@@ -124,6 +124,13 @@ class Engine:
                 self.poses[name] = list(buf)
             if not self.poses:
                 raise RuntimeError("Reference speaker contains no poses")
+            # JD3's detailed stored geometry is not exactly reconstructed by its
+            # 13 AnatomyParams. Use one representational basis from the first
+            # forward call so freezing/reapplying those parameters is lossless
+            # within this adapter, including the default speaker.
+            self.set_anatomy(self.base_anatomy)
+            self.provenance = {**self.provenance,
+                "geometry_basis": "vtl-anatomy-params-reconstructed-v1"}
         except BaseException:
             if initialized:
                 self.lib.vtlClose()

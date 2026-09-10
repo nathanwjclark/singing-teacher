@@ -98,6 +98,11 @@ def fit_joint(engine: Engine, document, *, anatomy_bounds=None, articulation_bou
     geometry_input = doc.get("geometry_observations", [])
     if not isinstance(geometry_input, list):
         raise ValueError("geometry_observations must be a list")
+    held_out_geometry_ids = {
+        g.get("evidence_id") for g in geometry_input
+        if isinstance(g, dict) and g.get("split") == "held_out"
+        and isinstance(g.get("evidence_id"), str) and g.get("evidence_id").strip()
+    }
     for g in geometry_input:
         if not isinstance(g, dict) or g.get("split") not in ("calibration", "held_out"):
             raise ValueError("Geometry requires an explicit split")
@@ -111,6 +116,8 @@ def fit_joint(engine: Engine, document, *, anatomy_bounds=None, articulation_bou
                     raise ValueError(f"Visible geometry requires {field}")
             if g["evidence_id"] in excluded_ids:
                 raise ValueError("Visible geometry references excluded held-out evidence")
+            if g["evidence_id"] in held_out_geometry_ids:
+                raise ValueError("Visible geometry reuses held-out geometry evidence")
             if g["trial_id"] not in by_id:
                 raise ValueError("Visible geometry must reference a calibration trial")
             row = by_id[g["trial_id"]]

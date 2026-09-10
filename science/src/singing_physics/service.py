@@ -70,6 +70,13 @@ def _worker(root, job_id, parent_pid, timeout_s):
                 forecast = condition_on_execution(Artifact(params['prospective_json'].encode()), snapshot, **options)
             forecast.write(destination / 'forecast.json')
             result = forecast.data
+        elif request['operation'] == 'rank_interventions':
+            from .prediction import Artifact
+            from .identifiability import rank_interventions
+            snapshot = Artifact(params['snapshot_json'].encode())
+            ranking = rank_interventions(snapshot, **{k:v for k,v in params.items() if k != 'snapshot_json'})
+            ranking.write(destination / 'ranking.json')
+            result = ranking.data
         elif request['operation'] == 'predict':
             from .prediction import Artifact, predict
             snapshot = Artifact(params['snapshot_json'].encode())
@@ -83,6 +90,15 @@ def _worker(root, job_id, parent_pid, timeout_s):
                     result = engine.export(destination / 'forward', **params)
                 elif request['operation'] == 'fit_transfer':
                     result = fit(engine, params['observations'], **{k: v for k, v in params.items() if k != 'observations'})
+                elif request['operation'] == 'fit_pcm':
+                    from .pcm_inverse import fit_pcm
+                    result = fit_pcm(engine, params['observations'], **{k:v for k,v in params.items() if k != 'observations'})
+                elif request['operation'] == 'fit_frozen_control':
+                    from .prediction import Artifact
+                    from .frozen_control import fit_frozen_control
+                    snapshot = Artifact(params['snapshot_json'].encode())
+                    options = {k:v for k,v in params.items() if k not in {'snapshot_json', 'observations'}}
+                    result = fit_frozen_control(engine, snapshot, params['observations'], **options)
                 elif request['operation'] == 'fit_dynamic':
                     from .dynamic import fit_dynamic
                     result = fit_dynamic(engine, params['observations'], **{k:v for k,v in params.items() if k != 'observations'})
@@ -172,9 +188,12 @@ class JobService:
         self._identity(idempotency_key, 'idempotency_key')
         if not isinstance(request, dict) or set(request) - {'operation', 'parameters', 'session_id', 'model_id'}:
             raise ValueError('Invalid local job request fields')
-        if request.get('operation') not in {'forward', 'fit_transfer', 'fit_joint', 'predict', 'fit_dynamic', 'fit_control', 'control_predict', 'condition_prediction'} or not isinstance(request.get('parameters'), dict):
+        if request.get('operation') not in {'forward', 'fit_transfer', 'fit_joint', 'predict', 'fit_dynamic', 'fit_control', 'control_predict', 'condition_prediction', 'fit_frozen_control', 'rank_interventions', 'fit_pcm'} or not isinstance(request.get('parameters'), dict):
             raise ValueError('Unsupported operation or missing parameters')
         allowed = {
+            'fit_pcm': {'observations', 'candidates', 'max_synthesis_calls'},
+            'fit_frozen_control': {'snapshot_json', 'observations', 'expected_digest', 'candidate_id', 'budget', 'seed'},
+            'rank_interventions': {'snapshot_json', 'expected_digest', 'ranking_id', 'target_evidence_id', 'generated_at', 'interventions', 'noise_sigma_db', 'noise_assumption', 'frequency_band_hz', 'bins', 'max_native_calls', 'separation_threshold'},
             'forward': {'pose', 'anatomy', 'articulation', 'f0_hz', 'duration_s'},
             'fit_transfer': {'observations', 'starts', 'seed', 'max_spectrum_evaluations'},
             'fit_joint': {'observations', 'anatomy_bounds', 'articulation_bounds', 'budget_per_model', 'starts', 'seed'},
@@ -191,6 +210,9 @@ class JobService:
         if request['operation'] == 'predict' and not {'snapshot_json', 'expected_digest', 'prediction_id', 'target_evidence_id', 'generated_at', 'intervention'} <= set(request['parameters']):
             raise ValueError('Missing prediction parameters')
         required = {
+            'fit_pcm': {'observations', 'candidates'},
+            'fit_frozen_control': {'snapshot_json', 'observations', 'expected_digest', 'candidate_id'},
+            'rank_interventions': {'snapshot_json', 'expected_digest', 'ranking_id', 'target_evidence_id', 'generated_at', 'interventions', 'noise_sigma_db', 'noise_assumption'},
             'fit_control': {'attempts', 'anatomy_model_id', 'fitted_at'},
             'control_predict': {'snapshot_json', 'control_profile_json', 'expected_anatomy_digest', 'expected_control_digest', 'prediction_id', 'target_evidence_id', 'generated_at', 'cue_id', 'cue_version', 'context', 'mode'},
             'condition_prediction': {'prospective_json', 'snapshot_json', 'expected_prospective_digest', 'expected_anatomy_digest', 'prediction_id', 'generated_at', 'observed_at', 'observed_evidence_id', 'measured_ja_deg', 'measurement_sigma_deg'},
@@ -202,10 +224,10 @@ class JobService:
         for key in ('session_id', 'model_id'):
             if key in request:
                 self._identity(request[key], key)
-        if request['operation'] in {'predict', 'control_predict', 'condition_prediction'} and 'model_id' in request:
+        if request['operation'] in {'predict', 'control_predict', 'condition_prediction', 'fit_frozen_control', 'rank_interventions'} and 'model_id' in request:
             snapshot = json.loads(request['parameters']['snapshot_json'])
             if not isinstance(snapshot, dict) or snapshot.get('model_id') != request['model_id']:
-                raise ValueError('Prediction model does not match job model')
+                raise ValueError('Prediction or inference model does not match job model')
         if request['operation'] == 'fit_control' and 'model_id' in request and request['parameters']['anatomy_model_id'] != request['model_id']:
             raise ValueError('Control profile anatomy model does not match job model')
         encoded = canonical(request)

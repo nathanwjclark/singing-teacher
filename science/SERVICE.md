@@ -2,8 +2,8 @@
 
 `singing_physics.service.JobService(root, max_workers=1, timeout_s=180)` runs real
 native scientific jobs in isolated spawned processes. This is an executable local
-Python service interface; B's KIT-01 wire schemas and HTTP adapter are separate
-integration inputs. It does not expose a public unauthenticated network server.
+Python service interface. [KIT adapters](KIT_BRIDGE.md) consume B's published
+schemas; HTTP transport remains outside this local service.
 
 Use a context manager. `submit(request, idempotency_key=...)` returns an immutable
 job ID; `status`, `wait`, `result`, `cancel` and `replay` operate on that ID. An
@@ -14,6 +14,9 @@ Requests contain `operation` and `parameters`. Supported operations:
 
 - `forward`: Engine.export parameters, excluding its output path.
 - `fit_transfer`: observation document, starts, seed, total spectrum budget.
+- `fit_pcm`: canonical observation document, explicit finite `candidates`, and
+  optional `max_synthesis_calls`. Uses B's exact extractor on native PCM with an
+  equal-compute fixed-anatomy baseline. See [PCM_INVERSE.md](PCM_INVERSE.md).
 - `fit_joint`: observation document, anatomy/articulation bounds, starts, seed,
   and per-model budget. See JOINT_INFERENCE.md for its synthetic evidence profile.
 - `predict`: canonical frozen snapshot JSON, expected digest and predict arguments.
@@ -23,6 +26,11 @@ Requests contain `operation` and `parameters`. Supported operations:
   cue/version/context/mode and a native call cap.
 - `condition_prediction`: a frozen prospective artifact plus separately timestamped
   post-capture execution evidence. It produces a new conditional artifact and job.
+- `fit_frozen_control`: estimates per-frame articulation against one explicitly
+  frozen anatomy candidate; it does not update anatomy.
+- `rank_interventions`: scores predeclared named simulator poses against a finite
+  frozen hypothesis set. Its separation score is a declared heuristic, not a
+  posterior or significance test.
 
 Optional `session_id` and `model_id` must occur together. Register the current
 model using `register_model`. Stale requests are rejected; model changes during
@@ -53,3 +61,10 @@ Run `PYTHONPATH=.:science/src python -m pytest science/tests/test_service.py -q`
 from the repository root with the installed scientific environment. Tests execute
 real synthesis, deterministic replay, concurrent workers, failure, cancellation,
 model invalidation, integrity checks, timeout, close and reopen paths.
+
+`science/tests/test_b_service.py` executes actual frozen-control, ranking and PCM
+jobs, replay, digest/budget failure and stale-model checks. PCM jobs use the host
+Node runtime; executable paths cannot be supplied as job parameters. PCM replay
+reproduces quantities, scores, frame hashes and lineage. B's unchanged serializer
+records each new extraction's actual `createdAt`, so new extraction receipts
+have different timestamps. Previously committed forecasts remain immutable.

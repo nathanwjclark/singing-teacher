@@ -55,8 +55,8 @@ cross-lead acceptance gates are unfinished. No A agent merged repository main.
 
 | Input / gate | Responsible owner | A action after receipt | Current status |
 |---|---|---|---|
-| KIT-01 public schemas and designated integration commit | B | Adapt executable local jobs/observations; run B validators | Awaiting branch/commit |
-| AUD-01 canonical extractor and defined source/capture likelihood inputs | B, A scientific review | Implement measured-audio source/articulation/capture fitting | Awaiting runnable handoff |
+| KIT-01 public schemas and designated integration commit | B | Adapt executable local jobs/observations; run B validators | Received through B main `4c801ac`; A adapters in progress |
+| AUD-01 canonical extractor and defined source/capture likelihood inputs | B, A scientific review | Implement measured-audio source/articulation/capture fitting | Exact PCM extractor 1.1.0 received; finite candidate/source/gain comparison in progress |
 | CAP-01/02 actual rectified depth, calibration, clock and quality evidence | B + person with phones | Replay real geometry and verify FUSE timing/operator correspondence | No actual device bundle supplied |
 | G2 independent hidden scoring and equal-budget protocol | B, A numerical signoff | Reproduce independent results and report ambiguity | Internal controlled tests exist; B gate unfinished |
 | G3 human multimodal anatomy fit | A + B | Fit calibrated audio/geometry and validate claims | Blocked on the inputs above; not proven |
@@ -159,6 +159,25 @@ No public KIT-01/AUD-01 artifact or actual phone capture arrived during this ses
 The next A work is the B-contract/audio adapter and real multimodal acceptance once
 those concrete inputs are available; B owns repository release integration.
 
+## Independent A research continuation
+
+Starting commit: `615fde3`. The missing KIT-01/AUD-01/phone handoff blocks
+human integration, not the following explicitly bounded scientific work. All
+lanes use the existing internal synthetic profiles and certified native engine;
+B retains public schemas, canonical acoustic extraction and independent release scoring.
+
+| ID | Owner / branch | Acceptance experiment | Status |
+|---|---|---|---|
+| IDENT-01 | a_prediction / codex/a-identifiability | Freeze competing physical hypotheses; rank supported simulator experiments under declared noise; score only after ranking is saved | implemented; synthetic challenge completed |
+| SEP-01 | a_forward / codex/a-joint-recovery | Predeclared multi-anatomy, varying-articulation recovery matrix with equal-budget baseline and held-out conditional predictions | implemented; 4 cases scored, all acceptance checks false |
+| UNC-01 | a_scientific_review / codex/a-mismatch-uncertainty | Repeated clean/omitted-geometry fits; compare errors, residuals and candidate spread without posterior claims | implemented; 6 cases completed, no calibrated-posterior claim |
+| MOT-03 | a_inverse / codex/a-frozen-control | Single-vowel trajectory reconstruction with immutable anatomy, disjoint evidence, bounded JA search and real-native tests | verified by direct recovery and spawned-service tests in the B integration follow-up |
+| SVC-02 | A coordinator / codex/a-research-service | Durable jobs and replay for new supported scientific operations, model binding and failure checks | implemented; full suite passed |
+| REVIEW-02 | a_geometry; independent review | Evidence identity, timing, missing geometry and control lineage audit | held-out geometry identity gap fixed in `bdee764` with regression |
+
+Research failures and exhausted optimization budgets remain in every report.
+These investigations do not replace B's evaluator or demonstrate human anatomy
+recovery. Native jobs remain process-isolated; no lane modifies the native build.
 ## Lead B integration receipt
 
 B integrated the reviewed PR #3 head `615fde362960c0452a233e80c1f75d2b4d7a03de` into the local application integration branch. Concrete public schema/extractor and genuine producer handoff commands now appear in `docs/implementation/LEAD-B-ACCEPTANCE.md`. Native build, both A replay commands and B's controlled native PCM forecast/commit/generation/evaluation path were run. B's native adapter produces validated KIT records and self-contained geometry consumable by Mapped mode, with fixed forward parameters clearly distinguished from fitted human anatomy.
@@ -166,3 +185,33 @@ B integrated the reviewed PR #3 head `615fde362960c0452a233e80c1f75d2b4d7a03de` 
 This receipt supersedes earlier “no KIT/AUD artifacts received” descriptions for repository availability. It does not assert that A has reviewed the new adapter or completed the microphone likelihood. No actual phone depth, specialist cue review or human G3/G6/G7 evidence has been supplied by this integration.
 
 Additional B producer now available: `apps/ios/SingingDepth/SingingDepth.xcodeproj` compiles for unsigned iPhoneOS and exports native RGB/TrueDepth plus optional PCM/ASBD source data. `scripts/import-native-capture.ts` converts its validated original artifacts into KIT observations; `scripts/review-native-depth.py` reports raw coverage. No device was attached, so these are build/fixture results rather than physical acceptance. See `docs/implementation/NATIVE-KIT-IMPORT.md` for exact source clock/calibration semantics. The fitting consumer must handle the recorded lens distortion, missing head/world transforms and unknown synchronization uncertainty explicitly.
+
+## A consumption of B handoff
+
+Starting merged commit: `91d3380` (A `bdee764`, B `4c801ac`). This supersedes
+historical missing-KIT/AUD statements above. B owns main/release integration;
+A's queue is PR #3. Public contracts remain KIT 1.0.0; canonical PCM extraction
+remains B's `src/lib/audio.ts` version 1.1.0. No parallel extractor is introduced.
+
+| Ticket | Exclusive owner / branch | Concrete acceptance | Status |
+|---|---|---|---|
+| PCM-01 | a_forward / codex/a-pcm-inverse | Native PCM and recorded canonical features compared under explicit anatomy/source/JA/gain hypotheses, bounded fair baseline | reviewed; 7 direct tests plus actual service replay pass |
+| KIT-A-01 | a_prediction / codex/a-kit-forecast | Actual A jobs/candidates mapped to B contracts; PCM commitment precedes target synthesis and B scoring | reviewed; 7 integration tests and standalone replay pass |
+| NATIVE-GEO-01 | a_geometry / codex/a-native-geometry | Hash-verified native decoding, preserved calibration and explicit fusion gates | reviewed, 14 software tests passed |
+| RECT-01 | a_geometry / codex/a-depth-rectification | Authoritatively specified LUT ray/point transformation and analytic tests | reviewed; 10 analytic tests pass, physical calibration still needed |
+| MOT-03 verification | a_inverse / codex/a-frozen-verified | Direct native recovery, malformed lineage, hard call cap and no anatomy update | reviewed; 5 direct tests and actual service recovery pass |
+| SVC-B-01 | A coordinator / codex/a-b-handoff | Actual spawned PCM/control/ranking jobs, immutable replay and stale-model rejection | reviewed; 3 actual job tests pass |
+| SCI-B-01 | a_scientific_review / codex/a-b-scientific-review | Independent unit/source/evidence review of new consumers | PCM/KIT/native-basis fixes reviewed; no remaining blocker in that scope |
+| NATIVE-PCM-01 | a_forward / codex/a-native-pcm | Original ASBD chunks to canonical measurements with verified bytes, gap boundaries and explicit source-clock transformation | reviewed; 8 Node tests and strict TypeScript check pass; software fixture reaches the actual fitter |
+
+The previous 154-test pass did not exercise frozen-control recovery or its
+spawned service route. New direct tests found a local-search recovery failure;
+this is being resolved and is not counted as passing evidence. A test-suite
+count cannot substitute for coverage of a newly connected operation. The native
+geometry-basis fix and five direct plus three service tests now resolve that
+verification gap; the assembled Python suite passes 195 tests with `-W error`.
+
+Actual phone media, calibrated depth error/head pose/cross-clock alignment,
+specialist cue review and human held-out outcomes remain required external
+inputs. Available software can be built and replayed without those inputs;
+human acceptance gates cannot.

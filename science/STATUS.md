@@ -1,5 +1,42 @@
 # Current Lead A integration status
 
+Lead B's contracts, canonical PCM extractor, native acquisition/import and
+independent scoring are received through main `55ff619`. New consumers are in
+[PCM_INVERSE.md](PCM_INVERSE.md), [KIT_BRIDGE.md](KIT_BRIDGE.md),
+[NATIVE_GEOMETRY.md](NATIVE_GEOMETRY.md), [DEPTH_RECTIFICATION.md](DEPTH_RECTIFICATION.md)
+and [FROZEN_CONTROL.md](FROZEN_CONTROL.md). Original native LPCM now reaches the
+canonical extractor and fitting inputs via [NATIVE_PCM.md](NATIVE_PCM.md).
+
+## B integration verification
+
+The assembled Python suite passed **195 tests with `-W error`** (183.14 seconds).
+After the final clipping-threshold adjustment, all **10 targeted PCM and service
+tests** passed again. The **7 KIT bridge tests**, **8 native PCM importer tests**,
+and strict TypeScript checks for these scientific adapters pass. Application
+build and lint pass, as do **23 focused B contract/audio/capture/evaluation tests**,
+**6 coaching tests**, and **4 Playwright browser tests**. The build reports its
+existing bundle-size advisory. No native C++ source changed in this integration;
+the native results below belong to the earlier certified build.
+
+The final local replay is `science/artifacts/b-final-kit-replay`: its forecast is
+committed before a later synthetic target is generated and independently scored.
+Pitch error is 0.0380 Hz, centroid error 20.2484 Hz, flatness error 0.0000196 and
+level error 1.2181 dBFS. These are one software replay's errors, not human accuracy
+or improvement over a baseline. The native PCM fixture output is
+`science/artifacts/b-final-native-pcm`; private/generated artifacts stay untracked.
+
+See [B_INTEGRATION.md](B_INTEGRATION.md) for executable handoff paths and owners.
+Actual phone captures, physical calibration and synchronization/head-pose evidence
+remain external acceptance gates. Anatomy identifiability, microphone/room and
+tissue models, and held-out human learning outcomes remain research work; passing
+the software suite does not resolve them.
+
+Native forwards now start in the same 13-parameter reconstructed geometry basis
+used for fitted candidates. Previously detailed default JD3 geometry differed
+from reapplying its reported parameters (~1.24 dB in one /a/ comparison).
+New provenance includes `geometry_basis`; older snapshots lacking it must be
+regenerated, never silently relabeled. The native binary is unchanged.
+
 The initial foundation results below are retained as historical evidence. The
 parallel expansion is now implemented and reviewed in PR #3:
 
@@ -26,8 +63,9 @@ artifact with unchanged prospective replay bytes.
 See [JOINT_INFERENCE.md](JOINT_INFERENCE.md) for improved but still ambiguous joint
 recovery and [MISMATCH.md](MISMATCH.md) for all three fixed-budget perturbation
 attempts. Low fitting error does not establish correct anatomy. Measured-audio
-likelihoods await B's canonical extractor; real-phone calibration/correspondence
-and human-anatomy recovery remain unvalidated.
+comparisons now use B's canonical PCM extractor under explicit finite source/gain
+hypotheses. Real-phone calibration/correspondence and human-anatomy recovery
+remain unvalidated.
 
 The complete ownership and unmet acceptance gates are in the repository
 [coordination record](../docs/coordination/lead-a-handoff.md). The Python job/replay
