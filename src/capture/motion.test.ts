@@ -24,3 +24,14 @@ test('interchange rejects malformed evidence instead of coercing it',()=>{
  assert.equal(validateLearningRecord({kind:'motion-observation',schemaVersion:'1.0.0'}).valid,false)
  assert.equal(validateLearningRecord({kind:'cue-definition',schemaVersion:'0'}).valid,false)
 })
+
+test('companion media requires exact bytes; missing legacy binding is not verified',async()=>{
+ const {motionMediaBinding,verifyMotionMedia}=await import('./motion.ts')
+ const blob=new Blob(['original-video']),binding=await motionMediaBinding(blob)
+ const media={filename:'motion.webm',mimeType:'video/webm',startedAtMs:0,syncUncertaintyMs:null,...binding}
+ await verifyMotionMedia(media,blob)
+ await assert.rejects(()=>verifyMotionMedia(media,new Blob(['different-data'])),/SHA-256/)
+ await assert.rejects(()=>verifyMotionMedia(media,new Blob(['short'])),/byte length/)
+ await assert.rejects(()=>verifyMotionMedia({...media,sha256:undefined,byteLength:undefined},blob),/no media integrity/)
+ await assert.rejects(()=>motionMediaBinding(new Blob([])),/empty/)
+})

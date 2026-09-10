@@ -23,3 +23,17 @@ export function phaseAt(elapsedMs:number):{repetition:number;phase:MotionPhase;d
   const repetition=Math.min(3,Math.floor(elapsedMs/7000)+1), t=Math.min(Math.max(0,elapsedMs),20999)%7000
   return {repetition,phase:t<2000?'neutral':t<5000?'gesture':'return',done:elapsedMs>=21000}
 }
+
+/** Bind visible-motion evidence to the exact retained video bytes. */
+export async function motionMediaBinding(blob: Blob): Promise<{sha256:string;byteLength:number}> {
+ if (!blob.size) throw new Error('Recorder returned empty media')
+ const bytes=await blob.arrayBuffer()
+ const digest=await crypto.subtle.digest('SHA-256',bytes)
+ return {sha256:Array.from(new Uint8Array(digest),byte=>byte.toString(16).padStart(2,'0')).join(''),byteLength:blob.size}
+}
+export async function verifyMotionMedia(media: MotionObservation['media'],blob:Blob):Promise<void>{
+ if(!media?.sha256||media.byteLength===undefined)throw new Error('This JSON has no media integrity binding. Legacy landmarks can be replayed, but a companion video cannot be verified.')
+ if(blob.size!==media.byteLength)throw new Error('Companion video byte length does not match this motion capture')
+ const binding=await motionMediaBinding(blob)
+ if(binding.sha256!==media.sha256)throw new Error('Companion video SHA-256 does not match this motion capture')
+}
