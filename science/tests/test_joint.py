@@ -39,6 +39,12 @@ def test_native_joint_budget_baseline_reset_and_no_leakage():
         assert result["spectrum_calls"] == 2*result["residual_calls"]
         for model in (result["joint"], result["fixed_anatomy_baseline"]):
             assert set(model["best"]["trial_articulation"]) == {"a", "i"}
+            assert set(model["best"]["trial_controls"]) == {"a", "i"}
+            for trial_id in ("a", "i"):
+                controls = model["best"]["trial_controls"][trial_id]
+                assert len(controls) == engine.tract_count
+                assert controls["JA"]["requested"] == model["best"]["trial_articulation"][trial_id]["JA"]
+                assert np.isfinite(controls["JA"]["applied"])
             assert model["identifiability"] == "not_established"
             assert model["residual_calls"] <= 120
             assert 0 < model["global_residual_calls"] <= 60
@@ -101,3 +107,14 @@ def test_multistart_exhaustion_is_not_convergence():
         assert result["joint"]["diversity_assessment"] == "bounded_multistart_only"
         assert result["joint"]["spread_is_calibrated_posterior"] is False
         assert result["residual_calls"] <= 20
+
+
+def test_noisy_geometry_value_outside_latent_bounds_is_a_residual():
+    with Engine() as engine:
+        doc = observations(engine)
+        doc["geometry_observations"][0].update(value=5.3, sigma=.3)
+        result = fit_joint(engine, doc, budget_per_model=10, starts=1)
+        assert result["geometry_measurement_count"] == 1
+        assert result["joint"]["best"]["objective"] > 0
+        assert 3.8 <= result["joint"]["best"]["anatomy"]["hard_palate_length"] <= 5.1
+        assert result["explicit_pose_calls"] == result["spectrum_calls"]

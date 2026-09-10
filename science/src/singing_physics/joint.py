@@ -99,13 +99,13 @@ def fit_joint(engine: Engine, document, *, anatomy_bounds=None, articulation_bou
         if g.get("kind") != "synthetic_direct_anatomy" or g.get("parameter") not in ab or g.get("unit") != "cm":
             raise ValueError("Only synthetic direct anatomy measurements in cm are supported")
         value, sigma = finite(g.get("value"), "geometry value"), finite(g.get("sigma"), "geometry sigma")
-        if sigma <= 0 or not ab[g["parameter"]][0] <= value <= ab[g["parameter"]][1]:
+        if sigma <= 0:
             raise ValueError("Invalid geometry observation")
         geometry.append((g["parameter"], value, sigma))
     calibration_hash = hashlib.sha256(json.dumps({"rows": rows, "geometry": geometry,
         "sigma_db": sigma_db}, sort_keys=True, allow_nan=False).encode()).hexdigest()
     saved = engine.anatomy()
-    totals = {"residual_calls": 0, "spectrum_calls": 0}
+    totals = {"residual_calls": 0, "spectrum_calls": 0, "explicit_pose_calls": 0}
 
     def solve(free_anatomy):
         names = list(ab) if free_anatomy else []
@@ -133,7 +133,11 @@ def fit_joint(engine: Engine, document, *, anatomy_bounds=None, articulation_bou
             trial = {r["id"]: dict(zip(db, physical[len(names)+i*len(db):len(names)+(i+1)*len(db)].tolist())) for i, r in enumerate(rows)}
             engine.set_anatomy(anatomy)
             predicted = []
+            applied_controls = {}
             for row in rows:
+                totals["explicit_pose_calls"] += 1
+                _, controls = engine.pose(row["pose"], overrides=trial[row["id"]])
+                applied_controls[row["id"]] = controls
                 totals["spectrum_calls"] += 1
                 predicted.append(engine.spectrum(row["pose"], overrides=trial[row["id"]], bins=512)[1][mask])
             raw = np.concatenate(predicted) - target
@@ -142,7 +146,7 @@ def fit_joint(engine: Engine, document, *, anatomy_bounds=None, articulation_bou
             if not np.isfinite(result).all():
                 raise RuntimeError("Nonfinite physical residual")
             candidate = {"anatomy": {**engine.base_anatomy, **anatomy}, "trial_articulation": trial,
-                         "objective": float(np.dot(result, result)), "rmse_db": float(np.sqrt(np.mean(raw**2)))}
+                         "trial_controls": applied_controls, "objective": float(np.dot(result, result)), "rmse_db": float(np.sqrt(np.mean(raw**2)))}
             if first_objective is None:
                 first_objective = candidate["objective"]
             if best is None or candidate["objective"] < best["objective"]:
@@ -186,7 +190,8 @@ def fit_joint(engine: Engine, document, *, anatomy_bounds=None, articulation_bou
         articulation_spread = {r["id"]: {k: float(np.ptp([c["trial_articulation"][r["id"]][k] for c in near]))
                                for k in db} for r in rows}
         return {"best": candidates[0], "candidates": candidates, "residual_calls": calls,
-                "spectrum_calls": calls * len(rows), "global_residual_calls": global_calls,
+                "spectrum_calls": calls * len(rows), "explicit_pose_calls": calls * len(rows),
+                "global_residual_calls": global_calls,
                 "near_optimal_articulation_spread": articulation_spread,
                 "diversity_assessment": "insufficient_multistart_evidence" if starts < 2 else "bounded_multistart_only",
                 "near_optimal_anatomy_spread_cm": spread, "near_optimal_candidates": len(near),
