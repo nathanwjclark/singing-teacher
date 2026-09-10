@@ -1,5 +1,5 @@
 import {test,expect,type Page} from '@playwright/test';
-const status={provider:{configured:true,available:true,provider:'test-provider',model:'test-model'},runId:'qa-run',sessionId:'qa-session',remainingCalls:3,callBudget:4,running:false,latest:null as unknown};
+const status={provider:{configured:true,available:true,provider:'test-provider',model:'test-model'},runId:'qa-run',sessionId:'qa-session',remainingCalls:3,callBudget:4,running:false,latestCurrent:true,latest:null as unknown};
 const emptyMemory={kind:'subjective-cue-memory',scope:'subjective_not_physiological_evidence',sessionId:'qa-session',entries:[] as unknown[]};
 async function open(page:Page){
  await page.route('**/api/science/status',r=>r.fulfill({json:{status:'not-run'}}));
@@ -56,4 +56,31 @@ test('mobile sensation failure retains draft, successful save retains report aft
  await expect(draft).toHaveValue('');await expect(panel).toContainText('1 saved reports');await expect(panel).toContainText('A relaxed buzz near my lips');
  await page.reload();await page.getByRole('button',{name:'Experiments',exact:true}).click();await expect(panel).toContainText('A relaxed buzz near my lips');
  const bounds=await panel.boundingBox();expect(bounds).not.toBeNull();expect(bounds!.x).toBeGreaterThanOrEqual(0);expect(bounds!.x+bounds!.width).toBeLessThanOrEqual(391);
+});
+
+
+test('running and failed attempts never masquerade as decisions; historical cue is not current',async({page})=>{
+ const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
+ let current={...status,running:true,latestCurrent:false,latest:null as unknown,latestAttempt:{requestId:'pending-qa',status:'running',error:undefined as string|undefined},latestDesignStatus:null as string|null};
+ await page.route('**/api/astra/status',r=>r.fulfill({json:current}));
+ await page.route('**/api/learning/memory',r=>r.fulfill({json:emptyMemory}));
+ await open(page);const coach=page.getByRole('region',{name:'Astra experiment coach'});
+ await expect(coach).toContainText('Waiting for the server');
+ await expect(coach.getByRole('heading',{name:'Next recording',exact:true})).toHaveCount(0);
+ await expect(coach.getByRole('heading',{name:'Rest',exact:true})).toHaveCount(0);
+ current={...current,running:false,latestAttempt:{requestId:'pending-qa',status:'failed',error:'Provider rejected the request'}};
+ await coach.getByRole('button',{name:'Refresh connection'}).click();
+ await expect(coach.getByRole('alert')).toContainText('Provider rejected the request');
+ await expect(coach.getByRole('button',{name:'Ask Astra for the next experiment'})).toBeEnabled();
+ await expect(coach.locator('.astra-coach-decision')).toHaveCount(0);
+ current={...current,latest:receipt('record','historical-qa'),latestAttempt:{requestId:'historical-qa',status:'succeeded',error:undefined},latestDesignStatus:'completed'};
+ await coach.getByRole('button',{name:'Refresh connection'}).click();
+ await expect(coach.getByRole('heading',{name:'Previous instruction',exact:true})).toBeVisible();
+ await expect(coach).toContainText('historical or its current validity is unconfirmed (completed)');
+ await expect(coach).not.toContainText('The prediction is committed');
+ // Legacy server attempts in the latest slot must also be safe to render.
+ current={...current,latest:{requestId:'legacy-failed',status:'failed'},latestAttempt:{requestId:'legacy-failed',status:'failed',error:'Legacy failure'}};
+ await coach.getByRole('button',{name:'Refresh connection'}).click();
+ await expect(coach.getByRole('alert')).toContainText('Legacy failure');
+ await expect(coach.locator('.astra-coach-decision')).toHaveCount(0);expect(errors).toEqual([]);
 });
