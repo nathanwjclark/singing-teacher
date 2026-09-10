@@ -39,11 +39,19 @@ def test_outcome_requires_frozen_selected_pose(tmp_path):
     fixture(tmp_path)
     (tmp_path/'science-current.json').write_text(json.dumps({'status':'succeeded','runId':'run-test'}))
     run=tmp_path/'science-runs/run-test';run.mkdir(parents=True)
-    (run/'summary.json').write_text(json.dumps({'forecast':{'selected_experiment_id':'exp','rankings':[{'experiment':{'experiment_id':'exp','pose':'i'}}]}}))
+    (run/'summary.json').write_text(json.dumps({'sessionId':'session','modelId':'model-1','designId':'design-1','forecast':{'design_id':'design-1','target_observation_id':'target-1','selected_experiment_id':'exp','rankings':[{'experiment':{'experiment_id':'exp','pose':'i'}}]}}))
     with pytest.raises(ValueError,match='frozen'):prepare(tmp_path,'outcome','a',False)
     assert prepare(tmp_path,'outcome','i',False)['prepared']
     c=json.loads((tmp_path/'science-outcome-input.json').read_text())
     assert c['pose']=='i' and c['recording_kind']=='ordinary-singing' and c['segment_index']==0
+    assert (c['design_id'],c['experiment_id'],c['observation_id'])==('design-1','exp','target-1')
+    original=(run/'summary.json').read_bytes()
+    (run/'astra-current.json').write_text(json.dumps({'sessionId':'session','modelId':'model-2','designId':'design-2','forecast':{'design_id':'design-2','target_observation_id':'target-2','selected_experiment_id':'exp-2','rankings':[{'experiment':{'experiment_id':'exp-2','pose':'e'}}]}}))
+    with pytest.raises(ValueError,match='frozen'):prepare(tmp_path,'outcome','i',False)
+    assert prepare(tmp_path,'outcome','e',False)['prepared']
+    c=json.loads((tmp_path/'science-outcome-input.json').read_text())
+    assert (c['design_id'],c['experiment_id'],c['observation_id'])==('design-2','exp-2','target-2')
+    assert (run/'summary.json').read_bytes()==original
 
 
 def test_invalid_claims_probe_receipt_and_archive_hash_rejected(tmp_path):

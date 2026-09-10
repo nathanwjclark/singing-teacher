@@ -22,7 +22,17 @@ def prepare(data_root, purpose, pose, contains_external_excitation):
         if current.get('status') != 'succeeded' or not re.fullmatch(r'[A-Za-z0-9_-]+',run_id):
             raise ValueError('A completed model run is required before recording its outcome')
         summary = _json((root/'science-runs'/run_id/'summary.json').read_bytes())
-        forecast = summary.get('forecast',{})
+        try:
+            active = _json((root/'science-runs'/run_id/'astra-current.json').read_bytes())
+        except FileNotFoundError:
+            active = summary
+        if active.get('sessionId') != summary.get('sessionId'):
+            raise ValueError('Active experiment belongs to a different session')
+        forecast = active.get('forecast',{})
+        design_id = active.get('designId')
+        target = forecast.get('target_observation_id')
+        if not design_id or forecast.get('design_id') != design_id or not target:
+            raise ValueError('Active frozen experiment lineage is incomplete')
         selected = forecast.get('selected_experiment_id')
         experiment = next((r['experiment'] for r in forecast.get('rankings',[]) if r.get('experiment',{}).get('experiment_id') == selected),None)
         if not experiment or experiment.get('pose') != pose:
@@ -71,6 +81,7 @@ def prepare(data_root, purpose, pose, contains_external_excitation):
     relative=str(destination.relative_to(root))
     config={'sourceDirectory':relative,'evidenceKind':'human-observation'} if purpose=='calibration' else {
         'sourceDirectory':relative,'pose':pose,'segment_index':0,'evidence_kind':'human-observation',
+        'design_id':design_id,'experiment_id':selected,'observation_id':target,
         'participant_id':'local','recording_kind':'ordinary-singing','contains_external_excitation':False}
     config_file=root/('science-input.json' if purpose=='calibration' else 'science-outcome-input.json')
     fd,temporary=tempfile.mkstemp(prefix='.voice-config-',dir=root)

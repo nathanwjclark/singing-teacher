@@ -5,6 +5,13 @@ import {spawn} from 'node:child_process';
 
 const files=new Set(['space-diff.json','tract0.obj','tract0.mtl','tract.svg','geometry.json','manifest.json','fit.json','forecast.json','summary.json']);
 const types={obj:'text/plain',mtl:'text/plain',svg:'image/svg+xml',json:'application/json'};
+async function activeResult(runDirectory){
+  const original=JSON.parse(await readFile(resolve(runDirectory,'summary.json'),'utf8'));
+  let active;
+  try{active=JSON.parse(await readFile(resolve(runDirectory,'astra-current.json'),'utf8'))}catch(error){if(error.code==='ENOENT')return original;throw error}
+  if(active.sessionId!==original.sessionId||!active.modelId||!active.designId||active.forecast?.design_id!==active.designId||!active.forecast?.target_observation_id||!active.forecast?.selected_experiment_id)throw new Error('Active experiment lineage is invalid');
+  return {...original,geometryModelId:original.modelId,modelId:active.modelId,designId:active.designId,sessionVersion:active.sessionVersion,forecast:active.forecast,decisionId:active.decisionId};
+}
 export function scienceRoutes({repo,dataRoot,json}) {
   let running=null,starting=false;
   const index=resolve(dataRoot,'science-current.json');
@@ -43,7 +50,7 @@ export function scienceRoutes({repo,dataRoot,json}) {
     }
     if(url.pathname==='/api/science/status'&&req.method==='GET'){
       const state=await status();if(state.status==='running'&&!running)state.status='interrupted';
-      if(state.status==='succeeded'&&state.runId){try{state.result=JSON.parse(await readFile(resolve(dataRoot,'science-runs',state.runId,'summary.json'),'utf8'))}catch{state.status='failed';state.error='Published result unavailable'}}
+      if(state.status==='succeeded'&&state.runId){try{state.result=await activeResult(resolve(dataRoot,'science-runs',state.runId))}catch{state.status='failed';state.error='Published result unavailable'}}
       json(res,200,state);return true;
     }
     if(url.pathname==='/api/science/asset'&&req.method==='GET'){
@@ -55,8 +62,10 @@ export function scienceRoutes({repo,dataRoot,json}) {
       const current=await status();
       if(current.status!=='succeeded'||!/^run-[A-Za-z0-9-]+$/.test(current.runId||'')){json(res,409,{error:'A completed model run is required'});return true}
       const runDirectory=resolve(dataRoot,'science-runs',current.runId),outcomeIndex=resolve(runDirectory,'outcome-current.json');
+      let active;try{active=await activeResult(runDirectory)}catch{json(res,409,{error:'Current experiment unavailable'});return true}
       let previous;try{previous=JSON.parse(await readFile(outcomeIndex,'utf8'))}catch{previous={status:'not-run'}}
       if(req.method==='GET'){
+        if(previous.designId&&previous.designId!==active.designId){json(res,200,{status:'not-run',designId:active.designId});return true}
         if(previous.status==='running'&&!running)previous.status='interrupted';
         if(previous.status==='succeeded'){
           try{previous.result=JSON.parse(await readFile(resolve(runDirectory,'outcomes',previous.outcomeId,'summary.json'),'utf8'))}
@@ -69,6 +78,7 @@ export function scienceRoutes({repo,dataRoot,json}) {
       if(!process.env.SCIENCE_URL||!process.env.SCIENCE_TOKEN){json(res,409,{error:'Start the shared worker with npm run science:local'});return true}
       starting=true;try{
         let config;try{config=JSON.parse(await readFile(resolve(dataRoot,'science-outcome-input.json'),'utf8'))}catch{json(res,409,{error:'No later voice capture configured'});return true}
+        if(config.design_id!==active.designId||config.experiment_id!==active.forecast?.selected_experiment_id||config.observation_id!==active.forecast?.target_observation_id){json(res,409,{error:'Prepared capture belongs to a different experiment. Prepare a new capture for the current decision.'});return true}
         const {sourceDirectory,...parameters}=config;
         if(typeof sourceDirectory!=='string'){json(res,400,{error:'A private sourceDirectory is required'});return true}
         const source=resolve(dataRoot,sourceDirectory);
@@ -82,7 +92,7 @@ export function scienceRoutes({repo,dataRoot,json}) {
         await mkdir(resolve(runDirectory,'outcomes'),{recursive:true,mode:0o700});
         const configPath=resolve(runDirectory,'outcomes',outcomeId+'-input.json');
         if(!reuse)await writeFile(configPath,JSON.stringify(parameters),{mode:0o600,flag:'wx'});
-        const record={status:'running',runId:current.runId,outcomeId,inputHash,startedAt:reuse?previous.startedAt:new Date().toISOString()};
+        const record={status:'running',runId:current.runId,designId:active.designId,modelId:active.modelId,outcomeId,inputHash,startedAt:reuse?previous.startedAt:new Date().toISOString()};
         await saveAt(outcomeIndex,record);
         launch([resolve(repo,'science/scripts/run_native_outcome.py'),'--run',runDirectory,'--source',source,'--output',output,'--config',configPath],output,record,value=>saveAt(outcomeIndex,value),resolve(runDirectory,'outcomes',outcomeId+'-process.log'));
         json(res,202,record);return true;
