@@ -33,3 +33,20 @@ test('mobile layout fits the viewport and explains the app', async ({ page }) =>
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
   await page.screenshot({ path: 'test-results/studio-mobile.png', fullPage: true });
 });
+
+test('ending a session releases a camera permission request that resolves late', async ({ page }) => {
+  await page.addInitScript(() => {
+    const state = window as unknown as { finishCamera: () => void; stopped: boolean };
+    state.stopped = false;
+    navigator.mediaDevices.getUserMedia = () => new Promise(resolve => {
+      state.finishCamera = () => resolve({ getTracks: () => [{ stop: () => { state.stopped = true; } }] } as unknown as MediaStream);
+    });
+  });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Start camera' }).click();
+  await expect(page.getByRole('heading', { name: 'Getting ready' })).toBeVisible();
+  await page.getByRole('button', { name: 'End session' }).click();
+  await page.evaluate(() => (window as unknown as { finishCamera: () => void }).finishCamera());
+  expect(await page.evaluate(() => (window as unknown as { stopped: boolean }).stopped)).toBe(true);
+  await expect(page.getByRole('button', { name: 'Start camera' })).toBeVisible();
+});
