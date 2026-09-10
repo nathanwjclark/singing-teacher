@@ -20,6 +20,7 @@ from .pcm_design import _snapshot
 from .prediction import Artifact, _encode, _timestamp
 
 VERSION = 'experimental-rear-lidar-lip-1'
+DISTANCE_EQUIVALENCE_M = 1e-6
 
 
 def _hash(value):
@@ -185,6 +186,22 @@ def rank_lidar_hypotheses(engine, snapshot, capture_directory, annotation, *, en
                 raise ValueError('Nonfinite native distance discrepancy')
             result['rankings'].append({'hypothesis_id': hypothesis['hypothesis_id'], 'anatomy': hypothesis['anatomy'],
                 'depth_discrepancy': cost, 'predictions': predictions})
+        # A fixed numerical-resolution guard prevents microscopic native/export
+        # differences from breaking a tie. It is not a sensor accuracy claim.
+        groups = []
+        for row in result['rankings']:
+            row['raw_depth_discrepancy'] = row['depth_discrepancy']
+            distances = np.array([p['distance_m'] for p in row['predictions']])
+            group = next((g for g in groups if np.max(np.abs(distances - g['distances'])) <= DISTANCE_EQUIVALENCE_M), None)
+            if group is None:
+                group = {'distances': distances, 'representative': row['hypothesis_id'], 'score': row['depth_discrepancy'], 'ids': []}
+                groups.append(group)
+            group['ids'].append(row['hypothesis_id'])
+            row['depth_discrepancy'] = group['score']
+            row['distance_equivalence_representative'] = group['representative']
+        result['distance_equivalence'] = {'tolerance_m': DISTANCE_EQUIVALENCE_M,
+            'scope': 'Numerical guard on every declared JA component, not calibrated accuracy; first acoustic-order member supplies group score',
+            'groups': [g['ids'] for g in groups]}
         order = {v: i for i, v in enumerate(result['without_depth_order'])}
         result['rankings'].sort(key=lambda r: (r['depth_discrepancy'], order[r['hypothesis_id']]))
         result['tied_best_hypotheses'] = [r['hypothesis_id'] for r in result['rankings'] if r['depth_discrepancy'] == result['rankings'][0]['depth_discrepancy']]

@@ -122,3 +122,24 @@ def test_unmeasured_or_uncalibrated_pixels_do_not_enter_likelihood(tmp_path, cha
         result = rank_lidar_hypotheses(engine, snapshot, tmp_path, doc, enabled=True)
         assert result['status'] == 'rejected' and result['actual_geometry_calls'] == 0
         assert result['baseline_preserved'] and not result['model_updated']
+
+
+def test_numerically_indistinguishable_markers_preserve_acoustic_order(tmp_path, monkeypatch):
+    with Engine() as engine:
+        snapshot, doc = preparation(tmp_path, engine)
+        snapshot['hypotheses'][1]['anatomy'] = engine.set_anatomy({'hard_palate_length': 4.8})
+        doc['snapshot_sha256'] = hashlib.sha256(_encode(snapshot)).hexdigest()
+        native = engine.lip_markers
+        def limited_precision(*args, **kwargs):
+            result = native(*args, **kwargs)
+            if engine.anatomy()['hard_palate_length'] > 4.7:
+                result['distance_m'] += 1e-8
+            return result
+        monkeypatch.setattr(engine, 'lip_markers', limited_precision)
+        result = rank_lidar_hypotheses(engine, snapshot, tmp_path, doc, enabled=True, max_geometry_calls=2)
+        assert result['status'] == 'ranked'
+        assert result['with_depth_order'] == result['without_depth_order']
+        assert len(result['tied_best_hypotheses']) == 2
+        assert result['distance_equivalence']['tolerance_m'] == 1e-6
+        assert len(result['distance_equivalence']['groups']) == 1
+        assert result['rankings'][0]['depth_discrepancy'] == result['rankings'][1]['depth_discrepancy']
