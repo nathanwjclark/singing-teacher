@@ -73,38 +73,75 @@ export async function importNativeForward(root:string,source:string,capabilities
   return {candidate,observation,measurements,manifest:await readJson(resolve(output,'native-manifest.json')),directory:resolve(output)};
 }
 
-/** Only a real joint-fit job is accepted; unsupported fit families fail explicitly. */
+function nativeBinding(native:NativeHandoff):string {
+  if(!object(native.manifest.provenance)||typeof native.manifest.provenance.geometry_basis!=='string'||!native.manifest.provenance.geometry_basis)throw Error('Native geometry basis is undeclared');
+  return hash(canonicalJson(native.manifest.provenance));
+}
+function fittedCandidate(job:LocalJob,native:NativeHandoff,expectedModelId:string,fit:{anatomy:Record<string,unknown>;provenance:unknown;evidenceIds:string[];bounds:Record<string,unknown>;solver:string;interpretation:string;uncertainty:string}):CandidateAnatomy {
+  if(jobRecord(job).state!=='completed'||job.request.model_id!==expectedModelId)throw Error('Fitted model is unavailable or stale');
+  if(canonicalJson(fit.provenance)!==canonicalJson(native.manifest.provenance))throw Error('Fit/forward native provenance mismatch');
+  const binding=nativeBinding(native),inferred=new Set(Object.keys(fit.bounds));
+  if(!fit.evidenceIds.length||fit.evidenceIds.some(id=>typeof id!=='string'||!id))throw Error('Fitted evidence lineage is missing');
+  const known=new Set(native.candidate.parameters.map(p=>p.name));
+  if(Object.keys(fit.anatomy).some(name=>!known.has(name))||[...inferred].some(name=>!known.has(name)))throw Error('Unknown fitted anatomy mapping');
+  const parameters=native.candidate.parameters.map(parameter=>{
+    const value=fit.anatomy[parameter.name];
+    if(typeof value!=='number'||!Number.isFinite(value)||Math.abs(value-parameter.value)>1e-7)throw Error('Forward geometry does not match fitted anatomy');
+    const bounds=fit.bounds[parameter.name];
+    if(inferred.has(parameter.name)&&(!Array.isArray(bounds)||bounds.length!==2||bounds.some(v=>typeof v!=='number'||!Number.isFinite(v))))throw Error('Invalid fitted search bounds');
+    return {...parameter,bounds:inferred.has(parameter.name)?bounds as [number,number]:parameter.bounds,status:inferred.has(parameter.name)?'inferred' as const:'fixed' as const,
+      interpretation:inferred.has(parameter.name)?fit.interpretation:'Fixed physical geometry outside the varied candidate parameter set'};
+  });
+  return checked({...native.candidate,id:expectedModelId,modelVersion:`${native.candidate.modelVersion}:${job.row.manifest_hash?.slice(0,12)}`,
+    provenance:{kind:'engine-generated',producer:'singing-physics/fitted-anatomy-kit',producerVersion:'0.2.0',
+      sourceIds:[job.row.id,...fit.evidenceIds,`native-provenance:${binding}`],sourceHashes:[job.row.request_hash,job.row.manifest_hash!,binding,...native.candidate.provenance.sourceHashes]},
+    evidenceIds:[...fit.evidenceIds],parameters,solver:{name:fit.solver,version:'0.1.0',configSha256:job.row.request_hash},
+    uncertaintyMethod:fit.uncertainty,mismatch:false});
+}
+
 export function candidateFromJointFit(job:LocalJob,native:NativeHandoff,expectedModelId:string):CandidateAnatomy{
   if(jobRecord(job).state!=='completed'||job.request.model_id!==expectedModelId)throw Error('Fitted model is unavailable or stale');
   const fit=job.result;
-  if(!fit||fit.kind!=='synthetic_joint_fit'||job.request.operation!=='fit_joint'||!object(fit.joint)||!object(fit.joint.best)||!object(fit.joint.best.anatomy)||!object(fit.anatomy_bounds))throw Error('Unsupported fitted anatomy result');
-  if(canonicalJson(fit.provenance)!==canonicalJson(native.manifest.provenance))throw Error('Fit/forward native provenance mismatch');
-  const anatomy=fit.joint.best.anatomy, inferred=new Set(Object.keys(fit.anatomy_bounds));
-  if(!Array.isArray(fit.calibration_ids)||!fit.calibration_ids.length)throw Error('Fitted evidence lineage is missing');
-  const known=new Set(native.candidate.parameters.map(p=>p.name));
-  if(Object.keys(anatomy).some(name=>!known.has(name))||[...inferred].some(name=>!known.has(name)))throw Error('Unknown fitted anatomy mapping');
-  const parameters=native.candidate.parameters.map(parameter=>{
-    const value=anatomy[parameter.name];
-    if(typeof value!=='number'||!Number.isFinite(value)||Math.abs(value-parameter.value)>1e-7)throw Error('Forward geometry does not match fitted anatomy');
-    const fitBounds=(fit.anatomy_bounds as Record<string,unknown>)[parameter.name];
-    if(inferred.has(parameter.name)&&(!Array.isArray(fitBounds)||fitBounds.length!==2||fitBounds.some(v=>typeof v!=='number'||!Number.isFinite(v))))throw Error('Invalid fitted search bounds');
-    return {...parameter,bounds:inferred.has(parameter.name)?fitBounds as [number,number]:parameter.bounds,status:inferred.has(parameter.name)?'inferred' as const:'fixed' as const,
-      interpretation:inferred.has(parameter.name)?'Jointly inferred from synthetic direct-transfer calibration; anatomical identifiability not established':'Fixed reference-template geometry outside the fitted variable set'};
-  });
-  return checked({...native.candidate,id:expectedModelId,modelVersion:`${native.candidate.modelVersion}:${job.row.manifest_hash?.slice(0,12)}`,
-    provenance:{kind:'engine-generated',producer:'singing-physics/joint-fit-kit',producerVersion:'0.1.0',
-      sourceIds:[job.row.id,...fit.calibration_ids as string[]],sourceHashes:[job.row.request_hash,job.row.manifest_hash!,...native.candidate.provenance.sourceHashes]},
-    evidenceIds:[...fit.calibration_ids as string[]],parameters,solver:{name:'VocalTractLab joint anatomy/articulation fit',version:'0.1.0',configSha256:job.row.request_hash},
-    uncertaintyMethod:'Uncalibrated bounded optimization candidate; fixed nuisance/source assumptions; no human anatomical truth claim',mismatch:false});
+  if(!fit||fit.kind!=='synthetic_joint_fit'||job.request.operation!=='fit_joint'||!object(fit.joint)||!object(fit.joint.best)||!object(fit.joint.best.anatomy)||!object(fit.anatomy_bounds)||!Array.isArray(fit.calibration_ids))throw Error('Unsupported fitted anatomy result');
+  return fittedCandidate(job,native,expectedModelId,{anatomy:fit.joint.best.anatomy,provenance:fit.provenance,
+    evidenceIds:fit.calibration_ids as string[],bounds:fit.anatomy_bounds,solver:'VocalTractLab joint anatomy/articulation fit',
+    interpretation:'Jointly inferred from synthetic direct-transfer calibration; anatomical identifiability not established',
+    uncertainty:'Uncalibrated bounded optimization candidate; fixed nuisance/source assumptions; no human anatomical truth claim'});
+}
+
+/** Selected finite PCM hypothesis, not identified anatomy or verified source audio. */
+export function candidateFromPcmFit(job:LocalJob,native:NativeHandoff,expectedModelId:string):CandidateAnatomy {
+  const fit=job.result;
+  if(!fit||job.request.operation!=='fit_pcm'||fit.kind!=='conditional_pcm_candidate_fit'||!object(fit.joint)||!object(fit.joint.best)||!object(fit.joint.best.anatomy)||!Array.isArray(fit.joint.candidates)||!Array.isArray(fit.evidence_ids))throw Error('No selected PCM physical hypothesis');
+  const best=fit.joint.best,candidates=fit.joint.candidates;
+  if(best.status!=='scored'||!candidates.some(row=>object(row)&&canonicalJson(row)===canonicalJson(best)))throw Error('PCM selection is not a scored retained candidate');
+  const bounds:Record<string,[number,number]>={};
+  for(const parameter of native.candidate.parameters){
+    const values=candidates.map(row=>{
+      if(!object(row)||!object(row.anatomy)||typeof row.anatomy[parameter.name]!=='number'||!Number.isFinite(row.anatomy[parameter.name]))throw Error('Incomplete PCM candidate geometry');
+      return row.anatomy[parameter.name] as number;
+    });
+    if(!values.length)throw Error('Empty PCM candidate grid');
+    const low=Math.min(...values),high=Math.max(...values);
+    if(low!==high)bounds[parameter.name]=[low,high];
+  }
+  return fittedCandidate(job,native,expectedModelId,{anatomy:best.anatomy as Record<string,unknown>,provenance:fit.native_provenance,
+    evidenceIds:fit.evidence_ids as string[],bounds,solver:'VocalTractLab finite PCM hypothesis selection',
+    interpretation:'Selected among varied physical hypotheses using coarse PCM descriptors; not identified physiology',
+    uncertainty:`Uncalibrated finite-grid conditional selection; explicit native source/JA/F0/scalar gain assumptions; source artifact bytes verified by fitter: ${fit.source_artifact_bytes_verified===true?'yes':'no'}; no human validation`});
 }
 
 const PCM_UNITS:Record<string,string>={pitchHz:'Hz',centroidHz:'Hz',flatness:'ratio',dbfs:'dBFS'};
 export function forecastFromPcm(candidate:CandidateAnatomy,native:NativeHandoff,options:{id:string;experimentId:string;intervention:string;createdAt:string;solverCalls:number}):Forecast{
   checked(candidate);
+  const binding=nativeBinding(native);
+  const declared=candidate.provenance.sourceIds.filter(id=>id.startsWith('native-provenance:'));
+  if(declared.length!==1||declared[0]!==`native-provenance:${binding}`||!candidate.provenance.sourceHashes.includes(binding))throw Error('Candidate/native provenance or geometry basis mismatch');
   if(candidate.availability!=='available')throw Error('Candidate is unavailable');
   if(!Number.isInteger(options.solverCalls)||options.solverCalls<1)throw Error('Declare actual prospective synthesis calls');
   const audio=native.measurements[0];if(!audio)throw Error('No canonical PCM window');
   checked(audio);
+  if(new Set(audio.measurements.map(m=>m.name)).size!==audio.measurements.length)throw Error('Duplicate PCM feature names');
   if(audio.provenance.kind!=='derived-measurement'||native.observation.provenance.kind!=='engine-generated'||audio.observationId!==native.observation.id||!audio.provenance.sourceIds.includes(audio.artifactId))throw Error('Expected engine-generated PCM lineage');
   const stream=native.observation.streams.find(s=>s.modality==='audio');
   const artifact=native.observation.artifacts.find(a=>a.id===audio.artifactId);

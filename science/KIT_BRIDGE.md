@@ -27,12 +27,18 @@ Node 23.9 was used for verification.
 - `importNativeForward(root, source, capabilities, output)`: runs B's existing importer
   to validate native artifacts, convert its OBJ to metre-valued glTF, and extract
   canonical PCM windows. No duplicate WAV decoder or feature implementation exists.
-- `candidateFromJointFit(job, native, expectedModelId)`: currently accepts genuine
-  `fit_joint` results only. It rejects failed, stale, mismatched provenance or geometry
+- `candidateFromJointFit(job, native, expectedModelId)`: accepts genuine
+  `fit_joint` results. It rejects failed, stale, mismatched provenance or geometry
   outputs. Parameters in the declared anatomy search bounds are labeled inferred;
   remaining template geometry is fixed. Search bounds are not physiological limits.
   Solver configuration binds the exact local request hash. Dynamic articulation is
   not falsely exposed as stable anatomy.
+- `candidateFromPcmFit(job, native, expectedModelId)`: exports a scored selected
+  `fit_pcm` hypothesis. Only geometry dimensions whose actual values vary across
+  the retained finite grid are labeled inferred; other dimensions remain fixed.
+  The record explicitly describes coarse conditional selection, fixed source
+  assumptions, and the fitter's source-audio-byte verification status. A missing
+  selection or stale model cannot produce anatomy.
 - `forecastFromPcm(candidate, native, options)`: takes the first canonical PCM window
   and binds its prediction to the fitted candidate and source evidence. Only pitch,
   centroid, flatness and PCM dBFS are included. Direct tract-transfer dB is never
@@ -72,3 +78,17 @@ geometry differs from generation truth. Those errors demonstrate a working adapt
 and independent scoring path, not anatomical accuracy, human G4/G6/G7 evidence or
 learning efficacy. Foreground camera/depth synchronization and metric motion claims
 are outside this synthetic PCM bridge.
+
+Both candidate adapters persist a canonical native-provenance digest using existing
+KIT provenance source IDs/hashes. Forecast generation requires that exact digest,
+including the declared geometry basis and native library hash. Matching the thirteen
+geometry numbers alone is insufficient. Old sources without an explicit geometry
+basis are rejected. The forecast also rejects duplicate canonical feature names
+before feature selection; no competing duplicate is silently chosen.
+
+The PCM adapter has an actual service integration test: synthesize a calibration
+window, extract it canonically, score two physical candidates through `fit_pcm`,
+export the selected native geometry, map the result into KIT, and create its PCM
+forecast. This is a finite-hypothesis test, not an anatomical-identification result.
+When testing across worktrees, `SINGING_SCIENCE_ROOT` can point to the checkout
+containing the updated native basis and PCM service implementation.
