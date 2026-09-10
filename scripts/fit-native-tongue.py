@@ -9,6 +9,29 @@ def import_script(name):
     spec=importlib.util.spec_from_file_location(name,Path(__file__).with_name(name+'.py'))
     module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module);return module
 
+
+def validate_regions(annotation, frames):
+    """Require in-bounds, separately anchored tongue/face/cheek annotations."""
+    if not isinstance(annotation, dict) or not isinstance(annotation.get('regions_xyxy'), dict):
+        raise ValueError('Expected explicit capture-specific region annotations')
+    if set(annotation['regions_xyxy']) != {'mouth','tongue','cheek'}:
+        raise ValueError('Expected mouth/tongue/cheek regions')
+    boxes = {'tracking_template': annotation.get('tracking_template_xyxy'), **annotation['regions_xyxy']}
+    for name, box in boxes.items():
+        if not isinstance(box, list) or len(box)!=4 or any(type(v) is not int for v in box):
+            raise ValueError(f'{name}: expected integer rectangle coordinates')
+        x0,y0,x1,y1=box
+        if not (22<=x0<x1<=298 and 22<=y0<y1<=158):
+            raise ValueError(f'{name}: region must leave 22-pixel tracking margins')
+    tongue=boxes['tongue']
+    for name in ['tracking_template','cheek']:
+        other=boxes[name]
+        if max(tongue[0],other[0])<min(tongue[2],other[2]) and max(tongue[1],other[1])<min(tongue[3],other[3]):
+            raise ValueError(f'{name}: nuisance registration region overlaps evaluated tongue')
+    reference=annotation.get('reference_frame')
+    if type(reference) is not int or not any(f['sequence']==reference for f in frames):
+        raise ValueError('Reference frame must identify a paired native frame')
+
 def basis(xy,center,scale,degree=2):
     u,v=((xy-center)/scale).T
     return np.stack([np.ones_like(u),u,v]+([u*u,u*v,v*v] if degree==2 else []),axis=1)
@@ -57,6 +80,7 @@ def main():
     if m['capture_id']!=ann['capture_id'] or m['device']['output_mirrored']:raise ValueError('Capture/annotation mismatch or mirrored output')
     frames=[f for f in m['frames'] if f.get('rgb') and f.get('depth')]
     if any(f['depth_dimensions']!=[320,180] or f['rgb_dimensions']!=[1280,720] for f in frames):raise ValueError('Unsupported annotation geometry')
+    validate_regions(ann,frames)
     def load(f):
         rgb=np.asarray(Image.open(io.BytesIO(z.read(prefix+f['rgb']['path']))).convert('RGB').resize((320,180),Image.Resampling.BOX))
         d=np.frombuffer(z.read(prefix+f['depth']['path']),dtype='<f4').reshape(180,320)
