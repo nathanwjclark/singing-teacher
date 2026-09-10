@@ -104,7 +104,7 @@ class NativeCapture:
     frames: tuple[NativeDepthFrame, ...]
 
 
-def read_native_capture(directory, *, max_bytes=_LIMIT):
+def read_native_capture(directory, *, max_bytes=_LIMIT, allow_rear_lidar=False):
     """Verify source artifacts and decode packed metric axial depth without fusion.
 
     evidence/timebase identifiers match B's native KIT importer. Numeric CMTime
@@ -147,13 +147,18 @@ def read_native_capture(directory, *, max_bytes=_LIMIT):
     manifest = json.loads(raw_manifest, object_pairs_hook=pairs,
         parse_constant=lambda _: (_ for _ in ()).throw(ValueError("nonfinite manifest JSON")))
     if (not isinstance(manifest, dict) or manifest.get("schema_version") != "singing-native-rgbd-1.0.0"
-            or manifest.get("capture_mode") != "one-held-pose"):
+            or manifest.get("capture_mode") not in ("one-held-pose", "separate-rear-lidar-held-pose")):
         raise ValueError("unsupported native capture schema/mode")
     capture_id = _text(manifest.get("capture_id"), "capture_id")
     device = manifest.get("device", {})
-    if (not isinstance(device, dict) or "TrueDepth" not in str(device.get("device_type", ""))
-            or device.get("position") != "front" or device.get("output_mirrored") is not False):
-        raise ValueError("expected declared unmirrored front TrueDepth capture")
+    sensor = "unsupported"
+    if isinstance(device, dict) and device.get("output_mirrored") is False:
+        if "TrueDepth" in str(device.get("device_type", "")) and device.get("position") == "front" and manifest.get("capture_mode") == "one-held-pose":
+            sensor = "front-truedepth"
+        elif "LiDAR" in str(device.get("device_type", "")) and device.get("position") == "back" and device.get("sensor") == "rear-lidar" and manifest.get("capture_mode") == "separate-rear-lidar-held-pose":
+            if not allow_rear_lidar:raise ValueError("Optional rear LiDAR ingestion is disabled")
+            sensor = "rear-lidar"
+    if sensor == "unsupported":raise ValueError("expected declared unmirrored front TrueDepth or explicitly enabled rear LiDAR capture")
     artifacts = {}
     def verify(value):
         if isinstance(value, list):
@@ -226,8 +231,9 @@ def read_native_capture(directory, *, max_bytes=_LIMIT):
                 blocked.append("absolute_depth_accuracy_not_declared")
             if not np.any(np.isfinite(depth) & (depth > 0)):
                 blocked.append("no_positive_finite_depth")
+        if sensor == "rear-lidar":blocked.append("vendor_fused_depth_support_not_independently_characterized")
         valid = int(np.count_nonzero(np.isfinite(depth) & (depth > 0))) if depth is not None else 0
-        readiness = {"decoded_axial_depth_m": depth is not None, "positive_finite_pixels": valid,
+        readiness = {"sensor": sensor, "separate_scan": sensor == "rear-lidar", "decoded_axial_depth_m": depth is not None, "positive_finite_pixels": valid,
             "total_pixels": int(depth.size) if depth is not None else 0, "calibration_metadata_present": calibration is not None,
             "metric_points_ready": False, "joint_fusion_ready": False, "blocking_reasons": blocked,
             "calibration_extrinsics_are_world_pose": False, "manifest_sha256": manifest_hash}

@@ -9,7 +9,7 @@ import struct
 import zipfile
 
 
-def review(path):
+def review(path, *, allow_rear_lidar=False):
     with zipfile.ZipFile(path) as archive:
         names = archive.namelist()
         if len(names) != len(set(names)):
@@ -30,8 +30,15 @@ def review(path):
         manifest = json.loads(raw_manifest)
         if manifest.get('schema_version') != 'singing-native-rgbd-1.0.0':
             raise ValueError('Unsupported capture version')
-        if manifest.get('capture_mode') != 'one-held-pose':
+        device=manifest.get('device', {})
+        rear=manifest.get('capture_mode')=='separate-rear-lidar-held-pose'
+        if rear:
+            if not allow_rear_lidar:raise ValueError('Optional rear LiDAR review is disabled')
+            if device.get('sensor')!='rear-lidar' or 'LiDAR' not in str(device.get('device_type','')) or device.get('position')!='back' or device.get('output_mirrored') is not False:raise ValueError('Rear sensor identity mismatch')
+        elif manifest.get('capture_mode') != 'one-held-pose':
             raise ValueError('This review supports held-pose capture only')
+        elif 'TrueDepth' not in str(device.get('device_type','')) or device.get('position')!='front' or device.get('output_mirrored') is not False:
+            raise ValueError('Front sensor identity mismatch')
         def artifact(record):
             name = record['path']
             if PurePosixPath(name).name != name:
@@ -115,14 +122,15 @@ def review(path):
                         raise ValueError('Invalid focal length')
                 row.update({'total_pixels':len(values),'positive_finite_pixels':len(valid),'valid_fraction':len(valid)/len(values),'median_depth_m':valid[len(valid)//2] if valid else None,'filtered':frame.get('depth_filtered'),'calibration_present':bool(calibration)})
             rows.append(row)
-        return {'kind':'native-depth-coverage-review','manifest_sha256':hashlib.sha256(raw_manifest).hexdigest(),'capture_id':manifest['capture_id'],'callbacks':len(rows),'verified_audio_chunks':audio_checked,'frames_with_depth':sum('valid_fraction'in r for r in rows),'frames_with_rgb':sum(bool(f.get('rgb')) for f in manifest['frames']),'audio':manifest.get('audio'),'stop_reason':manifest.get('stop_reason'),'frames':rows,'limitations':['Coverage is whole-depth-frame coverage, not mouth segmentation.','No on-device capture is implied by running this validator on a fixture.','Positive finite depth is not evidence of accurate tongue/palate reconstruction.','Native distortion is not corrected and head/world pose is absent; no surface fusion or metric point cloud generated.','Timestamp differences do not establish absolute synchronization uncertainty.']}
+        return {'sensor':'rear-lidar' if rear else 'front-truedepth','separate_scan':rear,'fusion_enabled':False,'kind':'native-depth-coverage-review','manifest_sha256':hashlib.sha256(raw_manifest).hexdigest(),'capture_id':manifest['capture_id'],'callbacks':len(rows),'verified_audio_chunks':audio_checked,'frames_with_depth':sum('valid_fraction'in r for r in rows),'frames_with_rgb':sum(bool(f.get('rgb')) for f in manifest['frames']),'audio':manifest.get('audio'),'stop_reason':manifest.get('stop_reason'),'frames':rows,'limitations':['Coverage is whole-depth-frame coverage, not mouth segmentation.','No on-device capture is implied by running this validator on a fixture.','Positive finite depth is not evidence of accurate tongue/palate reconstruction.','Native distortion is not corrected and head/world pose is absent; no surface fusion or metric point cloud generated.','Timestamp differences do not establish absolute synchronization uncertainty.']}
 
 if __name__ == '__main__':
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('capture_zip')
     parser.add_argument('--output',required=True)
+    parser.add_argument('--allow-rear-lidar',action='store_true')
     args=parser.parse_args()
-    report=review(args.capture_zip)
+    report=review(args.capture_zip,allow_rear_lidar=args.allow_rear_lidar)
     with Path(args.output).open('x') as f:
         json.dump(report,f,indent=2)
     print(f"Verified {report['callbacks']} callbacks; {report['frames_with_depth']} depth frames. Private report: {args.output}")

@@ -13,6 +13,10 @@ struct SingingDepthApp: App {
 struct ContentView: View {
     @ObservedObject var capture: DepthCapture
     @StateObject private var probe = AcousticProbe()
+    @StateObject private var rearCapture = RearLidarCapture()
+    @AppStorage("rearLidarOptIn") private var rearOptIn = false
+    @State private var rearPresented = false
+    @State private var rearSwitching = false
     @State private var pose = "Comfortable ah — hold still"
     @State private var addSound = false
     @State private var setupExpanded = false
@@ -29,7 +33,7 @@ struct ContentView: View {
     @State private var phase = ""
     @Environment(\.scenePhase) private var scenePhase
 
-    private var working: Bool { bundling || busy || capture.recording || capture.exporting || probe.running || probe.exporting }
+    private var working: Bool { rearPresented || rearSwitching || bundling || busy || capture.recording || capture.exporting || probe.running || probe.exporting }
     var body: some View {
         VStack(spacing: 10) {
             Text("Mouth capture").font(.title2.bold())
@@ -60,6 +64,19 @@ struct ContentView: View {
                         Text("Relaxed neutral").tag("Relaxed neutral")
                     }.disabled(working)
                     Text("Frame your whole mouth. Keep the phone steady for the selected pose. If depth is missing, move the phone farther away. Video ends after ten seconds; Stop ends the entire capture.").font(.footnote)
+                    DisclosureGroup("Optional rear LiDAR") {
+                        Toggle("Enable separate rear scans", isOn: $rearOptIn).disabled(working || setupActive || rearSwitching)
+                        if rearOptIn {
+                            Button("Open rear LiDAR scanner") {
+                                rearSwitching = true
+                                capture.setProbeMode(true) {
+                                    guard scenePhase == .active else { rearSwitching = false; restoreFrontCamera(); return }
+                                    rearCapture.setEnabled(true) { rearPresented = true; rearSwitching = false }
+                                }
+                            }.disabled(working || setupActive || rearSwitching || capture.retryAvailable)
+                            Text("A separate, silent held-pose scan. Sensor availability and depth coverage are checked at runtime; no fusion with the voice model is enabled.").font(.caption)
+                        }
+                    }
                     Toggle("Add sound measurement after video", isOn: $addSound).disabled(working || setupActive)
                     if addSound {
                         Text(probe.hasLevelCheck ? "After video saves, hold still without singing for three short sounds. The route and level check are verified again before playback." : "Sound measurement needs a reviewed output-level check. Set it up below, or turn this off to capture video and voice normally.")
@@ -105,7 +122,18 @@ struct ContentView: View {
         .fileImporter(isPresented: $importing, allowedContentTypes: [.json]) { result in
             if case .success(let url) = result { probe.importLevel(url) }
         }
+        .sheet(isPresented: Binding(get: { rearPresented }, set: { value in
+            if !value { rearSwitching = true }
+            rearPresented = value
+        }), onDismiss: {
+            rearSwitching = true
+            rearCapture.setEnabled(false) { rearSwitching = false; restoreFrontCamera() }
+        }) { RearLidarView(capture: rearCapture, close: { rearSwitching = true; rearPresented = false }) }
         .sheet(isPresented: $sharing) { if let url = shareURL { ShareCapture(url: url) } }
+    }
+    private func restoreFrontCamera() {
+        guard !rearPresented && !rearSwitching else { return }
+        capture.setProbeMode(false) {}
     }
     private func presentShare(_ url: URL?) { guard let url else { return }; shareURL = url; sharing = true }
     private func prepareSetup() {
@@ -114,9 +142,10 @@ struct ContentView: View {
     }
     private func finishSetup() {
         setupActive = false; probe.setModeActive(false)
-        capture.setProbeMode(false) {}; phase = ""
+        restoreFrontCamera(); phase = ""
     }
     private func startSequence() {
+        guard !rearPresented && !rearSwitching else { return }
         let id = UUID().uuidString
         sessionID = id; depthURL = nil; latestSessionURL = nil
         awaitingSound = addSound; busy = true; phase = "Recording video and depth…"
@@ -130,7 +159,7 @@ struct ContentView: View {
         capture.stop(reason: reason); probe.stop(reason: reason)
         probe.setModeActive(false)
         if setupActive { setupActive = false }
-        capture.setProbeMode(false) {}
+        restoreFrontCamera()
         if hadSequence { phase = "Stopped. Saving any recorded data; no further sound will play." }
         // Export callbacks still finish an in-flight save; invalidated preparation cannot start playback.
         busy = false
@@ -156,10 +185,10 @@ struct ContentView: View {
         }
     }
     private func endWithoutSound(_ message: String) {
-        busy = false; phase = message; probe.setModeActive(false); capture.setProbeMode(false) {}
+        busy = false; phase = message; probe.setModeActive(false); restoreFrontCamera()
     }
     private func soundSaved(url: URL?, reason: String) {
-        probe.setModeActive(false); capture.setProbeMode(false) {}
+        probe.setModeActive(false); restoreFrontCamera()
         guard let url, let depthURL, let sessionID else {
             busy = false; phase = "Video saved. \(probe.status)"; return
         }

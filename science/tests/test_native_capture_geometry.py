@@ -113,3 +113,47 @@ def test_depth_clock_cannot_reverse_behind_increasing_capture_callbacks(tmp_path
     manifest["frames"].append(second); save()
     with pytest.raises(ValueError, match="depth clock reversed"):
         read_native_capture(tmp_path)
+
+
+def test_rear_lidar_is_explicitly_gated_and_preserves_projection_lineage(tmp_path):
+    import base64
+    from observations.geometry.rectification import rectify_depth_points
+    manifest,save=fixture(tmp_path)
+    manifest['capture_mode']='separate-rear-lidar-held-pose'
+    manifest['device']={'device_type':'AVCaptureDeviceTypeBuiltInLiDARDepthCamera','position':'back','output_mirrored':False,'sensor':'rear-lidar'}
+    manifest['frames'][0]['calibration']['inverse_lens_distortion_table_base64']=base64.b64encode(np.zeros(8,dtype='<f4').tobytes()).decode()
+    save()
+    with pytest.raises(ValueError,match='disabled'):read_native_capture(tmp_path)
+    frame=read_native_capture(tmp_path,allow_rear_lidar=True).frames[0]
+    assert frame.readiness['sensor']=='rear-lidar' and frame.readiness['separate_scan']
+    assert not frame.readiness['joint_fusion_ready']
+    points=rectify_depth_points(frame,depth_to_reference=[[2,0,1],[0,2,1],[0,0,1]],reference_mapping_id='analytic-fixture-pixel-centers')
+    assert len(points['points_camera_m'])==2
+    assert points['lineage']['source_artifact_sha256']==manifest['frames'][0]['depth']['sha256']
+    np.testing.assert_allclose(points['points_camera_m'][:,2],[.35,.4],rtol=1e-6)
+    manifest['device']['position']='front';save()
+    with pytest.raises(ValueError,match='declared'):read_native_capture(tmp_path,allow_rear_lidar=True)
+
+
+def test_rear_archive_coverage_review_requires_opt_in_and_sensor_identity(tmp_path):
+    import importlib.util
+    import zipfile
+    from pathlib import Path
+    spec=importlib.util.spec_from_file_location('native_review',Path(__file__).parents[2]/'scripts/review-native-depth.py')
+    module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+    manifest,save=fixture(tmp_path)
+    manifest['audio']={'samples':[]};(tmp_path/'audio.pcm').unlink()
+    manifest['frames'][0]['rgb_dropped']=True
+    manifest['capture_mode']='separate-rear-lidar-held-pose'
+    manifest['device']={'device_type':'AVCaptureDeviceTypeBuiltInLiDARDepthCamera','position':'back','output_mirrored':False,'sensor':'rear-lidar'}
+    def package():
+        save()
+        with zipfile.ZipFile(tmp_path/'rear.zip','w') as archive:
+            archive.write(tmp_path/'manifest.json','manifest.json');archive.write(tmp_path/'depth.f32','depth.f32')
+    package()
+    with pytest.raises(ValueError,match='disabled'):module.review(tmp_path/'rear.zip')
+    result=module.review(tmp_path/'rear.zip',allow_rear_lidar=True)
+    assert result['sensor']=='rear-lidar' and result['separate_scan'] and result['fusion_enabled'] is False
+    assert result['frames_with_depth']==1 and result['verified_audio_chunks']==0
+    manifest['capture_mode']='one-held-pose';package()
+    with pytest.raises(ValueError,match='Front sensor'):module.review(tmp_path/'rear.zip',allow_rear_lidar=True)

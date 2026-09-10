@@ -7,7 +7,7 @@ import { join } from 'node:path';
 
 const run = promisify(execFile);
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const archiveName = /^(capture|probe|session)-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.zip$/i;
+const archiveName = /^(capture|probe|session|rear-lidar)-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.zip$/i;
 const limit = 512 * 1024 * 1024;
 const fail = (message, status = 400) => Object.assign(new Error(message), { status });
 const options = timeout => ({ timeout, maxBuffer: 2 * 1024 * 1024, windowsHide: true });
@@ -70,22 +70,25 @@ export function createNativePullRoutes({ repo, dataRoot, json }) {
       verification: 'downloaded-only', source: 'configured-iphone-app-container',
       message: 'Saved privately. This archive has not yet been validated for model use.',
     };
-    if (selected.name.startsWith('capture-')) {
+    if (selected.name.startsWith('capture-') || selected.name.startsWith('rear-lidar-')) {
       let python = join(repo, 'science', '.venv', 'bin', 'python');
       try { await access(python); } catch { python = '/usr/bin/python3'; }
       try {
         const reportFile = join(job, 'depth-review.json');
-        await run(python, [join(repo, 'scripts', 'review-native-depth.py'), target, '--output', reportFile], options(80_000));
+        await run(python, [join(repo, 'scripts', 'review-native-depth.py'), target, '--output', reportFile,...(process.env.LIDAR_PREVIEW_ENABLED==='1'?['--allow-rear-lidar']:[])], options(80_000));
         const report = JSON.parse(await readFile(reportFile, 'utf8'));
         if (report.kind !== 'native-depth-coverage-review' || !Number.isSafeInteger(report.callbacks)
-          || String(report.capture_id).toUpperCase() !== selected.name.slice(8, -4).toUpperCase()) throw new Error('Invalid review result or capture ID');
+          || String(report.capture_id).toUpperCase() !== selected.name.replace(/^(capture|rear-lidar)-/, '').slice(0,-4).toUpperCase()) throw new Error('Invalid review result or capture ID');
         receipt.verification = 'native-rgbd-verified';
+        receipt.sensor = report.sensor;
+        receipt.separateScan = report.separate_scan===true;
+        receipt.modelFusionEnabled = false;
         receipt.captureId = report.capture_id;
         receipt.frames = report.callbacks;
         receipt.depthFrames = report.frames_with_depth;
         receipt.rgbFrames = report.frames_with_rgb;
         receipt.audioChunks = report.verified_audio_chunks;
-        receipt.message = `${existing ? 'Already here; reverified' : 'Pulled and verified'} ${report.callbacks} frames and ${report.verified_audio_chunks} audio chunks. Depth coverage still needs review.`;
+        receipt.message = `${existing ? 'Already here; reverified' : 'Pulled and verified'} ${report.callbacks} frames and ${report.verified_audio_chunks} audio chunks. Depth coverage still needs review.${report.sensor==='rear-lidar'?' Separate rear LiDAR scan; review only, no voice-model update.':''}`;
       } catch {
         receipt.message = 'Saved privately, but native validation did not pass. The original ZIP is retained; do not use it as verified model input yet.';
       }
