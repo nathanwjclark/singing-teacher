@@ -1,8 +1,10 @@
 # Parallel-agent execution plan
 
-Companion to revision 7 of the physiological acoustic moonshot specification. Two humans remain accountable, each coordinating as many bounded Astra tasks as the dependency graph supports. This is an implementation plan, not evidence that the application or anatomical recovery works. There are no fixed hackathon time estimates.
+Companion to revision 8 of the physiological acoustic moonshot specification. Two humans remain accountable, each coordinating as many bounded Astra tasks as the dependency graph supports. This is an implementation plan, not evidence that the application or anatomical recovery works. The current three-hour finish schedule and completion definition are in the research-harness finish plan.
 
 Optimize for the earliest integrated, independently evaluated physiological inference experiment. Launch an agent only when its inputs, owned files and acceptance experiment are concrete. Additional capacity should remove a demonstrated bottleneck or challenge a scientific assumption. Unlimited agents do not imply unlimited simultaneous edits or benchmark compute.
+
+The [research-harness finish plan](research-harness-finish-plan.md) supersedes accuracy/positive-result interpretations of these gates. Prioritize actual runtime Astra, capture-to-model adapters, orchestration, actual-model visualization and end-to-end verification. Independent evaluation checks experiment integrity; it need not find accurate anatomy or improved learning to accept connected software. Existing module ownership remains intact.
 
 ## 1. Human accountability and coordination
 

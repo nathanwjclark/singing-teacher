@@ -1,6 +1,8 @@
 # Active acoustic probing: integrated app capability
 
-Revision 7. Active acoustic probing is an initial product workstream, alongside singing audio, RGB, depth and embodied cues. It is not gated behind completion of a separate research project. Build a real capture-to-inference path with acceptance checks inside delivery. The plan does not claim phone-based cavity reconstruction already works.
+Revision 8. Active acoustic probing is an initial product workstream, alongside singing audio, RGB, depth and embodied cues. It is not gated behind completion of a separate research project. Build a real capture-to-inference path with acceptance checks inside delivery. The plan does not claim phone-based cavity reconstruction already works.
+
+The [research-harness finish plan](research-harness-finish-plan.md) governs completion and the three-hour window. A coarse external-drive model with poor predictions can satisfy implementation acceptance when real probe data traverses it correctly. Capture-only probing does not complete the connection. Positive reconstruction accuracy or added modality benefit is not required.
 
 ## Product behavior and scope
 
