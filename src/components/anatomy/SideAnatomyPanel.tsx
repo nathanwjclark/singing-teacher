@@ -1,11 +1,12 @@
 import { useEffect, useId, useRef, type RefObject } from 'react';
 import type { AnatomyMotionState } from '../../lib/anatomyState';
 import './SideAnatomyPanel.css';
+import { AtlasCrossSection } from './AtlasCrossSection';
 
 type Props = { motion: RefObject<AnatomyMotionState> };
 const degrees = (angle: number) => angle * 180 / Math.PI;
 
-// Original illustrative sagittal geometry. The shared surface rig supplies motion;
+// Licensed anatomical plate above; original illustrative airway geometry below. The shared surface rig supplies motion;
 // neither the internal tissue shapes nor airway dimensions are camera measurements.
 export function SideAnatomyPanel({ motion }: Props) {
   const root = useRef<HTMLDivElement>(null);
@@ -16,15 +17,12 @@ export function SideAnatomyPanel({ motion }: Props) {
     const find = (name: string) => Array.from(element.querySelectorAll<SVGElement>(`[data-motion="${name}"]`));
     const torso = find('torso'), head = find('head'), jaw = find('jaw');
     const tongue = find('tongue'), airway = find('airway'), centerline = find('centerline');
-    const lateral = find('lateral'), neck = find('neck');
+    const lateral = find('lateral');
     const status = element.querySelector('[data-status]');
     let request = 0;
     const draw = () => {
       const state = motion.current;
       const pitch = degrees(state.head.x), lean = degrees(state.torso.x);
-      const neckX = 146 + 27 * Math.cos(state.head.x) + 39 * Math.sin(state.head.x);
-      const neckY = 168 + 27 * Math.sin(state.head.x) - 39 * Math.cos(state.head.x);
-      neck.forEach(node => node.setAttribute('d', `M ${neckX} ${neckY} Q 161 183 172 219 L 157 231 Q 153 194 ${neckX - 7} ${neckY + 7} Z`));
       torso.forEach(node => node.setAttribute('transform', `rotate(${lean} 143 237)`));
       head.forEach(node => node.setAttribute('transform', `rotate(${pitch} 146 168)`));
       jaw.forEach(node => node.setAttribute('transform', `rotate(${degrees(state.jawOpen)} 173 117)`));
@@ -51,39 +49,8 @@ export function SideAnatomyPanel({ motion }: Props) {
   return <div ref={root} className="side-anatomy-panel">
     <section className="side-anatomy-tile" aria-label="Side profile head and neck cross-section">
       <header><strong>HEAD & NECK</strong><span>SAGITTAL CUTAWAY</span></header>
-      <svg viewBox="45 5 260 250" role="img" aria-label="Animated illustrative side cutaway of skull, jaw, neck muscles and tongue">
-        <defs>
-          <linearGradient id={`${id}-bone`} x2="1" y2="1"><stop stopColor="#f5e5c9"/><stop offset="1" stopColor="#ad9d82"/></linearGradient>
-          <linearGradient id={`${id}-muscle`}><stop stopColor="#9f5961"/><stop offset=".55" stopColor="#d69787"/><stop offset="1" stopColor="#935563"/></linearGradient>
-          <pattern id={`${id}-fibers`} width="5" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(-20)"><path d="M0 0V8" stroke="#f6c9af" strokeOpacity=".28" strokeWidth="1"/></pattern>
-        </defs>
-        <g data-motion="torso">
-          <path d="M 82 247 Q 105 222 130 218 L 140 166 L 176 162 L 180 216 Q 209 225 222 247" fill="#c69a8620" stroke="#b795824f"/>
-          <path d="M 141 170 Q 127 198 139 240" fill="none" stroke="#b5ac94" strokeWidth="14"/>
-          {[181,194,207,220,233].map((y, i) => <rect key={y} x={129 + Math.abs(i-2)} y={y} width="19" height="9" rx="3" fill={`url(#${id}-bone)`} stroke="#766e5e" strokeWidth="1"/>)}
-          <path data-motion="neck" fill={`url(#${id}-muscle)`}/>
-          <path data-motion="neck" fill={`url(#${id}-fibers)`}/>
-          <path d="M 137 175 Q 113 208 99 239 L 121 239 Q 130 207 145 188 Z" fill="#a96c72" opacity=".8"/>
-          <g data-motion="head">
-            <path d="M 143 172 C 116 163 102 129 105 87 C 109 42 143 22 177 25 C 211 27 225 53 224 81 L 237 97 L 251 105 Q 254 111 239 113 L 236 124 Q 248 130 235 137 L 238 149 Q 236 165 212 167 L 177 175" fill="#d9a68b18" stroke="#d6b093" strokeWidth="1.6"/>
-            <path d="M 139 152 C 115 135 111 108 116 81 C 123 46 148 34 176 36 C 201 38 213 53 214 76 L 207 93 L 191 104 L 179 116 L 168 145 Z" fill={`url(#${id}-bone)`}/>
-            <path d="M 132 118 C 119 91 130 59 157 51 C 183 42 202 58 203 77 C 202 95 181 104 174 128 L 158 137 Z" fill="#293b36" stroke="#d4c3a5" strokeWidth="2"/>
-            <path d="M 213 89 Q 238 101 229 112 L 208 112 L 198 120 L 182 122 L 190 104 Z" fill="#2c4541" stroke="#b5b5a0"/>
-            <path d="M 185 121 Q 210 119 232 123" stroke="#e6d6b9" strokeWidth="5" fill="none"/>
-            <path d="M 198 124 H230" stroke="#fbf1d9" strokeWidth="5" strokeDasharray="5 1"/>
-            <path d="M 172 120 Q 155 134 158 173 L 158 209" fill="none" stroke="#73bab0" strokeWidth="12" opacity=".4"/>
-            <g data-motion="jaw">
-              <path d="M 174 118 Q 167 137 182 155 Q 204 164 233 150 L 229 144 Q 204 151 188 143 L 183 117 Z" fill={`url(#${id}-bone)`} stroke="#dec8a6" strokeWidth="1"/>
-              <path d="M 199 145 L 230 143" stroke="#fbf1d9" strokeWidth="5" strokeDasharray="5 1"/>
-              <path data-motion="tongue" fill="#df8897" stroke="#ffb1b4" strokeWidth="1.5"/>
-              <path d="M 178 111 Q 185 120 187 142 L 177 139 Q 170 121 178 111 Z" fill={`url(#${id}-muscle)`}/>
-            </g>
-            <circle cx="215" cy="83" r="4" fill="#111f1b" stroke="#ddbaa1"/>
-          </g>
-        </g>
-        <g className="side-anatomy-label"><path d="M 74 76 H106"/><text x="57" y="71">Skull</text><path d="M 249 145 H270"/><text x="247" y="158">Tongue</text><path d="M 82 204 H124"/><text x="55" y="199">Neck</text></g>
-      </svg>
-      <div className="side-anatomy-key"><i className="bone"/>Bone<i className="muscle"/>Muscle<i className="tongue"/>Tongue</div>
+      <AtlasCrossSection motion={motion}/>
+      <div className="atlas-credit"><a href="https://commons.wikimedia.org/wiki/File:Head_sagittal_mouth.jpg" target="_blank" rel="noreferrer">Patrick J. Lynch · C. Carl Jaffe</a><span>Animated adaptation · <a href="https://creativecommons.org/licenses/by/2.5/" target="_blank" rel="noreferrer">CC BY 2.5</a></span></div>
     </section>
     <section className="side-anatomy-tile vocal-tract-tile" aria-label="Vocal tract interior shape">
       <header><strong>VOCAL TRACT</strong><span>INTERIOR SPACE</span></header>
