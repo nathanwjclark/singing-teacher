@@ -1,7 +1,39 @@
-# Foundation evidence and handoff
+# Current Lead A integration status
+
+The initial foundation results below are retained as historical evidence. The
+parallel expansion is now implemented and reviewed in PR #3:
+
+| Module | Executable evidence |
+|---|---|
+| Forward | Certified native binary; repeatable audio/SVG/tube/OBJ export and lip markers |
+| Geometry/fusion | Calibrated points -> source-defined lip measurement -> synchronized joint likelihood |
+| Inference | Shared anatomy/per-trial articulation; global/local budget; fair baseline; applied controls |
+| Forecast | Content-addressed frozen candidates -> actual native transfer predictions |
+| Service | Real spawned jobs, idempotency, replay, stale-model rejection, cancellation and watchdog |
+| Cross-module replay | Native observations -> fitting job -> frozen model -> prediction job -> identical bytes |
+
+The assembled suite passed 78 tests with `-W error`, and a fresh native build
+passed all 21 C++ tests. The native anatomy patch also passed the 21-test
+AddressSanitizer suite during the foundation milestone; subsequent changes are
+Python integrations around the same native source. Duplicate geometry and held-out relabeling regressions are included. Revision 6
+dynamic motion/control extensions are now being integrated as a separate stage.
+
+See [JOINT_INFERENCE.md](JOINT_INFERENCE.md) for improved but still ambiguous joint
+recovery and [MISMATCH.md](MISMATCH.md) for all three fixed-budget perturbation
+attempts. Low fitting error does not establish correct anatomy. Measured-audio
+likelihoods await B's canonical extractor; real-phone calibration/correspondence
+and human-anatomy recovery remain unvalidated.
+
+The complete ownership and unmet acceptance gates are in the repository
+[coordination record](../docs/coordination/lead-a-handoff.md). The Python job/replay
+interfaces are executable internal profiles, not a competing KIT-01 wire contract.
+
+---
+
+# Scientific implementation evidence and handoff
 
 Verified on macOS arm64 with Python 3.12. This is Person A's first executable
-milestone under the [two-person plan](../docs/physiology/two-person-execution-plan.md).
+foundation milestone under the [two-person plan](../docs/physiology/two-person-execution-plan.md).
 
 ## Implemented
 
@@ -50,7 +82,7 @@ measurement precision on people. An earlier local-only optimizer failed; the
 implemented global search resolves these tested cases but does not prove global
 identifiability. Candidate spread is not a calibrated uncertainty distribution.
 
-## Next integrated work
+## Original foundation handoff (superseded above)
 
 1. **A:** add unknown excitation, capture response and bounded per-trial
    articulation; keep global anatomy shared across trials. Test whether competing

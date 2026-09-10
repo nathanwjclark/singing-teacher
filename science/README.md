@@ -1,9 +1,10 @@
 # Physiological acoustic model foundation
 
-Person A's first working model milestone integrates a real VocalTractLab engine,
-exposes anatomical controls, exports sound and corresponding geometry, and runs
-a controlled inverse test. It does **not** yet fit human recordings, fuse RGB/depth,
-recover tissue mechanics or run the Astra experiment planner.
+Lead A's scientific implementation integrates VocalTractLab, shared-anatomy and
+per-trial articulation fitting, calibrated visible-lip constraints, frozen numerical
+forecasts and durable subprocess jobs. It exports real sound and corresponding
+SVG/OBJ geometry. Human microphone fitting, tissue-mechanics recovery and actual
+phone acceptance remain unfinished; B owns the Astra experimental system.
 
 See [verified results and owner handoff](STATUS.md) for measured recovery results,
 checks run and the next integrated tasks.
@@ -44,11 +45,13 @@ are rejected.
 sagittal contour), `geometry.json` (tube lengths/areas with units), `transfer.json`
 (simulated transfer magnitude/phase), and `manifest.json` (parameters, actual
 articulation, source assumptions, sample rate and source/patch/artifact hashes).
+Native OBJ/MTL surfaces, matching EMA markers and surface-mesh metadata are also
+exported and hashed. These are template-conditional model surfaces, not a scan.
 There is no hidden playback normalization; peak amplitude is recorded.
 
 Person B can ingest this genuine audio/geometry pair before live capture is
-integrated. This milestone provides local commands and Python functions, not a
-network server or unfinished sensor endpoints.
+integrated. The executable job service exposes local Python operations; B owns adaptation
+to the shared public contract. No unfinished sensor endpoint is advertised.
 
 ## Scientific scope
 
@@ -92,12 +95,28 @@ science/.venv/bin/python science/scripts/build_native.py --sanitize
 Upstream also emits temporary exception-message string warnings. These are not
 fixed by the anatomy patch; broader file ingestion needs further hardening.
 
-## Next Person A tasks
+## Integrated modules and next handoff
 
-- Model excitation, articulation and capture when fitting actual microphone audio.
-- Fit bounded per-trial articulation with shared anatomy; test mismatch and identifiability.
-- Integrate Person B's synchronized RGB/depth bundle and visibility/calibration (FUSE-01).
-- Add scientific job/evidence identities and intervention forecasts for the experiment loop.
+- [Forward physics](FORWARD.md): synthesis, tube geometry, OBJ surfaces and lip markers.
+- [Joint inference](JOINT_INFERENCE.md): shared anatomy, trial jaw controls, fair baseline,
+  actual visible-lip likelihood and retained recovery failures.
+- [Geometry](GEOMETRY.md): calibrated visible points, uncertainty, synchronization and
+  source-defined lip observation operator.
+- [Forecasts](PREDICTION.md), [jobs](SERVICE.md) and [replay](REPLAY.md): runnable fit to
+  frozen prediction through real native subprocesses.
+- [Mismatch challenge](MISMATCH.md): fixed-budget perturbations and observed anatomy drift.
+
+Run the integrated synthetic handoff with:
+
+```sh
+science/.venv/bin/python science/scripts/replay_science.py science/artifacts/replay --budget 20
+```
+
+Next, A consumes B's KIT-01/AUD-01 contracts and extractor to add unknown source and
+capture response to microphone likelihoods. Actual CAP-01/02 recordings must validate
+phone calibration, timing and lip correspondence before human multimodal acceptance.
+B's independent evaluator and prospective ledger are needed for the release gates.
+See the repository [coordination record](../docs/coordination/lead-a-handoff.md).
 
 Original `science/` code is AGPL-3.0-or-later; dependencies retain their own terms.
 This scoped license does not relicense existing frontend code or assets. See
