@@ -1,6 +1,6 @@
 import { CONTRACT_VERSION } from '../contracts/index.ts';
 import type { AudioMeasurement, Measurement, Timebase } from '../contracts/index.ts';
-import type { AudioCalibration } from './audioCalibration';
+import type { AudioCalibration } from './audioCalibration.ts';
 
 export type AudioMetrics = { dbfs: number; centroidHz: number | null; flatness: number | null; pitchHz: number | null; periodicity: number | null };
 export type MusicalNote = { name: string; octave: number; cents: number; midi: number };
