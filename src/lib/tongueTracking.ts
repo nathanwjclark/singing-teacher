@@ -1,5 +1,6 @@
 import { createTongueTipTracker } from './tongueTip.ts';
-import type { Landmark, TongueObservation } from '../types';
+import { inferLabeledTongueTip, validTongueProfile, type TongueProfile } from './tongueProfile.ts';
+import type { Landmark, TongueObservation, TongueDiagnostic } from '../types';
 
 /** Experimental segmentation of exposed pink tissue inside the inner lip
  * contour. This is not an internal tongue pose or a trained tongue detector. */
@@ -73,33 +74,47 @@ export function detectVisibleTongue(pixels: Uint8ClampedArray, width: number, he
 export function createTongueTracker() {
   const tipTracker=createTongueTipTracker();
   let hits=0;
-  let reference:{x:number;y:number}|undefined;
+  let profile:TongueProfile|undefined;
+  let profileStatus='Private labeled profile not loaded; select a visible tip';
+  let diagnostic:TongueDiagnostic={state:'unselected',reason:profileStatus};
+  let reference:{x:number;y:number}|undefined={x:0,y:0};
   let smooth:TongueObservation|undefined;
   const track = (pixels:Uint8ClampedArray,width:number,height:number,face:Landmark[]) => {
     let observed=detectVisibleTongue(pixels,width,height,face);
-    const tip=face.length?tipTracker.update(pixels,width,height):undefined;
-    if(!face.length)tipTracker.reset();
+    let tip=face.length?tipTracker.update(pixels,width,height):undefined;
+    diagnostic=tipTracker.diagnostic;
+    if(face.length&&profile&&!tip){
+      const result=inferLabeledTongueTip(profile,pixels,width,height);tip=result.point;
+      diagnostic={state:tip?'tracking':'lost',reason:`Private labeled profile · ${result.reason}`,score:result.score};
+    } else if(!tip&&!tipTracker.selected)diagnostic={state:'unselected',reason:profileStatus};
+    if(!face.length){tipTracker.reset();diagnostic={state:'unselected',reason:profile?'Private labeled profile ready · show an open mouth':profileStatus};}
     // A tissue-color gate is not evidence that a selected image point was lost.
     if(!observed&&tip)observed={x:tip.x,y:tip.y,lateral:0,lift:.5,visibleFraction:0};
-    if(!observed){hits=0;smooth=undefined;if(!face.length)reference=undefined;return undefined;}
+    if(!observed){hits=0;smooth=undefined;return undefined;}
     hits++;
     observed.trackingMode=tip?'tip':'region';
     observed.tip=tip;
     if(tip){
-      const left=Math.min(face[78].x,face[308].x),right=Math.max(face[78].x,face[308].x);
-      const span=Math.max(.01,right-left);
+      const [left,right]=[face[78],face[308]].sort((a,b)=>a.x-b.x);
+      const dx=(right.x-left.x)*width,dy=(right.y-left.y)*height,span=Math.max(1,Math.hypot(dx,dy));
+      const ux=dx/span,uy=dy/span;
+      const cx=(left.x+right.x)*width/2,cy=face[14].y*height;
+      const tx=tip.x*width-cx,ty=tip.y*height-cy;
       observed.x=tip.x;observed.y=tip.y;
-      observed.lateral=(tip.x-(left+right)/2)/span;
-      observed.elevation=((face[13].y+face[14].y)/2-tip.y)*height/(span*width);
-      observed.extension=Math.max(0,Math.min(1,(tip.y-face[14].y)*height/(span*width*.45)));
-    } else {reference=undefined;observed.lateral=0;observed.elevation=0;}
-    // The selected tip supplies both axes; recentering defines its neutral pose.
-    reference??={x:observed.lateral,y:observed.elevation??0};
-    observed.lateral=Math.max(-1,Math.min(1,(observed.lateral-reference.x)*6));
-    observed.elevation=Math.max(-1,Math.min(1,((observed.elevation??0)-reference.y)*6));
+      observed.lateral=(tx*ux+ty*uy)/span;
+      observed.elevation=(tx*uy-ty*ux)/span;
+      observed.extension=Math.max(0,Math.min(1,((tip.y-face[14].y)*height*ux-(tip.x-face[14].x)*width*uy)/(span*.45)));
+    } else {observed.lateral=0;observed.elevation=0;}
+    // The lower lip is the visible tongue-rest height; the aperture midpoint
+    // incorrectly makes even a raised tongue appear below neutral. Mouth axes
+    // at this lip reference are the default neutral. Only explicit Recenter captures a
+    // user offset; automatic reacquisition must not zero a newly lifted tip.
+    if(tip)reference??={x:observed.lateral,y:observed.elevation??0};
+    observed.lateral=Math.max(-1,Math.min(1,(observed.lateral-(reference?.x??0))*6));
+    observed.elevation=Math.max(-1,Math.min(1,((observed.elevation??0)-(reference?.y??0))*6));
     if(smooth) for(const key of ['x','y','lateral','lift','visibleFraction','extension','elevation'] as const) observed[key]=(smooth[key]??observed[key]??0)+((observed[key]??0)-(smooth[key]??0))*.45;
     smooth=observed;
-    return hits>=2 ? observed : undefined;
+    return tip || hits>=2 ? observed : undefined;
   };
-  return Object.assign(track,{diagnostics(){return tipTracker.diagnostic},selectTip(x:number,y:number){tipTracker.select(x,y);reference=undefined;smooth=undefined;hits=0;},isTipSelected(){return tipTracker.selected},resetMotionReference(){reference=undefined;smooth=undefined;hits=0;}});
+  return Object.assign(track,{setProfile(value:unknown){if(!validTongueProfile(value)){profileStatus='Private profile is invalid; select the visible tip';return false;}profile=value;profileStatus=`Private labeled profile ready · ${profile.examples.length} examples`;return true;},profileUnavailable(){profileStatus='No private labeled profile; click Track tip to initialize';},diagnostics(){return {...diagnostic}},selectTip(x:number,y:number){tipTracker.select(x,y);reference={x:0,y:0};smooth=undefined;hits=0;},isTipSelected(){return tipTracker.selected},resetMotionReference(){reference=undefined;smooth=undefined;hits=0;}});
 }
