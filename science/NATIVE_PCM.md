@@ -82,3 +82,13 @@ nonfinite values, declared timing mismatch, short-fit exclusion, PCM16 clipping,
 cumulative timing drift and five-second source offsets. These tests provide
 software-path evidence only; actual iPhone recordings remain required for device
 acceptance and human reconstruction claims.
+
+A recorded cross-language software check fed the emitted 48 kHz
+`fit_trial_options[0]` unchanged into `fit_pcm` with one explicitly declared
+native candidate and its fixed-anatomy baseline. Both synthesized actual PCM:
+2 total native calls, candidate status `scored`, weighted discrepancy
+3.4641016472298887 against the software tone. The nonzero discrepancy is retained;
+a tone is not a vocal-tract reconstruction target. Local reproducible handoff
+artifacts are in `science/artifacts/native-pcm-handoff`, with the separately
+retained raw fixture in `science/artifacts/native-pcm-source-fixture`. These
+artifacts carry explicit development-fixture provenance and are not phone data.
