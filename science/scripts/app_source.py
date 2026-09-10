@@ -15,8 +15,8 @@ from import_session_bundle import _archive, _phase, _json
 from singing_physics.phonation import measure_phonation
 
 
-def read(path):
-    if path.is_symlink() or not path.is_file() or path.stat().st_size>64*1024*1024:raise ValueError('Invalid source artifact')
+def read(path,limit=64*1024*1024):
+    if path.is_symlink() or not path.is_file() or path.stat().st_size>limit:raise ValueError('Invalid source artifact')
     return path.read_bytes()
 
 
@@ -53,7 +53,7 @@ def frame(import_dir,session_id,identity=None,evidence_at=None,rate=None,declare
 def capture(root,output,session_id,target,committed_at,rate,kind,pose):
     receipt=load(root/'native-pull-latest.json');name=receipt.get('name','')
     if not re.fullmatch(r'capture-[0-9a-fA-F-]{36}\.zip',name):raise ValueError('Pull a later ordinary voice capture')
-    raw=read(root/'usb-imports'/name)
+    raw=read(root/'usb-imports'/name,512*1024*1024)
     if len(raw)!=receipt['bytes'] or sha(raw)!=receipt['sha256']:raise ValueError('Original USB archive integrity mismatch')
     files=_archive(raw,[512*1024*1024]);manifest=_phase(files,'videoDepth')
     if manifest.get('capture_id','').upper()!=name[8:-4].upper():raise ValueError('USB identity mismatch')
