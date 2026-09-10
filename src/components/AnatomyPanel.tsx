@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { createModelHair } from '../lib/modelHair';
 import type { BodyRegion, TrackingFrame } from '../types';
 import './AnatomyPanel.css';
 
@@ -77,6 +78,9 @@ export function AnatomyPanel({ frame, activeRegion = 'jaw', activeMuscles, demo 
     const meshes: AnatomyMesh[] = [];
     const decorative: THREE.Mesh[] = [];
     const eyes: THREE.Group[] = [];
+    const hair = createModelHair();
+    head.add(hair);
+    hair.traverse(object => { if (object instanceof THREE.Mesh) decorative.push(object); });
     // Deliberately cartoon eyes; the surrounding anatomical surfaces come from the dataset.
     for (const side of [-1, 1]) {
       const eye = new THREE.Group();eye.position.set(side * 3.15,8,8.1);head.add(eye);eyes.push(eye);
@@ -122,6 +126,7 @@ export function AnatomyPanel({ frame, activeRegion = 'jaw', activeMuscles, demo 
     let lastAppearance = '';
     renderer.setAnimationLoop((time) => {
       const props=latest.current;const m=props.frame?.metrics;
+      hair.visible=props.muscles;
       const simulation=props.demo&&!props.frame;
       const shoulderRoll=bounded(m?.torsoLean ?? m?.shoulderTilt,-20,20)*radians;
       const world = props.frame?.worldPose;
