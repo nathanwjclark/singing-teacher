@@ -19,12 +19,12 @@ test('compact bank retains bounded unavailable alternatives and conditional held
  const {root,dir}=await fixture(t),previous=globalThis.fetch,url=process.env.SCIENCE_URL,token=process.env.SCIENCE_TOKEN;
  process.env.SCIENCE_URL='http://127.0.0.1:8766';process.env.SCIENCE_TOKEN='test';
  t.after(()=>{globalThis.fetch=previous;if(url===undefined)delete process.env.SCIENCE_URL;else process.env.SCIENCE_URL=url;if(token===undefined)delete process.env.SCIENCE_TOKEN;else process.env.SCIENCE_TOKEN=token;});
- const rows=Array.from({length:27},(_,i)=>({alternative_id:'joint:'+i,family:'joint',candidate_id:String(i),status:i?'available':'unavailable',reason:i?null:'unsupported-window',record:i?{descriptors:{pitch:180}}:null}));
+ const rows=Array.from({length:51},(_,i)=>({alternative_id:'joint:'+i,family:'joint',candidate_id:String(i),status:i?'available':'unavailable',reason:i?null:'unsupported-window',record:i?{descriptors:{pitch:180}}:null}));
  await writeFile(join(dir,'source-forecast.json'),JSON.stringify({status:'succeeded',result:{baselineModelId:'model-one',forecast:{kind:'frozen-phonation-bank-1',target_id:'target',status:'available',alternatives:rows,fit_sha256:'fit-hash'},sha256:'bank-hash'}}));
  await writeFile(join(dir,'source-score.json'),JSON.stringify({status:'succeeded',result:{baselineModelId:'model-one',status:'scored',forecast_sha256:'bank-hash',alternatives:rows.map((row,i)=>({...row,score:i?2:null,heldout_rank:i||null})),ranking:['joint:1'],conditionalRanking:{rankingId:'rank-one',version:1,bankSha256:'bank-hash'},model_updated:false}}));
  globalThis.fetch=async()=>Response.json({state:{snapshot:{model_id:'model-one'},source_model:{model_id:'source-one'},source_forecasts:{target:{status:'scored',source_model_id:'source-one',baseline_model_id:'model-one'}},source_rankings:[{ranking_id:'rank-one',bank_sha256:'bank-hash',source_model_id:'source-one',baseline_model_id:'model-one'}]}});
  const compact=await readSourceInferenceContext({dataRoot:root,enabled:true,compact:true});
- assert.equal(compact.forecast.current,false);assert.equal(compact.forecast.bank.alternatives.length,24);assert.equal(compact.forecast.bank.totalAlternatives,27);
+ assert.equal(compact.forecast.current,false);assert.equal(compact.forecast.bank.alternatives.length,48);assert.equal(compact.forecast.bank.totalAlternatives,51);
  assert.equal(compact.forecast.bank.alternatives[0].status,'unavailable');assert.equal(compact.forecast.bank.alternatives[0].descriptors,null);
  assert.equal(compact.score.conditionalRanking.alternatives[0].discrepancy,null);assert.equal(compact.score.conditionalRanking.conditionalRanking.rankingId,'rank-one');
  assert.equal(compact.sourceRankingIdentity,'rank-one');assert.equal(compact.sourceRankingBankSha256,'bank-hash');
