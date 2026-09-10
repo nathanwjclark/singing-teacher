@@ -29,7 +29,10 @@ export function AstraCoachPanel({ onDecision, refreshKey = 0 }: {
         const next = await getAstraStatus(controller.signal);
         if (controller.signal.aborted || generation !== decisionGeneration.current) return;
         setStatus(next);
-        if (next.latest && delivered.current !== next.latest.requestId) {
+        if (next.latestAttempt?.status === 'failed' || next.latestAttempt?.status === 'succeeded') {
+          setPending(previous => previous?.requestId === next.latestAttempt?.requestId ? null : previous);
+        }
+        if (next.latestCurrent && next.latest && delivered.current !== next.latest.requestId) {
           delivered.current = next.latest.requestId;
           callback.current?.(next.latest);
         }
@@ -58,11 +61,7 @@ export function AstraCoachPanel({ onDecision, refreshKey = 0 }: {
       decisionGeneration.current += 1;
       if (!mounted.current) return;
       setPending(null);
-      setStatus(previous => previous ? { ...previous, latest: receipt } : previous);
-      if (delivered.current !== receipt.requestId) {
-        delivered.current = receipt.requestId;
-        callback.current?.(receipt);
-      }
+      setStatus(previous => previous ? { ...previous, latest: receipt, latestCurrent: false } : previous);
     } catch (failure) {
       if (mounted.current && failure instanceof AstraRequestError && failure.status >= 400 && failure.status < 500) setPending(null);
       if (mounted.current) setError(failure instanceof Error ? failure.message : 'Astra could not choose an experiment.');
@@ -90,11 +89,11 @@ export function AstraCoachPanel({ onDecision, refreshKey = 0 }: {
       {busy ? 'Astra is choosing an experiment…' : pending ? 'Retry Astra request' : 'Ask Astra for the next experiment'}</button>
       <button onClick={() => { setError(''); setRefresh(value => value + 1); }}>Refresh connection</button></div>
     {busy && <p role="status">Waiting for the server to finish and commit the prediction. Keep this page open.</p>}
-    {(error || status?.error) && <p role="alert">{error || status?.error}</p>}
+    {(error || status?.error || status?.latestAttempt?.status === 'failed') && <p role="alert">{error || status?.error || status?.latestAttempt?.error || 'The last Astra request failed. You can request a new decision.'}</p>}
     {latest && <div className="astra-coach-decision" aria-label="Latest Astra decision">
-      <h4>{latest.decision.action === 'rest' ? 'Rest' : 'Next recording'}</h4>
+      <h4>{!status.latestCurrent ? 'Previous instruction' : latest.decision.action === 'rest' ? 'Rest' : 'Next recording'}</h4>
       <p className="astra-coach-cue">{latest.decision.cue}</p><p>{latest.decision.explanation}</p>
-      {latest.decision.action === 'record' && <p>The prediction is committed. Record this instruction, pull the new iPhone capture, then score it in the scientific model panel.</p>}
+      {status.latestCurrent && latest.decision.action === 'record' ? <p>The prediction is committed. Record this instruction, pull the new iPhone capture, then score it in the scientific model panel.</p> : !status.latestCurrent && <p>This instruction is historical or its current validity is unconfirmed{status.latestDesignStatus ? ` (${status.latestDesignStatus})` : ''}. Ask Astra for the next experiment using the current model before recording.</p>}
       <details><summary>Decision receipt</summary><p>Provider: {latest.provider} · {latest.model}</p>
         <p>Session: {latest.sessionId}<br />Design: {latest.designId || 'No recording requested'}
           {latest.modelId && <><br />Model: {latest.modelId}</>}

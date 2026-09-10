@@ -20,7 +20,20 @@ export interface AstraStatus {
   callBudget: number;
   running: boolean;
   latest: AstraDecisionReceipt | null;
+  latestAttempt?: { requestId: string; status: 'running' | 'failed' | 'succeeded'; error?: string } | null;
+  latestCurrent?: boolean;
+  latestDesignStatus?: string | null;
+  currentModelId?: string | null;
   error?: string;
+}
+
+export function isAstraDecision(value: unknown): value is AstraDecisionReceipt {
+  if (!value || typeof value !== 'object') return false;
+  const row = value as Partial<AstraDecisionReceipt>;
+  return row.status === 'succeeded' && typeof row.requestId === 'string' &&
+    typeof row.sessionId === 'string' && typeof row.runId === 'string' &&
+    Boolean(row.decision && ['record', 'rest'].includes(row.decision.action) &&
+      typeof row.decision.cue === 'string' && typeof row.decision.explanation === 'string');
 }
 
 export class AstraRequestError extends Error {
@@ -38,14 +51,18 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return body as T;
 }
 
-export function getAstraStatus(signal?: AbortSignal): Promise<AstraStatus> {
-  return request('status', { signal });
+export async function getAstraStatus(signal?: AbortSignal): Promise<AstraStatus> {
+  const status = await request<AstraStatus>('status', { signal });
+  // Older servers can return a running/failed attempt in the latest slot.
+  return { ...status, latest: isAstraDecision(status.latest) ? status.latest : null };
 }
 
-export function askAstra(requestId: string, goal: string): Promise<AstraDecisionReceipt> {
-  return request('decide', {
+export async function askAstra(requestId: string, goal: string): Promise<AstraDecisionReceipt> {
+  const receipt = await request<unknown>('decide', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ requestId, ...(goal.trim() ? { goal: goal.trim() } : {}) }),
   });
+  if (!isAstraDecision(receipt)) throw new Error('Astra did not return a completed decision. Refresh status before trying again.');
+  return receipt;
 }
