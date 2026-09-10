@@ -145,7 +145,7 @@ def finish(backend,intent,output):
     accepted=result['status']=='ranked' and adoption.get('model_updated') is True
     answer={'captureId':intent['captureId'],'importId':intent['importId'],'archiveSha256':intent['archiveSha256'],
         'sessionId':intent['sessionId'],'parentModelId':intent['parentModelId'],'modelId':adoption.get('model_id',intent['parentModelId']),
-        'jobId':record['job_id'],'fitId':output.name,'status':'ranked' if accepted else adoption.get('status',result['status']),
+        'jobId':record['job_id'],'fitId':output.name,'status':'ranked' if accepted else 'rejected' if adoption.get('status')=='rejected' else result['status'],
         'reason':adoption.get('reason') or result.get('reason'),'result':result,'includedInFit':accepted,'adoption':adoption,'geometry':None}
     # Native geometry is a subsequent export. Preserve the authoritative adoption
     # first so a failed export cannot conceal a model update that already occurred.

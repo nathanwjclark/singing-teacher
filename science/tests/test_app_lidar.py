@@ -51,20 +51,21 @@ def test_unapproved_annotation_never_gets_evidence_binding(tmp_path):
     assert not (tmp_path/'experimental-declaration.json').exists()
 
 
-def test_ranked_numerical_result_rejected_by_session_is_not_included(tmp_path):
+@pytest.mark.parametrize('numerical_status,adoption_status',[('ranked','rejected'),('rejected','succeeded')])
+def test_ranked_numerical_result_rejected_by_session_is_not_included(tmp_path,numerical_status,adoption_status):
     from science.scripts.app_lidar import finish,digest
     from singing_physics.service import canonical
     intent={'sessionId':'session','parentModelId':'parent','captureId':'capture','importId':'import','archiveSha256':'a'*64,
         'command':{'command_id':'fit-command'}}
     key='session:'+digest(canonical(['session','fit-command']).encode())
-    state={'jobs':[{'key':key,'job_id':'job','status':'succeeded','result':{'status':'ranked','with_depth_order':['first']}}],
-        'pending':None,'lidar_fusions':[{'job_id':'job','status':'rejected','reason':'source evidence changed','model_updated':False,'model_id':'parent'}]}
+    state={'jobs':[{'key':key,'job_id':'job','status':'succeeded','result':{'status':numerical_status,'with_depth_order':['first']}}],
+        'pending':None,'lidar_fusions':[{'job_id':'job','status':adoption_status,'reason':'source evidence changed','model_updated':False,'model_id':'parent'}]}
     class Backend:
         def execute(self,command):return {'state':state} if command['action']=='state' else {'events':[]}
     answer=finish(Backend(),intent,tmp_path)
     assert answer['status']=='rejected' and answer['includedInFit'] is False
     assert answer['reason']=='source evidence changed' and answer['modelId']=='parent'
-    assert answer['result']['status']=='ranked'
+    assert answer['result']['status']==numerical_status
     assert answer['geometry'] is None
 
 
