@@ -43,3 +43,5 @@ The tongue-label export is a real visible-tip annotation set with invalid direct
 The reconstruction direction is recorded in [mouth-reconstruction-direction.md](../research/mouth-reconstruction-direction.md).
 
 Revision 6 learning exports include `kit.records` alongside the local protocol/replay envelope. Run `node --experimental-strip-types scripts/validate-learning.ts EXPORT_JSON` to check the shared record schema and cue/attempt references. The validator cannot verify specialist credentials or substitute for actual learner evidence.
+
+Native depth export inspection is available as `python3 scripts/review-native-depth.py CAPTURE.zip --output NEW_REPORT.json`. It verifies recorded bytes and metadata and reports valid-depth coverage. It does not undistort, infer missing surfaces, or certify interior-mouth measurement accuracy.
