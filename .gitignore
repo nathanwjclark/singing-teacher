@@ -30,3 +30,8 @@ dist-ssr
 # Local participant captures and private HTTPS keys
 .local-data/
 .local-certs/
+
+# Private API configuration
+.env
+.env.*
+!.env.example

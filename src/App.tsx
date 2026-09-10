@@ -112,6 +112,16 @@ function StudioApp() {
   const [help, setHelp] = useState(false)
   const [trackingEpoch,setTrackingEpoch]=useState(0)
   const [scientificPreview,setScientificPreview]=useState(false)
+  useEffect(() => {
+    const showScience = () => setTab('experiments');
+    const showModel = () => { setScientificPreview(false); setTab('studio'); };
+    window.addEventListener('singing:show-science', showScience);
+    window.addEventListener('singing:show-model', showModel);
+    return () => {
+      window.removeEventListener('singing:show-science', showScience);
+      window.removeEventListener('singing:show-model', showModel);
+    };
+  }, []);
   const onStatus = useCallback((value: TrackingStatus, detail?: string) => { setStatus(previous => value === 'idle' && previous === 'error' ? previous : value); if (value !== 'idle') setMessage(detail ?? ''); if(value === 'error') setActive(false) }, [])
   useEffect(() => { if (!active) return; const timer = window.setInterval(() => setSeconds(s => s + 1), 1000); return () => window.clearInterval(timer) }, [active])
   useEffect(() => {
