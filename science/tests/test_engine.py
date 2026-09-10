@@ -73,3 +73,72 @@ def test_anatomical_perturbation_changes_spectrum_and_returns_to_baseline():
         assert np.linalg.norm(original-changed) > 1
         e.set_anatomy({})
         np.testing.assert_allclose(e.spectrum("a")[1], original, atol=1e-9)
+
+
+def test_synthesis_preserves_anatomy_and_responds_to_controls():
+    with Engine() as e:
+        e.set_anatomy({'hard_palate_length': 4.3})
+        anatomy = e.anatomy()
+        first = e.synthesize('a', duration_s=.1)
+        repeat = e.synthesize('a', duration_s=.1)
+        assert first.dtype == np.float64
+        assert first.shape == (round(.1 * e.sample_rate),)
+        np.testing.assert_allclose(repeat, first, atol=1e-12, rtol=0)
+        changed_pitch = e.synthesize('a', f0_hz=220, duration_s=.1)
+        changed_lips = e.synthesize('a', {'LD': 1.}, duration_s=.1)
+        assert np.linalg.norm(changed_pitch-first) > 1e-3
+        assert np.linalg.norm(changed_lips-first) > 1e-3
+        assert e.anatomy() == anatomy
+        e.set_anatomy({})
+        changed_anatomy = e.synthesize('a', duration_s=.1)
+        assert np.linalg.norm(changed_anatomy-first) > 1e-3
+
+
+def test_synthesis_validation_and_failed_export_restore_state(tmp_path):
+    with Engine() as e:
+        e.set_anatomy({'hard_palate_length': 4.3})
+        before = e.anatomy()
+        for kwargs in [{'f0_hz': True}, {'duration_s': float('nan')}, {'duration_s': .01},
+                       {'articulation': []}, {'articulation': {'LD': float('inf')}},
+                       {'pose': []}, {'f0_hz': 10000}]:
+            with pytest.raises(ValueError):
+                e.synthesize(**{'pose': 'a', **kwargs})
+            assert e.anatomy() == before
+        with pytest.raises(ValueError):
+            e.export(tmp_path/'invalid', anatomy={'hard_palate_length': 4.6}, pose='invalid')
+        assert e.anatomy() == before
+        assert not (tmp_path/'invalid').exists()
+        record = e.export(tmp_path/'current', duration_s=.1)
+        assert record['anatomy'] == before
+        assert e.anatomy() == before
+    with pytest.raises(RuntimeError, match='closed'):
+        e.synthesize('a')
+
+
+def test_geometry_matches_current_anatomy_and_is_independent_of_call_order():
+    with Engine() as e:
+        e.set_anatomy({'hard_palate_length': 4.3})
+        before = e.geometry('a', {'LD': 1.})
+        assert before['anatomy'] == e.anatomy()
+        assert len(before['length_cm']) == e.tube_count
+        assert all(x > 0 for x in before['length_cm'])
+        assert before['incisor_position_cm'] > 0
+        e.spectrum('i')
+        assert e.geometry('a', {'LD': 1.}) == before
+        assert e.geometry('i')['area_cm2'] != before['area_cm2']
+
+
+def test_manifest_mismatch_rejected_before_native_initialization(tmp_path, monkeypatch):
+    import singing_physics.engine as module
+    original = module.BUILD
+    manifest = json.loads((original/'manifest.json').read_text())
+    (tmp_path/'source').symlink_to(original/'source', target_is_directory=True)
+    monkeypatch.setattr(module, 'BUILD', tmp_path)
+    for key in ('patch_sha256', 'library_sha256'):
+        changed = {**manifest, key: '0'*64}
+        (tmp_path/'manifest.json').write_text(json.dumps(changed))
+        with pytest.raises(RuntimeError, match='differs from the build manifest'):
+            Engine()
+    (tmp_path/'manifest.json').write_text(json.dumps(manifest))
+    with Engine() as e:
+        assert e.sample_rate > 0

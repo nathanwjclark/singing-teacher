@@ -5,6 +5,7 @@ import hashlib
 import json
 import shutil
 import subprocess
+import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 REVISION = "df30392f18dc5e175b577c3ba734caaa65a3927f"
@@ -19,6 +20,8 @@ def main():
     if revision != REVISION:
         raise SystemExit(f"Expected VTL {REVISION}, got {revision}")
     target = ROOT / ".build" / ("native-asan" if args.sanitize else "native")
+    # A failed rebuild must not leave a manifest certifying an older library.
+    (target / "manifest.json").unlink(missing_ok=True)
     source = target / "source"
     source.mkdir(parents=True, exist_ok=True)
     # Export only tracked source at the pin. Upstream tests write files into their tree.
@@ -43,7 +46,12 @@ add_test(NAME AnatomyLifecycle COMMAND AnatomyLifecycle ${CMAKE_SOURCE_DIR}/reso
     subprocess.run(["cmake", "-S", str(source), "-B", str(build), *options], check=True)
     subprocess.run(["cmake", "--build", str(build), "--parallel", "4"], check=True)
     subprocess.run(["ctest", "--test-dir", str(build), "--output-on-failure"], check=True)
+    suffix = {"darwin": "dylib", "linux": "so"}.get(sys.platform)
+    if suffix is None:
+        raise SystemExit("Native manifest supports macOS and Linux only")
+    library = source / f"lib/Release/libVocalTractLabApi.{suffix}"
     manifest = {
+        "library_sha256": hashlib.sha256(library.read_bytes()).hexdigest(),
         "upstream_revision": revision,
         "patch_sha256": hashlib.sha256(patch.read_bytes()).hexdigest(),
         "speaker_sha256": hashlib.sha256((source / "resources/JD3.speaker").read_bytes()).hexdigest(),

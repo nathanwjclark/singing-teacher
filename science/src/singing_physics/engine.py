@@ -9,6 +9,7 @@ import ctypes as ct
 import hashlib
 import json
 import math
+from numbers import Real
 from pathlib import Path
 import sys
 import threading
@@ -48,7 +49,7 @@ def write_json(path: Path, value):
 
 
 def finite(value, label):
-    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+    if isinstance(value, bool) or not isinstance(value, Real) or not math.isfinite(value):
         raise ValueError(f"{label} must be a finite number")
     return float(value)
 
@@ -74,7 +75,12 @@ class Engine:
             speaker = BUILD / "source/resources/JD3.speaker"
             if digest(speaker) != self.provenance["speaker_sha256"]:
                 raise RuntimeError("Reference speaker differs from the build manifest")
-            self.provenance = {**self.provenance, "library_sha256": digest(library)}
+            if digest(ROOT / "patches/anatomy-tongue-bounds.patch") != self.provenance["patch_sha256"]:
+                raise RuntimeError("Native patch differs from the build manifest")
+            library_hash = digest(library)
+            if self.provenance.get("library_sha256", library_hash) != library_hash:
+                raise RuntimeError("Native library differs from the build manifest")
+            self.provenance = {**self.provenance, "library_sha256": library_hash}
             self.lib = ct.CDLL(str(library))
             signatures = {
                 "vtlInitialize": [ct.c_char_p], "vtlClose": [],
@@ -187,8 +193,10 @@ class Engine:
 
     def pose(self, name, overrides=None):
         self._guard()
-        if name not in self.poses:
+        if not isinstance(name, str) or name not in self.poses:
             raise ValueError(f"Unknown pose {name!r}")
+        if overrides is not None and not isinstance(overrides, dict):
+            raise ValueError("articulation must be a mapping")
         info = self._param_info("vtlGetTractParamInfo", self.tract_count)
         indices = {p["name"]: i for i, p in enumerate(info)}
         values = list(self.poses[name])
@@ -229,15 +237,17 @@ class Engine:
                 "supports": ["forward_audio", "sagittal_svg", "tube_area_function", "shared_anatomy_synthetic_transfer_fit"],
                 "unsupported": ["human_audio_inverse_fit", "depth_fusion", "nasal_outlet_occlusion", "tissue_mechanics_recovery", "calibrated_posterior"]}
 
-    def export(self, output, pose="a", anatomy=None, articulation=None, f0_hz=160., duration_s=.4):
-        output = Path(output)
-        if output.exists():
-            raise ValueError(f"Output already exists: {output}; choose a new directory")
+    def synthesize(self, pose, articulation=None, f0_hz=160., duration_s=.4):
+        """Synthesize a stationary pose at the current anatomy; return float64 audio.
+
+        Each call resets the acoustic solver and ramps glottal pressure over 25 ms.
+        Values are native amplitudes, not normalized or microphone-calibrated sound.
+        """
+        self._guard()
         f0_hz, duration_s = finite(f0_hz, "f0_hz"), finite(duration_s, "duration_s")
         if not 40 <= f0_hz <= 1000 or not .1 <= duration_s <= 5:
-            raise ValueError("Demo F0 must be 40-1000 Hz and duration 0.1-5 seconds")
-        applied = self.set_anatomy(anatomy or {})
-        params, pose_record = self.pose(pose, articulation)
+            raise ValueError("F0 must be 40-1000 Hz and duration 0.1-5 seconds")
+        params, _ = self.pose(pose, articulation)
         source = (ct.c_double * self.glottis_count)(*(p["default"] for p in self.source_info))
         source_names = {p["name"]: i for i, p in enumerate(self.source_info)}
         if "F0" not in source_names or "PR" not in source_names:
@@ -260,19 +270,58 @@ class Engine:
         audio = np.concatenate([np.array(attack), np.array(sustain)])
         if not np.isfinite(audio).all() or np.max(np.abs(audio)) == 0:
             raise RuntimeError("Native synthesis returned nonfinite or silent output")
-        frequency, db, phase = self.spectrum(pose, articulation)
+        return audio
+
+    def geometry(self, pose, articulation=None):
+        """Return the current model's discretized tract, not measured anatomy."""
+        params, pose_record = self.pose(pose, articulation)
         lengths, areas = (ct.c_double * self.tube_count)(), (ct.c_double * self.tube_count)()
         articulators = (ct.c_int * self.tube_count)()
         incisors, tongue_side, velum = ct.c_double(), ct.c_double(), ct.c_double()
         self._check(self.lib.vtlTractToTube(params, lengths, areas, articulators, ct.byref(incisors), ct.byref(tongue_side), ct.byref(velum)), "tube geometry")
+        numeric = [*lengths, *areas, incisors.value, tongue_side.value, velum.value]
+        if not np.isfinite(numeric).all() or min(lengths) <= 0 or min(areas) < 0 or velum.value < 0:
+            raise RuntimeError("Native tube geometry contains invalid dimensions")
+        return {"kind": "model_tube_geometry", "length_cm": list(lengths), "area_cm2": list(areas),
+                "articulator_index": list(articulators), "velum_opening_cm2": velum.value,
+                "incisor_position_cm": incisors.value, "tongue_side_elevation": tongue_side.value,
+                "tongue_side_elevation_parameter": "TS3", "anatomy": self.anatomy(),
+                "pose": pose, "articulation": pose_record}
+
+    def export(self, output, pose="a", anatomy=None, articulation=None, f0_hz=160., duration_s=.4):
+        """Export matching artifacts. Omitted anatomy preserves the current model.
+
+        Explicit anatomy uses set_anatomy's template-relative semantics. Failed
+        exports restore the previous anatomy; partial output has no manifest.
+        """
+        self._guard()
+        output = Path(output)
+        if output.exists():
+            raise ValueError(f"Output already exists: {output}; choose a new directory")
+        previous = self.anatomy()
+        try:
+            if anatomy is not None:
+                self.set_anatomy(anatomy)
+            return self._export_current(output, pose, articulation, f0_hz, duration_s)
+        except BaseException:
+            if self.anatomy() != previous:
+                self.set_anatomy(previous)
+            raise
+
+    def _export_current(self, output, pose, articulation, f0_hz, duration_s):
+        f0_hz, duration_s = finite(f0_hz, "f0_hz"), finite(duration_s, "duration_s")
+        audio = self.synthesize(pose, articulation, f0_hz, duration_s)
+        applied = self.anatomy()
+        params, pose_record = self.pose(pose, articulation)
+        frequency, db, phase = self.spectrum(pose, articulation)
+        geometry = self.geometry(pose, articulation)
         output.mkdir(parents=True)
         try:
             wavfile.write(output / "audio.wav", self.sample_rate, audio.astype(np.float32))
             self._check(self.lib.vtlExportTractSvg(params, str(output / "tract.svg").encode()), "SVG export")
             write_json(output / "transfer.json", {"frequency_hz": frequency.tolist(), "magnitude_db": db.tolist(), "phase_rad": phase.tolist(),
                                                   "kind": "simulator_transfer_function_not_measured_audio"})
-            write_json(output / "geometry.json", {"kind": "model_tube_geometry", "length_cm": list(lengths), "area_cm2": list(areas),
-                                                  "articulator_index": list(articulators), "velum_opening_cm2": velum.value})
+            write_json(output / "geometry.json", geometry)
             record = {"schema_version": "0.1.0", "kind": "synthetic_forward_export", "anatomy": applied, "pose": pose,
                       "articulation": pose_record, "f0_hz": f0_hz, "duration_s": len(audio)/self.sample_rate,
                       "sample_rate_hz": self.sample_rate, "peak_absolute_amplitude": float(np.max(np.abs(audio))),
