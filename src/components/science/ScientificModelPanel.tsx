@@ -36,6 +36,7 @@ export function ScientificModelPanel({onPreview}:{onPreview:()=>void}){
   window.addEventListener('singing:process-capture',process);return()=>window.removeEventListener('singing:process-capture',process);
  });
  useEffect(()=>{const clear=()=>{setVoiceOnly(false);setOutcomeConfirmed(false)};window.addEventListener('singing:native-capture',clear);return()=>window.removeEventListener('singing:native-capture',clear)},[]);
+ useEffect(()=>{const update=()=>setRefresh(value=>value+1);window.addEventListener('singing:model-updated',update);return()=>window.removeEventListener('singing:model-updated',update)},[]);
  useEffect(()=>{
   const job=requested.current;
   if(job&&((job.kind==='fit'&&state.runId===job.id&&['failed','interrupted'].includes(state.status))||(job.kind==='outcome'&&outcome.outcomeId===job.id&&['failed','interrupted'].includes(outcome.status)))){requested.current=null;setCaptureProgress(null);setProcessingLabel('');window.dispatchEvent(new Event('singing:show-science'))}

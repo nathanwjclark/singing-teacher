@@ -45,7 +45,8 @@ export function LidarFusionPanel(){
   setBusy(true);setError('');
   try{
    const jawValues=parseNumbers(jaw,'Jaw angles'),jawWeights=parseNumbers(weights,'Jaw weights');
-   if(jawValues.length!==jawWeights.length||jawWeights.some(value=>value<0)||!jawWeights.some(value=>value>0))throw Error('Supply one nonnegative weight per jaw angle, with at least one positive weight');
+   if(jawValues.length>3||jawValues.some(value=>value< -5||value> -1)||new Set(jawValues).size!==jawValues.length)throw Error('Supply one to three distinct jaw angles between −5 and −1 degrees');
+   if(jawValues.length!==jawWeights.length||jawWeights.some(value=>value<=0)||Math.abs(jawWeights.reduce((sum,value)=>sum+value,0)-1)>1e-12)throw Error('Supply one positive weight per jaw angle, with weights adding to one');
    const measurementSigmaM=Number(measurementSigma),modelSigmaM=Number(modelSigma);
    if(!(measurementSigmaM>0)||!(modelSigmaM>0)||!Number.isFinite(measurementSigmaM+modelSigmaM))throw Error('Both uncertainty values must be positive finite meters');
    if([mappingWhy,uncertainty,correspondence,registration].some(value=>!value.trim()))throw Error('Explain the mapping, uncertainty, correspondence and registration assumptions');
@@ -90,6 +91,7 @@ export function LidarFusionPanel(){
   </>}
   {status?.result&&<div><h4>Recorded LiDAR contribution</h4>
    <p>Numerical result: {status.result.result.status}. {status.result.result.reason}</p>
+   {status.result.adoption?.reason&&<p role="status">Session adoption: {status.result.adoption.status}. {status.result.adoption.reason}</p>}
    <p>{status.result.adoption?.model_updated?'The depth-ranked successor was adopted by the session.':'No successor model was adopted.'} {status.result.includedInFit?'Depth evidence participated in this conditional fit.':'Depth evidence was not included in the fit.'} This does not validate anatomy.</p>
    <p>Model lineage: {status.result.parentModelId} → {status.result.modelId}. {status.result.adoption?.model_updated&&status.currentModelId!==status.result.modelId?'Historical result: the current model has since changed.':''}</p>
    {status.result.result.observed_distance_m!=null&&<p>Declared outer-lip distance: {status.result.result.observed_distance_m.toFixed(6)} m · {status.result.result.actual_geometry_calls??0} native geometry calls.</p>}

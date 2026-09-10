@@ -1,6 +1,7 @@
 import {open, readdir, realpath} from 'node:fs/promises';
 import {resolve, sep} from 'node:path';
 import {createHash} from 'node:crypto';
+import {isDeepStrictEqual} from 'node:util';
 
 const safeId = value => typeof value === 'string' && /^[A-Za-z0-9_-]{1,160}$/.test(value);
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
@@ -172,6 +173,23 @@ export function createSessionExportRoutes({dataRoot, json, fetchImpl = fetch, en
         }
         if (inspectedMotionAnalyses > MAX_FILES || artifacts.length >= MAX_FILES) break;
       }
+      for (const fitId of await folders('lidar-fits')) {
+        const source = `lidar-fits/${fitId}/summary.json`;
+        if (artifacts.length >= MAX_FILES) { missing.push({source, reason: 'Artifact count limit reached'}); break; }
+        try {
+          const artifact = await read(source), result = artifact.data;
+          if (result.sessionId !== sessionId) continue;
+          const job = state?.jobs?.find(row => row.job_id === result.jobId && row.request?.operation === 'rank_lidar_hypotheses');
+          const adoption = state?.lidar_fusions?.find(row => row.job_id === result.jobId);
+          if (!job || !adoption || !isDeepStrictEqual(job.result, result.result) || !isDeepStrictEqual(adoption, result.adoption)
+              || result.fitId !== fitId || !knownModels.has(result.modelId) || !/^[a-f0-9]{64}$/.test(result.importId)) throw Error('LiDAR receipt is not bound to authoritative session');
+          const original = await digestOriginal(`lidar-imports/${result.importId}/original.zip`, 128 * 1024 * 1024);
+          if (original.sha256 !== result.archiveSha256 || original.sha256 !== result.importId) throw Error('Original LiDAR archive changed');
+          artifacts.push({...artifact, binding: {sessionId, modelId: result.modelId, current: result.modelId === state.snapshot?.model_id,
+            role: 'experimental-lidar-fusion', originalBytesVerified: true, modelUpdated: adoption.model_updated === true}});
+          await optional(`lidar-fits/${fitId}/experimental-declaration.json`);
+        } catch { missing.push({source, reason: 'LiDAR receipt, original archive or authoritative lineage unavailable or exceeds verification bounds; excluded'}); }
+      }
       const summary = {
         modelId: state?.snapshot?.model_id || null,
         sessionVersion: state?.version ?? null,
@@ -180,6 +198,8 @@ export function createSessionExportRoutes({dataRoot, json, fetchImpl = fetch, en
         attemptCount: state?.attempts?.length || 0,
         scoreCount: (state?.jobs || []).filter(job => job.result?.scores).length,
         probeFitCount: artifacts.filter(a => a.source.startsWith('probe-fits/')).length,
+        lidarFusionCount: (state?.lidar_fusions || []).filter(row => row.status === 'adopted').length,
+        sourceBankScoreCount: (state?.source_receipts || []).filter(row => row.operation === 'score_phonation_bank').length,
         motionAnalysisCount: artifacts.filter(a => a.binding?.role === 'conditional-motion-audio-analysis').length,
       };
       // Recheck the app pointer after asynchronous collection; never mix two active runs.

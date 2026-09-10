@@ -11,7 +11,7 @@ export function currentLidarPreview(status:LidarStatus|null):LidarFitReceipt|nul
 export interface LidarFitReceipt {
  captureId:string;importId:string;archiveSha256:string;sessionId:string;parentModelId:string;modelId:string;jobId:string;fitId:string;status:string;includedInFit:boolean;
  result:{status:string;reason?:string;without_depth_order?:string[];with_depth_order?:string[];rankings?:Array<{hypothesis_id:string;depth_discrepancy:number|null;predictions:unknown}>;observed_distance_m?:number;actual_geometry_calls?:number;comparison?:unknown};
- adoption?:{status:string;model_updated:boolean};
+ adoption?:{status:string;model_updated:boolean;reason?:string};
  geometry?:{modelId:string;hypothesisId:string;pose:string;JA:number;files:Record<string,{sha256:string;byteLength:number}>};
 }
 export interface LidarFrame {width:number;height:number;depthM:Array<number|null>;sequence:number;calibration:unknown}
