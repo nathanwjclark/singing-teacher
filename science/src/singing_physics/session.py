@@ -100,6 +100,9 @@ class SessionController:
                 except (ValueError, RuntimeError) as exc:
                     state['jobs'].append({**pending,'status':'submission_failed','error':str(exc)})
                     state['pending']=None
+                    if pending.get('visual_binding'):
+                        from .session_visual import collect
+                        collect(state,pending,'submission_failed',None)
                     if pending.get('source_binding'):
                         from .session_source import collect
                         collect(state,pending,'submission_failed',None)
@@ -121,7 +124,7 @@ class SessionController:
             state,digest,events=self._dispatch(ledger=True)
             return {'state':state,'ledger_sha256':digest, **({'events':events} if action=='replay' else {})}
         command_id=_id(command.get('command_id'))
-        fields={'register_model':{'snapshot'},'ingest_calibration':{'document'},'search':{'parameters'},'fit_probe':{'parameters'},'fit_lidar':{'parameters'},
+        fields={'forecast_visual':{'forecast_id','parameters'},'score_visual':{'forecast_id','parameters'},'register_model':{'snapshot'},'ingest_calibration':{'document'},'search':{'parameters'},'fit_probe':{'parameters'},'fit_lidar':{'parameters'},
             'select_experiment':{'source_design_id','design_id','target_observation_id','experiment_id','selection_reason'},
             'propose_design':{'parameters'},'collect_job':{'job_id'},'submit_outcome':{'design_id','parameters'},
             'forecast_source_bank':{'parameters'},'score_source_bank':{'forecast_id','pcm','metadata'},'fit_source':{'parameters'},'forecast_source':{'parameters'},'score_source':{'forecast_id','pcm','metadata'},
@@ -150,7 +153,12 @@ class SessionController:
                           'key':'session:'+_hash([self.session_id,command_id]),'job_id':None,'base_model_id':model}
 
     def _apply(self,state,action,c):
-        if action in ('fit_source','forecast_source','score_source','forecast_source_bank','score_source_bank'):
+        if action in ('forecast_visual','score_visual'):
+            from .session_visual import prepare
+            operation,parameters,binding=prepare(state,action,c)
+            self._launch(state,operation,parameters,c['command_id'])
+            state['pending']['visual_binding']=binding
+        elif action in ('fit_source','forecast_source','score_source','forecast_source_bank','score_source_bank'):
             from .session_source import prepare
             operation,parameters,binding=prepare(state,action,c)
             self._launch(state,operation,parameters,c['command_id'])
@@ -299,6 +307,9 @@ class SessionController:
             if operation in ('fit_phonation','forecast_phonation','score_phonation','forecast_phonation_bank','score_phonation_bank'):
                 from .session_source import collect
                 collect(state,pending,status['status'],result)
+            if operation in ('freeze_visual_forecast','score_visual_forecast'):
+                from .session_visual import collect
+                collect(state,pending,status['status'],result)
             if operation=='rank_lidar_hypotheses':
                 from .session_lidar import collect
                 collect(state,pending,status['status'],result)
@@ -397,6 +408,9 @@ class SessionController:
             if not any(a['attempt_id']==c['attempt_id'] for a in state['attempts']) or not isinstance(c['text'],str) or not 1<=len(c['text'])<=2000:
                 raise ValueError('Sensation must reference recorded attempt and bounded text')
             state['sensations'].append({'attempt_id':c['attempt_id'],'text':c['text'],'kind':'subjective_report_not_model_constraint'})
+        if state.get('visual_forecasts'):
+            from .session_visual import invalidate_stale
+            invalidate_stale(state)
         if state.get('source_model'):
             from .session_source import invalidate_stale
             invalidate_stale(state)

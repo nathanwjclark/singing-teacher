@@ -79,8 +79,11 @@ not enter the physical fitting objective.
 
 ## Remaining ownership
 
-- **Lead A, further research:** define and validate a calibrated visual forward
-  observation model before fitting visible trajectories jointly. The optional
+- **Lead A, conditional visual observation:** original-frame outer-lip projection,
+  fixed declared camera calibration, frozen targets and held-out scoring are
+  implemented with explicit missing/ambiguous results and an unchanged baseline.
+  Calibrated continuous-motion inference and human correspondence validation
+  remain separate work. The optional
   fixed-anatomy temporal comparison now reports heuristic path penalties and
   sensitivity over existing audio windows; it does not recover continuous
   motion or verified motor control. See [temporal comparisons](../../science/MOTION_PATH.md).
@@ -127,7 +130,9 @@ can rerun one exported PCM update against a retained original frame and original
 controller replay. It reports numerical agreement separately from unverified
 legacy scoring-policy provenance; it does not fabricate missing media.
 
-The next visual likelihood lane is specified in
-[conditional visual observations](../physiology/conditional-visual-likelihood-plan.md).
-Its native-marker correspondence and camera/coordinate assumptions must be
-explicit; legacy MediaPipe lip names alone are not valid physical correspondence.
+The connected conditional visual workflow and independently gated illustrated
+teaching integration are described in [visual experiments](VISUAL-EXPERIMENTS.md).
+Two real native/browser visual flows passed with synthetic evidence, including
+visible and missing targets after reload. Illustrated teaching browser acceptance
+is still pending at this checkpoint. Calibrated motion and human anatomical
+accuracy are not implied by either implementation.

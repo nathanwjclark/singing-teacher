@@ -185,3 +185,25 @@ test('LiDAR export binds original archive and authoritative adoption, including 
  scientific.state.lidar_fusions=[adoption];await writeFile(join(root,'lidar-imports',sha,'original.zip'),'changed');
  await request(route);assert.ok(output.data.missing.some(a=>a.source==='lidar-fits/fit-one/summary.json'));assert.ok(!output.data.artifacts.some(a=>a.binding?.role==='experimental-lidar-fusion'));
 });
+
+test('exports only session-bound visual results with freshly verified original media',async t=>{
+ const {root,put}=await fixture(t), scientific=replay();
+ const hash=x=>createHash('sha256').update(x).digest('hex');
+ const record=Buffer.from('{}'),media=Buffer.from('original-video-fixture');
+ const recordHash=hash(record),mediaHash=hash(media),captureId=hash(recordHash+mediaHash);
+ const prefix=`motion-captures/${captureId}`;await mkdir(join(root,prefix),{recursive:true});
+ await writeFile(join(root,prefix,'record.json'),record);await writeFile(join(root,prefix,'media'),media);
+ const original={id:captureId,recordSha256:recordHash,mediaSha256:mediaHash,mediaByteLength:media.length};
+ await put(`${prefix}/summary.json`,original);
+ const envelope={sha256:'f'.repeat(64),artifact:{model_id:'updated-model',targets:[],calibration_status:'scored'}};
+ scientific.state.visual_forecasts={f:{baseline_model_id:'updated-model',artifact:envelope,status:'committed'}};
+ scientific.state.visual_receipts=[{forecast_id:'f',job_id:'visual',operation:'freeze_visual_forecast',status:'succeeded',baseline_model_id:'updated-model'}];
+ scientific.state.jobs.push({job_id:'visual',status:'succeeded',request:{operation:'freeze_visual_forecast'},result:envelope});
+ await put('visual-runs/visual-one/summary.json',{operation:'freeze',forecastId:'f',sessionId:'session-one',baselineModelId:'updated-model',
+ result:envelope,modelUpdated:false,captureId,sourceHashes:{record:recordHash,media:mediaHash,receipt:hash(JSON.stringify(original))}});
+ let output;const route=createSessionExportRoutes({dataRoot:root,env,json:(_r,status,data)=>{output={status,data};},fetchImpl:async()=>Response.json(scientific)});
+ await request(route);assert.equal(output.status,200);assert.equal(output.data.summary.visualResultCount,1);
+ await writeFile(join(root,prefix,'media'),'changed');await request(route);
+ assert.equal(output.data.summary.visualResultCount,0);
+ assert.ok(output.data.missing.some(r=>r.source==='visual-runs/visual-one/summary.json'));
+});

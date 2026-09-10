@@ -1,3 +1,4 @@
+import {verifiedVisualForecasts} from './visualContext.mjs';
 import {open, readdir, realpath} from 'node:fs/promises';
 import {resolve, sep} from 'node:path';
 import {createHash} from 'node:crypto';
@@ -198,6 +199,29 @@ export function createSessionExportRoutes({dataRoot, json, fetchImpl = fetch, en
           } catch { missing.push({source: declarationSource, reason: 'Declaration is unavailable or does not match the frozen annotation hashes'}); }
         } catch { missing.push({source, reason: 'LiDAR receipt, original archive or authoritative lineage unavailable or exceeds verification bounds; excluded'}); }
       }
+      const verifiedVisual = verifiedVisualForecasts(state);
+      for (const visualId of await folders('visual-runs')) {
+        const source = `visual-runs/${visualId}/summary.json`;
+        if (artifacts.length >= MAX_FILES) { missing.push({source, reason: 'Artifact count limit reached'}); break; }
+        try {
+          const artifact = await read(source), result = artifact.data;
+          if (result.sessionId !== sessionId) continue;
+          const verified = verifiedVisual.find(v => v.forecastId === result.forecastId);
+          const envelope = result.operation === 'freeze' ? verified?.entry.artifact : result.operation === 'score' ? verified?.score : null;
+          if (!envelope || !isDeepStrictEqual(envelope, result.result) || result.modelUpdated !== false
+              || result.baselineModelId !== verified.entry.baseline_model_id || !/^[a-f0-9]{64}$/.test(result.captureId)) throw Error('Unbound visual result');
+          const prefix = `motion-captures/${result.captureId}`;
+          const receipt = await read(`${prefix}/summary.json`);
+          const record = await digestOriginal(`${prefix}/record.json`, 4 * 1024 * 1024);
+          const media = await digestOriginal(`${prefix}/media`, 64 * 1024 * 1024);
+          if (receipt.sha256 !== result.sourceHashes?.receipt || record.sha256 !== result.sourceHashes?.record
+              || media.sha256 !== result.sourceHashes?.media || receipt.data.recordSha256 !== record.sha256
+              || receipt.data.mediaSha256 !== media.sha256 || receipt.data.mediaByteLength !== media.byteLength
+              || hash(record.sha256 + media.sha256) !== result.captureId) throw Error('Changed original visual evidence');
+          artifacts.push({...artifact,binding:{sessionId,modelId:result.baselineModelId,
+            current:result.baselineModelId === state.snapshot?.model_id,role:'conditional-visual-annotation-holdout',originalBytesVerified:true,modelUpdated:false}});
+        } catch { missing.push({source,reason:'Visual receipt or original video does not match authoritative session; excluded'}); }
+      }
       const summary = {
         modelId: state?.snapshot?.model_id || null,
         sessionVersion: state?.version ?? null,
@@ -208,6 +232,7 @@ export function createSessionExportRoutes({dataRoot, json, fetchImpl = fetch, en
         probeFitCount: artifacts.filter(a => a.source.startsWith('probe-fits/')).length,
         lidarFusionCount: (state?.lidar_fusions || []).filter(row => row.status === 'adopted').length,
         sourceBankScoreCount: (state?.source_receipts || []).filter(row => row.operation === 'score_phonation_bank').length,
+        visualResultCount: artifacts.filter(a => a.binding?.role === 'conditional-visual-annotation-holdout').length,
         motionAnalysisCount: artifacts.filter(a => a.binding?.role === 'conditional-motion-audio-analysis').length,
       };
       // Recheck the app pointer after asynchronous collection; never mix two active runs.

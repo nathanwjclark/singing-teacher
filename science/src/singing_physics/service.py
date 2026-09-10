@@ -60,7 +60,16 @@ def _worker(root, job_id, parent_pid, timeout_s):
         params = request['parameters']
         if request['operation'] == 'evaluate_probe' and 'model_id' in request and json.loads(request['parameters']['forecast_json']).get('model_id') != request['model_id']:
             raise ValueError('Forecast model does not match job model')
-        if request['operation'] in {'fit_phonation', 'forecast_phonation', 'score_phonation', 'forecast_phonation_bank', 'score_phonation_bank'}:
+        if request['operation'] in {'freeze_visual_forecast','score_visual_forecast'}:
+            from .visual_likelihood import freeze_visual_forecast, score_visual_forecast
+            if request['operation']=='freeze_visual_forecast':
+                artifact=freeze_visual_forecast(**params)
+            else:
+                from .prediction import Artifact, _encode
+                options=dict(params); options['forecast']=Artifact(_encode(options['forecast']))
+                artifact=score_visual_forecast(**options)
+            result={'artifact':artifact.data,'sha256':artifact.sha256}
+        elif request['operation'] in {'fit_phonation', 'forecast_phonation', 'score_phonation', 'forecast_phonation_bank', 'score_phonation_bank'}:
             # Optional modules load only inside the bounded disposable worker.
             if params.get('enabled', False) is not True:
                 result = {'status': 'disabled', 'reason': 'Optional phonation source operations disabled', 'model_updated': False}
@@ -252,9 +261,11 @@ class JobService:
         self._identity(idempotency_key, 'idempotency_key')
         if not isinstance(request, dict) or set(request) - {'operation', 'parameters', 'session_id', 'model_id'}:
             raise ValueError('Invalid local job request fields')
-        if request.get('operation') not in {'forward', 'fit_transfer', 'fit_joint', 'predict', 'fit_dynamic', 'fit_control', 'control_predict', 'condition_prediction', 'fit_frozen_control', 'rank_interventions', 'fit_pcm', 'search_pcm', 'design_pcm', 'update_pcm', 'fit_probe_pcm', 'predict_probe', 'evaluate_probe', 'fit_phonation', 'forecast_phonation', 'score_phonation', 'rank_lidar_hypotheses', 'forecast_phonation_bank', 'score_phonation_bank'} or not isinstance(request.get('parameters'), dict):
+        if request.get('operation') not in {'forward', 'fit_transfer', 'fit_joint', 'predict', 'fit_dynamic', 'fit_control', 'control_predict', 'condition_prediction', 'fit_frozen_control', 'rank_interventions', 'fit_pcm', 'search_pcm', 'design_pcm', 'update_pcm', 'fit_probe_pcm', 'predict_probe', 'evaluate_probe', 'fit_phonation', 'forecast_phonation', 'score_phonation', 'rank_lidar_hypotheses', 'forecast_phonation_bank', 'score_phonation_bank','freeze_visual_forecast','score_visual_forecast'} or not isinstance(request.get('parameters'), dict):
             raise ValueError('Unsupported operation or missing parameters')
         allowed = {
+            'freeze_visual_forecast': {'model_id','hypotheses','camera_candidates','calibration_frames','targets','coordinate_system','expected_provenance','calibration_tolerance_px','max_geometry_calls'},
+            'score_visual_forecast': {'forecast','expected_digest','annotations'},
             'rank_lidar_hypotheses': {'snapshot','capture_directory','annotation','enabled','max_geometry_calls'},
             'forecast_phonation_bank': {'fit_result','reference_trial_id','pose','controls','target_id','max_synthesis_calls','timeout_s','enabled'},
             'score_phonation_bank': {'frozen','pcm','metadata','enabled'},
@@ -286,6 +297,8 @@ class JobService:
         if request['operation'] == 'predict' and not {'snapshot_json', 'expected_digest', 'prediction_id', 'target_evidence_id', 'generated_at', 'intervention'} <= set(request['parameters']):
             raise ValueError('Missing prediction parameters')
         required = {
+            'freeze_visual_forecast': {'model_id','hypotheses','camera_candidates','calibration_frames','targets','coordinate_system','expected_provenance'},
+            'score_visual_forecast': {'forecast','expected_digest','annotations'},
             'rank_lidar_hypotheses': {'snapshot','capture_directory','annotation'},
             'forecast_phonation_bank': {'fit_result','reference_trial_id','pose','controls','target_id'},
             'score_phonation_bank': {'frozen','pcm','metadata'},

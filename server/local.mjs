@@ -36,6 +36,12 @@ const handleMotion=createMotionRoutes({dataRoot,json});
 let handlePhonation;
 let handleSource;
 let handleLidar;
+let handleVisual;
+try{const {createVisualLikelihoodRoutes}=await import('./visualLikelihood.mjs');handleVisual=createVisualLikelihoodRoutes({repo:resolve(import.meta.dirname,'..'),dataRoot,json});}
+catch{handleVisual=async(req,res,url)=>{if(!url.pathname.startsWith('/api/visual/'))return false;json(res,req.method==='GET'?200:503,{enabled:false,busy:false,reason:'Optional visual comparison is unavailable',baselinePreserved:true});return true;};}
+let handleTeaching;
+try{const {createTeachingRoutes}=await import('./teaching.mjs');handleTeaching=createTeachingRoutes({repo:resolve(import.meta.dirname,'..'),dataRoot,json});}
+catch{handleTeaching=async(req,res,url)=>{if(!url.pathname.startsWith('/api/teaching/'))return false;json(res,req.method==='GET'?200:503,{enabled:false,busy:false,reason:'Optional model illustration unavailable; general explanations remain available'});return true;};}
 try{const {createLidarRoutes}=await import('./lidar.mjs');handleLidar=createLidarRoutes({repo:resolve(import.meta.dirname,'..'),dataRoot,json});}
 catch{handleLidar=async(req,res,url)=>{if(!url.pathname.startsWith('/api/lidar/'))return false;json(res,req.method==='GET'?200:503,{enabled:false,running:false,reason:'Optional LiDAR module is unavailable',baselinePreserved:true});return true;};}
 try{const {createSourceInferenceRoutes}=await import('./sourceInference.mjs');handleSource=createSourceInferenceRoutes({repo:resolve(import.meta.dirname,'..'),dataRoot,json});}
@@ -59,6 +65,8 @@ const serverHandler=async(req,res)=>{try{
   if(await handlePhonation(req,res,url))return;
   if(await handleSource(req,res,url))return;
   if(await handleLidar(req,res,url))return;
+  if(await handleVisual(req,res,url))return;
+  if(await handleTeaching(req,res,url))return;
   if(await handleMotion(req,res,url))return;
   if(await handleScience(req,res,url))return;
   if(await handleVoiceCapture(req,res,url))return;

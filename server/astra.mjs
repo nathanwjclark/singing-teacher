@@ -1,4 +1,6 @@
+import teachingCatalog from '../src/teaching/decisionCatalog.json' with {type:'json'};
 import {readMotionContext} from './motionContext.mjs';
+import {visualContextFromState} from './visualContext.mjs';
 import {lidarContextFromState} from './lidarContext.mjs';
 import {readFile, writeFile, mkdir, rename, readdir, unlink} from 'node:fs/promises';
 import {resolve} from 'node:path';
@@ -78,11 +80,17 @@ export function createAstraRoutes({dataRoot,json,provider,fetchImpl=fetch,callBu
         const lidarReceipt=await read(resolve(dataRoot,'native-pull-latest.json')).catch(()=>null);
         prompt.lidar={...lidarContextFromState(state),
           latestTransfer:lidarReceipt?.sensor==='rear-lidar'&&lidarReceipt.verification==='native-rgbd-verified'?{captureId:lidarReceipt.captureId,receivedAt:lidarReceipt.receivedAt,archiveSha256:lidarReceipt.sha256,depthFrames:lidarReceipt.depthFrames,frames:lidarReceipt.frames}:null};
+        prompt.visual=visualContextFromState(state);
         prompt.motionAudio=await readMotionContext({dataRoot,sessionId:context.sessionId,modelId:state.snapshot.model_id});
         const dir=resolve(dataRoot,'astra-decisions',context.sessionId);await mkdir(dir,{recursive:true,mode:0o700});path=resolve(dir,input.requestId+'.json');receipt={requestId:input.requestId,sessionId:context.sessionId,runId:context.runId,modelId:state.snapshot.model_id,status:'running',goal:input.goal||'',createdAt:new Date().toISOString(),input:prompt,sessionVersion:state.version};await save(path,receipt);
-        const result=await p.generateDecision({instructions,input:prompt,schema,signal:AbortSignal.timeout(90000)}),decision=result.decision;
-        if(!decision||Object.keys(decision).sort().join(',')!=='action,cue,experimentId,explanation'||!['record','rest'].includes(decision.action)||!['cue','explanation'].every(k=>typeof decision[k]==='string'&&decision[k].trim().length>0&&decision[k].length<=2000)|| (decision.action==='rest'?decision.experimentId!==null:!options.some(r=>r.experiment.experiment_id===decision.experimentId)))throw failure('Astra returned an unsupported decision',502);
-        receipt={...receipt,decision,provider:result.provider,model:result.model,usage:result.usage};await save(path,receipt);
+        const teachingEnabled=process.env.VISUAL_TEACHING_ENABLED==='1';
+        if(teachingEnabled)prompt.teaching={version:teachingCatalog.version,demonstrations:teachingCatalog.demonstrations,scope:'Choose an optional educational mechanism relevant to this supported sustained-vowel task. A catalog cue is not a new authorized action; use cueId null: the current catalog exercises change pitch, vowel, or jaw during a trial and are not compatible with the committed constant-vowel task. Rest requires null demonstrationId and cueId.'};
+        const decisionSchema=teachingEnabled?{...schema,required:[...schema.required,'demonstrationId','cueId'],properties:{...schema.properties,demonstrationId:{type:['string','null'],enum:[null,...teachingCatalog.demonstrations.map(d=>d.id)]},cueId:{type:['string','null'],enum:[null]}}}:schema;
+        if(teachingEnabled){receipt.input=prompt;await save(path,receipt);}
+        const result=await p.generateDecision({instructions,input:prompt,schema:decisionSchema,signal:AbortSignal.timeout(90000)}),decision=result.decision;
+        if(!decision||Object.keys(decision).sort().join(',')!==(teachingEnabled?'action,cue,cueId,demonstrationId,experimentId,explanation':'action,cue,experimentId,explanation')||!['record','rest'].includes(decision.action)||!['cue','explanation'].every(k=>typeof decision[k]==='string'&&decision[k].trim().length>0&&decision[k].length<=2000)|| (decision.action==='rest'?decision.experimentId!==null:!options.some(r=>r.experiment.experiment_id===decision.experimentId)))throw failure('Astra returned an unsupported decision',502);
+        if(teachingEnabled){const demonstration=teachingCatalog.demonstrations.find(d=>d.id===decision.demonstrationId);if((decision.demonstrationId!==null&&!demonstration)||decision.cueId!==null||(decision.action==='rest'&&(decision.demonstrationId!==null||decision.cueId!==null)))throw failure('Astra returned an unsupported teaching selection',502);}
+        receipt={...receipt,decision,...(teachingEnabled?{teachingVersion:teachingCatalog.version}:{}),provider:result.provider,model:result.model,usage:result.usage};await save(path,receipt);
         if((await current()).runId!==context.runId)throw failure('Current voice fit changed while Astra was deciding');
         const refreshed=await stateFor(context.sessionId);if(refreshed.version!==state.version)throw failure('Session changed while Astra was deciding; request a new decision');
         let designId=null;
