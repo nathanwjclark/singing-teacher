@@ -11,11 +11,19 @@ struct SingingDepthApp: App {
 
 struct ContentView: View {
     @ObservedObject var capture: DepthCapture
+    @StateObject private var probe = AcousticProbe()
+    @State private var mapping = false
     @State private var pose = "Comfortable ah — hold still"
     @State private var share = false
     @Environment(\.scenePhase) private var scenePhase
     var body: some View {
         VStack(spacing: 12) {
+            Toggle("Acoustic mapping", isOn: $mapping).disabled(capture.recording || capture.exporting || probe.running)
+                .onChange(of: mapping) { _, selected in
+                    probe.setModeActive(selected)
+                    capture.setProbeMode(selected) { if selected && mapping { probe.prepare() } }
+                }
+            if mapping { AcousticProbeView(probe: probe) } else {
             Text("Mouth surface capture").font(.title2.bold())
             CameraPreview(session: capture.session)
                 .frame(maxHeight: .infinity)
@@ -46,8 +54,9 @@ struct ContentView: View {
             }
             Button("Share latest private capture") { share = true }.disabled(capture.archiveURL == nil || capture.exporting || capture.recording)
             Text("Front camera + available TrueDepth, with optional microphone audio. Depth can be missing inside the mouth; hidden tissue is not scanned. Files stay on this phone until you share.").font(.caption).foregroundStyle(.secondary)
+            }
         }.padding().task { capture.requestCamera() }
-        .onChange(of: scenePhase) { _, phase in if phase != .active { capture.stop(reason: "app-backgrounded") } }
+        .onChange(of: scenePhase) { _, phase in if phase != .active { capture.stop(reason: "app-backgrounded"); probe.stop(reason: "app-backgrounded") } }
         .sheet(isPresented: $share) { if let url = capture.archiveURL { ShareCapture(url: url) } }
     }
 }

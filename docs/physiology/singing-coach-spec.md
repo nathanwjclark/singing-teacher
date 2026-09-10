@@ -1,12 +1,12 @@
 # Personal Vocal Physiology and Acoustics
 
-**Moonshot implementation specification - revision 6, September 10, 2026.**
+**Moonshot implementation specification - revision 7, September 10, 2026.**
 
 ## 1. Research objective and change of direction
 
 Build a system that attempts to infer a person's internal vocal anatomy, dynamic articulation, and eventually vocal-fold mechanics from ordinary audiovisual observations plus actively selected vocal experiments. The resulting personal physical model must generate sound, explain multiple observations with shared anatomy, and predict the consequences of interventions. Singing coaching is the downstream application of that model.
 
-This plan supersedes the current remote repository architecture and scope; existing code is optional reusable material. Revision 6 adds embodied cue-based teaching, dynamic movement mapping and a separate model of learned motor control to the parallel-agent design. It retains the integrated iPhone depth work and physiological reconstruction objective.
+This plan supersedes the current remote repository architecture and scope; existing code is optional reusable material. Revision 7 integrates active acoustic probing into acquisition, external-drive physics, joint inference and runtime Astra teaching, retaining embodied cues and dynamic control mapping. It retains the integrated iPhone depth work and physiological reconstruction objective.
 
 This revision supersedes the earlier recommendation to make empirical cue personalization the main product. Failure to recover physiology is an acceptable research outcome. A cue recommendation engine is not a substitute deliverable. Scientific uncertainty determines what we test and how we interpret the result; it does not remove the moonshot from scope.
 
@@ -157,6 +157,16 @@ Extend the physical hierarchy with a separate cue-conditioned control profile: o
 During mapping, record neutral-to-gesture-to-return trajectories with synchronized RGB/depth/audio, head-pose registration and per-frame visibility. Visible soft-palate motion can be estimated only when consistently observed and calibrated; missing depth is not a zero excursion. Report observed movement rather than claiming full physiological range. Multiple moving poses must not be fused as a rigid static cavity. Hidden movement remains an inference target with explicit uncertainty.
 
 Add CUE-01 (B: reviewed cue library and embodied teaching), MOT-01 (A: motor-control model), MOT-02 (B capture/A fusion: dynamic mapping) and LEARN-01 (B: independent recall/transfer evaluation). These extend the prototype now. Later coaching-efficacy studies remain separate from demonstrating a working teaching loop. Acceptance adds G6 repeated dynamic mapping and G7 a measured goal -> cue -> sensation -> recall -> phrase-transfer cycle; synthetic runs cannot establish human learning.
+
+### Active acoustic probing in the app
+
+The [active acoustic probing plan](active-acoustic-probing-plan.md) is part of initial implementation and the PDF. Add a native Acoustic mapping flow that plays a known level-bounded signal from a phone outside the mouth, records its response, associates visible pose/calibration and uses supported response measurements in joint anatomy fitting. One phone is the first end-to-end path; a second external receiver near the nose is optional and requires clock/leakage modeling. No phone or speaker is inserted into the mouth or nose.
+
+External broadband probing at the lips is an established resonance-measurement technique, but phone implementation and anatomical reconstruction remain unvalidated. Acoustic reflectometry's area-distance estimates are model-dependent, and nasal branching complicates interpretation.[^active-probe][^active-reflectometry][^active-nasal]
+
+A owns the external-drive acoustic operator and joint inverse/service integration; B owns native playback/capture, response extraction, public contracts, independent scoring and runtime Astra/UI. This is distinct from the existing glottis-to-mouth transfer function and singing PCM feature extractor. Preserve exact drive/received bytes, device/placement calibration, timing uncertainty, response masks and nuisance parameters. Measurements progress from captured to response-usable to included-in-fit with explicit reasons. Unsupported channels never fabricate topology.
+
+PROBE-01 through PROBE-06 have module owners, prerequisites and delivery checks in the addendum. G8 requires real probe data influencing the shared model through a supported operator; G9 requires Astra selecting a supported probe/gesture, committing its forecast and adapting after scoring. Build these capabilities directly with normal acceptance checks; no separate exploratory project is a prerequisite. One-phone integration proceeds independently of two-phone nasal capability.
 
 ## 7. Learning a population prior from video and other data
 
@@ -408,3 +418,7 @@ The intended breakthrough is **recovering an individual's physical voice-generat
 
 [^embodied-asha]: American Speech-Language-Hearing Association. Voice Disorders; yawn-sigh and facilitating approaches. Accessed September 10, 2026. https://www.asha.org/practice-portal/clinical-topics/voice-disorders/
 [^twang]: Sundberg and Thalén. What is Twang? Journal of Voice, 2010. Single-performer acoustic/source study. https://pubmed.ncbi.nlm.nih.gov/20083379/
+
+[^active-probe]: UNSW Music Acoustics. Vocal tract resonances from broadband excitation; calibrated external source/microphone and visual feedback. https://www.phys.unsw.edu.au/jw/broadband.html
+[^active-reflectometry]: Acoustic reflectometry for airway measurement. Principles, limitations and previous work. https://pubmed.ncbi.nlm.nih.gov/1855359/
+[^active-nasal]: Acoustic rhinometry in healthy humans: accuracy of area estimates and ability to quantify certain anatomic structures in the nasal cavity. https://pubmed.ncbi.nlm.nih.gov/18217510/

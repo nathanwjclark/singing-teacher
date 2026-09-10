@@ -23,6 +23,7 @@ final class DepthCapture: NSObject, ObservableObject, AVCaptureDataOutputSynchro
     private var synchronizer: AVCaptureDataOutputSynchronizer?
     private let imageContext = CIContext()
     private var configured = false
+    private var probeOwnsAudio = false
     private var folder: URL?
     private var frames: [[String: Any]] = []
     private var origin: CMTime?
@@ -73,7 +74,7 @@ final class DepthCapture: NSObject, ObservableObject, AVCaptureDataOutputSynchro
     }
     deinit { notificationTokens.forEach(NotificationCenter.default.removeObserver) }
     private func resumePreview() {
-        guard configured, !applicationInBackground, !session.isInterrupted else { return }
+        guard configured, !probeOwnsAudio, !applicationInBackground, !session.isInterrupted else { return }
         if !session.isRunning { session.startRunning() }
         let running = session.isRunning
         DispatchQueue.main.async { self.ready = running }
@@ -164,6 +165,14 @@ final class DepthCapture: NSObject, ObservableObject, AVCaptureDataOutputSynchro
                 let timeout = DispatchWorkItem { self.finish(reason: "ten-second-limit") }; self.timeout = timeout
                 self.queue.asyncAfter(deadline: .now() + 10, execute: timeout)
             } catch { self.message("Could not start: \(error.localizedDescription)") }
+        }
+    }
+    func setProbeMode(_ enabled: Bool, completion: @escaping () -> Void) {
+        queue.async {
+            self.probeOwnsAudio = enabled
+            if enabled { self.finish(reason: "acoustic-mapping-selected"); self.session.stopRunning(); DispatchQueue.main.async { self.ready = false } }
+            else { self.resumePreview() }
+            DispatchQueue.main.async(execute: completion)
         }
     }
     func stop(reason: String) { queue.async { self.finish(reason: reason) } }
