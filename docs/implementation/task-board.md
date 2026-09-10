@@ -63,3 +63,18 @@ The original eleven rows remain prototype implementation statuses, not scientifi
 | Pitch repair | Rate-aware live analysis; explicit no-pitch reasons; 10Hz saved pitch replay/export | User's actual mic/phone route confirmation |
 
 Private Wi-Fi HTTPS is prepared and locally deployed. A native TrueDepth/RGB/optional-PCM app is now implemented and compiles unsigned; physical device acquisition acceptance remains unfinished. The browser surface capture route was a user-selected prototype scope, not satisfaction of the native device gate. The new surface-reconstruction direction does not turn estimated landmark z into measured depth.
+
+## Planned active acoustic probing (revision 7)
+
+Newly planned scope, not implementation claims. The [active probing plan](../physiology/active-acoustic-probing-plan.md) defines contracts, user flow, external-drive physics and acceptance.
+
+| Ticket | Accountable owner | Status | Next dependency / acceptance |
+|---|---|---|---|
+| PROBE-01 native drive/record | B capture | planned | Supported full-duplex route and reviewed level protocol; real drive/response capture with local stop. |
+| PROBE-02 response records/DSP | B contracts/acoustics | planned | Minimal schema agreement; verified source data and repeat-derived response quality. |
+| PROBE-03 external-drive operator | A physics | planned | Shared tube geometry and explicit lip/source boundaries; analytical checks and supported channels. |
+| PROBE-04 inverse/service | A inverse/service | planned | PROBE-02/03; actual response contributes to joint anatomy fit with bounded nuisance model. |
+| PROBE-05 Astra/UI | B orchestration/teacher | planned | Real responses/forecasts; runtime tool-mediated probe selection and scored adaptation. |
+| PROBE-06 evaluation | B evaluation; A review | planned | G8 real capture-to-fit and G9 prospective Astra loop; compare with/without probing, retain null results. |
+
+Existing lane owners coordinate edits; this board update does not assign running agents or change current acceptance statuses.

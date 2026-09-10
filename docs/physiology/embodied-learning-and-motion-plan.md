@@ -1,6 +1,6 @@
 # Embodied learning and dynamic physiology
 
-Revision 6 addendum. The teacher must translate intended physical/acoustic changes into familiar actions, help the singer recognize their own sensations, and test whether they can reproduce and transfer the result. Initial mapping must capture movement and achievable control as well as static anatomy. These are integrated research and teaching capabilities, not a replacement for physiological inference.
+Revision 7 addendum. The teacher must translate intended physical/acoustic changes into familiar actions, help the singer recognize their own sensations, and test whether they can reproduce and transfer the result. Initial mapping must capture movement and achievable control as well as static anatomy. These are integrated research and teaching capabilities, not a replacement for physiological inference.
 
 ## 1. A personalized action-to-physiology model
 

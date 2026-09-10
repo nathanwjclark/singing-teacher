@@ -30,7 +30,7 @@ iPhone capture app
             existing web interface on the MacBook
 ```
 
-Under the revision 6 parallel-agent execution plan, B coordinates the native acquisition agent (CAP-01/02), acoustic measurement agent (AUD-01), orchestration agent (ACT-01) and independent evaluator (DEPTH-02). A coordinates visual/depth measurements (GEO-01), inverse fusion (FUSE-01) and numerical forecasts (PRED-01). B owns the repository integration queue; A accepts scientific fusion. Separate processing agents preserve common evidence IDs and timestamps.
+Under the revision 7 parallel-agent execution plan, B coordinates the native acquisition agent (CAP-01/02), acoustic measurement agent (AUD-01), orchestration agent (ACT-01) and independent evaluator (DEPTH-02). A coordinates visual/depth measurements (GEO-01), inverse fusion (FUSE-01) and numerical forecasts (PRED-01). B owns the repository integration queue; A accepts scientific fusion. Separate processing agents preserve common evidence IDs and timestamps.
 
 Person B owns all acquisition modalities and alignment, including the native iOS adapter. Person A owns the physical observation model: how visible geometry, depth and sound constrain common anatomy and time-varying articulation. They jointly define the bundle. There is no separate audio-owner versus camera-owner split.
 
@@ -81,10 +81,14 @@ B's early priority becomes the unified capture session and native depth spike, k
 
 First produce a deployable capture path, then a real synchronized export and measured sensor quality. These are CAP-01 and CAP-02, owned by B. A then implements FUSE-01. If native capture is blocked, retain synchronized browser RGB/audio as a working instrument while reporting depth integration as unfinished. Do not substitute landmark-derived depth for hardware depth without labeling it.
 
-These changes are incorporated into main specification revision 6, section 8, including owners and CAP-01/02, FUSE-01 and DEPTH-01/02 acceptance gates. The PDF is regenerated from that specification and the parallel-agent execution appendix. These documents specify planned work; they do not establish application implementation or anatomical recovery.
+These changes are incorporated into main specification revision 7, section 8, including owners and CAP-01/02, FUSE-01 and DEPTH-01/02 acceptance gates. The PDF is regenerated from that specification and the parallel-agent execution appendix. These documents specify planned work; they do not establish application implementation or anatomical recovery.
 
 ## Dynamic gesture mapping (MOT-02)
 
 The [embodied learning and motion addendum](embodied-learning-and-motion-plan.md) extends CAP-01/02 and FUSE-01 to repeated neutral -> comfortable gesture -> return capture. B records cue/version, time-aligned audio/RGB/depth and failed attempts. A estimates head-registered visible movement, observed comfortable envelope and cue-dependent control through GEO-01, MOT-01 and inverse fusion. Include ordinary “ah”, reviewed yawn-like gestures and comfortable tongue extension/return as candidate protocols. No forced maximum stretching or device insertion.
 
 Track visible palate regions only when identifiable, calibrated and sufficiently observed. Occlusion or missing depth produces uncertainty, not zero mobility or a filled measured surface. Dynamic structures must not be merged into one rigid scan. Separate learned voluntary control from elicited movement and stable anatomy. Breathing/torso observations use a separately consented view or subjective self-touch reports; they cannot be inferred as measured muscle activity from the face scan. G6 requires repeated synchronized trajectories with explicit uncertainty; G7 connects the resulting control profile to independently scored recall and singing transfer.
+
+## Unified active-probe acquisition
+
+PROBE-01 adds external-speaker playback to the same acquisition system. Preserve exact drive PCM and recorded response, source/host clock mappings, route/level/processing configuration, calibration/placement and synchronized RGB/depth when supported. Use standalone audio with explicit missing modalities if full-duplex audio plus camera/depth is unavailable. Stop/route interruption cancels playback locally. The optional second phone stays outside the nose/mouth, records a separate clock/reference channel and cannot claim internal-only transmission. See the [active probing plan](active-acoustic-probing-plan.md) for collection, response extraction and model integration.
