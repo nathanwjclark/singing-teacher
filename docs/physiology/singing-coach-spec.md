@@ -1,12 +1,12 @@
 # Personal Vocal Physiology and Acoustics
 
-**Moonshot implementation specification - revision 4, September 10, 2026.**
+**Moonshot implementation specification - revision 5, September 10, 2026.**
 
 ## 1. Research objective and change of direction
 
 Build a system that attempts to infer a person's internal vocal anatomy, dynamic articulation, and eventually vocal-fold mechanics from ordinary audiovisual observations plus actively selected vocal experiments. The resulting personal physical model must generate sound, explain multiple observations with shared anatomy, and predict the consequences of interventions. Singing coaching is the downstream application of that model.
 
-This plan supersedes the current remote repository architecture and scope; existing code is optional reusable material. Revision 4 integrates the two-person ownership and iPhone depth work into the main execution plan.
+This plan supersedes the current remote repository architecture and scope; existing code is optional reusable material. Revision 5 expands the two-person ownership into parallel agent lanes, runnable integration contracts, dependency-driven activation and independent scientific evaluation. It retains the integrated iPhone depth work and physiological reconstruction objective.
 
 This revision supersedes the earlier recommendation to make empirical cue personalization the main product. Failure to recover physiology is an acceptable research outcome. A cue recommendation engine is not a substitute deliverable. Scientific uncertainty determines what we test and how we interpret the result; it does not remove the moonshot from scope.
 
@@ -23,7 +23,7 @@ The statement that complete reconstruction is not established belongs in the res
 | Success means better practice performance | Success means evidence of parameter recovery and prospective physical prediction |
 | Coaching interface gets most engineering time | Forward physics, inverse fitting and experiment design get most engineering time |
 
-**Working assumptions:** two builders, each using Astra, with local development hardware and the available iPhones. Work is ordered by dependencies and acceptance evidence; no hackathon duration or delivery estimates are assumed.
+**Working assumptions:** two human leads, each coordinating parallel Astra agents, with local development hardware and the available iPhones. Work is ordered by dependencies and acceptance evidence; no hackathon duration or delivery estimates are assumed.
 
 ## 2. What counts as progress, success and failure
 
@@ -199,7 +199,7 @@ Proposed performance budgets: local capture feedback under 150 ms p95 on the cho
 
 ### Integrated iPhone capture and depth workstream
 
-**Owner: Person B, experimental instrument. Integration owner: Person A, physiological inference.** B owns microphone, RGB and depth together, including timestamps, calibration, quality, native deployment and export. A owns the joint observation model, depth projection, visibility masking and how these measurements constrain anatomy. Both review the interface and acceptance results. This is part of the main build, not an unassigned future extension.
+**Acquisition owner: Person B. Scientific fusion owner: Person A. Repository integration owner: Person B.** B owns microphone, RGB and depth together, including timestamps, calibration, quality, native deployment and export. A owns the joint observation model, depth projection, visibility masking and how these measurements constrain anatomy. Both review the interface and acceptance results. This is part of the main build, not an unassigned future extension.
 
 Available devices are an iPhone 13 Pro Max and iPhone 15 Pro; both provide front TrueDepth and rear LiDAR. Start by testing the 15 Pro front TrueDepth and microphone together, then compare the other device and rear mode on the same targets. Capture format availability is checked at runtime. Use a Mac for compute/display. Do not assume front and rear depth can run concurrently.[^iphone-depth]
 
@@ -219,7 +219,7 @@ Depth directly constrains only visible surfaces. Benchmark known-size and cavity
 | DEPTH-01 | A numerical forecasts; B execution/evaluation | Prediction frozen before acquisition, followed by scoring and then update; repeat capture uses the same contract. |
 | DEPTH-02 | B runs evaluator; A reviews fits | Audio-only, audio+RGB and audio+RGB+depth compared under equal budgets; effect on prediction/recovery reported, including null results. |
 
-At each capture and integration gate, both people run the shared artifact through their side of the interface. Exchange exact commit, command, contract version, tests and blockers. If native deployment fails, B time-boxes diagnosis and maintains synchronized browser RGB/audio as the working capture path. Depth stays explicitly unfinished; it is not silently replaced with landmark depth. A continues synthetic inverse-physics work while B resolves capture. Reduce visual polish before dropping these integration checkpoints.
+At each capture and integration gate, both people run the shared artifact through their side of the interface. Exchange exact commit, command, contract version, tests and blockers. If native deployment fails, B assigns a bounded diagnosis task and maintains synchronized browser RGB/audio as the working capture path. Depth stays explicitly unfinished; it is not silently replaced with landmark depth. A continues synthetic inverse-physics work while B resolves capture. Reduce visual polish before dropping these integration checkpoints.
 
 Person B's additional native work is offset by keeping the interface minimal. Person A takes numerical calibration checks and depth residual implementation. Simultaneous two-phone capture is an extension after one-phone synchronization works, because it adds clock drift and spatial registration. Static scans and dynamic singing remain distinct observations, not one rigid reconstruction.
 
@@ -274,18 +274,33 @@ VocalSet's publisher metadata specifies CC BY 4.0 and provides singing-technique
 The distinctive training/evaluation corpus must be collected with consent: calibrated observations, assigned intervention, actual execution, prior model and committed prediction, plus independent physiology where available. Split by singer/session/song as appropriate; adjacent frames or clips from the same recording must not leak across evaluation boundaries. Dataset reuse permission does not remove all performer-consent or downstream-purpose questions.
 
 
-## 11. Ordered implementation responsibilities
+## 11. Parallel-agent implementation responsibilities
 
-The two-person checklist below replaces time estimates. Both people work independently where dependencies permit, then exchange runnable artifacts at each gate. Scientific inference remains the primary deliverable.
+Two human leads coordinate bounded Astra agents through dependency gates, without fixed hackathon timing. A owns scientific interpretation and numerical acceptance; B owns the experimental system, independent evaluation and repository integration queue. The companion [parallel-agent execution plan](two-person-execution-plan.md) defines exclusive module ownership, dispatch rules, acceptance experiments and human checklists. Its complete text is also included as the execution appendix in the PDF.
 
-| Stage | Person A: backend and model | Person B: instrument and evaluation |
+Start with KIT-01: a runnable contract kit defining observations, model candidates, forecasts, immutable prediction commits, evaluation records, units, coordinate frames and evidence provenance. Publish schemas and validation commands first; add a genuine synthesized audio/geometry pair and actual synchronized phone capture as their producers become available. The engine capability manifest evolves from verified support. No production consumer uses fabricated fitted anatomy.
+
+| Agent lane | Human lead | Deliverable / dependency |
 |---|---|---|
-| Agree interface | Define physical parameters, supported inputs and baseline. | Define synchronized bundle, units, quality and prediction records. |
-| Build independent foundations | Build/test simulator and export genuine audio/geometry. | CAP-01: deploy native capture; record RGB/depth/audio. |
-| Validate inputs and forward model | Build parameter manifest and synthetic recovery harness. | CAP-02: replay synchronized export; measure timing and depth quality. |
-| Fit and integrate | Joint shared-anatomy fitting and FUSE-01; retain alternative candidates. | Feed real bundles to inference; render actual returned geometry. |
-| Run active experiment | Forecast candidate interventions and numerical disagreement. | DEPTH-01: Astra selects; commit prediction, capture, score, then update. |
-| Compare and reproduce | Diagnose mismatch; run fixed-anatomy baseline and recovery tests. | DEPTH-02: modality ablations, independent evaluation and replay. |
+| KIT-01 / INT-01 contracts and integration | B | Versioned artifacts, validation, replay and cross-service checks; minimum shared decisions first. |
+| PHY-01 forward physics | A | Pinned engine, parameter capabilities and real audio/geometry export. |
+| CAP-01/02 native acquisition | B | Synchronized phone audio/RGB/depth, calibration and measured quality; bundle schema first. |
+| AUD-01 acoustic measurements | B; A reviews | Canonical extractor shared by simulated and observed signals; feature definitions first. |
+| GEO-01 visual/depth measurements | A | Calibrated visible-surface constraints, uncertainty and missing data; bundle coordinates first. |
+| INV-01 / FUSE-01 inverse inference | A | Shared anatomy, dynamic articulation, diverse candidates and multimodal fit; engine and measurements first. |
+| SVC-01 scientific jobs | A | Artifact/job lifecycle, cancellation, retries and model version checks; contracts first. |
+| EVAL-01 / DEPTH-02 / REP-01 evaluation | B | Hidden scoring truth, baselines, modality comparisons and reproducibility; frozen scoring protocol first. |
+| PRED-01 numerical forecasts | A | Supported interventions and numerical disagreement; engine capabilities and candidate models first. |
+| ACT-01 / DEPTH-01 orchestration | B | Validated action, frozen prediction, capture, score, then update; forecast/capture/evaluation contracts first. |
+| VIS-01 model visualization | B | Actual engine geometry and alternatives; genuine geometry export first. |
+
+Activate roughly six foundation tasks initially: contracts, engine, native capture, acoustic measurement definition, evaluation design and visual/depth feasibility. Start each independent portion once its inputs exist. After genuine artifacts arrive, activate inverse fitting, job service, visualization and executable benchmarks. Then connect numerical forecasts and orchestration into the prospective loop and run modality comparisons. These are dependency waves, not group-wide barriers: synthetic recovery continues while phone capture is unresolved, and capture continues while inference is incomplete.
+
+B integrates reviewed commits in dependency order and maintains a passing cross-service path. Each implementation agent has an isolated worktree, bounded task, exclusive owned files, starting commit, input contract and acceptance experiment. Assign one writer per shared schema/dependency file. A signs off scientific changes; a separate reviewer checks evidence. Every handoff includes actual test results, exact replay commands, provenance and blockers. Do not start new tasks merely to occupy agents or let agents expand their own scope.
+
+Integration evidence gates are G0 contract skeleton; G1 genuine artifact exchange; G2 hidden synthetic inference and actual geometry rendering; G3 real multimodal fitting; G4 prediction committed before capture and scored before update; G5 reproduced benchmarks and modality results. G2 can precede phone capture; synthetic G4 does not satisfy a human-data gate. Task status is proposed, ready, running, review, integrated or blocked, with an explicit missing dependency and owner.
+
+Use additional agents for bounded identifiability, anatomy/articulation separation, microphone compensation, model-mismatch, depth-value and leakage investigations. Algorithm alternatives share an interface and predeclared development benchmark/compute budget; select on development cases and evaluate the selected method on fresh held-out cases. Keep scoring truth outside inference and planning inputs. Agent agreement is not empirical evidence. Schedule simulator/device resources and isolate stateful engine workers when thread safety is unproven.
 
 The demo should show: initial candidate anatomies, why a specific new experiment distinguishes them, the sound/spectrum predicted before recording, the observed result, and how the candidates change. Follow with recovery plots on hidden synthetic subjects. If a compatible independently measured case exists, present that as a separate anatomy validation panel.
 
@@ -336,7 +351,7 @@ Predeclare parameter-specific tolerances according to measurement resolution and
 
 ## 14. Decisions, remaining unknowns and deliverables
 
-The next implementation action is PHY-01 plus the synthetic recovery harness, not a lesson screen or web-video scraper. Pin the engine and parameter subset, generate hidden test anatomies, and attempt reconstruction from simulated audiovisual tasks. That test reveals whether the proposed inverse loop is coherent before involving a singer.
+The first dispatch establishes KIT-01 and launches the independent foundation tasks in section 11. PHY-01 and the synthetic recovery harness form the scientific critical path while native capture, measurement validation and evaluation design progress alongside them. Pin the engine and supported parameter subset, generate hidden test anatomies, and attempt reconstruction from simulated audiovisual tasks. This tests the coherence of the inverse loop while the experimental instrument is being validated.
 
 Critical unknowns are supported nasal outlet control, global morphology integration, runtime per candidate, correspondence between external and internal geometry, robustness to source/capture compensation, and recoverability of mechanics. Each has an explicit experiment or integration gate above. Lack of certainty is expected; hidden substitution of a simpler product is not.
 

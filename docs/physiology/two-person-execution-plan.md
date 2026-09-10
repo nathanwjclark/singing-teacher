@@ -1,168 +1,172 @@
-# Two-person execution plan
+# Parallel-agent execution plan
 
-Companion to the revision 4 physiological acoustic moonshot specification. Assumes two builders, each using their own Astra conversation. This is a work allocation and integration plan, not an implemented application.
+Companion to revision 5 of the physiological acoustic moonshot specification. Two humans remain accountable, each coordinating as many bounded Astra tasks as the dependency graph supports. This is an implementation plan, not evidence that the application or anatomical recovery works. There are no fixed hackathon time estimates.
 
-The [capture and depth addendum](capture-and-depth-plan.md) incorporates the existing remote repository and available iPhone 13 Pro Max / iPhone 15 Pro. Person B owns synchronized audio, RGB and depth as one acquisition system; Person A consumes them jointly. The main specification section 8 now assigns CAP-01/02 to B, FUSE-01 to A and DEPTH-01/02 jointly. Its acceptance criteria are shared integration gates. Existing repository architecture does not constrain this design; prioritize native capture over UI polish.
+Optimize for the earliest integrated, independently evaluated physiological inference experiment. Launch an agent only when its inputs, owned files and acceptance experiment are concrete. Additional capacity should remove a demonstrated bottleneck or challenge a scientific assumption. Unlimited agents do not imply unlimited simultaneous edits or benchmark compute.
 
-## 1. Split by responsibility
+## 1. Human accountability and coordination
 
-**Person A: physical model and inverse inference.** Own the executable scientific hypothesis: generate sound from anatomy, fit anatomy across observations, represent competing solutions, and predict responses to candidate experiments.
-
-**Person B: experimental system and independent evaluation.** Own how evidence is collected, how Astra chooses and runs an experiment, how predictions are scored, and how the actual model is displayed.
-
-This divides two substantial engineering workstreams. Person B builds instrumentation and scientific evaluation, not just a frontend. Person A does not build the entire backend. Both contribute to the central physiological reconstruction experiment.
-
-| Responsibility | Accountable owner | Reviewer |
+| Responsibility | Accountable lead | Review |
 |---|---|---|
-| Simulator build, license/assets and parameter capabilities | A | B |
-| Physical parameters, forward model, geometry export | A | B |
-| Shared-anatomy fitting, candidate diversity, diagnostics | A | B |
-| Numerical forecasts for candidate interventions | A | B |
-| Capture, synchronization, quality and feature extraction | B | A |
-| Astra tool adapter and experiment state machine | B | A |
-| Immutable predictions, scoring and leakage checks | B | A |
-| Candidate anatomy and spectrum visualization | B | A |
-| Benchmark runner and results presentation | B | A |
-| Scientific objectives, contract and scope changes | Together | Together |
+| Forward physics, parameter meanings, inverse inference, visual/depth likelihood and numerical forecasts | A: scientific model lead | B checks evidence and integration |
+| Native acquisition, canonical acoustic measurements, application orchestration, visualization and independent evaluation | B: experimental system lead | A checks scientific validity |
+| Integration queue, shared contracts, cross-service checks and release readiness | B: integration lead | A signs off on scientific changes |
+| Objective, scoring rules, supported anatomy and scope changes | A and B jointly | Record decision before dependent implementation |
 
-Person A's work is likely to be the bottleneck. Person B owns the independent evaluator and feature extraction to keep that workload balanced. After the first integration, B can take bounded simulator debugging or benchmark tasks by explicitly transferring file ownership; neither person silently edits the other's module.
+Each human keeps one coordinating conversation and delegates bounded work to separate agent conversations. Coordinators manage task dependencies, review evidence and resolve decisions; implementation agents return small tested commits. The Astra runtime selecting vocal experiments inside the product is separate from these development agents.
 
-## 2. Agree these before independent implementation
+B owns repository integration; A owns scientific inference integration (FUSE-01). This distinction replaces ambiguous uses of "integration owner". No agent merges its own work solely on its own completion claim. Participant interaction, device access and anatomical interpretation remain human responsibilities.
 
-1. Read revision 4 and agree on the first end-to-end experiment: several comfortable vowel segments informing one shared anatomical parameter set, followed by a held-out prediction. Nasal occlusion is included only if the simulator and protocol support it.
-2. Pick one supported capture device/browser and one reference forward-engine configuration. Agree that uncertain controls remain unsupported until verified.
-3. Create the repository layout and assign ownership. Choose Python for the scientific service and TypeScript for capture/display, as in the main specification.
-4. Agree on contract version 0.1: parameter units, audio/camera timebases, artifact references, missing-data representation, job states and evidence IDs. The exact physical parameter list follows A's capability audit.
-5. Choose a score before fitting. Define calibration versus held-out records, the fixed-anatomy baseline, and the difference between prospective prediction and post-hoc reconstruction.
-6. Commit this shared starting point. Each person starts their own branch and Astra conversation from that commit.
+## 2. First shared deliverable: runnable integration kit (KIT-01)
 
-Do not spend this session designing every future API. Agree on the narrow path needed to send observations to A and return candidates, geometry and predictions to B.
+Agree a narrow first experiment: several comfortable vowel segments constrain one shared anatomical parameter set, followed by a held-out prediction. Nasal occlusion is added only after the engine boundary condition and execution protocol are demonstrated. This preserves the reconstruction moonshot without inventing supported controls.
 
-## 3. Proposed module ownership
+- [ ] Version observation, candidate-model, forecast, prediction-commit and evaluation schemas.
+- [ ] Define units, coordinate frames, time origins, quality flags, artifact hashes, missing-data reasons, job states and model/evidence IDs.
+- [ ] Define forward-engine interfaces and an extensible capability manifest; unsupported parameters stay unsupported until verified.
+- [ ] Agree canonical acoustic features, calibration/held-out roles, scoring rules and a fixed-anatomy baseline with equal articulation freedom.
+- [ ] Publish validation and replay commands with expected outputs.
+- [ ] Add one genuine engine-generated audio/geometry pair with provenance as soon as PHY-01 exports it.
+- [ ] Add one actual synchronized phone bundle when CAP-01/02 produces it.
 
-These are planned application paths, not files that already exist.
+KIT-01 has incremental handoffs: the schema skeleton unblocks independent foundations; genuine artifacts unlock the consumers' integration checks. Do not wait for full anatomy discovery to build capture. Development examples must identify their provenance and cannot be reported as live human reconstruction. No production path returns fabricated fitted anatomy.
 
-```text
-contracts/                 B maintains; A reviews breaking changes
-science/forward/           A: native simulator wrapper and capabilities
-science/inverse/           A: joint fitting and candidate diagnostics
-science/prediction/        A: intervention simulations and disagreement
-science/service/           A: scientific job API and artifact export
-observations/              B: canonical audio/video feature extraction
-apps/web/                  B: capture, experiment flow and visualization
-experiment/                B: Astra tools, state machine, immutable ledger
-evaluation/                B: independent scoring and benchmark runner
-tests/science/             A: physics, inference and numerical tests
-tests/integration/         B: real cross-service flow and leakage tests
-docs/decisions/            B maintains; decisions agreed together
-```
+Start each task from a recorded integration commit. Shared contracts describe file-backed immutable artifacts first; the job API transports the same records. Large media and simulator states stay outside agent prompts.
 
-B owns repository-level integration configuration; A owns native build configuration and scientific dependencies. Declare a single owner for each dependency/lock file at kickoff. If using one Python environment, nominate A as its dependency-file owner and have B request additions. Do not maintain incompatible duplicate feature implementations.
+## 3. Agent lanes and exclusive module ownership
 
-Both observed and synthesized signals use B's versioned feature extractor. A defines the required scientific features and reviews their units/validity. If extraction is not yet ready, A can progress on direct numerical synthetic tests, while B works on real capture and extraction independently.
+Paths below are proposed application paths, not claims about files already implemented. Adapt them to existing work with an explicit ownership map before launch. One active writer owns each file, including shared configuration.
 
-## 4. The shared interface
+| Lane / tickets | Lead | Owned paths | Deliverable and acceptance experiment | Prerequisites |
+|---|---|---|---|---|
+| Contracts and integration / KIT-01, INT-01 | B | contracts/, tests/integration/, repository CI | Validate genuine producer artifacts; replay one cross-service flow; reject incompatible versions and stale results. | Joint minimum interface decisions |
+| Forward physics / PHY-01 | A | science/forward/, tests/science/forward/ | Pinned build; parameter units/bounds; repeatable synthesis and matching geometry; reset and unsupported-control tests. | Engine selected |
+| Native acquisition / CAP-01, CAP-02 | B | apps/ios/, capture/ | Deploy on available iPhone; export/replay audio, RGB and supported depth; measure timing/depth quality and missing samples. | Observation schema; human device access |
+| Acoustic measurements / AUD-01 | B, A reviews | observations/audio/ | One versioned extractor for observed and synthesized signals; controlled pitch/spectral cases, noise and failure behavior. | Feature definitions; real or synthesized test signals |
+| Visual/depth measurements / GEO-01 | A | observations/geometry/, tests/science/geometry/ | Calibrated visible-surface measurements and uncertainty; known-target projection, masking and missing-depth tests. | Bundle coordinates; actual depth data for device acceptance |
+| Inverse inference and fusion / INV-01, FUSE-01 | A | science/inverse/, tests/science/inverse/ | Shared anatomy across tasks; dynamic states; diverse candidates; held-out synthetic recovery; real multimodal fit and missing-modality behavior. | PHY-01, AUD-01; GEO-01 for visual/depth fusion |
+| Scientific job service / SVC-01 | A | science/service/, tests/service/ | Submit, cancel and replay real jobs; immutable artifacts; idempotent retries; stale-model rejection. | Job/artifact contracts; engine for executable integration |
+| Independent evaluation / EVAL-01, DEPTH-02, REP-01 | B | evaluation/, tests/evaluation/ | Scoring-only truth; equal-budget baselines; frozen forecasts; modality comparisons; reproducible report including failed attempts. | Contract/scoring agreement; executable inputs as producers land |
+| Numerical experiment forecasts / PRED-01 | A | science/prediction/, tests/science/prediction/ | Forecast supported interventions from frozen candidates; quantify disagreement and compare with repeat variability. | PHY-01 capability manifest; candidate models from INV-01 |
+| Experiment orchestration / ACT-01, DEPTH-01 | B | experiment/, tests/experiment/ | Validate proposals; commit prediction before capture; score before update; stop/failure/retry behavior. | Forecast contracts; PRED-01, capture and evaluator for full loop |
+| Actual model visualization / VIS-01 | B | apps/web/ | Render engine geometry and alternatives; distinguish fitted/fixed/unsupported structure; align predicted and observed results. | Genuine geometry export and model contract |
 
-Use file-backed, immutable artifacts initially; do not pass large media or simulator state through an Astra prompt. Support asynchronous scientific jobs. An HTTP adapter can transport the same records when both pieces run together.
+A owns scientific dependency files and native-engine build configuration. B owns repository CI and frontend/iOS dependency files. If Python dependencies are shared, A is the sole lock-file writer; B requests additions. Reviewers propose changes without concurrently editing an implementer's files. Task transfers are recorded before the new writer starts.
 
-| Operation / artifact | Producer | Consumer | Required content |
-|---|---|---|---|
-| Capabilities | A | B | Engine version; supported global/dynamic parameters; units/bounds; valid interventions; geometry formats. |
-| Observation bundle | B | A | Media references/hashes; task; timestamps; capture metadata; canonical feature version; quality flags; calibration/held-out role. |
-| Fit request | B | A | Explicit calibration evidence IDs; prior/configuration; compute budget; seed; contract version. |
-| Fit result | A | B | Immutable model ID; candidate global anatomy and dynamic states; residuals; uncertainty method; mismatch status; geometry/audio artifacts. |
-| Experiment forecast | A | B | Frozen model ID; action; predicted observables; uncertainty and assumptions; execution mode; numerical selection score. |
-| Prediction commit | B | Evaluator | Forecast hash; action; model/evidence IDs; scoring rule; commit time before capture. |
-| Evaluation result | B | Both | Prediction error; execution deviations; exclusions; baseline comparison; update eligibility. |
+### Preserve synchronized evidence while splitting processing
 
-Every request has a unique ID. Jobs report queued, running, succeeded, failed or cancelled; progress is optional. Errors carry a reason, not a successful empty result. Results from superseded models cannot enter the current session. Artifacts carry coordinate conventions, units, sample rates and time origins. Unsupported values are null with a reason, never fabricated zeroes.
+B's acquisition agent owns microphone, RGB and depth together, preserving a shared observation manifest, source timestamps, calibration and synchronization uncertainty. Audio and geometry agents may process independently, but every output references the same evidence IDs/timebase. A's inverse agent combines their constraints in one physiological fit. Never treat independent network arrival times as synchronization or derived face geometry as measured hidden anatomy.
 
-Use a consistent geometry export that A can actually generate. SVG contours can establish the first integration; richer 3D export follows. B must display A's fitted geometry, not invent an unrelated mesh from acoustic features. A must document any template or cross-section assumptions.
+The available iPhone 13 Pro Max and iPhone 15 Pro remain the hardware targets. Start with one-phone synchronized capture; retain CAP-01/02, FUSE-01 and DEPTH-01/02 from the capture addendum. Sensor limitations remain measured outcomes, not reasons to silently remove depth from the work queue.
 
-Do not make B wait for the complete inverse solver. A's first handoff is an actual forward-generated observation/geometry pair with a provenance manifest. B can test ingest, rendering and extraction with that data. Development fixtures are clearly identified and excluded from live success claims; no fake fitted result enters the production path.
+## 4. Dependency-driven activation
 
-## 5. Ordered checklists and integration gates
+These waves describe prerequisites, not dates or mandatory group-wide barriers. A lane starts its next task as soon as its own inputs pass, without waiting for unrelated lanes.
 
-### Person A: backend and model
+### Wave 1: foundations and uncertainty removal
 
-- [ ] Agree the shared observation and forecast contracts with B.
-- [ ] Build and test the pinned physical simulator; record licenses/assets.
-- [ ] Export real synthesized audio and matching geometry for B.
-- [ ] Publish parameter names, units, bounds and unsupported controls.
-- [ ] Build known-parameter synthetic recovery tests with hidden scoring truth.
-- [ ] Implement shared-anatomy inverse fitting across tasks, with multiple candidates and diagnostics.
-- [ ] Run the fixed-anatomy baseline with equal dynamic flexibility.
-- [ ] Implement FUSE-01: consume B's synchronized RGB/audio/depth bundle and handle missing observations explicitly.
-- [ ] Implement intervention simulation and numerical disagreement scoring.
-- [ ] Integrate DEPTH-01 with B's prospective experiment flow.
-- [ ] Review DEPTH-02 modality comparisons and investigate model mismatch.
-- [ ] Publish reproducible model commands, parameter recovery and known limitations.
+Start roughly six concrete tasks: KIT-01 contracts; PHY-01 engine; CAP-01 native capture; AUD-01 measurement definition/controlled tests; EVAL-01 scoring and leakage harness design; GEO-01 coordinate/measurement feasibility. Capture starts after the minimal bundle agreement; evaluation can specify scores before the engine is available, but cannot claim executable recovery results yet.
 
-### Person B: capture, orchestration and evaluation
+A checks what anatomy and interventions the engine actually exposes. B obtains actual device-format logs and recordings. Both freeze the first calibration/held-out protocol. Return runnable evidence for capability claims instead of broad research summaries.
 
-- [ ] Agree the shared observation and forecast contracts with A.
-- [ ] Implement CAP-01: native iPhone microphone, RGB and supported depth capture.
-- [ ] Implement CAP-02: timestamp/calibration preservation, quality checks, replay and depth/timing bench tests.
-- [ ] Build the canonical feature extractor used for observed and simulated audio.
-- [ ] Ingest A's genuine forward-model outputs and display the matching geometry.
-- [ ] Send a real synchronized bundle through A's FUSE-01 pipeline.
-- [ ] Implement Astra tool orchestration and deterministic proposal validation.
-- [ ] Implement DEPTH-01: immutable prediction, capture, score, then model update.
-- [ ] Implement independent evaluation and hidden synthetic-truth handling.
-- [ ] Run DEPTH-02: audio-only versus RGB versus RGB+depth comparisons under equal budgets.
-- [ ] Test stop, missing sensors, stale jobs, failure reporting and replay.
-- [ ] Prepare the end-to-end demonstration with clear evidence levels.
+### Wave 2: inference and application integration
 
-### Shared gates
+Once genuine artifacts exist, activate INV-01, SVC-01 and VIS-01. AUD-01 validates engine outputs and live recordings; GEO-01 validates actual depth and produces constraints for FUSE-01. The evaluator generates fresh hidden scoring cases and runs executable baselines. Native capture proceeds independently of synthetic inverse recovery.
 
-1. **Contract agreed:** both can validate the same bundle and parameter manifest.
-2. **Artifacts exchanged:** A's genuine simulation and B's real capture load successfully.
-3. **Inference integrated:** synchronized observations enter fitting and returned geometry renders.
-4. **Prospective loop:** prediction is frozen before recording and scored before update.
-5. **Evidence reproduced:** both can replay the run and explain what succeeded, failed or remains untested.
+### Wave 3: prospective experiments and comparisons
 
-Exchange a working commit, exact command, expected output and known failures at every gate. Work proceeds by satisfied dependencies, not elapsed time. A polished interface alone does not satisfy the physiological inference gate.
+PRED-01 consumes real candidate models. ACT-01 connects forecasts to the learner and immutable ledger. EVAL-01 scores outcomes before updates. Run DEPTH-01 followed by DEPTH-02 modality comparisons with equal budgets. Investigate failures with bounded research tasks rather than broad unplanned rewrites.
 
-## 6. Using two Astra conversations effectively
+### Critical dependency chains
 
-Each person keeps a separate working conversation for their owned modules. Both conversations receive the main specification, this plan, shared contracts and current milestone. Share decisions through the repository; do not assume one conversation knows what the other decided.
+- Scientific: PHY-01 + AUD-01 -> INV-01 -> PRED-01 -> prospective loop.
+- Measured multimodal: CAP-01 -> CAP-02 + GEO-01 -> FUSE-01 -> DEPTH-02.
+- Integration: KIT-01 -> genuine artifact exchange -> SVC-01 + VIS-01 -> prospective replay -> reproducible report.
+- Evaluation: frozen scoring protocol -> hidden cases/baselines -> frozen fit/forecast -> score -> model update eligibility.
 
-Each iteration follows: inspect current code and interfaces -> choose a bounded task -> implement -> run the relevant checks -> provide a concise handoff. Ask Astra to identify assumptions and test numerical or data-flow claims rather than accepting plausible explanations as verification.
+These chains intersect but should not unnecessarily serialize one another. In particular, missing phone depth does not block synthetic recovery; incomplete inverse fitting does not block capture or actual forward-geometry rendering. A blocked ticket remains explicitly unfinished.
 
-Use short-lived branches such as `codex/physics-forward` and `codex/experiment-capture`, each from the agreed integration branch. On different computers, each person has their own checkout; on one computer, use separate worktrees. Keep shared interfaces small, commit integrated slices frequently, and have the integrator combine reviewed changes. Do not edit one working directory concurrently.
+## 5. Working integration gates
 
-The humans own scientific decisions and participant interaction. The two development conversations are distinct from the Astra instance inside the application that selects experiments. API responses or developer explanations are not numerical test results.
+B integrates small reviewed commits into one designated integration branch. Follow repository deployment procedures when a runnable application change is in scope; a planning update alone does not merge or deploy the app. Keep feature worktrees separate and preserve the last passing integration state.
 
-### Starter prompt for Person A
+| Gate | Required runnable evidence | Acceptance owner |
+|---|---|---|
+| G0: contract skeleton | Shared schemas and validation commands agree; owners and scoring protocol recorded. | B, with A scientific signoff |
+| G1: real artifact exchange | Engine audio/geometry pair and actual synchronized capture validate and replay; provenance distinguished. | A engine acceptance; B capture acceptance |
+| G2: synthetic inference | Hidden-anatomy fit, fixed-anatomy baseline, candidate geometry display and independent score reproduce. | A numerical review; B independent evaluation |
+| G3: human multimodal fit | Actual bundle enters FUSE-01; supported observations affect likelihood; missing depth and model mismatch reported. | A and B |
+| G4: prospective loop | Supported prediction frozen before capture; outcome scored before update; stale/cancelled work excluded. | B; A forecast review |
+| G5: evidence reproduced | Both humans replay benchmark and recorded run; equal-budget modality results, failures and limitations documented. | A and B |
 
-> We are building an open-source moonshot that attempts to recover a person's physiological acoustic model from audiovisual evidence and active vocal experiments. Read the current main specification and two-person execution plan. You own science/forward, science/inverse, science/prediction, science/service and tests/science. Another builder owns capture, canonical feature extraction, orchestration and evaluation; do not overwrite their work. Use the shared contracts, and propose coordinated changes when necessary. First build and test the forward simulator, inspect actual parameter capabilities, and export one genuine synthesized recording plus corresponding geometry and provenance. Then implement shared-anatomy inverse fitting and a synthetic recovery test. Keep known test anatomy outside the inverse solver. Do not replace physical inference with cue recommendations, fake fitted outputs or unsupported anatomical labels. Work in small verified commits and hand off exact commands, artifact formats, test results and blockers.
+G2 may pass before the capture part of G1. The synthetic G4 path may be exercised before G3, clearly labeled synthetic. No synthetic result satisfies a human-data gate. Gates are evidence labels, not permission to misrepresent a partially integrated system.
 
-### Starter prompt for Person B
+Each handoff includes a commit, exact command, contract version, expected artifacts, actual checks and known failures. Integration checks should exercise real module boundaries, including error paths. B merges in dependency order; A reviews physical meanings and numerical claims before scientific changes enter the passing integration state.
 
-> We are building an open-source moonshot that attempts to recover a person's physiological acoustic model from audiovisual evidence and active vocal experiments. Read the current main specification and two-person execution plan. You own observations, apps/web, experiment, evaluation, tests/integration and shared-contract maintenance. Another builder owns physical simulation and inverse fitting; do not overwrite their work. First implement actual capture, quality metadata and a versioned observation bundle, then canonical feature extraction and ingestion/display of the other builder's real simulator outputs. Build the immutable prediction -> recording -> scoring -> update state machine and Astra tool adapter. Keep held-out anatomy and evaluated audio out of fitting and prospective planning. Display the geometry supplied by the scientific engine, not an invented personalized scan. Do not report simulated or replayed data as a live human reconstruction. Work in small verified commits and hand off exact commands, contracts, test results and blockers.
+## 6. Use extra agents for independent scientific challenges
 
-### Handoff format
+Review and investigation agents do not share ownership of production files. Assign a specific hypothesis and artifact. Their independence helps expose errors; agreement between agents is not empirical validation.
+
+| Investigation | Required result | Lead |
+|---|---|---|
+| Identifiability | Distinct plausible anatomies with similar fit; candidate intervention predicted to distinguish them. | A |
+| Anatomy/articulation separation | Stability across vowels with articulation varying; identify compensating parameters. | A |
+| Capture compensation | Controlled microphone/room perturbations; determine whether inferred anatomy changes spuriously. | B, A reviews |
+| Incremental depth value | Audio, audio+RGB, audio+RGB+depth comparison at equal evidence/compute budgets; report null results. | B |
+| Model mismatch | Generate cases with altered physics/capture assumptions; test recovery and uncertainty failure. | A |
+| Evidence integrity | Attempt target leakage, stale-model updates, post-outcome forecasts and failed-trial exclusion. | B |
+| Device reliability | Repeat capture/stop/permission-loss/replay on both available phones; preserve metadata. | B |
+
+For unresolved algorithms, permit bounded competing implementations behind the same interface in isolated branches. Predeclare a compute budget, development cases and selection metric. Tune only on development data; after selecting, evaluate once on fresh held-out cases to avoid selecting on the final test set. Promote one supported implementation and record why. Keep other branches as research evidence rather than merging all alternatives.
+
+Schedule simulator workers, phones and benchmark compute explicitly. Pin versions, seeds, parallelism and budgets. If the native engine is stateful or not demonstrated thread-safe, isolate workers in processes and test deterministic reset behavior. More agents must not create uncontrolled compute contention or irreproducible comparisons.
+
+## 7. Task board, dispatch and handoff contract
+
+Use one shared repository-visible task board with IDs, owner, prerequisites, starting commit, contract version, acceptance experiment, branch/PR and status. Statuses: proposed -> ready -> running -> review -> integrated; blocked records the missing input and responsible owner. Only B marks repository integration complete after checks; scientific acceptance also requires A's signoff.
+
+A task is ready when its input exists or its independent portion is explicitly bounded, one writer owns its files, and success can be checked. Split research/design and executable acceptance when only the former is unblocked. Coordinators revisit blocked dependencies at each handoff and dispatch the next ready task. Finishing agents take ready review or investigation tasks; they do not invent new architecture.
 
 ```text
-Milestone / commit:
-What works and exact command:
-Input/output contract version:
-Tests run and results:
-Scientific assumptions and unsupported controls:
-Known failures:
-Next dependency needed from the other builder:
+Task ID / objective:
+Human lead / independent reviewer:
+Owned files and explicit non-goals:
+Starting commit / branch / worktree:
+Input artifacts and contract version:
+Prerequisites / what can proceed independently:
+Acceptance experiment and required checks:
+Compute or device budget:
+Handoff commit / exact command / expected output:
+Actual results / limitations / blockers:
+Next consumer and dependency unblocked:
 ```
 
-## 7. Independent checks and task transfers
+Agent starter instruction:
 
-B's evaluator should load hidden synthetic truth only after inference outputs are frozen. Generate private scoring records in a separate artifact location from the fitting/planning inputs. A can know training examples; scored cases need fresh seeds and held-out anatomy, with no truth metadata in prompts or filenames available to the solver. This separation checks leakage, not adversarial secrecy between teammates.
+> Read revision 5, the lane assignment and shared contracts. You are not alone in this repository. Modify only your assigned files in your own worktree; do not revert others' changes or edit shared interfaces without their owner. Implement the bounded deliverable with real producers and explicit failure behavior. Separate research hypotheses, synthetic evidence and human observations. Run the acceptance experiment and report its actual result, including failure. Return a small commit, runnable commands, artifact provenance, contract version and remaining blockers. Do not expand scope, fabricate fitted anatomy or merge your own work.
 
-A reviews feature extraction and whether proposed experiments are represented physically. B reviews whether the fit reuses one anatomy across tasks, whether post-outcome information leaked into forecasts, and whether visualizations overstate recovery. Both review independent physiology claims.
+## 8. Human checklists
 
-If A is blocked, B can take a discrete task such as testing native build portability, producing feature benchmarks, or checking a geometry exporter. Record the ownership transfer before editing. If B is blocked, A can help with a specific contract adapter or integration test after freezing a working solver build. Neither person starts a second competing implementation of the other's core module.
+### Person A: scientific model lead
 
-Preserve scientific progress when reducing scope: remove conversation polish, account systems, large-scale video scraping and elaborate 3D interaction first. Keep a working forward model, actual inverse fitting, prospective record and honest results. If only synthetic recovery works, present that result accurately.
+- [ ] Agree the first physiological hypothesis, supported parameter subset and scoring protocol.
+- [ ] Dispatch PHY-01 and scientific feasibility tasks; obtain genuine forward artifacts.
+- [ ] Review AUD-01 features and GEO-01 physical constraints with their owners.
+- [ ] Dispatch INV-01, FUSE-01 and SVC-01 as prerequisites pass.
+- [ ] Review anatomy/articulation separation, parameter recovery, candidate diversity and baselines.
+- [ ] Dispatch PRED-01 and identifiability/model-mismatch investigations.
+- [ ] Sign off numerical changes entering the integration queue.
+- [ ] Review DEPTH-01/02 and publish supported conclusions and unresolved failures.
 
-## Integrated depth ownership
+### Person B: experimental system and integration lead
 
-Main specification section 8 is authoritative: B owns CAP-01 and CAP-02; A owns FUSE-01; both own DEPTH-01 and DEPTH-02 with B responsible for execution/scoring and A for numerical forecasts/fit review. These are dependency gates without time estimates. Existing repository code is optional reusable material, not an architectural constraint.
+- [ ] Establish KIT-01, file ownership, task board and integration queue.
+- [ ] Dispatch native capture, acoustic measurement and independent evaluation tasks.
+- [ ] Arrange device access and obtain CAP-01/02 timing/depth evidence.
+- [ ] Dispatch service integration, actual geometry visualization and orchestration when ready.
+- [ ] Keep hidden scoring truth separate from fitting/planning inputs; review leakage controls.
+- [ ] Integrate reviewed commits and maintain the runnable cross-service path.
+- [ ] Execute prospective and modality-comparison experiments with all attempts retained.
+- [ ] Verify both humans can reproduce results and explain the evidence levels.
+
+Both humans resolve cross-lane decisions in a short repository decision record, with affected contracts/tasks and migration owner. Preserve physiological inference, real evidence and independent scoring when reducing scope; reduce conversation polish, accounts, large-scale scraping and elaborate visual effects first. Anatomical recovery remains a hypothesis to test, not a completion claim inferred from agent output.
