@@ -18,6 +18,11 @@ defaults to 8766 and `SCIENCE_DATA_DIR` to `.local-data/science-jobs`. Ctrl-C st
 both processes. Persistent jobs and session history remain available after restart;
 interrupted jobs retain failure status rather than fabricated completion.
 
+For ordinary iPhone voice captures, use the app controls documented in
+[APP_VOICE_FLOW.md](APP_VOICE_FLOW.md). They prepare the capture and execute fit
+or outcome updates automatically. The adapter/command interfaces below are
+developer integration references, not steps a learner must perform.
+
 The app's ordinary pairing/capture routes remain available. Scientific commands
 are desktop-local, forwarded under `/api/science/`; the same endpoints cannot be
 used remotely from a paired phone. Startup can briefly report an unavailable

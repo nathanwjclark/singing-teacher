@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 import re
+import signal
 import subprocess
 import time
 from urllib.parse import urlsplit
@@ -15,7 +16,7 @@ from urllib.request import Request, build_opener, ProxyHandler, HTTPRedirectHand
 
 from singing_physics.engine import digest, write_json
 from singing_physics.pcm_inverse import FEATURES
-from singing_physics.service import JobService
+from singing_physics.service import JobService, canonical
 from singing_physics.session import SessionController
 from science.scripts.model_space_diff import pair
 
@@ -46,7 +47,7 @@ class HTTPBackend:
         headers={'Authorization':'Bearer '+self.token}
         if body is not None: headers['Content-Type']='application/json'
         request=Request(self.url+path,data=json.dumps(body,allow_nan=False).encode() if body is not None else None,headers=headers)
-        with self.opener.open(request,timeout=60) as response:
+        with self.opener.open(request,timeout=getattr(self,'request_timeout_s',60)) as response:
             data=response.read(64_000_001)
         if len(data)>64_000_000: raise ValueError('Scientific response exceeds local limit')
         return json.loads(data)
@@ -60,16 +61,18 @@ class HTTPBackend:
     def status(self,job_id): return self.request('/jobs/'+job_id)
     def result(self,job_id): return self.request('/jobs/'+job_id+'/result')
     def exports(self,job_id): return self.request('/jobs/'+job_id+'/exports')
+    def cancel(self,job_id): return self.request('/jobs/'+job_id+'/cancel',{})
 
 
 class LocalBackend:
     def __init__(self,service,session_id):
-        self.service=service
+        self.service=service;self.session_id=session_id
         self.controller=SessionController(service.root/'sessions',service,session_id)
     def execute(self,command): return self.controller.execute(command)
     def submit(self,request,key): return self.service.submit(request,idempotency_key=key)
     def status(self,job_id): return self.service.status(job_id)
     def result(self,job_id): return self.service.result(job_id)
+    def cancel(self,job_id): return self.service.cancel(job_id)
     def exports(self,job_id):
         result=self.service.result(job_id)
         root=self.service.root/'artifacts'/job_id/'forward'
@@ -124,13 +127,17 @@ def pipeline(data, output, backend, session_id):
     jobs=[]
     def command(action,**fields):
         state=backend.execute({'action':'state'})['state']
-        return backend.execute({'action':action,'command_id':f'{output.name}-{action}-{state["version"]}',
+        command_id=f'{output.name}-{action}-{state["version"]}'
+        if action in ('search','propose_design'):
+            backend.session_job_key='session:'+hashlib.sha256(canonical([session_id,command_id]).encode()).hexdigest()
+        return backend.execute({'action':action,'command_id':command_id,
             'expected_version':state['version'],**fields})['state']
     def session_job(action,parameters):
         state=command(action,parameters=parameters);pending=state['pending']
         if pending is None: raise RuntimeError('Session job submission failed; session ledger retained')
         ident=pending['job_id'];receipt=wait(backend,ident)
         state=command('collect_job',job_id=ident)
+        backend.session_job_key=None
         jobs.append({'id':ident,'operation':pending['request']['operation'],'status':receipt['status']})
         write_json(output/'session-ledger.json',backend.execute({'action':'replay'}))
         if receipt['status']!='succeeded': raise RuntimeError(f'{action}: {receipt.get("error")}')
@@ -158,7 +165,10 @@ def pipeline(data, output, backend, session_id):
         request={'operation':'forward','session_id':session_id,'model_id':snapshot['model_id'],
             'parameters':{'pose':'a','anatomy':anatomy,'articulation':{'JA':-3.},'f0_hz':180.,'duration_s':.25}}
         write_json(output/f'{key}-request.json',request)
-        forward_id=backend.submit(request,output.name+'-'+key);receipt=wait(backend,forward_id)
+        backend.forward_job_id=None
+        backend.forward_intent=(request,output.name+'-'+key)
+        forward_id=backend.submit(*backend.forward_intent);backend.forward_job_id=forward_id
+        receipt=wait(backend,forward_id)
         jobs.append({'id':forward_id,'operation':'forward','role':key,'status':receipt['status']})
         if receipt['status']!='succeeded': raise RuntimeError('Forward export failed: '+str(receipt.get('error')))
         forward=backend.result(forward_id);bundle=backend.exports(forward_id)
@@ -193,6 +203,51 @@ def pipeline(data, output, backend, session_id):
     return summary
 
 
+
+class CaptureInterrupted(RuntimeError):
+    pass
+
+
+@contextmanager
+def interruption_signals():
+    """Give a terminated CLI a bounded opportunity to cancel remote work."""
+    previous={sig:signal.getsignal(sig) for sig in (signal.SIGTERM,signal.SIGINT)}
+    def stop(signum,_frame):
+        # A second signal must not interrupt receipt persistence/remote cancellation.
+        for sig in previous: signal.signal(sig,signal.SIG_IGN)
+        raise CaptureInterrupted('Capture pipeline interrupted by signal '+str(signum))
+    try:
+        for sig in previous: signal.signal(sig,stop)
+        yield
+    finally:
+        for sig,handler in previous.items(): signal.signal(sig,handler)
+
+
+def cancel_owned_jobs(backend,run_id):
+    """Cancel only this pipeline's intents, then collect terminal session receipts."""
+    if isinstance(backend,HTTPBackend): backend.request_timeout_s=3
+    report={'status':'reconciled','jobs':[]}
+    state=backend.execute({'action':'state'})['state'];pending=state['pending']
+    if pending and pending['key']==getattr(backend,'session_job_key',None):
+        identity=pending['job_id'];backend.cancel(identity)
+        receipt=backend.status(identity)
+        if receipt['status'] not in ('succeeded','failed','cancelled'):
+            raise RuntimeError('Cancellation did not produce a terminal job receipt')
+        # A completion which beat cancellation is retained, but no next stage runs.
+        backend.execute({'action':'collect_job','command_id':run_id+'-interrupt-'+identity,
+                         'expected_version':state['version'],'job_id':identity})
+        report['jobs'].append({'job_id':identity,'status':receipt['status']})
+    intent=getattr(backend,'forward_intent',None)
+    if intent:
+        identity=getattr(backend,'forward_job_id',None)
+        if identity is None:
+            # Recover the exact idempotent submission if its HTTP reply was lost.
+            identity=backend.submit(*intent)
+        backend.cancel(identity)
+        report['jobs'].append({'job_id':identity,'status':backend.status(identity)['status']})
+    return report
+
+
 def run(source,output,*,development_fixture=False):
     output.mkdir(parents=True,exist_ok=False,mode=0o700)
     session_id='live-'+hashlib.sha256(str(output.resolve()).encode()).hexdigest()[:24]
@@ -201,8 +256,19 @@ def run(source,output,*,development_fixture=False):
     subprocess.run(args,check=True,stdout=subprocess.DEVNULL)
     data=json.loads((output/'import/native-pcm.json').read_text())
     with backend_for(output,session_id) as backend:
-        try: summary=pipeline(data,output,backend,session_id)
-        finally:
+        try:
+            summary=pipeline(data,output,backend,session_id)
+        except BaseException as exc:
+            report={'status':'interrupted','reason':str(exc),'time':now()}
+            try: report['cleanup']=cancel_owned_jobs(backend,output.name)
+            except Exception as cleanup_error:
+                report['cleanup']={'status':'reconciliation_required','error':str(cleanup_error)}
+            write_json(output/'interruption.json',report)
+            try: write_json(output/'session-ledger.json',backend.execute({'action':'replay'}))
+            except Exception as ledger_error:
+                write_json(output/'ledger-recovery.json',{'status':'reconciliation_required','error':str(ledger_error),'sessionId':session_id})
+            raise
+        else:
             write_json(output/'session-ledger.json',backend.execute({'action':'replay'}))
     manifest=(source/'manifest.json').read_bytes()
     if hashlib.sha256(manifest).hexdigest()!=data['source_manifest_sha256']:
@@ -216,7 +282,9 @@ def run(source,output,*,development_fixture=False):
 if __name__=='__main__':
     p=argparse.ArgumentParser(description=__doc__);p.add_argument('--source',type=Path,required=True);p.add_argument('--output',type=Path,required=True)
     p.add_argument('--development-fixture',action='store_true');a=p.parse_args()
-    try: run(a.source.resolve(),a.output.resolve(),development_fixture=a.development_fixture)
+    try:
+        with interruption_signals():
+            run(a.source.resolve(),a.output.resolve(),development_fixture=a.development_fixture)
     except Exception as e:
         if a.output.exists():write_json(a.output/'failure.json',{'status':'failed','error':str(e),'time':now()})
         raise

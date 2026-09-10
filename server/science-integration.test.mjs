@@ -26,6 +26,7 @@ test('desktop proxy executes native jobs and session commands without exposing t
     assert.ok(ready,'Scientific server did not become ready');
     // B's app routes and A's worker routes must coexist under the same prefix.
     assert.deepEqual((await call('/status')).data,{status:'not-run'});
+    assert.equal((await call('/outcome')).status,409);
     const unconfiguredRun=await fetch(base+'/api/science/run',{method:'POST'});
     assert.equal(unconfiguredRun.status,409);
     assert.match((await unconfiguredRun.json()).error,/No verified local voice/);

@@ -88,3 +88,73 @@ def test_missing_eligible_capture_retains_protocol_without_fitting(tmp_path):
         live.pipeline({'fit_trial_options':[]},tmp_path,None,'session')
     assert (tmp_path/'protocol.json').exists()
     assert not (tmp_path/'fit.json').exists()
+
+
+def test_sigterm_client_cancels_owned_remote_search_and_clears_pending(tmp_path,monkeypatch):
+    import os
+    import signal
+    import subprocess
+    import sys
+    import time
+    from singing_physics.http_service import ScientificHTTPServer
+    source=capture(tmp_path);output=tmp_path/'interrupted-run'
+    session_id='live-'+hashlib.sha256(str(output.resolve()).encode()).hexdigest()[:24]
+    server=ScientificHTTPServer(tmp_path/'shared-jobs','t'*48,port=0)
+    thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
+    url=f'http://127.0.0.1:{server.server_port}'
+    backend=live.HTTPBackend(url,'t'*48,session_id)
+    process=None
+    try:
+        env={**os.environ,'SCIENCE_URL':url,'SCIENCE_TOKEN':'t'*48,'PYTHONPATH':str(SCRIPT.parents[2])+':'+str(SCRIPT.parents[1]/'src')}
+        process=subprocess.Popen([sys.executable,str(SCRIPT),'--source',str(source),'--output',str(output),'--development-fixture'],
+            env=env,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
+        deadline=time.monotonic()+30;job_id=None
+        while time.monotonic()<deadline:
+            state=backend.execute({'action':'state'})['state']
+            if state['pending']:
+                job_id=state['pending']['job_id']
+                if server.jobs.status(job_id)['status']=='running': break
+            time.sleep(.02)
+        assert job_id is not None and server.jobs.status(job_id)['status']=='running'
+        process.send_signal(signal.SIGTERM)
+        stdout,stderr=process.communicate(timeout=20)
+        assert process.returncode!=0,(stdout,stderr)
+        state=backend.execute({'action':'state'})['state']
+        assert state['pending'] is None
+        assert state['snapshot'] is None
+        assert state['jobs'][-1]['status']=='cancelled'
+        assert server.jobs.status(job_id)['status']=='cancelled'
+        cleanup=json.loads((output/'interruption.json').read_text())
+        assert cleanup['cleanup']['status']=='reconciled'
+        assert not (output/'summary.json').exists()
+        # Session can accept a new bounded search intent instead of remaining wedged.
+        params=state['jobs'][-1]['request']['parameters'];params={k:v for k,v in params.items() if k!='observations'}
+        params['max_synthesis_calls']=1
+        reply=backend.execute({'action':'search','command_id':'resume-after-stop','expected_version':state['version'],'parameters':params})
+        new_job=reply['state']['pending']['job_id']
+        assert server.jobs.wait(new_job)['status']=='failed'
+        backend.execute({'action':'collect_job','command_id':'collect-resume','expected_version':reply['state']['version'],'job_id':new_job})
+    finally:
+        if process and process.poll() is None:process.kill();process.communicate()
+        server.shutdown();thread.join();server.server_close()
+
+
+def test_cleanup_recovers_forward_submission_identity_without_duplicate_job(tmp_path):
+    from singing_physics.http_service import ScientificHTTPServer
+    server=ScientificHTTPServer(tmp_path/'jobs','t'*48,port=0)
+    thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
+    backend=live.HTTPBackend(f'http://127.0.0.1:{server.server_port}','t'*48,'export-session')
+    try:
+        backend.execute({'action':'state'})
+        model='session-unfitted:'+hashlib.sha256(json.dumps('export-session').encode()).hexdigest()
+        request={'operation':'forward','session_id':'export-session','model_id':model,
+            'parameters':{'pose':'a','duration_s':.25}}
+        backend.forward_intent=(request,'owned-export')
+        identity=backend.submit(*backend.forward_intent)
+        # No cached forward_job_id: cleanup must recover a lost response by the same key.
+        report=live.cancel_owned_jobs(backend,'run')
+        assert report['jobs'][0]['job_id']==identity
+        assert report['jobs'][0]['status'] in ('cancelled','succeeded')
+        assert backend.submit(*backend.forward_intent)==identity
+    finally:
+        server.shutdown();thread.join();server.server_close()
