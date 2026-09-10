@@ -33,13 +33,21 @@ export function createMotionRoutes({dataRoot,json,repo=join(import.meta.dirname,
    {method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${process.env.SCIENCE_TOKEN}`},body:JSON.stringify({action:'state'}),signal:AbortSignal.timeout(5000)});
   return response.ok?(await response.json()).state?.snapshot?.model_id??null:null;
  }
+ async function verifyAnalysis(result,state){
+  if(result.captureId!==state.captureId||result.modelId!==state.expectedModelId)throw Error('Audio analysis result identity differs from its declared capture or model.');
+  const source=await capture(state.captureId),media=await readFile(join(root,state.captureId,'media'));
+  const receipt=await readFile(join(root,state.captureId,'summary.json'));
+  if(media.length!==source.summary.mediaByteLength||hash(media)!==source.summary.mediaSha256||
+   result.sourceHashes?.media!==source.summary.mediaSha256||result.sourceHashes?.record!==source.summary.recordSha256||result.sourceHashes?.receipt!==hash(receipt))
+   throw Error('Audio analysis original evidence hashes no longer agree.');
+ }
  async function analysisStatus(captureId){
   if(!identifier.test(captureId??''))throw Error('Invalid motion capture identifier');
   const path=join(analysisRoot,captureId,'current.json');let state=await optional(path);
   const currentModelId=await currentModel().catch(()=>null);
   if(!state)return {status:'not-run',analysisId:null,error:null,result:null,resultCurrent:false,currentModelId,availability:await decoderAvailability()};
   const result=await optional(join(analysisRoot,captureId,state.analysisId,'summary.json'));
-  if(result&&(result.captureId!==captureId||result.modelId!==state.expectedModelId))throw Error('Audio analysis result identity differs from its declared capture or model.');
+  if(result)await verifyAnalysis(result,state);
   if(result&&state.status!=='succeeded'){
    state={...state,status:'succeeded',error:null};await saveAnalysis(path,state);
   }else if(state.status==='running'&&!analysisBusy){
@@ -84,7 +92,7 @@ export function createMotionRoutes({dataRoot,json,repo=join(import.meta.dirname,
    if(timedOut)kill('SIGKILL');
    try{
     const result=await optional(join(output,'summary.json'));
-    if(result){await capture(body.captureId);if(result.captureId!==body.captureId||result.modelId!==state.expectedModelId)throw Error('Audio result identity differs from original capture/model declaration.');}
+    if(result)await verifyAnalysis(result,state);
     state.status=!error&&code===0&&result?'succeeded':'failed';
     state.error=state.status==='succeeded'?null:timedOut?'Audio analysis reached its time limit. Retry in the app; the model was not changed.':
      stderr.split('\n').findLast(line=>/^(ValueError|RuntimeError|FileNotFoundError):/.test(line))||'Audio analysis could not finish. Your original recording and model were preserved.';
