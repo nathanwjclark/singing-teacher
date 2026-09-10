@@ -32,7 +32,7 @@ def native_outcome_capture(directory, *, created_at=None):
     return directory
 
 
-@pytest.mark.parametrize('interruption',['submit_response','preparation','saved_result','stopped'])
+@pytest.mark.parametrize('interruption',['submit_response','preparation','saved_result','stopped','stale_collect'])
 def test_actual_http_update_resumes_lost_submit_response_and_completed_replay(tmp_path,monkeypatch,interruption):
     server=ScientificHTTPServer(tmp_path/'jobs','t'*48,port=0)
     thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
@@ -43,11 +43,16 @@ def test_actual_http_update_resumes_lost_submit_response_and_completed_replay(tm
         snapshot=freeze_pcm_hypotheses(model_id='initial',evidence_ids=['past'],evidence_hashes=['a'*64],provenance=provenance,hypotheses=[dict(hypothesis_id='a',anatomy={'hard_palate_length':4.2}),dict(hypothesis_id='b',anatomy={'hard_palate_length':4.8})],frozen_at=datetime.now(timezone.utc).isoformat()).data
         backend.execute(dict(action='register_model',command_id='register',expected_version=0,snapshot=snapshot))
         state=backend.execute({'action':'state'})['state']
-        state=backend.execute(dict(action='propose_design',command_id='design',expected_version=state['version'],parameters=dict(design_id='design',target_observation_id='target',profile=dict(sample_rate_hz=48000,frame_start_sample=4800,frame_size=4096,duration_s=.25),experiments=[dict(experiment_id='a',pose='a',JA=-2.,f0_hz=180.,gain=.1)],feature_scales={name:dict(unit=unit,scale=scale,assumption='Test engineering scale') for name,(unit,scale) in FEATURES.items()},minimum_separation=.000001,max_synthesis_calls=4)))['state']
-        job=state['pending']['job_id']
+        parameters=dict(design_id='design',target_observation_id='target',profile=dict(sample_rate_hz=48000,frame_start_sample=4800,frame_size=4096,duration_s=.25),experiments=[dict(experiment_id='a',pose='a',JA=-2.,f0_hz=180.,gain=.1)],feature_scales={name:dict(unit=unit,scale=scale,assumption='Test engineering scale') for name,(unit,scale) in FEATURES.items()},minimum_separation=.000001,max_synthesis_calls=4)
         from live_capture_jobs import wait
-        assert wait(backend,job)['status']=='succeeded'
-        state=backend.execute(dict(action='collect_job',command_id='collect-design',expected_version=state['version'],job_id=job))['state']
+        for design_id in (['prior','design'] if interruption=='stale_collect' else ['design']):
+            parameters['design_id']=design_id;parameters['target_observation_id']='prior-target' if design_id=='prior' else 'target'
+            state=backend.execute(dict(action='propose_design',command_id=design_id,expected_version=state['version'],parameters=parameters))['state']
+            job=state['pending']['job_id']
+            assert wait(backend,job)['status']=='succeeded'
+            state=backend.execute(dict(action='collect_job',command_id='collect-'+design_id,expected_version=state['version'],job_id=job))['state']
+            if design_id=='prior':
+                state=backend.execute(dict(action='record_attempt',command_id='prior-attempt',expected_version=state['version'],design_id='prior',attempt_id='prior-attempt',status='failed',reason='Previous execution unsuccessful'))['state']
         run=tmp_path/'saved-run';run.mkdir();(run/'summary.json').write_text(json.dumps(dict(runId='saved-run',sessionId='session',designId='design',modelId='initial')))
         source=native_outcome_capture(tmp_path/'later')
         config=tmp_path/'config.json';config.write_text(json.dumps(dict(pose='a',segment_index=0,evidence_kind='development-fixture',participant_id='fixture-participant',recording_kind='ordinary-singing',contains_external_excitation=False)))
@@ -56,6 +61,10 @@ def test_actual_http_update_resumes_lost_submit_response_and_completed_replay(tm
         original_process=runner.subprocess.run;original_seal=runner.seal
         def lose_response(self,command):
             nonlocal lost
+            if interruption=='stale_collect' and command.get('action')=='collect_job' and not lost:
+                lost=True
+                current=original(self,{'action':'state'})['state']
+                original(self,dict(action='record_sensation',command_id='concurrent-sensation',expected_version=current['version'],attempt_id='prior-attempt',text='Subjective report arrived during collection'))
             result=original(self,command)
             if interruption=='submit_response' and command.get('action')=='submit_outcome' and not lost:
                 lost=True;raise ConnectionError('Test lost accepted response')
@@ -75,8 +84,13 @@ def test_actual_http_update_resumes_lost_submit_response_and_completed_replay(tm
         monkeypatch.setattr(runner.HTTPBackend,'execute',lose_response)
         monkeypatch.setattr(runner.subprocess,'run',interrupt_import)
         monkeypatch.setattr(runner,'seal',interrupt_result)
-        with pytest.raises(ConnectionError,match='lost accepted'):
+        if interruption!='stale_collect':
+            with pytest.raises(ConnectionError,match='lost accepted'):
+                runner.run(run,source,out,config)
+        else:
             runner.run(run,source,out,config)
+            assert len(list(out.glob('collect-v*.json')))==2
+            assert lost
         assert (out/'session-before.json').exists()
         if interruption!='preparation': assert (out/'prepared.json').exists()
         if interruption=='stopped':
@@ -89,6 +103,10 @@ def test_actual_http_update_resumes_lost_submit_response_and_completed_replay(tm
         else:
             assert first['status']=='succeeded' and first['modelId']!='initial'
             assert first['scientificStatus'] in ('conditional_support_updated','model_mismatch','no_design_separation')
+        raw_result=json.loads((out/'result.json').read_text())
+        assert first['scores']==(raw_result['scores'] if interruption!='stopped' else [])
+        assert first['previousHypotheses']==2
+        assert first['retainedHypotheses']==(len(raw_result['updated_snapshot']['hypotheses']) if interruption!='stopped' else None)
         second=runner.run(run,source,out,config);assert second==first
         replay=json.loads((out/'replay.json').read_text())
         assert len([j for j in replay['state']['jobs'] if j['request']['operation']=='update_pcm'])==1

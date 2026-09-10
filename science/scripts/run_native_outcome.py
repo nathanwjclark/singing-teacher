@@ -195,6 +195,10 @@ def _run(run_directory, source, output, config_path, timeout_s, node_binary):
     return finish(output,{'status':disposition['status'],'sessionId':session_id,'runId':summary.get('runId'),'jobId':job_id,
         'designId':command['design_id'],'observationId':command['parameters']['observation_id'],'submitted':True,
         'scientificStatus':result.get('status') if applied else None,'modelUpdated':applied,
+        'scores':result.get('scores',[]) if applied else [],
+        'missingReason':result.get('missing_reason') if applied else None,
+        'retainedHypotheses':len(result['updated_snapshot']['hypotheses']) if applied else None,
+        'previousHypotheses':len(json.loads(read(output/'session-before.json'))['state']['snapshot']['hypotheses']),
         'modelId':replay['state']['snapshot']['model_id'], 'workerStatus':status['status'],
         'source':config['evidence_kind'],'anatomyValidated':False,'error':disposition.get('error')})
 

@@ -28,3 +28,5 @@ PYTHONPATH=science/src python -m pytest science/tests/test_native_outcome_runner
 ```
 
 Tests use actual authenticated HTTP, a sealed native48kHz design and a later original native PCM bundle. They execute import, worker update, collection and replay, with restart after interrupted preparation, lost accepted submit response, saved result before collection, and user stop after worker completion. They verify only one update job, model/evidence changes when applied, unchanged model when stopped, private permissions and corrupted-artifact rejection. All evidence is generated software evidence; human-device effectiveness is not claimed.
+
+Final regression: **5 actual HTTP tests passed**, including a concurrent valid sensation event that causes a real stale-version collect response. The runner retains both versioned collect attempts and applies exactly one update. Summary fields `scores`, `missingReason`, `retainedHypotheses` and `previousHypotheses` expose exact numerical result values/counts; stopped outcomes have empty scores and null retained count because the worker result was not applied.
