@@ -22,6 +22,7 @@ Do not mark an implementation failed merely because a scientific score is poor. 
 |---|---|---|
 | Capture and ingestion | Real recordings reach their consumer with original bytes, timestamps, provenance and missing-data flags. | No |
 | Physical inference | Actual supported observations affect fitting/ranking of physical hypotheses; parameters and limits explicit. | No recovery threshold |
+| Optional phonation and closure inference — not a release gate | When enabled, versioned audio descriptors reach their declared coaching/model consumers; full integration includes a forecast, recording, score and replay. Disabled, absent or failed capabilities preserve the core flow without false closure conclusions. See the [phonation plan](phonation-and-closure-plan.md), PHON-01–05, for graceful degradation. | No exact closure-recovery threshold; paired reference validation reported separately |
 | Runtime Astra | A real server-side model invocation inspects hypotheses/forecasts, selects a supported action and gives an intuitive instruction. | No optimal-policy proof |
 | Experiment execution | The instructed task is recorded; prediction is committed before outcome; unsuccessful attempts retained. | No successful gesture required |
 | Score and update | Compare compatible quantities, then produce a new model version or explicit mismatch/no-change decision; retain history. | No prediction-error threshold |

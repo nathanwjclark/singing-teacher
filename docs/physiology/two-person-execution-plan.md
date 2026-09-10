@@ -71,6 +71,12 @@ A reviews the separation of anatomy, articulation and learned control; B secures
 
 ## 4. Dependency-driven activation
 
+### Phonation and closure inference extension
+
+The [phonation and closure plan](phonation-and-closure-plan.md) adds PHON-01 through PHON-05, entirely owned by A. This is a feature-specific exception to the general lane table: A owns acoustic extraction, source/tract inference, existing-capture integration, coaching UI, orchestration, independent evaluation and release-ready integration. B has no phonation implementation, acquisition, review or acceptance assignment. Audio-derived closure estimates remain conditional hypotheses, never confirmed vocal-fold contact. The addendum defines deliverables, shared contracts and acceptance criteria; all new tickets start as planned.
+
+These tickets are optional and do not gate the existing release or block other lanes. A owns both fallback/model integrity and non-blocking capture/UI behavior, using additive modules, existing capture interfaces and minimal shared-file wiring. Independent review is performed by a separate reviewer within A. No new B deliverable is a prerequisite; active shared-file edits remain protected by the single-writer rule. Independently gate measurement, inference and coaching capabilities. Missing implementation, invalid evidence or runtime failure preserves the existing verified flow with explicit limitations; it never produces a fabricated closure result. See the addendum's graceful-degradation acceptance checks.
+
 These waves describe prerequisites, not dates or mandatory group-wide barriers. A lane starts its next task as soon as its own inputs pass, without waiting for unrelated lanes.
 
 ### Wave 1: foundations and uncertainty removal
