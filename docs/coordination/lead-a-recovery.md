@@ -6,6 +6,15 @@ Final verification: 286 Python tests with `-W error`, 8 KIT integration tests,
 replay used 24 calls and preserved its 2.45 mm anatomical error. Build bundle-size
 advisory remains; actual human/live Astra demonstration is not claimed.
 
+Publication receipt: PR #3 was already merged at its older head. This recovered
+queue therefore requires a follow-up PR. Final B delta through `5e919bb` adds
+sequential video/sound capture, raw depth feedback and a native model readiness
+report. It preserves separate acquisition phases and explicitly abstains where
+tongue correspondence is missing. The merged dynamic-handoff tests (11), app build
+and lint passed again. Local iOS rebuild is blocked: this host has only Command
+Line Tools selected and no `/Applications/Xcode*.app`; B's unsigned-build report
+is retained as producer evidence, not a locally repeated check.
+
 The usage interruption preserved all worktrees. This ledger reconciles agent
 messages with actual files and commits; an agent stopping does not mark its lane
 complete. Revision 8's research-harness finish plan governs delivery. Negative

@@ -15,6 +15,11 @@ PCM search/design/update loop and [the recovery ledger](../docs/coordination/lea
 for reconciliation of interrupted agents and saved work. Positive reconstruction
 or learning outcomes are not implementation completion requirements.
 
+Final publication also incorporates B main `5e919bb`. Eleven dynamic-handoff
+tests, build and lint passed after that delta. The iOS rebuild cannot run on this
+host because full Xcode is absent; B reports its own unsigned build. This remaining
+verification gap does not imply that native code was locally tested here.
+
 External-drive physics, immutable probe forecasts, joint singing/probe fitting
 and process-isolated CLI/service execution are now implemented. The source is a
 free external monopole with direct leakage and oral reradiation, not the glottal
