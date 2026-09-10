@@ -14,6 +14,6 @@ export function CoachingPanel({ tips, demo, tracking, selectedTipId, now, onSele
         <div className="recent-cue-time"><span className={tip.active ? 'cue-present' : ''}>{tip.active ? 'Present' : 'Recent'}</span><span>{Math.max(0, Math.floor((now - tip.triggeredAt) / 1000))}s ago</span></div>
       </li>)}
     </ol>
-    {selected && <div className="selected-cue-detail" id="selected-cue-detail"><p>{selected.detail}</p>{selected.muscles?.length ? <span>REFERENCE · {selected.muscles.join(' / ')}</span> : null}</div>}
+    {selected && <div className="selected-cue-detail" id="selected-cue-detail">{!selected.active && <span>RECENT CUE · NOT CURRENTLY DETECTED</span>}<p>{selected.detail}</p>{selected.muscles?.length ? <span>REFERENCE · {selected.muscles.join(' / ')}</span> : null}</div>}
   </section>;
 }
