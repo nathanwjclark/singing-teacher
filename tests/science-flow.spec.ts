@@ -20,6 +20,21 @@ test('Astra rest disables scoring and capture event submissions',async({page})=>
  await expect(page.locator('.scientific-model')).toContainText('Selected experiment: vowel-a');
 });
 
+test('interrupted outcome resumes the existing recording without preparing another capture',async({page})=>{
+ let preparations=0,resumes=0;
+ await page.route('**/api/science/status',r=>r.fulfill({json:{status:'succeeded',runId:'ui-test',result:{...result,recordingAllowed:false,recordingMessage:'A scientific job is updating this session.'}}}));
+ await page.route('**/api/science/outcome',r=>{
+  if(r.request().method()==='POST'){resumes++;return r.fulfill({status:202,json:{status:'running',outcomeId:'outcome-same'}})}
+  return r.fulfill({json:{status:resumes?'running':'interrupted',outcomeId:'outcome-same'}});
+ });
+ await page.route('**/api/science/use-latest-capture',r=>{preparations++;return r.fulfill({json:{prepared:true}})});
+ await page.goto('/');await page.getByRole('button',{name:'Experiments',exact:true}).click();
+ await expect(page.getByRole('button',{name:'Score latest iPhone capture'})).toBeDisabled();
+ await page.getByRole('button',{name:'Resume interrupted scoring'}).click();
+ await expect.poll(()=>resumes).toBe(1);
+ expect(preparations).toBe(0);
+});
+
 test('capture preparation failure is visible and never starts a model job',async({page})=>{
  let runs=0;
  await page.route('**/api/science/status',r=>r.fulfill({json:{status:'not-run'}}));

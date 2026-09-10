@@ -1,13 +1,103 @@
 """Apply a verified external probe to the current session's retained candidates."""
 import argparse
 import json
+import hashlib
+import os
+import fcntl
 from pathlib import Path
 from science.scripts.live_capture_jobs import backend_for, wait
-from science.scripts.prepare_probe_capture import write
+from singing_physics.service import canonical
+
+
+def seal(path, value):
+    """Atomic immutable receipts; an interrupted rename can safely be repeated."""
+    if path.exists():
+        if json.loads(path.read_text()) != value: raise ValueError('Probe receipt differs from its original bytes')
+        return
+    temporary=path.with_name(path.name+'.pending')
+    with os.fdopen(os.open(temporary,os.O_WRONLY|os.O_CREAT|os.O_TRUNC,0o600),'w') as stream:
+        json.dump(value,stream,allow_nan=False);stream.flush();os.fsync(stream.fileno())
+    os.replace(temporary,path)
+
+
+def finish(backend, intent, output):
+    command=intent['command']
+    key='session:'+hashlib.sha256(canonical([intent['sessionId'],command['command_id']]).encode()).hexdigest()
+    def owned(state):
+        return next((j for j in state['jobs'] if j.get('key')==key),None)
+    state=backend.execute({'action':'state'})['state']
+    record=owned(state)
+    if record is None and (not state['pending'] or state['pending'].get('key')!=key):
+        if state['pending']: raise ValueError('Another scientific operation is running; retry after it completes')
+        if state.get('snapshot',{}).get('model_id')!=intent['parentModelId']:
+            raise ValueError('Model changed before probe submission; refresh and start a new fit')
+        # The command ID is stable; expected_version may change only when no
+        # submission exists (e.g. a sensation was saved before this command).
+        for attempt in range(3):
+            try:
+                state=backend.execute({**command,'expected_version':state['version']})['state'];break
+            except Exception:
+                state=backend.execute({'action':'state'})['state']
+                if owned(state) or state['pending'] and state['pending'].get('key')==key:break
+                if attempt==2:raise
+    record=owned(state)
+    if record is None:
+        pending=state['pending']
+        if not pending or pending.get('key')!=key: raise ValueError('Probe submission has no recoverable session intent')
+        job=pending['job_id'];seal(output/'job.json',{'jobId':job,'key':key})
+        try:wait(backend,job)
+        except TimeoutError:
+            backend.cancel(job)
+            wait(backend,job)
+        for attempt in range(3):
+            state=backend.execute({'action':'state'})['state']
+            record=owned(state)
+            if record is not None:break
+            try:
+                state=backend.execute({'action':'collect_job','command_id':output.name+'-collect',
+                    'expected_version':state['version'],'job_id':job})['state']
+                record=owned(state);break
+            except Exception:
+                if attempt==2:raise
+    if record is None:raise ValueError('Probe completion is not yet available; retry to recover it')
+    # Result is authoritative even if the collect HTTP reply was lost or the
+    # process died after collection. No second fit/adoption is submitted.
+    seal(output/'terminal.json',{'jobId':record.get('job_id'),'status':record['status']})
+    if record['status']!='succeeded':
+        seal(output/'failure.json',{'status':record['status'],'reason':'Probe job did not finish; the session is available for retry.'})
+        raise ValueError('Probe job did not finish; retry the fit in the app')
+    result=record['result'];seal(output/'result.json',result)
+    # The full replay may grow later, so only freeze the first successful view.
+    if not (output/'session-ledger.json').exists():seal(output/'session-ledger.json',backend.execute({'action':'replay'}))
+    adoption=result.get('session_adoption',{})
+    model_id=adoption.get('model_id',intent['parentModelId'])
+    answer={'importId':intent['importId'],'parentModelId':intent['parentModelId'],'modelId':model_id,
+        'status':result['status'],'includedInFit':result['status']=='joint_probe_evidence_used',
+        'probeRecords':result['probe_records'],'score':result['joint']['best'],
+        'baselineScore':result['fixed_anatomy_baseline']['best'],'nativeCalls':result['actual_operator_calls'],
+        'adoptionStatus':'updated' if model_id!=intent['parentModelId'] else 'unchanged',
+        'jobId':record['job_id'],'sessionId':intent['sessionId']}
+    seal(output/'summary.json',answer)
+    return answer
 
 
 def run(data_root, import_id, expected_model_id, output):
     root, output = Path(data_root), Path(output)
+    output.mkdir(mode=0o700,parents=True,exist_ok=True)
+    # A restarted server and an orphaned child must not process this folder twice.
+    with os.fdopen(os.open(output/'run.lock',os.O_RDWR|os.O_CREAT,0o600),'w') as lock:
+        try:fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
+        except BlockingIOError:raise ValueError('This probe fit is still running; wait for completion')
+        return _run(root,import_id,expected_model_id,output)
+
+
+def _run(root, import_id, expected_model_id, output):
+    intent_path=output/'intent.json'
+    if intent_path.exists():
+        intent=json.loads(intent_path.read_text())
+        if intent['importId']!=import_id or intent['parentModelId']!=expected_model_id:
+            raise ValueError('Probe retry identity differs from original request')
+        with backend_for(output,intent['sessionId']) as backend:return finish(backend,intent,output)
     imported = root/'probe-imports'/import_id
     summary = json.loads((imported/'summary.json').read_text())
     if not summary['eligible']: raise ValueError('Probe calibration/import is not eligible for fitting')
@@ -23,11 +113,12 @@ def run(data_root, import_id, expected_model_id, output):
     # Re-import original bytes and supplemental evidence immediately before use.
     import subprocess
     from science.scripts.prepare_probe_capture import ROOT
-    output.mkdir(mode=0o700, parents=True, exist_ok=False)
+    import tempfile
+    verified=Path(tempfile.mkdtemp(prefix='verification-',dir=output))/'import'
     subprocess.run(['node','--experimental-strip-types',str(ROOT/'science/scripts/import_probe_science.ts'),
-                    str(imported/summary['captureDirectory']),str(output/'verified-import'),
+                    str(imported/summary['captureDirectory']),str(verified),
                     str(root/'probe-science-config.json')], check=True, stdout=subprocess.DEVNULL)
-    document = json.loads((output/'verified-import/probe-science-document.json').read_text())
+    document = json.loads((verified/'probe-science-document.json').read_text())
     if document is None: raise ValueError('Probe evidence is no longer eligible')
     fit = json.loads((run_dir/'fit.json').read_text())
     with backend_for(output, voice['sessionId']) as backend:
@@ -43,37 +134,13 @@ def run(data_root, import_id, expected_model_id, output):
                 'probe_trials':{t['id']:profile for t in document['trials']}})
         count=2*len(candidates)*(len(state['calibration']['trials'])+2*len(document['trials']))
         parameters={'probe_observations':document,'candidates':candidates,'max_native_calls':count,'pcm_weight':1.,'probe_weight':1.}
-        write(output/'request.json',parameters)
-        state=backend.execute({'action':'fit_probe','command_id':output.name+'-fit',
-            'expected_version':state['version'],'parameters':parameters})['state']
-        job=state['pending']['job_id']; terminal=wait(backend,job)
-        # Another sensation can advance the session while the native job runs.
-        state=backend.execute({'action':'state'})['state']
-        collect={'action':'collect_job','command_id':output.name+'-collect',
-            'expected_version':state['version'],'job_id':job}
-        try: state=backend.execute(collect)['state']
-        except Exception:
-            # A lost HTTP reply may follow a committed collection. Read its ledger
-            # before considering another mutation; never submit a second fit.
-            state=backend.execute({'action':'state'})['state']
-            if not any(item.get('job_id')==job or item.get('id')==job for item in state['jobs']):
-                collect['expected_version']=state['version']
-                state=backend.execute(collect)['state']
-        write(output/'session-ledger.json',backend.execute({'action':'replay'}))
-        if terminal['status']!='succeeded': raise ValueError('Joint probe job failed; session ledger retained')
-        # Adoption changes the worker's current model, so old-model job reads are
-        # intentionally stale. The session retains the authoritative result.
-        result=next(item['result'] for item in state['jobs'] if item.get('job_id')==job or item.get('id')==job)
-        write(output/'result.json',result)
-        best=result['joint']['best']; baseline=result['fixed_anatomy_baseline']['best']
-        adopted=state['snapshot']['model_id']!=expected_model_id
-        answer={'importId':import_id,'parentModelId':expected_model_id,'modelId':state['snapshot']['model_id'],
-            'status':result['status'],'includedInFit':result['status']=='joint_probe_evidence_used',
-            'probeRecords':result['probe_records'],'score':best,'baselineScore':baseline,
-            'nativeCalls':result['actual_operator_calls'],'adoptionStatus':'updated' if adopted else 'unchanged',
-            'jobId':job,'sessionId':voice['sessionId']}
-        write(output/'summary.json',answer)
-        return answer
+        seal(output/'request.json',parameters)
+        intent={'importId':import_id,'parentModelId':expected_model_id,'sessionId':voice['sessionId'],
+            'verifiedImport':str(verified.relative_to(output)),
+            'command':{'action':'fit_probe','command_id':output.name+'-fit',
+                'expected_version':state['version'],'parameters':parameters}}
+        seal(intent_path,intent)
+        return finish(backend,intent,output)
 
 
 if __name__=='__main__':

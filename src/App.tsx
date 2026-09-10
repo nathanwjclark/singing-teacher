@@ -29,6 +29,7 @@ import type { PredictionCommit } from './contracts'
 import { MotionCapturePanel } from './components/motion/MotionCapturePanel'
 import CoachLearningPanel from './components/coach/CoachLearningPanel'
 import LearningMemoryPanel from './components/coach/LearningMemoryPanel'
+import PhonationPanel from './phonation/PhonationPanel'
 import { ScientificModelPanel } from './components/science/ScientificModelPanel'
 import { AstraCoachPanel } from './components/science/AstraCoachPanel'
 import { ScientificSideView } from './components/science/ScientificGeometry'
@@ -193,6 +194,7 @@ function StudioApp() {
         <ScientificModelPanel onPreview={()=>{setScientificPreview(true);setTab('studio')}}/>
         <AstraCoachPanel/>
         <LearningMemoryPanel/>
+        <PhonationPanel audioStream={audioStream}/>
         <AcousticMappingPanel/>
         <MotionCapturePanel frame={!demo&&active?frame:null} videoStream={videoStream} audioStream={audioStream}/>
         <CoachLearningPanel videoStream={videoStream} audioStream={audioStream}/>

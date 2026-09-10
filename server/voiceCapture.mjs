@@ -1,6 +1,8 @@
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 import {join} from 'node:path';
+import {readFile} from 'node:fs/promises';
+import {activeResult} from './science.mjs';
 const run=promisify(execFile);
 export function createVoiceCaptureRoutes({repo,dataRoot,json}){
  let busy=false;
@@ -18,6 +20,12 @@ export function createVoiceCaptureRoutes({repo,dataRoot,json}){
    if(count!==length)throw Error('Incomplete declaration');
    const body=JSON.parse(Buffer.concat(chunks).toString());
    if(!body||Object.keys(body).sort().join(',')!=='contains_external_excitation,pose,purpose'||body.contains_external_excitation!==false||!['calibration','outcome'].includes(body.purpose)||!['a','e','i','o','u'].includes(body.pose))throw Error('Declare purpose, vowel and no external excitation');
+   if(body.purpose==='outcome'){
+    const current=JSON.parse(await readFile(join(dataRoot,'science-current.json'),'utf8'));
+    if(current.status!=='succeeded'||!/^run-[A-Za-z0-9-]+$/.test(current.runId||''))throw Error('A completed model run is required');
+    const active=await activeResult(join(dataRoot,'science-runs',current.runId));
+    if(!active.recordingAllowed)throw Error(active.recordingMessage||'A current committed recording decision is required');
+   }
    const python=process.env.SINGING_PYTHON||join(repo,'science/.venv/bin/python');
    const result=await run(python,[join(repo,'science/scripts/prepare_voice_capture.py'),'--data-root',dataRoot,'--purpose',body.purpose,'--pose',body.pose],{cwd:repo,timeout:90000,maxBuffer:1024*1024});
    json(res,200,JSON.parse(result.stdout));

@@ -29,6 +29,9 @@ const handleAstraReview=createAstraReviewRoutes({dataRoot,json});
 const handleLearning=createLearningRoutes({repo:resolve(import.meta.dirname,'..'),dataRoot,json});
 const handleAstra=createAstraRoutes({repo:resolve(import.meta.dirname,'..'),dataRoot,json});
 const handleProbe=createProbeRoutes({repo:resolve(import.meta.dirname,'..'),dataRoot,json});
+let handlePhonation;
+try{const {createPhonationRoutes}=await import('./phonation.mjs');handlePhonation=createPhonationRoutes({repo:resolve(import.meta.dirname,'..'),dataRoot,json});}
+catch{handlePhonation=async(req,res,url)=>{if(!url.pathname.startsWith('/api/phonation/'))return false;json(res,req.method==='GET'?200:503,{measurement:{status:'unsupported',reason:'Optional phonation module is unavailable'},inference:{status:'disabled'},coaching:{status:'disabled'},baselineScoring:'unchanged'});return true;};}
 const engineAvailable=await access(process.env.SINGING_PYTHON||resolve(import.meta.dirname,'../science/.venv/bin/python')).then(()=>true).catch(()=>false);
 const equal=(a,b)=>typeof a==='string'&&a.length===b.length&&timingSafeEqual(Buffer.from(a),Buffer.from(b));
 async function body(req){let size=0;const chunks=[];for await(const chunk of req){size+=chunk.length;if(size>12*1024*1024)throw Object.assign(Error('Request too large'),{status:413});chunks.push(chunk)}try{return JSON.parse(Buffer.concat(chunks).toString()||'{}')}catch{throw Object.assign(Error('Invalid JSON'),{status:400})}}
@@ -42,6 +45,7 @@ const serverHandler=async(req,res)=>{try{
   if(await handleLearning(req,res,url))return;
   if(await handleAstra(req,res,url))return;
   if(await handleProbe(req,res,url))return;
+  if(await handlePhonation(req,res,url))return;
   if(await handleScience(req,res,url))return;
   if(await handleVoiceCapture(req,res,url))return;
   if(await handleNativePull(req,res,url))return;
