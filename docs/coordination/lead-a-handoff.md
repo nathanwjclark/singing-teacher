@@ -158,3 +158,23 @@ learning efficacy. These are research/acceptance limitations, not passing tests.
 No public KIT-01/AUD-01 artifact or actual phone capture arrived during this session.
 The next A work is the B-contract/audio adapter and real multimodal acceptance once
 those concrete inputs are available; B owns repository release integration.
+
+## Independent A research continuation
+
+Starting commit: `615fde3`. The missing KIT-01/AUD-01/phone handoff blocks
+human integration, not the following explicitly bounded scientific work. All
+lanes use the existing internal synthetic profiles and certified native engine;
+B retains public schemas, canonical acoustic extraction and independent release scoring.
+
+| ID | Owner / branch | Acceptance experiment | Status |
+|---|---|---|---|
+| IDENT-01 | a_prediction / codex/a-identifiability | Freeze competing physical hypotheses; rank supported simulator experiments under declared noise; score only after ranking is saved | running |
+| SEP-01 | a_forward / codex/a-joint-recovery | Predeclared multi-anatomy, varying-articulation recovery matrix with equal-budget baseline and held-out conditional predictions | running |
+| UNC-01 | a_scientific_review / codex/a-mismatch-uncertainty | Repeated clean/omitted-geometry fits; compare errors, residuals and candidate spread without posterior claims | running |
+| MOT-03 | a_inverse / codex/a-frozen-control | Single-vowel trajectory reconstruction with immutable anatomy, disjoint evidence, bounded JA search and real-native tests | running |
+| SVC-02 | A coordinator / codex/a-research-service | Durable jobs and replay for new supported scientific operations, model binding and failure checks | running |
+| REVIEW-02 | a_geometry; independent review | Evidence identity, timing, missing geometry and control lineage audit | running |
+
+Research failures and exhausted optimization budgets remain in every report.
+These investigations do not replace B's evaluator or demonstrate human anatomy
+recovery. Native jobs remain process-isolated; no lane modifies the native build.
