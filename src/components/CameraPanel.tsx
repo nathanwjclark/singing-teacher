@@ -10,10 +10,13 @@ type Props = { active: boolean; onFrame: (frame: TrackingFrame) => void; onStatu
 export default function CameraPanel({ active, onFrame, onStatus }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const engineRef = useRef<VisionEngine | undefined>(undefined);
   const callbacks = useRef({ onFrame, onStatus });
   useEffect(() => { callbacks.current = { onFrame, onStatus }; }, [onFrame, onStatus]);
   const [status, setStatus] = useState<TrackingStatus>('idle');
   const [message, setMessage] = useState('');
+  const [depth, setDepth] = useState<{ distance?: number; relative?: number; points: number }>({ points: 0 });
+  const [calibration, setCalibration] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -23,6 +26,8 @@ export default function CameraPanel({ active, onFrame, onStatus }: Props) {
     let lastTime = -1;
     let lastTick = 0;
     let currentStatus: TrackingStatus = 'idle';
+    let modelTimeout = 0;
+    let expired = false;
     const video = videoRef.current!;
     const update = (next: TrackingStatus, detail = '') => {
       if (cancelled) return;
@@ -32,8 +37,10 @@ export default function CameraPanel({ active, onFrame, onStatus }: Props) {
     };
     const release = () => {
       cancelAnimationFrame(animation);
+      clearTimeout(modelTimeout);
       stream?.getTracks().forEach(track => track.stop());
       if (video.srcObject === stream) video.srcObject = null;
+      if (engineRef.current === engine) engineRef.current = undefined;
       engine?.close(); engine = undefined;
     };
     if (!active) {
@@ -48,12 +55,19 @@ export default function CameraPanel({ active, onFrame, onStatus }: Props) {
         if (!navigator.mediaDevices?.getUserMedia) throw new Error('Camera access requires HTTPS or localhost and a supported browser.');
         stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 24, max: 30 } }, audio: false });
         if (cancelled) { release(); return; }
+        setDepth({ points: 0 }); setCalibration('');
         video.srcObject = stream;
         await video.play();
         if (cancelled) { release(); return; }
         update('loading', 'Loading face, posture, and OpenCV models. First start may take a moment.');
+        modelTimeout = window.setTimeout(() => {
+          expired = true; release();
+          update('error', 'Tracking models took too long to load. Check your connection, then stop and restart the session.');
+        }, 60000);
         engine = await createVisionEngine();
-        if (cancelled) { release(); return; }
+        clearTimeout(modelTimeout);
+        if (cancelled || expired) { release(); return; }
+        engineRef.current = engine;
         stream.getVideoTracks()[0]?.addEventListener('ended', () => { if (!cancelled) { release(); update('error', 'The camera was disconnected. Stop the session and start again.'); } }, { once: true });
         const tick = (time: number) => {
           if (cancelled || !engine) return;
@@ -61,6 +75,7 @@ export default function CameraPanel({ active, onFrame, onStatus }: Props) {
             if (video.readyState >= 2 && video.currentTime !== lastTime && time - lastTick >= 90) {
               lastTime = video.currentTime; lastTick = time;
               const frame = engine.process(video, time);
+              setDepth({ distance: frame.metrics.distanceCm, relative: frame.metrics.relativeDepth, points: frame.face.length + frame.pose.filter(point => (point.visibility ?? 0) >= .5).length });
               const canvas = canvasRef.current;
               if (canvas) {
                 if (canvas.width !== video.videoWidth) canvas.width = video.videoWidth;
@@ -90,6 +105,10 @@ export default function CameraPanel({ active, onFrame, onStatus }: Props) {
     return () => { cancelled = true; release(); };
   }, [active]);
 
+  const calibrate = () => {
+    setCalibration(engineRef.current?.calibrate() ? 'Baseline set. Relative depth follows movement from this position.' : 'Face forward with both eyes visible and hold still briefly, then try again.');
+  };
+
   return <div className="camera-panel">
     <div className="camera-stage">
       <video ref={videoRef} autoPlay muted playsInline aria-label="Your mirrored live webcam" className={active && status !== 'error' ? 'camera-video visible' : 'camera-video'} />
@@ -103,6 +122,12 @@ export default function CameraPanel({ active, onFrame, onStatus }: Props) {
       </div>}
       {status === 'no-face' && <div className="camera-no-face"><ScanFace size={18} /> Bring your face into the frame</div>}
       <div className="camera-stage-label"><span className={status === 'tracking' ? 'camera-light live' : 'camera-light'} /> {status === 'tracking' ? 'LIVE CAMERA' : 'CAMERA VIEW'}<span>MIRRORED</span></div>
+    </div>
+    <div className="camera-depth">
+      <div className="camera-depth-values"><span><small>CAMERA DISTANCE</small><strong>{status === 'tracking' && depth.distance !== undefined ? `~${Math.round(depth.distance / 5) * 5} cm` : '—'}</strong></span><span><small>FROM BASELINE</small><strong>{status === 'tracking' && depth.relative !== undefined ? `${Math.abs(Math.round((depth.relative - 1) * 100))}% ${depth.relative >= 1 ? 'farther' : 'closer'}` : 'Not calibrated'}</strong></span></div>
+      <div className="camera-depth-action"><span>{status === 'tracking' ? `${depth.points} visible landmarks` : '478 face + 33 body landmarks'}</span><button type="button" onClick={calibrate} disabled={status !== 'tracking' || depth.distance === undefined}>{status !== 'tracking' || depth.relative === undefined ? 'Set depth baseline' : 'Reset baseline'}</button></div>
+      {active && calibration && <p className="camera-calibration-message" role="status">{calibration}</p>}
+      <details><summary>Approximate depth · how it works</summary><p>Camera distance assumes an 11.7 mm iris and a 60° camera field of view. Lenses, glasses, and head angle can change the result substantially. Face forward with eyes open. Set a baseline while still; relative movement is more useful than the centimeter estimate. Keep camera zoom unchanged.</p><p>Face mesh depth is relative to the face, in normalized image units. Pose world depth is an estimate in meters relative to your hips. Neither measures internal anatomy or camera distance.</p><a href="https://chuoling.github.io/mediapipe/solutions/iris.html" target="_blank" rel="noreferrer">MediaPipe iris method</a></details>
     </div>
     <div className="camera-caption"><span>01 / OBSERVE</span><span>Face + shoulders in view</span></div>
   </div>;

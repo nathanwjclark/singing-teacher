@@ -1,5 +1,6 @@
 import { FaceLandmarker, FilesetResolver, PoseLandmarker } from '@mediapipe/tasks-vision';
 import type { Landmark, TrackingFrame } from '../types';
+import { depthMetrics } from './depth';
 
 interface Mat { delete(): void; copyTo(destination: Mat): void }
 interface OpenCV {
@@ -43,7 +44,7 @@ function loadOpenCV(): Promise<{ cv: OpenCV }> {
   return cvPromise;
 }
 
-export interface VisionEngine { process(video: HTMLVideoElement, timestamp: number): TrackingFrame; close(): void }
+export interface VisionEngine { process(video: HTMLVideoElement, timestamp: number): TrackingFrame; calibrate(): boolean; close(): void }
 
 export async function createVisionEngine(): Promise<VisionEngine> {
   const { cv } = await loadOpenCV();
@@ -54,7 +55,7 @@ export async function createVisionEngine(): Promise<VisionEngine> {
   const fileset = await FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/wasm');
   const face = await FaceLandmarker.createFromOptions(fileset, {
     baseOptions: { modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task', delegate: 'CPU' },
-    runningMode: 'VIDEO', numFaces: 1,
+    runningMode: 'VIDEO', numFaces: 1, outputFaceBlendshapes: true, outputFacialTransformationMatrixes: true,
   });
   let pose: PoseLandmarker;
   try {
@@ -71,13 +72,24 @@ export async function createVisionEngine(): Promise<VisionEngine> {
   const previous = new cv.Mat();
   let hasPrevious = false;
   let cachedPose: Landmark[] = [];
+  let cachedWorldPose: Landmark[] = [];
+  let depthHistory: number[] = [];
+  let baselineDistance: number | undefined;
+  let recentDistance: number | undefined;
   let frameCount = 0;
   let closed = false;
   return {
     process(video, timestamp) {
       if (closed) throw new Error('Vision engine is closed.');
-      const landmarks = face.detectForVideo(video, timestamp).faceLandmarks[0] ?? [];
-      if (frameCount++ % 2 === 0) cachedPose = pose.detectForVideo(video, timestamp).landmarks[0] ?? [];
+      const faceResult = face.detectForVideo(video, timestamp);
+      const landmarks = faceResult.faceLandmarks[0] ?? [];
+      const faceTransform = faceResult.facialTransformationMatrixes[0]?.data;
+      const blendshapes = Object.fromEntries((faceResult.faceBlendshapes[0]?.categories ?? []).map(category => [category.categoryName, category.score]));
+      if (frameCount++ % 2 === 0) {
+        const poseResult = pose.detectForVideo(video, timestamp);
+        cachedPose = poseResult.landmarks[0] ?? [];
+        cachedWorldPose = poseResult.worldLandmarks[0] ?? [];
+      }
       context.drawImage(video, 0, 0, canvas.width, canvas.height);
       const rgba = cv.imread(canvas);
       const gray = new cv.Mat();
@@ -98,8 +110,18 @@ export async function createVisionEngine(): Promise<VisionEngine> {
         return angle > 90 ? angle - 180 : angle < -90 ? angle + 180 : angle;
       };
       const mouthOpen = landmarks.length > 308 ? distance(landmarks[13], landmarks[14]) / Math.max(distance(landmarks[78], landmarks[308]), .001) : 0;
-      return { face: landmarks, pose: cachedPose, timestamp, metrics: { mouthOpen, headTilt: tilt(landmarks[33], landmarks[263]), shoulderTilt: tilt(cachedPose[11], cachedPose[12]), brightness, motion } };
+      const depth = depthMetrics(landmarks, cachedPose, cachedWorldPose, faceTransform, blendshapes, video.videoWidth, video.videoHeight);
+      if (depth.distanceCm !== undefined) {
+        depthHistory.push(depth.distanceCm);
+        depthHistory = depthHistory.slice(-7);
+        const sorted = [...depthHistory].sort((a, b) => a - b);
+        recentDistance = sorted[Math.floor(sorted.length / 2)];
+        depth.distanceCm = recentDistance;
+        if (baselineDistance !== undefined) depth.relativeDepth = recentDistance / baselineDistance;
+      } else { recentDistance = undefined; depthHistory = []; }
+      return { face: landmarks, pose: cachedPose, worldPose: cachedWorldPose, faceTransform, blendshapes, timestamp, metrics: { mouthOpen, headTilt: tilt(landmarks[33], landmarks[263]), shoulderTilt: tilt(cachedPose[11], cachedPose[12]), brightness, motion, ...depth } };
     },
+    calibrate() { if (closed || recentDistance === undefined || depthHistory.length < 5) return false; baselineDistance = recentDistance; return true; },
     close() { if (!closed) { closed = true; face.close(); pose.close(); previous.delete(); } },
   };
 }
@@ -117,12 +139,20 @@ export function drawTracking(context: CanvasRenderingContext2D, frame: TrackingF
     }
     context.stroke();
   };
+  context.lineWidth = .55;
+  lines(frame.face, FaceLandmarker.FACE_LANDMARKS_TESSELATION, '#c5fc9338');
+  context.lineWidth = 1.2;
   lines(frame.face, FaceLandmarker.FACE_LANDMARKS_FACE_OVAL, '#c5fc93aa');
   lines(frame.face, FaceLandmarker.FACE_LANDMARKS_LIPS, '#d2ff96');
-  lines(frame.pose, [{ start: 11, end: 12 }, { start: 11, end: 13 }, { start: 12, end: 14 }, { start: 11, end: 23 }, { start: 12, end: 24 }], '#c5fc9366');
+  lines(frame.face, [...FaceLandmarker.FACE_LANDMARKS_LEFT_EYE, ...FaceLandmarker.FACE_LANDMARKS_RIGHT_EYE, ...FaceLandmarker.FACE_LANDMARKS_LEFT_EYEBROW, ...FaceLandmarker.FACE_LANDMARKS_RIGHT_EYEBROW], '#b3e4ceaa');
+  lines(frame.face, [...FaceLandmarker.FACE_LANDMARKS_LEFT_IRIS, ...FaceLandmarker.FACE_LANDMARKS_RIGHT_IRIS], '#9de4ff');
+  lines(frame.pose, PoseLandmarker.POSE_CONNECTIONS, '#c5fc9399');
   context.fillStyle = '#d2ff96';
-  for (const index of [1, 13, 14, 33, 263]) {
-    const point = frame.face[index];
-    if (point) { context.beginPath(); context.arc(point.x * width, point.y * height, 2.5, 0, Math.PI * 2); context.fill(); }
+  for (const point of frame.face) {
+    context.beginPath(); context.arc(point.x * width, point.y * height, .8, 0, Math.PI * 2); context.fill();
+  }
+  for (const point of frame.pose) {
+    if ((point.visibility ?? 0) < .5) continue;
+    context.beginPath(); context.arc(point.x * width, point.y * height, 2.5, 0, Math.PI * 2); context.fill();
   }
 }
