@@ -30,6 +30,52 @@ final class DepthCapture: NSObject, ObservableObject, AVCaptureDataOutputSynchro
     private var deviceDescription: [String: Any] = [:]
     private var frameCount = 0
     private var timeout: DispatchWorkItem?
+    private var notificationTokens: [NSObjectProtocol] = []
+    private var applicationInBackground = false
+
+    override init() {
+        super.init()
+        let center = NotificationCenter.default
+        for name in [AVCaptureSession.wasInterruptedNotification, AVCaptureSession.runtimeErrorNotification] {
+            notificationTokens.append(center.addObserver(forName: name, object: session, queue: nil) { [weak self] notification in
+                let reason = notification.name == AVCaptureSession.wasInterruptedNotification ? "session-interrupted" : "session-runtime-error"
+                self?.queue.async { [weak self] in
+                    guard let self else { return }
+                    self.finish(reason: reason)
+                    DispatchQueue.main.async {
+                        self.ready = false
+                        // Keep the saved/export-failure result visible after an interrupted capture.
+                        if self.archiveURL == nil { self.status += " Camera interrupted; return to the app to resume preview." }
+                    }
+                }
+            })
+        }
+        notificationTokens.append(center.addObserver(forName: AVCaptureSession.interruptionEndedNotification, object: session, queue: nil) { [weak self] _ in
+            self?.queue.async { [weak self] in self?.resumePreview() }
+        })
+        notificationTokens.append(center.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: nil) { [weak self] _ in
+            self?.queue.async { [weak self] in
+                guard let self else { return }
+                self.applicationInBackground = true
+                self.finish(reason: "app-backgrounded")
+                self.session.stopRunning()
+                DispatchQueue.main.async { self.ready = false }
+            }
+        })
+        notificationTokens.append(center.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: nil) { [weak self] _ in
+            self?.queue.async { [weak self] in
+                self?.applicationInBackground = false
+                self?.resumePreview()
+            }
+        })
+    }
+    deinit { notificationTokens.forEach(NotificationCenter.default.removeObserver) }
+    private func resumePreview() {
+        guard configured, !applicationInBackground, !session.isInterrupted else { return }
+        if !session.isRunning { session.startRunning() }
+        let running = session.isRunning
+        DispatchQueue.main.async { self.ready = running }
+    }
 
     private func message(_ text: String) { DispatchQueue.main.async { self.status = text } }
     func requestCamera() {
@@ -39,7 +85,7 @@ final class DepthCapture: NSObject, ObservableObject, AVCaptureDataOutputSynchro
         }
     }
     private func configure() {
-        guard !configured else { return }
+        guard !configured else { resumePreview(); return }
         guard let camera = AVCaptureDevice.default(.builtInTrueDepthCamera, for: .video, position: .front) else {
             message("A physical iPhone or iPad with a front TrueDepth camera is required. No simulated depth is generated."); return
         }
@@ -88,12 +134,22 @@ final class DepthCapture: NSObject, ObservableObject, AVCaptureDataOutputSynchro
             let depthSize = CMVideoFormatDescriptionGetDimensions(depthFormat.formatDescription)
             deviceDescription = ["model": UIDevice.current.model, "system_version": UIDevice.current.systemVersion, "camera": camera.localizedName, "position": "front", "device_type": camera.deviceType.rawValue, "rgb_format_dimensions": [rgbSize.width, rgbSize.height], "depth_format_dimensions": [depthSize.width, depthSize.height], "source_depth_pixel_format": CMFormatDescriptionGetMediaSubType(depthFormat.formatDescription), "output_mirrored": false]
             configured = true
-            queue.async { self.session.startRunning(); DispatchQueue.main.async { self.ready = true; self.status = "Ready. Preview is live; nothing is being recorded." } }
-        } catch { message("Camera setup failed: \(error.localizedDescription)") }
+            queue.async {
+                self.resumePreview()
+                let running = self.session.isRunning
+                self.message(running ? "Ready. Preview is live; nothing is being recorded." : "Camera preview unavailable; return to the app to retry.")
+            }
+        } catch {
+            // A failed partial configuration must not poison the next permission/setup attempt.
+            session.beginConfiguration()
+            session.inputs.forEach { session.removeInput($0) }
+            session.outputs.forEach { session.removeOutput($0) }
+            session.commitConfiguration()
+            message("Camera setup failed: \(error.localizedDescription)") }
     }
     func start(pose: String) {
         queue.async {
-            guard self.configured, self.folder == nil else { return }
+            guard self.configured, self.session.isRunning, !self.session.isInterrupted, self.folder == nil else { return }
             do {
                 self.captureID = UUID().uuidString
                 let root = try FileManager.default.url(for: .documentDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
@@ -102,15 +158,20 @@ final class DepthCapture: NSObject, ObservableObject, AVCaptureDataOutputSynchro
                 try (folder as NSURL).setResourceValue(true, forKey: .isExcludedFromBackupKey)
                 self.folder = folder; self.frames = []; self.audioSamples = []; self.previousAudioEnd = nil; self.origin = nil; self.frameCount = 0; self.task = pose
                 self.startedAt = ISO8601DateFormatter().string(from: Date())
-                DispatchQueue.main.async { self.recording = true; self.archiveURL = nil; self.status = "Recording held pose. Stop at any time." }
+                DispatchQueue.main.async { self.recording = true; self.status = "Recording held pose. Stop at any time." }
                 let timeout = DispatchWorkItem { self.finish(reason: "ten-second-limit") }; self.timeout = timeout
                 self.queue.asyncAfter(deadline: .now() + 10, execute: timeout)
             } catch { self.message("Could not start: \(error.localizedDescription)") }
         }
     }
     func stop(reason: String) { queue.async { self.finish(reason: reason) } }
+    private func seconds(_ value: CMTime) -> Any {
+        guard value.isNumeric else { return NSNull() }
+        let number = CMTimeGetSeconds(value)
+        return number.isFinite ? number as Any : NSNull()
+    }
     private func time(_ value: CMTime) -> [String: Any] {
-        ["value": value.value, "timescale": value.timescale, "epoch": value.epoch, "flags": value.flags.rawValue, "seconds": value.isNumeric ? CMTimeGetSeconds(value) as Any : NSNull()]
+        ["value": value.value, "timescale": value.timescale, "epoch": value.epoch, "flags": value.flags.rawValue, "seconds": seconds(value)]
     }
     private func artifact(_ data: Data, name: String, folder: URL) throws -> [String: Any] {
         try data.write(to: folder.appendingPathComponent(name), options: [.atomic, .completeFileProtection])
@@ -121,9 +182,9 @@ final class DepthCapture: NSObject, ObservableObject, AVCaptureDataOutputSynchro
         let rgb = collection.synchronizedData(for: video) as? AVCaptureSynchronizedSampleBufferData
         let measured = collection.synchronizedData(for: depth) as? AVCaptureSynchronizedDepthData
         guard let stamp = rgb?.timestamp ?? measured?.timestamp else { return }
-        if origin == nil { origin = stamp }
+        if origin == nil, stamp.isNumeric { origin = stamp }
         let id = "\(captureID)-frame-\(frameCount)"
-        var row: [String: Any] = ["id": id, "sequence": frameCount, "capture_clock_timestamp": time(stamp), "relative_seconds": CMTimeGetSeconds(CMTimeSubtract(stamp, origin!)), "head_pose": NSNull(), "head_pose_missing_reason": "not-measured", "landmark_correspondences": [], "audio_alignment": "See independent audio samples; no per-frame acoustic window inferred"]
+        var row: [String: Any] = ["id": id, "sequence": frameCount, "capture_clock_timestamp": time(stamp), "relative_seconds": origin.map { seconds(CMTimeSubtract(stamp, $0)) } ?? NSNull(), "head_pose": NSNull(), "head_pose_missing_reason": "not-measured", "landmark_correspondences": [], "audio_alignment": "See independent audio samples; no per-frame acoustic window inferred"]
         frameCount += 1
         if let rgb { row["rgb_timestamp"] = time(rgb.timestamp) }
         if let measured { row["depth_timestamp"] = time(measured.timestamp) }
@@ -159,7 +220,7 @@ final class DepthCapture: NSObject, ObservableObject, AVCaptureDataOutputSynchro
                     let matrix = c.intrinsicMatrix, extrinsic = c.extrinsicMatrix
                     row["calibration"] = ["intrinsics_row_major": (0..<3).map { r in (0..<3).map { col in matrix[col][r] } }, "intrinsic_reference_dimensions": [c.intrinsicMatrixReferenceDimensions.width, c.intrinsicMatrixReferenceDimensions.height], "extrinsics_3x4_row_major": (0..<3).map { r in (0..<4).map { col in extrinsic[col][r] } }, "extrinsics_semantics": "AVCameraCalibrationData extrinsicMatrix; not world or head pose", "pixel_size_mm": c.pixelSize, "lens_distortion_center": [c.lensDistortionCenter.x, c.lensDistortionCenter.y], "lens_distortion_table_base64": c.lensDistortionLookupTable?.base64EncodedString() as Any? ?? NSNull(), "inverse_lens_distortion_table_base64": c.inverseLensDistortionLookupTable?.base64EncodedString() as Any? ?? NSNull()]
                 } else { row["calibration"] = NSNull(); row["calibration_missing_reason"] = "not-provided-by-camera" }
-                if let rgb { row["rgb_depth_timestamp_delta_seconds"] = CMTimeGetSeconds(CMTimeSubtract(rgb.timestamp, measured.timestamp)) }
+                if let rgb { row["rgb_depth_timestamp_delta_seconds"] = seconds(CMTimeSubtract(rgb.timestamp, measured.timestamp)) }
             } else {
                 row["depth"] = NSNull(); row["depth_dropped"] = true; row["depth_drop_reason"] = measured.map { "\($0.droppedReason.rawValue)" } ?? "synchronized-output-absent"
             }
@@ -174,17 +235,25 @@ final class DepthCapture: NSObject, ObservableObject, AVCaptureDataOutputSynchro
         let timestamp = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
         let duration = CMSampleBufferGetDuration(sampleBuffer)
         let id = "\(captureID)-audio-\(audioSamples.count)"
-        var row: [String: Any] = ["id": id, "presentation_timestamp": time(timestamp), "duration": time(duration), "num_samples": CMSampleBufferGetNumSamples(sampleBuffer), "gap_before_seconds": previousAudioEnd.map { CMTimeGetSeconds(CMTimeSubtract(timestamp, $0)) } as Any? ?? NSNull()]
-        defer { audioSamples.append(row); if duration.isNumeric { previousAudioEnd = CMTimeAdd(timestamp, duration) } }
+        var row: [String: Any] = ["id": id, "presentation_timestamp": time(timestamp), "duration": time(duration), "num_samples": CMSampleBufferGetNumSamples(sampleBuffer), "gap_before_seconds": previousAudioEnd.map { seconds(CMTimeSubtract(timestamp, $0)) } ?? NSNull()]
+        var writeFailed = false
+        defer {
+            audioSamples.append(row)
+            previousAudioEnd = timestamp.isNumeric && duration.isNumeric ? CMTimeAdd(timestamp, duration) : nil
+            // Append the failure record before finalizing so it is present in the manifest.
+            if writeFailed { finish(reason: "audio-write-failure") }
+        }
         guard let description = CMSampleBufferGetFormatDescription(sampleBuffer), let format = CMAudioFormatDescriptionGetStreamBasicDescription(description)?.pointee else { row["missing_reason"] = "audio-format-unavailable"; return }
         row["asbd"] = ["sample_rate": format.mSampleRate, "format_id": format.mFormatID, "format_flags": format.mFormatFlags, "bytes_per_packet": format.mBytesPerPacket, "frames_per_packet": format.mFramesPerPacket, "bytes_per_frame": format.mBytesPerFrame, "channels_per_frame": format.mChannelsPerFrame, "bits_per_channel": format.mBitsPerChannel]
         guard format.mFormatID == kAudioFormatLinearPCM, format.mFormatFlags & kAudioFormatFlagIsNonInterleaved == 0 else { row["missing_reason"] = "unsupported-noninterleaved-or-compressed-native-audio"; return }
         guard let block = CMSampleBufferGetDataBuffer(sampleBuffer) else { row["missing_reason"] = "audio-data-buffer-unavailable"; return }
-        var bytes = Data(count: CMBlockBufferGetDataLength(block))
+        let byteCount = CMBlockBufferGetDataLength(block)
+        guard byteCount > 0 else { row["missing_reason"] = "empty-audio-data-buffer"; return }
+        var bytes = Data(count: byteCount)
         let copied = bytes.withUnsafeMutableBytes { raw in CMBlockBufferCopyDataBytes(block, atOffset: 0, dataLength: raw.count, destination: raw.baseAddress!) }
         guard copied == kCMBlockBufferNoErr else { row["missing_reason"] = "audio-copy-failed"; return }
         do { row["artifact"] = try artifact(bytes, name: "\(id).pcm.raw", folder: folder); row["storage"] = "native-interleaved-LPCM; decode using per-sample ASBD" }
-        catch { row["missing_reason"] = "audio-write-failed: \(error.localizedDescription)" }
+        catch { row["missing_reason"] = "audio-write-failed: \(error.localizedDescription)"; writeFailed = true }
     }
     private func finish(reason: String) {
         guard let current = folder else { return }
