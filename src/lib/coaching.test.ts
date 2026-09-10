@@ -50,7 +50,7 @@ test('poor lighting takes precedence over unreliable physical cues', () => {
 });
 
 test('threshold boundaries avoid unnecessary corrections and nonfinite data does not trigger them', () => {
-  assert.equal(getTips(frame({ mouthOpen: 0.12, headTilt: 9, shoulderTilt: -7 }))[0].id, 'keep-exploring');
+  assert.equal(getTips(frame({ mouthOpen: 0.24, headTilt: 9, shoulderTilt: -7 }))[0].id, 'keep-exploring');
   const tips = getTips(frame({ mouthOpen: Number.NaN, headTilt: Number.POSITIVE_INFINITY, shoulderTilt: Number.NaN }));
   assert.deepEqual(tips.map(tip => tip.id), ['measurement-unavailable']);
   assert.deepEqual(getTips(frame({ shoulderTilt: Number.NaN })).map(tip => tip.id), ['show-shoulders']);
@@ -67,7 +67,7 @@ test('green resolution requires an observed change; signal loss gets the normal 
   const {resolvedTipIds} = await import('./coaching.ts');
   const {updateRecentTips} = await import('./recentTips.ts');
   const before=frame({mouthOpen:.08,headTilt:15,shoulderTilt:12});before.timestamp=100;
-  const after=frame({mouthOpen:.15,headTilt:3,shoulderTilt:2});after.timestamp=200;
+  const after=frame({mouthOpen:.3,headTilt:3,shoulderTilt:2});after.timestamp=200;
   const initial=updateRecentTips([],getTips(before,{limit:12,uniqueRegions:false}),1000);
   const resolved=resolvedTipIds(before,after);
   assert.deepEqual([...resolved].sort(),['head-level','mouth-open','shoulder-level']);
@@ -93,4 +93,23 @@ test('voice activity expires when the microphone stops producing observations', 
   assert.equal(hasRecentVoice({voiced:true,at:1000},1700),false);
   assert.equal(hasRecentVoice({voiced:false,at:1000},1100),false);
   assert.equal(hasRecentVoice(null,1100),false);
+});
+
+test('partly open singing vowels keep jaw guidance through brief pitch dropouts, then resolve on opening', async () => {
+  const {updateVoiceActivity,hasRecentVoice}=await import('./voiceActivity.ts');
+  const {resolvedTipIds}=await import('./coaching.ts');
+  let voice=updateVoiceActivity(null,true,1000);
+  for (const now of [1100,1200,1400,1600]) {
+    voice=updateVoiceActivity(voice,false,now);
+    for (const mouthOpen of [.08,.15,.22]) {
+      const cues=getTips(frame({mouthOpen}),{singing:hasRecentVoice(voice,now)});
+      assert.ok(cues.some(cue=>cue.id==='mouth-open'));
+    }
+  }
+  voice=updateVoiceActivity(voice,false,1700);
+  assert.equal(getTips(frame({mouthOpen:.18}),{singing:hasRecentVoice(voice,1700)})[0].id,'no-singing');
+  const before=frame({mouthOpen:.18});before.timestamp=100;
+  const after=frame({mouthOpen:.3});after.timestamp=200;
+  assert.ok(resolvedTipIds(before,after).has('mouth-open'));
+  assert.equal(getTips(after)[0].id,'keep-exploring');
 });

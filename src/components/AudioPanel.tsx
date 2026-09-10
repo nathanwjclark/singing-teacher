@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Mic, Square, AudioLines } from 'lucide-react';
 import { analyzeAudioFrame, serializeAudioMeasurement, pitchToNote, audioFrameSize, pitchStatus, livePitchMetrics, LIVE_PITCH_MIN_DBFS } from '../lib/audio';
-import type { VoiceActivity } from '../lib/voiceActivity';
+import { updateVoiceActivity, type VoiceActivity } from '../lib/voiceActivity';
 import type { AudioMetrics } from '../lib/audio';
 import { AmbientCalibrator } from '../lib/audioCalibration';
 import type { AudioCalibration } from '../lib/audioCalibration';
@@ -94,6 +94,7 @@ export function AudioPanel({ demo = false, autoStart = false, externalStream = n
   const [metrics, setMetrics] = useState<AudioMetrics>(EMPTY);
   const [calibration, setCalibration] = useState<AudioCalibration | null>(null);
   const calibrator = useRef(new AmbientCalibrator());
+  const voiceActivity = useRef<VoiceActivity | null>(null);
   const callbacks = useRef({ onStream, onMeasurement, onVoiceActivity });
   useEffect(() => { callbacks.current = { onStream, onMeasurement, onVoiceActivity }; }, [onStream, onMeasurement, onVoiceActivity]);
   const [windowMs, setWindowMs] = useState(85);
@@ -111,6 +112,7 @@ export function AudioPanel({ demo = false, autoStart = false, externalStream = n
 
   const release = useCallback(() => {
     requestId.current++;
+    voiceActivity.current = null;
     callbacks.current.onVoiceActivity?.({voiced:false,at:performance.now()});
     const pending = pendingContext.current;
     pendingContext.current = null;
@@ -249,7 +251,8 @@ export function AudioPanel({ demo = false, autoStart = false, externalStream = n
             try {
               const measured = analyzeAudioFrame(waveform.current, live.context.sampleRate);
               latest = livePitchMetrics(waveform.current, live.context.sampleRate, measured);
-              callbacks.current.onVoiceActivity?.({voiced:latest.pitchHz !== null && (latest.periodicity ?? 0) >= 0.72,at:ms});
+              voiceActivity.current = updateVoiceActivity(voiceActivity.current, latest.pitchHz !== null && (latest.periodicity ?? 0) >= 0.72, ms);
+              callbacks.current.onVoiceActivity?.(voiceActivity.current);
               const deviceKey = JSON.stringify(live.stream.getAudioTracks().map(track => [track.id, track.getSettings()]));
               if (deviceKey !== live.deviceKey) { calibrator.current = new AmbientCalibrator(); live.deviceKey = deviceKey; }
               const ambient = calibrator.current.update(latest, waveform.current, ms);
