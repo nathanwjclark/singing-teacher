@@ -1,19 +1,30 @@
-import {readFile,writeFile,mkdir,rename,lstat} from 'node:fs/promises';
+import {readFile,writeFile,mkdir,rename,lstat,readdir} from 'node:fs/promises';
 import {resolve} from 'node:path';
 import {randomUUID,createHash} from 'node:crypto';
 import {spawn} from 'node:child_process';
 
 const read=async path=>JSON.parse(await readFile(path,'utf8'));
 const digest=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
-export function sourceForecastKey(status){return 'forecast:'+status.baselineModelId+':'+status.sourceModelId+':'+digest({fit:status.fit?.result||null,ranking:status.sourceRankingIdentity||null,bank:status.sourceRankingBankSha256||null,legacyScoreCount:status.sourceRankingIdentity?null:status.sourceScoreCount});}
+export function sourceForecastKey(status){return 'forecast:'+status.baselineModelId+':'+status.sourceModelId+':'+digest({policy:status.sourcePolicySha256||null,fit:status.fit?.result||null,ranking:status.sourceRankingIdentity||null,bank:status.sourceRankingBankSha256||null,legacyScoreCount:status.sourceRankingIdentity?null:status.sourceScoreCount});}
+export function sourceFitKey(status){return 'fit:'+status.baselineModelId+':'+status.sourcePolicySha256;}
+export async function sourceRuntimePolicy(repo=resolve(import.meta.dirname,'..')){
+ const paths=['science/scripts/phonation_bridge.ts','src/phonation/measure.ts','src/phonation/types.ts','src/lib/audio.ts',...(await readdir(resolve(repo,'src/contracts'))).filter(name=>name.endsWith('.ts')).sort().map(name=>'src/contracts/'+name)];
+ const hash=async path=>createHash('sha256').update(await readFile(resolve(repo,path))).digest('hex');
+ const extractor=Object.fromEntries(await Promise.all(paths.map(async path=>[path,await hash(path)])));
+ const adapter=await hash('science/src/singing_physics/phonation.py');return {adapter,extractor,sha256:digest({adapter,extractor})};
+}
 function compactBank(forecast){if(!Array.isArray(forecast?.alternatives))return null;return {kind:forecast.kind,fitSha256:forecast.fit_sha256,coverage:forecast.coverage,totalAlternatives:forecast.alternatives.length,alternatives:forecast.alternatives.slice(0,48).map(row=>({alternativeId:row.alternative_id,family:row.family,candidateId:row.candidate_id,status:row.status,reason:row.reason,calibrationDiscrepancy:row.calibration_score,sourceControls:row.controls,anatomy:row.anatomy,descriptors:row.record?.descriptors??null}))};}
 function compactRanking(score){if(!Array.isArray(score?.alternatives))return null;return {forecastSha256:score.forecast_sha256,conditionalRanking:score.conditionalRanking??null,coverage:score.coverage,totalAlternatives:score.alternatives.length,ranking:score.ranking?.slice(0,48),alternatives:score.alternatives.slice(0,48).map(row=>({alternativeId:row.alternative_id,family:row.family,candidateId:row.candidate_id,status:row.status,reason:row.reason,discrepancy:row.score,calibrationRank:row.calibration_rank,heldoutRank:row.heldout_rank,rankChange:row.rank_change}))};}
 async function save(path,value){const temporary=path+'.'+randomUUID()+'.tmp';await writeFile(temporary,JSON.stringify(value),{mode:0o600});await rename(temporary,path);}
 async function context(dataRoot){const c=await read(resolve(dataRoot,'science-current.json'));if(c.status!=='succeeded'||!/^run-[A-Za-z0-9_-]+$/.test(c.runId||''))throw Error('A completed voice fit is required');const dir=resolve(dataRoot,'science-runs',c.runId),summary=await read(resolve(dir,'summary.json'));return {dir,runId:c.runId,sessionId:summary.sessionId};}
-async function readContext({dataRoot,enabled=process.env.PHONATION_SOURCE_ENABLED==='1'}){
+async function readContext({dataRoot,repo=resolve(import.meta.dirname,'..'),enabled=process.env.PHONATION_SOURCE_ENABLED==='1'}){
  const unavailable={status:enabled?'unsupported':'disabled',reason:enabled?'Analyze a saved voice recording first':'Optional source inference is disabled'};let c;try{c=await context(dataRoot);}catch{return {enabled,running:false,fit:unavailable,forecast:unavailable,score:unavailable};}
  if(!enabled)return {enabled,running:false,runId:c.runId,sessionId:c.sessionId,fit:unavailable,forecast:unavailable,score:unavailable,baselinePreserved:true};
  const phases={};for(const name of ['fit','forecast','score']){try{phases[name]=await read(resolve(c.dir,'source-'+name+'.json'));}catch{phases[name]=unavailable;}}
+ let policy=null;try{policy=await sourceRuntimePolicy(repo);}catch{}
+ const fitted=phases.fit.result;
+ const policyChanged=Boolean(fitted&&(!policy||fitted.capability?.source_adapter_sha256!==policy.adapter||digest(Object.entries(fitted.extractor_signature||{}).sort())!==digest(Object.entries(policy.extractor).sort())));
+ if(policyChanged)for(const phase of Object.values(phases)){phase.status='unsupported';phase.reason='Source or extractor policy changed; analyze the latest capture again. Historical receipts are retained.';delete phase.result;}
  let baselineModelId=null,state=null;
  if(process.env.SCIENCE_URL&&process.env.SCIENCE_TOKEN){try{const base=new URL(process.env.SCIENCE_URL);if(base.protocol!=='http:'||base.hostname!=='127.0.0.1')throw Error('Local scientific service required');const response=await fetch(new URL('/sessions/'+c.sessionId+'/state',base),{headers:{Authorization:'Bearer '+process.env.SCIENCE_TOKEN},signal:AbortSignal.timeout(3000)});if(!response.ok)throw Error('Unavailable session');state=(await response.json()).state;baselineModelId=state.snapshot?.model_id;}catch{baselineModelId=null;}}
  for(const phase of Object.values(phases)){if(phase.status==='running')phase.status='interrupted';if(phase.result&&phase.result.baselineModelId!==baselineModelId){phase.status='unsupported';phase.reason='Source result is historical or its baseline model is unavailable';delete phase.result;}}
@@ -23,7 +34,7 @@ async function readContext({dataRoot,enabled=process.env.PHONATION_SOURCE_ENABLE
  let resting=false;try{await lstat(resolve(c.dir,'astra-rest.json'));resting=true;}catch(error){if(error.code!=='ENOENT')resting=true;}
  if(resting){phases.forecast.current=false;phases.forecast.authoritativeStatus='rest';phases.forecast.reason='Astra selected rest; request a new recording decision before continuing';}
  const ranking=(state?.source_rankings||[]).filter(row=>row.source_model_id===state?.source_model?.model_id&&row.baseline_model_id===baselineModelId).at(-1);
- return {enabled,runId:c.runId,sessionId:c.sessionId,running:false,...phases,baselineModelId,sourceModelId:state?.source_model?.model_id||null,sourceRankingIdentity:ranking?.ranking_id||null,sourceRankingBankSha256:ranking?.bank_sha256||null,sourceScoreCount:(state?.source_receipts||[]).filter(r=>r.operation==='score_phonation'||r.operation==='score_phonation_bank').length,baselinePreserved:true,interpretation:'Conditional source/tract acoustic comparison; not vocal-fold contact or closure measurement'};
+ return {enabled,runId:c.runId,sessionId:c.sessionId,running:false,...phases,sourcePolicySha256:policy?.sha256||null,baselineModelId,sourceModelId:state?.source_model?.model_id||null,sourceRankingIdentity:ranking?.ranking_id||null,sourceRankingBankSha256:ranking?.bank_sha256||null,sourceScoreCount:(state?.source_receipts||[]).filter(r=>r.operation==='score_phonation'||r.operation==='score_phonation_bank').length,baselinePreserved:true,interpretation:'Conditional source/tract acoustic comparison; not vocal-fold contact or closure measurement'};
 }
 export async function readSourceInferenceContext(options){const status=await readContext(options);if(!options.compact)return status;const {fit,forecast,score,...base}=status;const fitted=fit.result;return {...base,fit:{status:fit.status,reason:fit.reason,sourceModelVersion:fitted?.source_model_version,alternatives:fitted?Object.fromEntries(['joint','fixed_source','fixed_anatomy'].map(family=>[family,(fitted[family]?.candidates||[]).slice(0,16).map(row=>({candidateId:row.candidate_id,anatomy:row.anatomy,status:row.status,discrepancy:row.score,sourceControls:row.predictions?.[0]?.controls}))])):null},forecast:{status:forecast.status,current:forecast.current,reason:forecast.reason,targetId:forecast.result?.forecast?.target_id,pose:forecast.result?.pose,bankSha256:forecast.result?.sha256,bank:compactBank(forecast.result?.forecast),sourceControls:forecast.current?forecast.result?.forecast?.controls:null,descriptors:forecast.current?forecast.result?.forecast?.record?.descriptors:null},score:{status:score.status,reason:score.reason,discrepancy:score.result?.score,modelUpdated:score.result?.model_updated,forecastSha256:score.result?.forecast_sha256,conditionalRanking:compactRanking(score.result)},supportedActionScope:'Optional source context may inform existing supported vowel actions; source parameters are not new physical actions or measured controls; historical banks and conditional ranks do not authorize recording'};}
 export function createSourceInferenceRoutes({repo,dataRoot,json,enabled=process.env.PHONATION_SOURCE_ENABLED==='1'}){
@@ -33,13 +44,13 @@ export function createSourceInferenceRoutes({repo,dataRoot,json,enabled=process.
   if(!url.pathname.startsWith('/api/source/'))return false;
   const host=req.headers.host,address=req.socket.remoteAddress?.replace(/^::ffff:/,'');if(!['127.0.0.1','::1'].includes(address)||!host||!/^((localhost|127\.0\.0\.1)|\[::1\])(:\d+)?$/.test(host)||(req.headers.origin&&!['http://'+host,'https://'+host].includes(req.headers.origin))){json(res,403,{error:'Use source inference from the local app'});return true;}
   try{
-   if(req.method==='GET'&&url.pathname==='/api/source/status'){const wasRunning=running,phaseAtRead=activePhase;const status=await readSourceInferenceContext({dataRoot,enabled});const busy=wasRunning||running,phase=phaseAtRead||activePhase;if(busy&&phase)status[phase].status='running';json(res,200,{...status,running:busy});return true;}
+   if(req.method==='GET'&&url.pathname==='/api/source/status'){const wasRunning=running,phaseAtRead=activePhase;const status=await readSourceInferenceContext({repo,dataRoot,enabled});const busy=wasRunning||running,phase=phaseAtRead||activePhase;if(busy&&phase)status[phase].status='running';json(res,200,{...status,running:busy});return true;}
    const phase={'/api/source/analyze':'fit','/api/source/forecast':'forecast','/api/source/score':'score'}[url.pathname];if(req.method!=='POST'||!phase){json(res,405,{error:'Method not allowed'});return true;}
-   if(!enabled){json(res,200,await readSourceInferenceContext({dataRoot,enabled}));return true;}
+   if(!enabled){json(res,200,await readSourceInferenceContext({repo,dataRoot,enabled}));return true;}
    if(running){json(res,409,{error:'An optional source job is running'});return true;}
    if(url.search||Number(req.headers['content-length']||0)>0||req.headers['transfer-encoding']){json(res,400,{error:'This action uses saved original audio and takes no parameters'});return true;}
    running=true;const c=await context(dataRoot),path=resolve(c.dir,'source-'+phase+'.json');let previous;try{previous=await read(path);}catch{previous=null;}
-   const status=await readSourceInferenceContext({dataRoot,enabled});let key=phase+':'+status.baselineModelId;
+   const status=await readSourceInferenceContext({repo,dataRoot,enabled});let key=phase==='fit'?sourceFitKey(status):phase+':'+status.baselineModelId;
    if(phase==='forecast')key=sourceForecastKey(status);
    if(phase==='score'){const pull=await read(resolve(dataRoot,'native-pull-latest.json'));key+=':'+status.forecast.result?.forecast?.target_id+':'+pull.sha256;}
    if(previous?.key===key&&status[phase].status==='succeeded'&&(phase!=='forecast'||status.forecast.current)){running=false;json(res,200,previous);return true;}

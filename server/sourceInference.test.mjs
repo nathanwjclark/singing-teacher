@@ -3,10 +3,27 @@ import assert from 'node:assert/strict';
 import {mkdtemp,mkdir,writeFile,rm} from 'node:fs/promises';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
-import {readSourceInferenceContext,sourceForecastKey} from './sourceInference.mjs';
+import {readSourceInferenceContext,sourceForecastKey,sourceFitKey,sourceRuntimePolicy} from './sourceInference.mjs';
 
 async function fixture(t){const root=await mkdtemp(join(tmpdir(),'source-state-'));t.after(()=>rm(root,{recursive:true,force:true}));const dir=join(root,'science-runs/run-one');await mkdir(dir,{recursive:true});await writeFile(join(root,'science-current.json'),JSON.stringify({status:'succeeded',runId:'run-one'}));await writeFile(join(dir,'summary.json'),JSON.stringify({sessionId:'session-one'}));await writeFile(join(dir,'source-forecast.json'),JSON.stringify({status:'succeeded',result:{baselineModelId:'model-one',forecast:{target_id:'target',status:'available'},sha256:'hash'}}));return {root,dir};}
 test('disabled source capability hides prior active results without deleting history',async t=>{const {root}=await fixture(t);const state=await readSourceInferenceContext({dataRoot:root,enabled:false});assert.equal(state.forecast.status,'disabled');assert.equal(state.forecast.result,undefined);});
+test('source policy changes invalidate fit and forecast cache while preserving historical receipts',async t=>{
+ const {root,dir}=await fixture(t),repo=join(root,'repo');
+ const names=['science/src/singing_physics/phonation.py','science/scripts/phonation_bridge.ts','src/phonation/measure.ts','src/phonation/types.ts','src/lib/audio.ts','src/contracts/example.ts'];
+ for(const name of names){const path=join(repo,name);await mkdir(join(path,'..'),{recursive:true});await writeFile(path,name);}
+ const policy=await sourceRuntimePolicy(repo),saved={status:'succeeded',result:{baselineModelId:'model-one',capability:{source_adapter_sha256:policy.adapter},extractor_signature:policy.extractor}};
+ await writeFile(join(dir,'source-fit.json'),JSON.stringify(saved));
+ const previous=globalThis.fetch,url=process.env.SCIENCE_URL,token=process.env.SCIENCE_TOKEN;
+ process.env.SCIENCE_URL='http://127.0.0.1:8766';process.env.SCIENCE_TOKEN='test';
+ globalThis.fetch=async()=>Response.json({state:{snapshot:{model_id:'model-one'},source_model:{model_id:'source-one'}}});
+ t.after(()=>{globalThis.fetch=previous;if(url===undefined)delete process.env.SCIENCE_URL;else process.env.SCIENCE_URL=url;if(token===undefined)delete process.env.SCIENCE_TOKEN;else process.env.SCIENCE_TOKEN=token;});
+ const before=await readSourceInferenceContext({repo,dataRoot:root,enabled:true});assert.equal(before.fit.status,'succeeded');
+ await writeFile(join(repo,'science/src/singing_physics/phonation.py'),'new-source-policy');
+ const after=await readSourceInferenceContext({repo,dataRoot:root,enabled:true});
+ assert.equal(after.fit.status,'unsupported');assert.match(after.fit.reason,/analyze the latest capture again/);assert.equal(after.fit.result,undefined);
+ assert.notEqual(sourceFitKey(before),sourceFitKey(after));assert.notEqual(sourceForecastKey(before),sourceForecastKey(after));
+ const {readFile}=await import('node:fs/promises');assert.deepEqual(JSON.parse(await readFile(join(dir,'source-fit.json'),'utf8')),saved);
+});
 test('forecast identity changes with bank/ranking content rather than receipt count alone',()=>{
  const state={baselineModelId:'base',sourceModelId:'source',sourceScoreCount:1,fit:{result:{joint:{candidates:[{candidate_id:'one'}]}}},sourceRankingIdentity:'rank-one',sourceRankingBankSha256:'bank-one'};
  const key=sourceForecastKey(state);
