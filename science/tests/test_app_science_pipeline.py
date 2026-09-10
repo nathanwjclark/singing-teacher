@@ -1,5 +1,7 @@
 """Real app POST -> native capture -> shared session owner -> app geometry."""
 import json
+import hashlib
+from datetime import datetime, timezone
 import os
 from pathlib import Path
 import socket
@@ -10,6 +12,8 @@ import time
 import urllib.request
 
 from singing_physics.http_service import ScientificHTTPServer
+from singing_physics.engine import Engine
+from singing_physics.pcm_inverse import resample_native_pcm
 from test_live_capture_jobs import capture
 
 
@@ -55,6 +59,41 @@ def test_app_run_publishes_shared_session_and_verified_model(tmp_path):
                 geometry=call('/api/science/asset?run='+started['runId']+'&name=geometry.json')
                 assert geometry
                 assert not (data/'science-runs'/started['runId']/'jobs').exists()
+                # A later native capture reaches the actual update through the app,
+                # without hand-building a session export, command ID or digest.
+                design=result['forecast'];selected=design['selected_experiment_id']
+                assert selected is not None
+                experiment=next(row['experiment'] for row in design['rankings'] if row['experiment']['experiment_id']==selected)
+                later_root=data/'later';later_root.mkdir();later=capture(later_root)
+                with Engine() as engine:
+                    engine.set_anatomy(result['anatomy'])
+                    audio=engine.synthesize(experiment['pose'],{'JA':experiment['JA']},f0_hz=experiment['f0_hz'],duration_s=.6)
+                    pcm,_=resample_native_pcm(audio*experiment['gain'],44100,48000)
+                raw=pcm.astype('<f4').tobytes();(later/'audio.pcm.raw').write_bytes(raw)
+                manifest=json.loads((later/'manifest.json').read_text())
+                manifest['capture_id']='later-native-software-test'
+                manifest['created_at']=datetime.now(timezone.utc).isoformat()
+                manifest['audio']['samples'][0]['artifact'].update(bytes=len(raw),sha256=hashlib.sha256(raw).hexdigest())
+                (later/'manifest.json').write_text(json.dumps(manifest))
+                (data/'science-outcome-input.json').write_text(json.dumps({
+                    'sourceDirectory':str(later.relative_to(data)),'pose':experiment['pose'],'segment_index':0,
+                    'participant_id':'software-participant','evidence_kind':'development-fixture',
+                    'recording_kind':'ordinary-singing','contains_external_excitation':False}))
+                outcome=call('/api/science/outcome',True)
+                assert outcome['status']=='running'
+                deadline=time.monotonic()+60
+                while time.monotonic()<deadline:
+                    scored=call('/api/science/outcome')
+                    if scored['status']!='running':break
+                    time.sleep(.1)
+                assert scored['status']=='succeeded',scored
+                updated=call('/api/science/sessions/'+result['sessionId']+'/state')['state']
+                assert updated['snapshot']['model_id']!=result['modelId']
+                assert design['target_observation_id'] in updated['snapshot']['evidence_ids']
+                assert scored['result']['modelId']==updated['snapshot']['model_id']
+                retry=call('/api/science/outcome',True)
+                assert retry['outcomeId']==outcome['outcomeId'] and retry['status']=='succeeded'
+                assert call('/api/science/sessions/'+result['sessionId']+'/state')['state']['version']==updated['version']
             finally:
                 app.terminate()
                 try: app.wait(timeout=5)
