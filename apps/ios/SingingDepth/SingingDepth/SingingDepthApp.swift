@@ -21,7 +21,7 @@ struct ContentView: View {
                 .frame(maxHeight: .infinity)
                 .clipShape(RoundedRectangle(cornerRadius: 14))
                 .overlay(alignment: .topLeading) {
-                    Label(capture.recording ? "Recording" : capture.exporting ? "Saving capture" : "Preview · not recording",
+                    Label(capture.recording ? "Recording" : capture.exporting ? "Saving capture" : capture.ready ? "Preview · not recording" : "Camera idle · not recording",
                           systemImage: capture.recording ? "record.circle.fill" : capture.exporting ? "square.and.arrow.down" : "eye")
                         .font(.caption.bold())
                         .foregroundStyle(.white)
