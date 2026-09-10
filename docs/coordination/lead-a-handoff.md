@@ -202,7 +202,7 @@ remains B's `src/lib/audio.ts` version 1.1.0. No parallel extractor is introduce
 | MOT-03 verification | a_inverse / codex/a-frozen-verified | Direct native recovery, malformed lineage, hard call cap and no anatomy update | reviewed; 5 direct tests and actual service recovery pass |
 | SVC-B-01 | A coordinator / codex/a-b-handoff | Actual spawned PCM/control/ranking jobs, immutable replay and stale-model rejection | reviewed; 3 actual job tests pass |
 | SCI-B-01 | a_scientific_review / codex/a-b-scientific-review | Independent unit/source/evidence review of new consumers | PCM/KIT/native-basis fixes reviewed; no remaining blocker in that scope |
-| NATIVE-PCM-01 | a_forward / codex/a-native-pcm | Original ASBD chunks to canonical measurements with verified bytes, gap boundaries and explicit source-clock transformation | running |
+| NATIVE-PCM-01 | a_forward / codex/a-native-pcm | Original ASBD chunks to canonical measurements with verified bytes, gap boundaries and explicit source-clock transformation | reviewed; 8 Node tests and strict TypeScript check pass; software fixture reaches the actual fitter |
 
 The previous 154-test pass did not exercise frozen-control recovery or its
 spawned service route. New direct tests found a local-search recovery failure;

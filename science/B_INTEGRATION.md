@@ -10,6 +10,7 @@ extractor was introduced.
 | Input | A operation | Consumer/output |
 |---|---|---|
 | Original native capture directory | Verified artifact decoding; calibrated radial point mapping | Camera-space points with source hashes and explicit calibration/fusion gates |
+| Original native LPCM/ASBD chunks | Verified decoding and gap-aware segmentation through B's extractor | Canonical measurements and selectable `fit_pcm` trial inputs; original source hashes and unknown synchronization retained |
 | Canonical audio measurements | `JobService` operation `fit_pcm` | All finite anatomy/source/JA/gain candidates and equal-compute fixed-anatomy scores |
 | Frozen complete anatomical snapshot and later single-vowel frames | `fit_frozen_control` | Per-frame inferred articulation; anatomical parameters stay fixed |
 | Verified completed joint or PCM fitting job and matching native export | KIT candidate adapter | Explicit inferred/fixed parameters, configuration and native-basis provenance |
@@ -32,6 +33,19 @@ SINGING_PYTHON=science/.venv/bin/python node --experimental-strip-types --test s
 npm run build
 npm run lint
 ```
+
+For an original private phone export, choose a new output directory and declare
+the recorded vowel explicitly (here `a`):
+
+```sh
+node --experimental-strip-types science/scripts/import_native_pcm.ts /path/to/native-export science/artifacts/native-pcm participant-id session-id a
+node --experimental-strip-types --test science/scripts/import_native_pcm.test.ts
+```
+
+See [NATIVE_PCM.md](NATIVE_PCM.md) for supported ASBD formats, segment boundaries,
+source-byte verification and selection of calibration windows. A software fixture
+has traversed this importer and the actual native fitter; its nonzero discrepancy
+is retained. This does not establish acceptance on an iPhone recording.
 
 The PCM development demonstration includes its noiseless generator in the finite
 candidate grid. Its exact match demonstrates executable comparison, not blind

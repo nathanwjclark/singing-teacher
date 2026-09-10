@@ -113,7 +113,7 @@ export async function importNativePcm(directory:string,outputDirectory:string,op
     sourceIds:[observation.id,...new Set(segment.chunks.map(c=>c.artifact.id))],sourceHashes:[manifestArtifact.sha256,...sourceHashes]},
    participantId:options.participantId,sessionId:options.sessionId,trialId:id,predictionId:null,consentScope:observation.consentScope,
    task:options.pose?`User-declared pose ${options.pose}; native audio segment`:'Native audio segment; pose not declared',artifacts:[artifact],
-   streams:['audio','rgb','depth'].map(modality=>({modality:modality as 'audio'|'rgb'|'depth',timebase,
+   streams:['audio','rgb','depth'].map((modality):ObservationBundle['streams'][number]=>({modality:modality as 'audio'|'rgb'|'depth',timebase,
     samples:modality==='audio'?[{captureMs:0,artifactId:artifact.id,sequence:0,quality:{flags:['derived-native-PCM','capture-sync-unknown'],missingReason:null}}]:[],
     missingReason:modality==='audio'?null:'not-requested',droppedSamples:0,
     settings:modality==='audio'?{sampleRate:segment.rate,channels:1,selectedSourceChannel:selected+1,encoding:'little-endian-float32',normalization:'none'}:{},
