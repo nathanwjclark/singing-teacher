@@ -42,3 +42,15 @@
 @media (max-width: 1050px) { .audio-plots { grid-template-columns: minmax(180px, .75fr) minmax(0, 2fr); gap: 18px; } .audio-histories { gap: 13px; } .audio-chart-title h3 > span { display: none; } .audio-wave-card { padding-right: 17px; } .audio-actions { gap: 10px; } }
 @media (max-width: 760px) { .audio-panel { padding: 21px 18px; } .audio-header { align-items: flex-start; flex-wrap: wrap; gap: 18px; } .audio-actions { width: 100%; justify-content: space-between; } .audio-title-wrap h2 { font-size: 23px; } .audio-plots { grid-template-columns: 1fr; gap: 25px; } .audio-wave-card { padding: 0 0 20px; border-right: 0; border-bottom: 1px solid #ffffff0c; } .audio-wave-surface { height: 100px; margin-top: 7px; } .audio-histories { gap: 15px; } .audio-chart-title h3 { font-size: 10px; } .audio-history-card .audio-chart-title strong { font-size: 19px; } .audio-y-axis { width: 17px; font-size: 7px; } .audio-time-axis { padding-left: 23px; } .audio-footer { grid-template-columns: 1fr; gap: 10px; } }
 @media (max-width: 390px) { .audio-histories { grid-template-columns: 1fr; gap: 23px; } .audio-history-card .audio-chart-title { flex-wrap: nowrap; } .audio-history-card .audio-chart-title strong { width: auto; } .audio-chart-title h3 > span { display: inline; } }
+.audio-history-card--pitch { --audio-trace: #ead98c; }
+.audio-history-card--tone { --audio-trace: #91c7e7; }
+.audio-histories { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.audio-history-card--pitch .audio-chart-title small { font-size: 7px; letter-spacing: -.02em; }
+@media (min-width: 761px) { .audio-plots { grid-template-columns: minmax(120px, .65fr) minmax(0, 4fr); gap: 16px; } .audio-histories { gap: 12px; } .audio-chart-title h3 > span { font-size: 6px; } }
+@media (max-width: 760px) { .audio-histories { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px 12px; } }
+@media (max-width: 450px) { .audio-histories { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.audio-note-axis { position: relative; }
+.audio-note-axis span { position: absolute; right: 0; }
+.audio-note-axis span:nth-child(1) { top: 2%; }
+.audio-note-axis span:nth-child(2) { top: 51%; transform: translateY(-50%); }
+.audio-note-axis span:nth-child(3) { bottom: 0; }
