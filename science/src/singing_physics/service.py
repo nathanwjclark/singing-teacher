@@ -56,7 +56,21 @@ def _worker(root, job_id, parent_pid, timeout_s):
     try:
         destination.mkdir(parents=True, exist_ok=False)
         params = request['parameters']
-        if request['operation'] == 'predict':
+        if request['operation'] == 'fit_control':
+            from .control import fit_control_profile
+            result = fit_control_profile(**params)
+        elif request['operation'] in {'control_predict', 'condition_prediction'}:
+            from .prediction import Artifact
+            from .control_forecast import predict_control, condition_on_execution
+            snapshot = Artifact(params['snapshot_json'].encode())
+            options = {k:v for k,v in params.items() if k not in {'snapshot_json','control_profile_json','prospective_json'}}
+            if request['operation'] == 'control_predict':
+                forecast = predict_control(snapshot, Artifact(params['control_profile_json'].encode()), **options)
+            else:
+                forecast = condition_on_execution(Artifact(params['prospective_json'].encode()), snapshot, **options)
+            forecast.write(destination / 'forecast.json')
+            result = forecast.data
+        elif request['operation'] == 'predict':
             from .prediction import Artifact, predict
             snapshot = Artifact(params['snapshot_json'].encode())
             options = {k: v for k, v in params.items() if k != 'snapshot_json'}
@@ -69,6 +83,9 @@ def _worker(root, job_id, parent_pid, timeout_s):
                     result = engine.export(destination / 'forward', **params)
                 elif request['operation'] == 'fit_transfer':
                     result = fit(engine, params['observations'], **{k: v for k, v in params.items() if k != 'observations'})
+                elif request['operation'] == 'fit_dynamic':
+                    from .dynamic import fit_dynamic
+                    result = fit_dynamic(engine, params['observations'], **{k:v for k,v in params.items() if k != 'observations'})
                 elif request['operation'] == 'fit_joint':
                     from .joint import fit_joint
                     result = fit_joint(engine, params['observations'], **{k: v for k, v in params.items() if k != 'observations'})
@@ -155,29 +172,42 @@ class JobService:
         self._identity(idempotency_key, 'idempotency_key')
         if not isinstance(request, dict) or set(request) - {'operation', 'parameters', 'session_id', 'model_id'}:
             raise ValueError('Invalid local job request fields')
-        if request.get('operation') not in {'forward', 'fit_transfer', 'fit_joint', 'predict'} or not isinstance(request.get('parameters'), dict):
+        if request.get('operation') not in {'forward', 'fit_transfer', 'fit_joint', 'predict', 'fit_dynamic', 'fit_control', 'control_predict', 'condition_prediction'} or not isinstance(request.get('parameters'), dict):
             raise ValueError('Unsupported operation or missing parameters')
         allowed = {
             'forward': {'pose', 'anatomy', 'articulation', 'f0_hz', 'duration_s'},
             'fit_transfer': {'observations', 'starts', 'seed', 'max_spectrum_evaluations'},
             'fit_joint': {'observations', 'anatomy_bounds', 'articulation_bounds', 'budget_per_model', 'starts', 'seed'},
+            'fit_dynamic': {'observations', 'anatomy_bounds', 'articulation_bounds', 'budget_per_model', 'starts', 'seed'},
+            'fit_control': {'attempts', 'anatomy_model_id', 'fitted_at'},
+            'control_predict': {'snapshot_json', 'control_profile_json', 'expected_anatomy_digest', 'expected_control_digest', 'prediction_id', 'target_evidence_id', 'generated_at', 'cue_id', 'cue_version', 'context', 'mode', 'bins', 'max_native_calls'},
+            'condition_prediction': {'prospective_json', 'snapshot_json', 'expected_prospective_digest', 'expected_anatomy_digest', 'prediction_id', 'generated_at', 'observed_at', 'observed_evidence_id', 'measured_ja_deg', 'measurement_sigma_deg', 'bins', 'max_native_calls'},
             'predict': {'snapshot_json', 'expected_digest', 'prediction_id', 'target_evidence_id', 'generated_at', 'intervention', 'bins', 'repeat_variability'},
         }[request['operation']]
         if set(request['parameters']) - allowed:
             raise ValueError('Unsupported operation parameters')
-        if request['operation'] in {'fit_transfer', 'fit_joint'} and 'observations' not in request['parameters']:
+        if request['operation'] in {'fit_transfer', 'fit_joint', 'fit_dynamic'} and 'observations' not in request['parameters']:
             raise ValueError('Missing observations')
         if request['operation'] == 'predict' and not {'snapshot_json', 'expected_digest', 'prediction_id', 'target_evidence_id', 'generated_at', 'intervention'} <= set(request['parameters']):
             raise ValueError('Missing prediction parameters')
+        required = {
+            'fit_control': {'attempts', 'anatomy_model_id', 'fitted_at'},
+            'control_predict': {'snapshot_json', 'control_profile_json', 'expected_anatomy_digest', 'expected_control_digest', 'prediction_id', 'target_evidence_id', 'generated_at', 'cue_id', 'cue_version', 'context', 'mode'},
+            'condition_prediction': {'prospective_json', 'snapshot_json', 'expected_prospective_digest', 'expected_anatomy_digest', 'prediction_id', 'generated_at', 'observed_at', 'observed_evidence_id', 'measured_ja_deg', 'measurement_sigma_deg'},
+        }.get(request['operation'], set())
+        if not required <= set(request['parameters']):
+            raise ValueError('Missing operation parameters')
         if ('session_id' in request) != ('model_id' in request):
             raise ValueError('session_id and model_id must occur together')
         for key in ('session_id', 'model_id'):
             if key in request:
                 self._identity(request[key], key)
-        if request['operation'] == 'predict' and 'model_id' in request:
+        if request['operation'] in {'predict', 'control_predict', 'condition_prediction'} and 'model_id' in request:
             snapshot = json.loads(request['parameters']['snapshot_json'])
             if not isinstance(snapshot, dict) or snapshot.get('model_id') != request['model_id']:
                 raise ValueError('Prediction model does not match job model')
+        if request['operation'] == 'fit_control' and 'model_id' in request and request['parameters']['anatomy_model_id'] != request['model_id']:
+            raise ValueError('Control profile anatomy model does not match job model')
         encoded = canonical(request)
         if len(encoded.encode()) > 2_000_000:
             raise ValueError('Job input exceeds 2 MB; keep large media outside requests')

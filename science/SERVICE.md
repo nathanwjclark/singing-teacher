@@ -17,13 +17,20 @@ Requests contain `operation` and `parameters`. Supported operations:
 - `fit_joint`: observation document, anatomy/articulation bounds, starts, seed,
   and per-model budget. See JOINT_INFERENCE.md for its synthetic evidence profile.
 - `predict`: canonical frozen snapshot JSON, expected digest and predict arguments.
+- `fit_dynamic`: timestamped attempt document plus the joint fitting bounds/budget.
+- `fit_control`: retained attempts, anatomy model ID and profile freeze time.
+- `control_predict`: canonical anatomy/control profile JSON, both expected hashes,
+  cue/version/context/mode and a native call cap.
+- `condition_prediction`: a frozen prospective artifact plus separately timestamped
+  post-capture execution evidence. It produces a new conditional artifact and job.
 
 Optional `session_id` and `model_id` must occur together. Register the current
 model using `register_model`. Stale requests are rejected; model changes during
 computation prevent successful publication. Reading a completed result after its
 session advances also fails with `stale_model`, preserving its historical artifact
 without making it eligible for the current session. Prediction snapshot model IDs
-must match their job model IDs. B owns model registration authorization and the
+must match their job model IDs. Control-profile jobs must also name that anatomy
+model; inferred control observations retain their upstream model binding. B owns model registration authorization and the
 prospective evidence ledger.
 
 SQLite holds requests, hashes, status and model bindings. Exclusive scheduler
