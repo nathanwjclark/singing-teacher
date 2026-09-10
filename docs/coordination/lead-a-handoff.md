@@ -158,3 +158,9 @@ learning efficacy. These are research/acceptance limitations, not passing tests.
 No public KIT-01/AUD-01 artifact or actual phone capture arrived during this session.
 The next A work is the B-contract/audio adapter and real multimodal acceptance once
 those concrete inputs are available; B owns repository release integration.
+
+## Lead B integration receipt
+
+B integrated the reviewed PR #3 head `615fde362960c0452a233e80c1f75d2b4d7a03de` into the local application integration branch. Concrete public schema/extractor and genuine producer handoff commands now appear in `docs/implementation/LEAD-B-ACCEPTANCE.md`. Native build, both A replay commands and B's controlled native PCM forecast/commit/generation/evaluation path were run. B's native adapter produces validated KIT records and self-contained geometry consumable by Mapped mode, with fixed forward parameters clearly distinguished from fitted human anatomy.
+
+This receipt supersedes earlier “no KIT/AUD artifacts received” descriptions for repository availability. It does not assert that A has reviewed the new adapter or completed the microphone likelihood. No actual phone depth, specialist cue review or human G3/G6/G7 evidence has been supplied by this integration.

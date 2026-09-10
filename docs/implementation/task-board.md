@@ -49,3 +49,17 @@ The integrator updates status after review; an agent's completion report alone d
 All eleven bounded agents returned separate commits. Build/typecheck and lint pass. Focused checks covered contract validation, immutable chronology, equal-budget scoring/comparison, saved MediaRecorder artifacts, pixel-to-tongue animation, WebRTC peers, QR generation, model import integrity, replay audit and the 1280×720 Studio layout. CI runs build/lint only; there is no CD. Local deployment uses `npm run local`.
 
 Remaining acceptance dependencies: a trusted HTTPS connection and physical phone testing; native depth acquisition/calibration; Lead A engine-generated forecasts, candidate geometry and actual fitting; independent human-data evaluation. The integrated prototype exposes these gaps explicitly. Automatic ambient calibration estimates relative noise/SNR; full microphone/room transfer-function recovery is not claimed. No datasets were downloaded or trained on.
+
+## Revision 6 and cross-lead integration update
+
+The original eleven rows remain prototype implementation statuses, not scientific acceptance. The repository now includes Nicole's reviewed PR #3 scientific queue, native engine replays, a real native audio/geometry → KIT adapter, and the controlled native PCM commitment → later synthesis → independent scoring replay. See [the acceptance ledger](LEAD-B-ACCEPTANCE.md) for commands and explicit remaining gates.
+
+| Ticket | Implementation now available | Acceptance still requiring external evidence |
+|---|---|---|
+| CUE-01 | Source-attributed cue candidates, actual specialist-review entry, explicit attempt recording/replay, sensation and mnemonic memory | Actual teacher/specialist review of wordings for the learner/context |
+| LEARN-01 | Frozen pitch protocol, baseline/variant, cue-free recall, phrase transfer, new-session delayed retention, independent score and failure retention | Real learner comparison/retention evidence; no efficacy claim |
+| MOT-02 B capture | Repeated neutral/gesture/return video/audio and visible-motion traces, timestamps, markers, export/replay | Native calibrated RGB-D/head pose and actual visible observations affecting fitting |
+| KIT/AUD handoff | Validated genuine native mesh/audio and canonical measurements; fixed-parameter geometry displayed in web viewer | A's microphone-source/capture likelihood and human fitting |
+| Pitch repair | Rate-aware live analysis; explicit no-pitch reasons; 10Hz saved pitch replay/export | User's actual mic/phone route confirmation |
+
+Private Wi-Fi HTTPS is prepared and locally deployed. Native depth acquisition remains unfinished; the browser surface capture route was a user-selected prototype scope, not satisfaction of the native device gate. The new surface-reconstruction direction does not turn estimated landmark z into measured depth.

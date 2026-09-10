@@ -21,6 +21,8 @@ import { DepthProtocolPanel } from './components/experiments/DepthProtocolPanel'
 import { readExperimentLedger, subscribeExperimentLedger } from './experiment/ledger'
 import { evaluatePrediction } from './evaluation'
 import type { PredictionCommit } from './contracts'
+import { MotionCapturePanel } from './components/motion/MotionCapturePanel'
+import CoachLearningPanel from './components/coach/CoachLearningPanel'
 import './App.css'
 
 const demoFrame: TrackingFrame = {
@@ -68,7 +70,7 @@ function StudioApp() {
     setObservations(old=>[recording.observationBundle,...old.filter(o=>o.id!==recording.observationBundle.id)].slice(0,20))
     setRecordingNotice('Recording saved in this tab. Extracting acoustic measurements…')
     void measureRecording(recording).then(rows=>{
-      setMeasurements(old=>[...rows,...old.filter(m=>m.observationId!==recording.observationBundle.id)].slice(0,1200))
+      setMeasurements(old=>[...rows,...old.filter(m=>m.observationId!==recording.observationBundle.id)].slice(0,12000))
       setRecordingNotice(rows.length?`Saved recording; ${rows.length} acoustic windows measured.`:'Saved recording; no decodable audio windows.')
     }).catch(()=>setRecordingNotice('Saved recording. This browser could not decode its audio for measurement; download it for offline analysis.'))
   },[])
@@ -153,8 +155,10 @@ function StudioApp() {
       </main>
       <main className="research-workspace" style={tab==='experiments'?undefined:{display:'none'}}>
         <h2>Experiments and evidence</h2><p>{recordingNotice}</p>
+        <MotionCapturePanel frame={!demo&&active?frame:null} videoStream={videoStream} audioStream={audioStream}/>
+        <CoachLearningPanel videoStream={videoStream} audioStream={audioStream}/>
         <p>{observations.length} recorded observations · {measurements.length} measured audio windows</p>
-        <p>Scientific forecasting and fitted anatomy await the Lead A engine. Phone browser captures do not include measured depth.</p>
+        <p>The native scientific engine is available locally. Import validated engine artifacts to inspect them; human-audio fitting and measured phone depth remain separate acceptance steps.</p>
         <ExperimentDashboard observations={observations} measurements={measurements} onCandidates={setCandidates} onRecords={setImportedRecords}>
         <ExperimentRunner onStartCapture={startExperiment} onStopCapture={stopExperiment} onEvaluate={scoreExperiment}/>
         <section className="scoring-setup"><h3>Independent scoring setup</h3><p>Use the actual engine-run counts. These declarations are recorded by the evaluator; they do not generate a forecast.</p>
