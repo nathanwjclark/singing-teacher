@@ -51,7 +51,7 @@ export function AtlasCrossSection({ motion }: { motion: RefObject<AnatomyMotionS
     const tractMesh = new THREE.Mesh(geometry, tractMaterial);
     tractMesh.frustumCulled = false; tractMesh.renderOrder = 1;
     scene.add(tractMesh);
-    const tipMarker=new THREE.Mesh(new THREE.CircleGeometry(11,20),new THREE.MeshBasicMaterial({color:0x75ffc1,depthTest:false}));tipMarker.renderOrder=5;scene.add(tipMarker);
+    const tipMarker=new THREE.Mesh(new THREE.CircleGeometry(15,20),new THREE.MeshBasicMaterial({color:0x75ffc1,depthTest:false}));tipMarker.renderOrder=5;scene.add(tipMarker);
     let texture: THREE.CanvasTexture | undefined;
     const image = new Image();
     image.onload = () => {

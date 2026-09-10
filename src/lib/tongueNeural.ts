@@ -35,7 +35,7 @@ export function neuralTipObservation(tip:NeuralTip,face:Landmark[],width:number,
  const [left,right]=[face[78],face[308]].sort((a,b)=>a.x-b.x);const dx=(right.x-left.x)*width,dy=(right.y-left.y)*height,span=Math.max(1,Math.hypot(dx,dy)),ux=dx/span,uy=dy/span;
  const tx=(tip.x-(left.x+right.x)/2)*width,ty=(tip.y-(left.y+right.y)/2)*height;
  const x=(tx*ux+ty*uy)/span,y=(tx*uy-ty*ux)/span,z=tip.depth;
- return {trackingMode:'tip',x:tip.x,y:tip.y,tip:{x:tip.x,y:tip.y},lateral:Math.max(-1,Math.min(1,x*3)),elevation:Math.max(-1,Math.min(1,y*3)),extension:Math.max(-1,Math.min(1,z)),lift:0,visibleFraction:0,observedAt:timestamp,tip3D:{x,y,z,depthSource:'learned'},confidence:tip.visibility};
+ return {trackingMode:'tip',x:tip.x,y:tip.y,tip:{x:tip.x,y:tip.y},lateral:Math.max(-1,Math.min(1,x)),elevation:Math.max(-1,Math.min(1,y)),extension:Math.max(-1,Math.min(1,z)),lift:0,visibleFraction:0,observedAt:timestamp,tip3D:{x,y,z,depthSource:'learned'},confidence:tip.visibility};
 }
 
 export function createNeuralTongueTracker(){
