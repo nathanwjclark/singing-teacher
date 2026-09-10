@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Activity, ArrowUpRight, Camera, CircleHelp, Eye, MicVocal, Play, ShieldCheck, Square } from 'lucide-react'
 import CameraPanel from './components/CameraPanel'
 import AnatomyPanel from './components/AnatomyPanel'
+import AudioPanel from './components/AudioPanel'
 import { CoachingPanel } from './components/CoachingPanel'
 import { getTips } from './lib/coaching'
 import type { Metrics, TrackingFrame, TrackingStatus } from './types'
@@ -48,7 +49,7 @@ function App() {
           <div><div className="eyebrow"><span/> YOUR PERSONAL PRACTICE STUDIO</div><h1>Find your voice.<br/><span>See what’s holding it back.</span></h1><p>Small adjustments. More freedom. A fresh perspective on how you sing.</p></div>
           <div className="session-controls"><button className={active ? 'start-button stop' : 'start-button'} onClick={toggleCamera}>{active ? <Square size={17}/> : <Camera size={19}/>} {active ? 'End session' : 'Start camera'}{!active && <ArrowUpRight size={19}/>}</button><button className="demo-button" onClick={() => { setActive(false); setFrame(null); setStatus('idle'); setMessage(''); setDemo(!demo) }}><Play size={12}/>{demo ? 'Exit demo' : 'Explore a demo'}</button></div>
         </section>
-        {help && <aside className="help-box"><strong>Your practice, in three views.</strong> Allow camera access, frame your head and shoulders, and try a comfortable sustained vowel. The 3D movement guide follows facial landmarks and estimated body depth. Drag to orbit the model and select a cue to highlight related muscles. Camera distance is an approximation; use the depth reference to compare your position. Tips are experimental visual prompts, not an assessment of your voice or internal anatomy. Video stays in your browser; no microphone is used. <button onClick={() => setHelp(false)}>Got it</button></aside>}
+        {help && <aside className="help-box"><strong>Your practice, in three views.</strong> Allow camera access, frame your head and shoulders, and try a comfortable sustained vowel. The 3D movement guide follows facial landmarks and estimated body depth. Drag to orbit the model and select a cue to highlight related muscles. Camera distance is an approximation; use the depth reference to compare your position. Tips are experimental visual prompts, not an assessment of your voice or internal anatomy. Video and audio stay in your browser. Enable the microphone separately in the audio pane to explore your waveform and sound descriptors. <button onClick={() => setHelp(false)}>Got it</button></aside>}
         <div className="studio-bar"><div className="studio-label"><span className={`status-dot ${active || demo ? 'on' : ''}`}/>{demo ? 'DEMO SESSION' : active ? status === 'loading' ? 'PREPARING STUDIO' : 'LIVE SESSION' : 'READY WHEN YOU ARE'}</div><span className="session-time">{String(Math.floor(seconds / 60)).padStart(2, '0')}:{String(seconds % 60).padStart(2, '0')}<span className="bar-divider">/</span>FREE PRACTICE</span></div>
         <div className="studio-grid">
           <section className="studio-column"><div className="column-title"><span className="column-number">01</span><h2>Your view</h2><Camera size={16}/></div><div className="panel-body camera-wrap"><CameraPanel active={active} onFrame={setFrame} onStatus={onStatus}/>{demo && <div className="demo-cover"><div className="demo-avatar"><MicVocal size={48}/></div><span className="eyebrow">SAMPLE SESSION</span><h3>{demoScenarios[scenario].title}</h3><p>{demoScenarios[scenario].detail}</p><div className="demo-scenarios" aria-label="Demo scenario">{demoScenarios.map((item, index) => <button key={item.name} aria-pressed={scenario === index} onClick={() => { setScenario(index); setSelectedTipId(undefined) }}>{item.name}</button>)}</div><span className="demo-pill">Demo · camera is off</span></div>}</div><div className="panel-footer"><span className="tiny-dot"/>{demo ? 'Example data · not live analysis' : 'Frame your head and shoulders'}</div></section>
@@ -56,9 +57,10 @@ function App() {
           <section className="studio-column coach-column"><div className="column-title"><span className="column-number">03</span><h2>Your next adjustment</h2><span className="live-tag">{demo ? 'DEMO' : active && status === 'tracking' ? 'LIVE' : 'COACH'}</span></div><div className="panel-body"><CoachingPanel tips={tips} demo={demo} tracking={!!shownFrame?.face.length} selectedTipId={selectedTip?.id} onSelectTip={tip => setSelectedTipId(tip.id)}/></div><div className="panel-footer">Select a cue to explore its muscles.</div></section>
         </div>
         {message && <p className={`session-message ${status === 'error' ? 'error' : ''}`} role="status">{message}</p>}
+        <AudioPanel demo={demo}/>
         <section className="practice-note"><div className="note-icon">✳</div><div><span className="eyebrow">A GOOD PLACE TO START</span><p>Sing a comfortable “ah.” Stay curious. Let the next adjustment be a small one.</p></div><span className="note-label">NO PERFECT VOICES REQUIRED</span></section>
       </main>
-      <footer className="site-footer"><span>Built for the voice that’s already yours.</span><span><ShieldCheck size={13}/> On-device video processing <span className="footer-dot">·</span> No recording</span></footer>
+      <footer className="site-footer"><span>Built for the voice that’s already yours.</span><span><ShieldCheck size={13}/> On-device processing <span className="footer-dot">·</span> No recording</span></footer>
     </div>
   )
 }

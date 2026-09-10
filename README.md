@@ -17,12 +17,16 @@ The first camera session downloads OpenCV, MediaPipe WASM, and face/pose models,
 
 ## How it works
 
-- **Camera:** mirrored video with a face outline, lip landmarks, and shoulder/torso guides. No audio capture or recording.
+- **Camera:** mirrored video with a face outline, lip landmarks, and shoulder/torso guides. The camera does not request audio; a separate microphone control enables the audio pane. No recording.
 - **Computer vision:** OpenCV.js converts frames to grayscale, measures brightness, and calculates frame-difference motion. MediaPipe Face Landmarker and Pose Landmarker estimate external facial and body landmarks. Face inference runs at up to roughly 11 fps; pose inference runs every other processed frame.
 - **Movement map:** real skeletal and muscle meshes from the open BodyParts3D dataset, rendered in 3D with cartoony eyeballs. The model follows estimated head and body movement. Select a coaching card to explore its associated muscles; drag to orbit the model.
 - **Coaching:** deterministic heuristics rank mouth opening during a sustained vowel, sideways head tilt, and shoulder asymmetry. Missing landmarks and poor lighting produce framing guidance. This is a prototype, with uncalibrated thresholds—not a validated teaching assessment.
 
-The anatomical mesh is a reference body, not a scan of you: a webcam cannot see internal bones, measure muscle tension, or assess breath support. The app does not listen for singing, pitch, or vocal quality, so mouth-opening prompts are conditional on practicing a vowel and may be irrelevant between phrases. Movement measurements can be affected by camera angle and framing. No session data is persisted or uploaded; external hosts receive normal asset requests for models, libraries, and fonts.
+The anatomical mesh is a reference body, not a scan of you: a webcam cannot see internal bones, measure muscle tension, or assess breath support. Visual coaching is not gated on the audio pane: mouth-opening prompts are conditional on practicing a vowel and may be irrelevant between phrases. The optional audio pane displays a waveform and trailing sound descriptors, not a validated assessment of singing technique. Movement measurements can be affected by camera angle and framing. No session data is persisted or uploaded; external hosts receive normal asset requests for models, libraries, and fonts.
+
+## Audio pane
+
+Enable the microphone separately in the bottom pane to see your waveform and trailing loudness, spectral brightness, and timbre descriptors. Microphone audio is analyzed locally with Web Audio and is not recorded, uploaded, or played back. Stop the microphone when finished. Timbre is complex: spectral measurements describe aspects of the sound, not a definitive voice type or quality score. Microphone response and room noise affect them.
 
 ## Working on features
 
