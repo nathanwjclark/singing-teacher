@@ -9,6 +9,10 @@ test('actual local native bank and held-out ranking render without disrupting ba
   const response = await request.get(new URL('/api/source/status', url).href);
   expect(response.ok()).toBe(true);
   let status = await response.json();
+  await expect.poll(async () => {
+    status = await (await request.get(new URL('/api/source/status', url).href)).json();
+    return Boolean(status.fit.result && status.score.result);
+  }, { timeout: 20000, intervals: [1000, 2000] }).toBe(true);
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
   await page.goto(url.href);
