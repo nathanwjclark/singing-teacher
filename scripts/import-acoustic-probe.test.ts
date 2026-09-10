@@ -19,6 +19,9 @@ export async function makeFixture(root:string){
 test('known filter response, withheld fit state, and corrupt-byte rejection',async()=>{
  const root=await mkdtemp(join(tmpdir(),'probe-dsp-')),a=await makeFixture(root),out=join(root,'derived'),r=await importAcousticProbe(root,out)
  assert.equal(r.responseUsable.value,true);assert.equal(r.includedInFit.value,false);assert.equal(r.provenance,'software-fixture');assert.equal(r.phaseUsable,true)
+ const records=JSON.parse(await readFile(join(out,'probe-records.json'),'utf8')).records
+ assert.equal(records[0].id,`${r.id}/definition`);assert.equal(records[0].kind,'probe-definition')
+ assert.equal(records[1].id,`${r.id}/calibration`);assert.equal(records[1].kind,'probe-calibration')
  const full=JSON.parse(await readFile(join(out,r.artifacts.response.path),'utf8'))
  let error=0,n=0;for(let i=0;i<full.frequencyHz.length;i++)if(full.valid[i]){const angle=-2*Math.PI*full.frequencyHz[i]*3/16000;error+=Math.hypot(full.real[i]-(.6+.2*Math.cos(angle)),full.imag[i]-.2*Math.sin(angle));n++}
  assert.ok(n>100);assert.ok(error/n<.0001,`known FIR complex error ${error/n}`)
