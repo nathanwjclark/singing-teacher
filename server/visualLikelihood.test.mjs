@@ -25,7 +25,7 @@ test('concurrent POST is rejected during body await and terminal failure permits
   const replies=new Map();let release;
   const gate=new Promise(resolve=>{release=resolve;});
   const route=createVisualLikelihoodRoutes({repo:process.cwd(),dataRoot:root,json:(res,status,body)=>replies.set(res,{status,body})});
-  const request=chunks=>{const req=Readable.from(chunks);req.method='POST';req.socket={remoteAddress:'127.0.0.1'};req.headers={host:'localhost:5173','content-type':'application/json'};return req;};
+  const request=chunks=>{const req=Readable.from((async function*(){for await(const chunk of chunks)yield Buffer.from(chunk);})());req.method='POST';req.socket={remoteAddress:'127.0.0.1'};req.headers={host:'localhost:5173','content-type':'application/json'};return req;};
   const pending=route(request((async function*(){await gate;yield '{}';})()),'first',new URL('http://localhost/api/visual/freeze'));
   await route(request(['{}']),'second',new URL('http://localhost/api/visual/score'));
   assert.equal(replies.get('second').status,409);
