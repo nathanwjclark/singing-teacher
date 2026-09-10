@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
+import type { RefObject } from 'react';
+import type { AnatomyMotionState } from '../lib/anatomyState';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { createMuscleMotion } from '../lib/muscleMotion';
@@ -8,7 +10,7 @@ import { createBoneMotion } from '../lib/boneMotion';
 import type { BodyRegion, TrackingFrame } from '../types';
 import './AnatomyPanel.css';
 
-type Props = { frame: TrackingFrame | null; activeRegion?: BodyRegion; activeMuscles?: string[]; demo: boolean };
+type Props = { motion: RefObject<AnatomyMotionState>; frame: TrackingFrame | null; activeRegion?: BodyRegion; activeMuscles?: string[]; demo: boolean };
 type Part = { name: string; kind: 'bone' | 'muscle'; muscleId: string; region: BodyRegion; rig: 'head' | 'jaw' | 'torso'; positionOffset: number; positionCount: number; indexOffset: number; indexCount: number; min: number[]; size: number[] };
 type AnatomyMesh = THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>;
 const normalize = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, '_');
@@ -20,9 +22,9 @@ const regionMuscles: Record<BodyRegion, string[]> = {
 const displayName = (name: string) => name.replace(/([a-z])[lr]$/, '$1').replace(/_/g, ' ').replace(/^./, c => c.toUpperCase());
 const bounded = (value: number | undefined, min: number, max: number) => THREE.MathUtils.clamp(Number.isFinite(value) ? value! : 0, min, max);
 
-export function AnatomyPanel({ frame, activeRegion = 'jaw', activeMuscles, demo }: Props) {
+export function AnatomyPanel({ motion, frame, activeRegion = 'jaw', activeMuscles, demo }: Props) {
   const mount = useRef<HTMLDivElement>(null);
-  const latest = useRef({ frame, activeRegion, activeMuscles, demo, bones: true, muscles: true, xray: false, tongue: true });
+  const latest = useRef({ motion, frame, activeRegion, activeMuscles, demo, bones: true, muscles: true, xray: false, tongue: true });
   const reset = useRef<() => void>(() => {});
   const [bones, setBones] = useState(true);
   const [muscles, setMuscles] = useState(true);
@@ -31,7 +33,7 @@ export function AnatomyPanel({ frame, activeRegion = 'jaw', activeMuscles, demo 
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [hovered, setHovered] = useState('');
   const [meshCount, setMeshCount] = useState(0);
-  useEffect(() => { latest.current = { frame, activeRegion, activeMuscles, demo, bones, muscles, xray, tongue }; }, [frame, activeRegion, activeMuscles, demo, bones, muscles, xray, tongue]);
+  useEffect(() => { latest.current = { motion, frame, activeRegion, activeMuscles, demo, bones, muscles, xray, tongue }; }, [motion, frame, activeRegion, activeMuscles, demo, bones, muscles, xray, tongue]);
   const focused = activeMuscles?.length ? activeMuscles : regionMuscles[activeRegion];
 
   useEffect(() => {
@@ -131,41 +133,19 @@ export function AnatomyPanel({ frame, activeRegion = 'jaw', activeMuscles, demo 
     const leave = () => setHovered('');
     renderer.domElement.addEventListener('pointermove',inspect);renderer.domElement.addEventListener('pointerleave',leave);
     const contextLost = (event: Event) => {event.preventDefault();setStatus('error');};renderer.domElement.addEventListener('webglcontextlost',contextLost);
-    const radians = Math.PI/180;
     let lastAppearance = '';
-    renderer.setAnimationLoop((time) => {
-      const props=latest.current;const m=props.frame?.metrics;
-      const simulation=props.demo&&!props.frame;
-      // In a webcam crop the hips are often missing. Use a conservative share
-      // of shoulder tilt for chest lean; shoulderPose removes this parent motion
-      // before calculating the remaining independent shoulder articulation.
-      const shouldersVisible = [11,12].every(i => {
-        const p = props.frame?.pose[i];
-        return p && (p.visibility ?? 1) >= .65;
-      });
-      const shoulderRoll=bounded(m?.torsoLean ?? (shouldersVisible ? (m?.shoulderTilt ?? 0) * .45 : 0),-20,20)*radians;
-      const world = props.frame?.worldPose;
-      const shoulderWidth = world?.[11] && world?.[12] ? Math.max(.15, Math.abs(world[11].x-world[12].x)) : .36;
-      const hipsVisible=shouldersVisible&&world?.[23]&&world?.[24]&&(world[23].visibility??1)>.65&&(world[24].visibility??1)>.65;
-      const hipWidth=hipsVisible?Math.max(.12,Math.abs(world[23].x-world[24].x)):shoulderWidth;
-      const torsoDepth=hipsVisible?(world[23].z??0)-(world[24].z??0):(shouldersVisible ? bounded(m?.shoulderDepth,-.5,.5) : 0);
-      const torsoYaw=THREE.MathUtils.clamp(Math.atan2(torsoDepth,hipWidth),-.75,.75);
-      torso.rotation.z=THREE.MathUtils.lerp(torso.rotation.z,-shoulderRoll,.1);
-      torso.rotation.y=THREE.MathUtils.lerp(torso.rotation.y,torsoYaw,.1);
-      torso.rotation.x=0;
-      const shoulderTargets=shoulderPose.update(props.frame,torso.rotation);
+    renderer.setAnimationLoop(() => {
+      const props=latest.current;const state=props.motion.current;
+      torso.rotation.set(state.torso.x,state.torso.y,state.torso.z);
+      head.rotation.set(state.head.x,state.head.y,state.head.z);
+      jaw.rotation.x=state.jawOpen;
+      const shoulderTargets=shoulderPose.update(state.frame,torso.rotation);
       [leftShoulder,rightShoulder].forEach((shoulder,i)=>{
         const side=i===0?1:-1;const target=shoulderTargets[i];
         shoulder.rotation.z=THREE.MathUtils.lerp(shoulder.rotation.z,side*Math.atan2(target.lift,17),.18);
         shoulder.rotation.y=THREE.MathUtils.lerp(shoulder.rotation.y,-side*Math.atan2(target.depth,17),.18);
         shoulder.position.x=THREE.MathUtils.lerp(shoulder.position.x,side+target.spread*.35,.18);
       });
-      const yaw=bounded(m?.headYaw,-55,55)*radians+(simulation?Math.sin(time*.00032)*.075:0);
-      head.rotation.y=THREE.MathUtils.lerp(head.rotation.y,yaw-torso.rotation.y,.14);
-      head.rotation.z=THREE.MathUtils.lerp(head.rotation.z,-bounded(m?.headTilt,-30,30)*radians-torso.rotation.z,.14);
-      head.rotation.x=THREE.MathUtils.lerp(head.rotation.x,bounded(m?.headPitch,-35,35)*radians-torso.rotation.x,.14);
-      const mouth=bounded(m?.mouthOpen,0,1)||(simulation?.17+Math.sin(time*.0018)*.08:0);
-      jaw.rotation.x=THREE.MathUtils.lerp(jaw.rotation.x,mouth*.5,.18);
       const appearance=JSON.stringify([props.activeMuscles,props.activeRegion,props.bones,props.muscles,props.xray]);
       if(appearance!==lastAppearance) {
         lastAppearance=appearance;const selected=(props.activeMuscles?.length?props.activeMuscles:regionMuscles[props.activeRegion]).map(normalize);
@@ -179,10 +159,10 @@ export function AnatomyPanel({ frame, activeRegion = 'jaw', activeMuscles, demo 
         }
       }
       tongueModel.mesh.visible=props.tongue;
-      tongueModel.update(props.frame?.tongue,time);
+      tongueModel.applyPose(state.tongue);
       boneMotion.update();
-      muscleMotion.update(props.frame?.blendshapes);
-      const blink=props.frame?.blendshapes;
+      muscleMotion.update(state.frame?.blendshapes);
+      const blink=state.frame?.blendshapes;
       eyes.forEach((eye,i)=>{const value=blink?.[i===0?'eyeBlinkRight':'eyeBlinkLeft']??0;eye.scale.y=1-bounded(value,0,.95)*.8;});
       controls.update();renderer.render(scene,camera);
     });
