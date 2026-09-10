@@ -42,3 +42,11 @@ def test_invalid_candidates_and_incomparable_scale_rejection():
     result=couple_motion_hypotheses(bad);assert result['excludedWindows'] and result['status']=='no-temporal-links';json.dumps(result,allow_nan=False)
     rows[1]['fit']['feature_scales']['pitchHz']['scale']=30
     result=couple_motion_hypotheses(rows);assert result['status']=='unavailable' and 'scales' in result['reason']
+
+
+def test_identical_samples_at_disjoint_times_are_valid_stable_sound():
+    rows=[window(0,0,[(4,-4,0)]),window(1,12000,[(4,-4,0)])]
+    rows[1]['frameSha256']=rows[0]['frameSha256']
+    result=couple_motion_hypotheses(rows)
+    assert result['status']=='available' and result['includedWindowCount']==2
+    assert result['sensitivity'][2]['best']['unweightedTransitionCost']==0

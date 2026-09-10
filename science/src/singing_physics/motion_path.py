@@ -3,6 +3,7 @@ from copy import deepcopy
 import hashlib
 import json
 import math
+import re
 
 VERSION='motion-conditional-path-1'
 PENALTIES=(0.,.1,1.)
@@ -28,7 +29,7 @@ def couple_motion_hypotheses(windows):
         'additionalSynthesisCalls':0,'modelUpdated':False,'limitations':['Sparse observed frames only; no interpolation or audiovisual correspondence.',
             'Source F0 is conditioned on each measured frame; remaining source assumptions inherited unchanged.',
             'Scores are not probabilities; low cost does not identify anatomy or observed JA.']}
-    parsed=[];signature=None;previous=None;seen_frames=set();segments=[];current=[]
+    parsed=[];signature=None;previous=None;segments=[];current=[]
     for position,window in enumerate(windows):
         reason=None;rows=[]
         fit=window.get('fit') if isinstance(window,dict) else None
@@ -51,8 +52,7 @@ def couple_motion_hypotheses(windows):
                 measurement=window['measurement'];duration_ms=measurement['window']['endMs']-measurement['window']['startMs']
                 if type(rate) is not int or rate not in (44100,48000,96000) or type(offset) is not int or offset<0 or type(crop) is not int or crop<0 or not _number(duration_ms) or duration_ms<=0:raise ValueError('Invalid acoustic sample span')
                 frame_hash=window['frameSha256']
-                if not isinstance(frame_hash,str) or len(frame_hash)!=64 or frame_hash in seen_frames:raise ValueError('Missing or reused physical frame')
-                seen_frames.add(frame_hash)
+                if not isinstance(frame_hash,str) or not re.fullmatch('[a-f0-9]{64}',frame_hash):raise ValueError('Missing physical frame hash')
                 start=(offset+crop)/rate;end=start+duration_ms/1000
                 raw=fit['joint']['candidates']
                 if not isinstance(raw,list) or len(raw)>18:raise ValueError('At most18 candidates per window')
