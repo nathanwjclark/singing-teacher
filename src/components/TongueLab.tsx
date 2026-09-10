@@ -11,6 +11,7 @@ export default function TongueLab({video,frame,select,close}:Props){
   const canvas=useRef<HTMLCanvasElement>(null);
   const [samples,setSamples]=useState<Sample[]>([]);
   const [recording,setRecording]=useState(false);
+  const [canFreeze,setCanFreeze]=useState(false);
   const [index,setIndex]=useState<number|null>(null);
   const [motion,setMotion]=useState('up');
   const [status,setStatus]=useState('Waiting for a mouth crop');
@@ -26,7 +27,7 @@ export default function TongueLab({video,frame,select,close}:Props){
       const v=video.current,f=frame.current,c=canvas.current,ctx=c?.getContext('2d');
       const crop=f?.tongueSearch;
       if(v&&v.readyState>=2&&ctx&&crop&&crop.width>0&&crop.height>0){
-        currentCrop.current=crop;
+        currentCrop.current=crop;setCanFreeze(true);
         ctx.drawImage(v,crop.x*v.videoWidth,crop.y*v.videoHeight,crop.width*v.videoWidth,crop.height*v.videoHeight,0,0,W,H);
         const p=f.tongue?.trackingMode==='tip'?{x:(f.tongue.x-crop.x)/crop.width,y:(f.tongue.y-crop.y)/crop.height}:undefined;
         setStatus(f.tongueStatus??'No tip observation');setDiagnostic(f.tongueDiagnostic);
@@ -39,11 +40,21 @@ export default function TongueLab({video,frame,select,close}:Props){
         }
         ctx.fillStyle='#ff71aa';for(const o of f.tongue?.outline??[]){ctx.beginPath();ctx.arc((o.x-crop.x)/crop.width*W,(o.y-crop.y)/crop.height*H,2,0,Math.PI*2);ctx.fill();}
         if(p)cross(ctx,p,'#ff71aa');
-      }else{currentCrop.current=undefined;setStatus('Waiting for a live mouth crop');setDiagnostic(undefined);ctx?.clearRect(0,0,W,H);}
+      }else{setCanFreeze(false);currentCrop.current=undefined;setStatus('Waiting for a live mouth crop');setDiagnostic(undefined);ctx?.clearRect(0,0,W,H);}
       raf=requestAnimationFrame(tick);
     };raf=requestAnimationFrame(tick);return()=>cancelAnimationFrame(raf);
   },[index,video,frame]);
   useEffect(()=>{if(!chosen)return;let cancelled=false;const img=new Image();img.onload=()=>{if(cancelled)return;const ctx=canvas.current?.getContext('2d');if(!ctx)return;ctx.drawImage(img,0,0,W,H);if(chosen.prediction)cross(ctx,chosen.prediction,'#ff71aa');if(chosen.label)cross(ctx,chosen.label,'#7effb0')};img.src=chosen.image;return()=>{cancelled=true}},[chosen]);
+  const freeze=()=>{
+    const v=video.current,f=frame.current,crop=f?.tongueSearch;
+    if(!v||v.readyState<2||!crop||crop.width<=0||crop.height<=0||samples.length>=80)return;
+    const image=document.createElement('canvas');image.width=W;image.height=H;
+    const ctx=image.getContext('2d');if(!ctx)return;
+    ctx.drawImage(v,crop.x*v.videoWidth,crop.y*v.videoHeight,crop.width*v.videoWidth,crop.height*v.videoHeight,0,0,W,H);
+    const prediction=f.tongue?.trackingMode==='tip'?{x:(f.tongue.x-crop.x)/crop.width,y:(f.tongue.y-crop.y)/crop.height}:undefined;
+    const sample:Sample={image:image.toDataURL('image/jpeg',.88),time:f.timestamp,motion,status:f.tongueStatus??'',diagnostic:f.tongueDiagnostic,prediction,crop:{...crop}};
+    setSamples(old=>[...old,sample]);setIndex(samples.length);
+  };
   const label=(value:Point|null)=>{if(index===null)return;setSamples(old=>old.map((s,i)=>i===index?{...s,label:value}:s))};
   const click=(e:React.MouseEvent<HTMLCanvasElement>)=>{const r=e.currentTarget.getBoundingClientRect();const p={x:1-(e.clientX-r.left)/r.width,y:(e.clientY-r.top)/r.height};if(index!==null)label(p);else{const c=currentCrop.current;if(c)select(c.x+p.x*c.width,c.y+p.y*c.height)}};
   const labeled=samples.filter(s=>s.label!==undefined),visible=labeled.filter(s=>s.label!==null),matched=visible.filter(s=>s.prediction);
@@ -52,9 +63,10 @@ export default function TongueLab({video,frame,select,close}:Props){
   const d=chosen?chosen.diagnostic:diagnostic;
   return <div className="tongue-lab-backdrop"><section role="dialog" aria-modal="true" aria-labelledby="tongue-lab-title" className="tongue-lab" onKeyDown={e=>{if(e.key==='Escape')close()}}>
     <header><h2 id="tongue-lab-title">Tongue observation lab</h2><button autoFocus onClick={close}>Close</button></header>
-    <p>Pink: tracked point and tissue outline. Green: your labeled tip. This tracker follows a selected image patch; it does not identify anatomy automatically.</p>
-    <div className="tongue-lab-grid"><div><canvas ref={canvas} width={W} height={H} onClick={click} aria-label={index===null?'Mirrored live mouth crop. Click the visible tip to track it.':'Captured mouth crop. Click the actual tip to label it.'}/><p>{index===null?'LIVE · Click the visible tip near its edge to initialize tracking.':`FRAME ${index+1} · ${chosen?.motion} · Click the actual tip to label it.`}</p></div>
+    <p>Pink shows the live tracker. Green appears only when you click the actual tip on a frozen frame—it is your manual label, not an automatic detection.</p>
+    <div className="tongue-lab-grid"><div><canvas ref={canvas} width={W} height={H} onClick={click} aria-label={index===null?'Mirrored live mouth crop. Click the visible tip to track it.':'Captured mouth crop. Click the actual tip to label it.'}/><p>{index===null?'LIVE · Clicking here initializes the pink tracker. To add a green label, choose Freeze frame & label tip first.':`FRAME ${index+1} · ${chosen?.motion} · Click the actual tip to place a green label.`}</p></div>
     <div className="tongue-lab-controls"><strong role="status">{chosen?.status??status}</strong><span>Tracker: {d?.state??'unavailable'}</span><span>{d?.reason??'No tracker observation yet'}</span><span>Patch match: {d?.score===undefined?'—':d.score.toFixed(2)} (similarity, not probability)</span><span>Separation from other matches: {d?.margin===undefined?'—':d.margin.toFixed(3)}</span>
+    {index===null?<><button disabled={!canFreeze||recording||samples.length>=80} onClick={freeze}>Freeze frame & label tip</button><small>1. Freeze a mouth image. 2. Click the tip on that image. A green marker appears where you click.</small></>:<strong role="status">{chosen?.label===null?'Tip marked hidden; no green marker for this frame.':chosen?.label?'Green marker = your label. Click again to move it.':'Frozen frame: click the visible tongue tip to add a green marker.'}</strong>}
     <label>Motion <select value={motion} disabled={recording} onChange={e=>setMotion(e.target.value)}>{['up','down','left','right','out','retract','head still / tongue still','head movement / tongue still'].map(m=><option key={m}>{m}</option>)}</select></label>
     <button disabled={index!==null||samples.length>=80} onClick={()=>setRecording(r=>!r)}>{recording?'Stop capture':'Start capture'}</button>
     <small>Explicit capture only: 4 mouth images/second, up to 80 frames. No audio. Kept in memory until you export; closing discards them.</small>
@@ -65,4 +77,4 @@ export default function TongueLab({video,frame,select,close}:Props){
     </div></div>
   </section></div>;
 }
-function cross(ctx:CanvasRenderingContext2D,p:Point,color:string){const x=p.x*W,y=p.y*H;ctx.strokeStyle=color;ctx.lineWidth=2;ctx.beginPath();ctx.arc(x,y,7,0,Math.PI*2);ctx.moveTo(x-12,y);ctx.lineTo(x+12,y);ctx.moveTo(x,y-12);ctx.lineTo(x,y+12);ctx.stroke()}
+function cross(ctx:CanvasRenderingContext2D,p:Point,color:string){const x=p.x*W,y=p.y*H;const radius=color==='#7effb0'?12:7;ctx.beginPath();ctx.arc(x,y,radius,0,Math.PI*2);ctx.moveTo(x-16,y);ctx.lineTo(x+16,y);ctx.moveTo(x,y-16);ctx.lineTo(x,y+16);ctx.strokeStyle='#071014';ctx.lineWidth=5;ctx.stroke();ctx.strokeStyle=color;ctx.lineWidth=2.5;ctx.stroke()}
