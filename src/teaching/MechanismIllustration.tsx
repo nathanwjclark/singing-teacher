@@ -14,14 +14,14 @@ function MechanismDrawing({kind,progress,label}:{kind:DemonstrationId;progress:n
   {kind==='cricothyroid-pitch'&&<>
    <path className="mechanism-guide" d="M66 51V242M59 60H73M59 232H73"/><text className="mechanism-small" x="18" y="36">Height held fixed</text>
    <path className="mechanism-cartilage" d="M145 188Q213 161 290 184L303 218Q220 241 151 216Z"/>
-   <g transform={`rotate(${-12*t} 158 176)`}>
+   <g transform={`rotate(${12*t} 158 176)`}>
     <path className="mechanism-cartilage mechanism-cartilage--moving" d="M166 70Q227 38 315 87L301 166Q226 151 162 173Z"/>
     <circle className="mechanism-joint" cx="158" cy="176" r="6"/>
     <circle className="mechanism-attachment" cx="292" cy="126" r="5"/>
    </g>
-   <path className="mechanism-fold" d={`M171 149L${158+134*Math.cos(-12*t*Math.PI/180)+50*Math.sin(-12*t*Math.PI/180)} ${176+134*Math.sin(-12*t*Math.PI/180)-50*Math.cos(-12*t*Math.PI/180)}`}/>
+   <path className="mechanism-fold" d={`M171 149L${158+134*Math.cos(12*t*Math.PI/180)+50*Math.sin(12*t*Math.PI/180)} ${176+134*Math.sin(12*t*Math.PI/180)-50*Math.cos(12*t*Math.PI/180)}`}/>
    <circle className="mechanism-attachment" cx="171" cy="149" r="5"/>
-   <path className="mechanism-arrow" d="M335 126Q362 103 339 73" markerEnd={`url(#${id}-arrow)`}/>
+   <path className="mechanism-arrow" d="M339 73Q362 103 335 126" markerEnd={`url(#${id}-arrow)`}/>
    <path className="mechanism-leader" d="M309 91H396M293 211H388M230 137L294 248"/>
    <text x="375" y="83">Thyroid</text><text x="331" y="231">Cricoid</text><text x="300" y="251">Vocal fold</text>
    <text className="mechanism-note" x="91" y="24">Relative cartilage movement</text>
@@ -62,8 +62,8 @@ function IllustrationControls({demonstrationId}:{demonstrationId:DemonstrationId
  const mechanism=getMechanism(demonstrationId)!;const sliderId=useId();
  const [progress,setProgress]=useState(0),[playing,setPlaying]=useState(false),[staticView,setStaticView]=useState(true),[reduced,setReduced]=useState(false);
  useEffect(()=>{const media=window.matchMedia('(prefers-reduced-motion: reduce)');const update=()=>{setReduced(media.matches);if(media.matches){setPlaying(false);setStaticView(true);}};update();media.addEventListener('change',update);return()=>media.removeEventListener('change',update);},[]);
- useEffect(()=>{if(!playing||reduced)return;const timer=window.setInterval(()=>setProgress(value=>Math.min(1,value+1/100)),60);return()=>window.clearInterval(timer);},[playing,reduced]);
- useEffect(()=>{if(progress===1)setPlaying(false);},[progress]);
+ const active=playing&&progress<1&&!reduced;
+ useEffect(()=>{if(!active)return;const timer=window.setInterval(()=>setProgress(value=>Math.min(1,value+1/100)),60);return()=>window.clearInterval(timer);},[active]);
  return <figure className="mechanism-illustration" aria-label={`${mechanism.title} illustration`}>
   <div className="mechanism-illustration-header"><span>General explanation</span><span>{mechanism.illustration.view}</span></div>
   {staticView?<div className="mechanism-comparison">
@@ -71,7 +71,7 @@ function IllustrationControls({demonstrationId}:{demonstrationId:DemonstrationId
    <div><p className="mechanism-state-label">After</p><MechanismDrawing kind={demonstrationId} progress={1} label={`After: ${mechanism.illustration.after}`}/><p>{mechanism.illustration.after}</p></div>
   </div>:<div className="mechanism-transition"><MechanismDrawing kind={demonstrationId} progress={progress} label={`${mechanism.title}: ${Math.round(progress*100)} percent through the illustration`}/></div>}
   <figcaption>{mechanism.illustration.caption} <span>This schematic is not a measurement of your anatomy.</span></figcaption>
-  <div className="mechanism-controls"><button type="button" disabled={reduced} onClick={()=>{setStaticView(false);if(progress===1)setProgress(0);setPlaying(value=>!value);}}>{playing?'Pause illustration':progress===1?'Replay illustration':'Play slow illustration'}</button>
+  <div className="mechanism-controls"><button type="button" disabled={reduced} onClick={()=>{setStaticView(false);if(progress===1)setProgress(0);setPlaying(!active);}}>{active?'Pause illustration':progress===1?'Replay illustration':'Play slow illustration'}</button>
    <button type="button" aria-pressed={staticView} onClick={()=>{setPlaying(false);setStaticView(value=>!value);}}>{staticView?'Show one view':'Static comparison'}</button>
    <label htmlFor={sliderId}>Explore the movement<input id={sliderId} type="range" min="0" max="100" value={Math.round(progress*100)} aria-valuetext={`${Math.round(progress*100)} percent from before to after`} onChange={event=>{setPlaying(false);setStaticView(false);setProgress(Number(event.target.value)/100);}}/></label>
   </div>
