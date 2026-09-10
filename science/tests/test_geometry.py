@@ -90,3 +90,24 @@ def test_declared_surface_operator_whitens_in_physical_coordinates():
             surface_residuals(observation, predictions, operator_id=identifier, model_sigma_m=.001)
     with pytest.raises(ValueError):
         surface_distance(observation, [0, 0], [0, 0])
+
+
+def test_native_lip_marker_operator_units_provenance_and_residual(tmp_path):
+    from observations.geometry import lip_predictions_from_ema, lip_distance_residual
+    from observations.geometry.lips import _HEADER
+    path = tmp_path / "native-ema.txt"
+    path.write_text(_HEADER + "\n0 1 2 3 1 1 3\n0.005 1 2 3 1 0 3\n")
+    predictions = lip_predictions_from_ema(path)
+    assert [p["value_m"] for p in predictions] == pytest.approx([.01, .02])
+    assert len(predictions[0]["artifact_sha256"]) == 64
+    observation = reconstruct(frame())
+    result = lip_distance_residual(observation, [0, 1], [2, 1], predictions[0],
+                                   correspondence_id="synthetic-projected-markers-v1", model_sigma_m=.001)
+    assert result["residual"] == pytest.approx(0)
+    assert result["evidence_id"] == observation.evidence_id
+    with pytest.raises(ValueError, match="correspondence"):
+        lip_distance_residual(observation, [0, 1], [2, 1], predictions[0], correspondence_id="", model_sigma_m=.001)
+    for text in (_HEADER + "\n0 nan 2 3 1 1 3\n", _HEADER + "\n", _HEADER.replace("cm", "m") + "\n0 1 2 3 1 1 3\n", _HEADER + "\n0 1 2 3 1 1 3\n0 1 2 3 1 1 3\n"):
+        path.write_text(text)
+        with pytest.raises(ValueError):
+            lip_predictions_from_ema(path)
