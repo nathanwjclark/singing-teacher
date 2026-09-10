@@ -1,2 +1,3 @@
 /* The review uses the same grid cell and typography as every live cue. */
 .astra-review-detail{max-height:180px;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin}.astra-review-detail p{white-space:pre-wrap}.astra-review-detail button{font-size:10px;padding:4px 8px;margin-top:7px;color:#e2efd6;background:#3b5534;border:1px solid #6b8753;border-radius:4px}.astra-review-detail:focus-visible{outline:1px solid #98cdbd;outline-offset:3px}
+.recent-coaching:has(.astra-review-detail) .recent-tip-grid{grid-auto-rows:minmax(105px,1fr);overflow-y:auto}
