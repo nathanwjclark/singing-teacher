@@ -18,7 +18,7 @@ export function pitchToNote(hz: number): MusicalNote | null {
  * Select the first sufficiently periodic trough to avoid preferring subharmonic octaves.
  * A pitch requires a strong repeating waveform; ambient noise can still have periodicity.
  */
-export function detectPitch(waveform: Float32Array, sampleRate: number): { pitchHz: number | null; periodicity: number | null } {
+export function detectPitch(waveform: Float32Array, sampleRate: number, options: { minimumDbfs: number; minimumPeriodicity: number } = { minimumDbfs: -60, minimumPeriodicity: 0.85 }): { pitchHz: number | null; periodicity: number | null } {
   if (!Number.isFinite(sampleRate) || sampleRate <= 0 || waveform.length < 256) return { pitchHz: null, periodicity: null };
   // Average adjacent samples while downsampling to reduce high-frequency aliasing.
   const stride = Math.max(1, Math.floor(sampleRate / 12000));
@@ -34,7 +34,7 @@ export function detectPitch(waveform: Float32Array, sampleRate: number): { pitch
     samples[i] = sum / stride;
     energy += samples[i] * samples[i];
   }
-  if (energy / samples.length < 1e-6) return { pitchHz: null, periodicity: null };
+  if (energy / samples.length < Math.pow(10, options.minimumDbfs / 10)) return { pitchHz: null, periodicity: null };
   const minLag = Math.max(2, Math.floor(rate / 1100));
   const maxLag = Math.min(Math.ceil(rate / 65) + 1, Math.floor((samples.length - 2) / 2));
   const window = samples.length - maxLag - 1;
@@ -56,13 +56,13 @@ export function detectPitch(waveform: Float32Array, sampleRate: number): { pitch
   const periodicity = Math.max(0, Math.min(1, 1 - best));
   let trough = -1;
   for (let lag = minLag; lag < maxLag; lag++) {
-    if (normalized[lag] < 0.15) {
+    if (normalized[lag] < 1 - options.minimumPeriodicity) {
       while (lag + 1 <= maxLag && normalized[lag + 1] < normalized[lag]) lag++;
       trough = lag;
       break;
     }
   }
-  if (trough < 0 || periodicity < 0.85) return { pitchHz: null, periodicity };
+  if (trough < 0 || periodicity < options.minimumPeriodicity) return { pitchHz: null, periodicity };
   // A dominant second harmonic can create a shallow half-period trough. Prefer
   // its full period only when that match is substantially better, not for tiny errors.
   const troughLeft = normalized[trough - 1];
@@ -124,8 +124,16 @@ export function audioFrameSize(sampleRate: number): number {
   if (!Number.isFinite(sampleRate) || sampleRate <= 0) throw new Error('Invalid sample rate.');
   return Math.min(32768, Math.max(2048, 2 ** Math.ceil(Math.log2(sampleRate * 0.085))));
 }
-export function pitchStatus(metrics: AudioMetrics): string {
-  if (metrics.dbfs < -60) return 'Too quiet for pitch';
+export const LIVE_PITCH_MIN_DBFS = -78;
+/** Sensitive meter only: leave canonical PCM measurements and recorded audio unchanged.
+ * YIN is amplitude-independent above this floor; no microphone gain is applied.
+ */
+export function livePitchMetrics(waveform: Float32Array, sampleRate: number, measured: AudioMetrics): AudioMetrics {
+  if (measured.pitchHz !== null || measured.dbfs < LIVE_PITCH_MIN_DBFS) return measured;
+  return { ...measured, ...detectPitch(waveform, sampleRate, { minimumDbfs: LIVE_PITCH_MIN_DBFS, minimumPeriodicity: 0.72 }) };
+}
+export function pitchStatus(metrics: AudioMetrics, minimumDbfs = -60): string {
+  if (metrics.dbfs < minimumDbfs) return 'Too quiet for pitch';
   if (metrics.pitchHz !== null) return 'Pitch detected';
   return metrics.periodicity !== null && metrics.periodicity >= 0.85
     ? 'Periodic sound · outside pitch range or ambiguous harmonics'

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Mic, Square, AudioLines } from 'lucide-react';
-import { analyzeAudioFrame, serializeAudioMeasurement, pitchToNote, audioFrameSize, pitchStatus } from '../lib/audio';
+import { analyzeAudioFrame, serializeAudioMeasurement, pitchToNote, audioFrameSize, pitchStatus, livePitchMetrics, LIVE_PITCH_MIN_DBFS } from '../lib/audio';
 import type { AudioMetrics } from '../lib/audio';
 import { AmbientCalibrator } from '../lib/audioCalibration';
 import type { AudioCalibration } from '../lib/audioCalibration';
@@ -73,7 +73,7 @@ function drawWave(canvas: HTMLCanvasElement | null, wave: Float32Array, active: 
     const y = height * i / 4;
     ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(width, y); ctx.stroke();
   }
-  let peak = 0.025;
+  let peak = 0.0025;
   for (const sample of wave) peak = Math.max(peak, Math.abs(sample));
   ctx.strokeStyle = active ? '#9bd5c2' : '#4f625a';
   ctx.lineWidth = 1.3;
@@ -245,13 +245,14 @@ export function AudioPanel({ demo = false, autoStart = false, externalStream = n
           live.analyser.getFloatTimeDomainData(waveform.current);
           if (now - lastSample >= 0.1) {
             try {
-              latest = analyzeAudioFrame(waveform.current, live.context.sampleRate);
+              const measured = analyzeAudioFrame(waveform.current, live.context.sampleRate);
+              latest = livePitchMetrics(waveform.current, live.context.sampleRate, measured);
               const deviceKey = JSON.stringify(live.stream.getAudioTracks().map(track => [track.id, track.getSettings()]));
               if (deviceKey !== live.deviceKey) { calibrator.current = new AmbientCalibrator(); live.deviceKey = deviceKey; }
               const ambient = calibrator.current.update(latest, waveform.current, ms);
               setCalibration(ambient);
               const settings = live.stream.getAudioTracks()[0]?.getSettings();
-              callbacks.current.onMeasurement?.(serializeAudioMeasurement(latest, waveform.current.length, live.context.sampleRate, {
+              callbacks.current.onMeasurement?.(serializeAudioMeasurement(measured, waveform.current.length, live.context.sampleRate, {
                 id: `${live.clockId}-${sequence++}`, observationId: live.clockId, artifactId: `${live.clockId}-unrecorded-pcm`,
                 startMs: Math.max(0, ms - live.startedMs - waveform.current.length / live.context.sampleRate * 1000),
                 timebase: { clockId: live.clockId, origin: 'session-start', unit: 'ms', syncUncertaintyMs: null, referenceClockId: null, offsetToReferenceMs: null },
@@ -294,7 +295,7 @@ export function AudioPanel({ demo = false, autoStart = false, externalStream = n
 
   const active = demo || status === 'live';
   const note = active && metrics.pitchHz !== null ? pitchToNote(metrics.pitchHz) : null;
-  const signal = active && metrics.dbfs >= -60;
+  const signal = active && metrics.dbfs >= LIVE_PITCH_MIN_DBFS;
   const readout = (value: number | null, digits = 0) => active && value !== null ? value.toFixed(digits) : '—';
   return (
     <section className="audio-panel" aria-labelledby="audio-title">
@@ -324,7 +325,7 @@ export function AudioPanel({ demo = false, autoStart = false, externalStream = n
         </article>
         <div className="audio-histories">
           <article className="audio-history-card audio-history-card--pitch">
-            <div className="audio-chart-title"><h3><i />Pitch <span>A4 = 440</span></h3><strong>{note ? `${note.name}${note.octave}` : '—'} <small>{note ? `${note.cents > 0 ? '+' : ''}${note.cents}¢ · ${Math.round(metrics.pitchHz!)} Hz` : active ? pitchStatus(metrics) : 'note · Hz'}</small></strong></div>
+            <div className="audio-chart-title"><h3 title="Sensitive live meter; canonical measurements and recording audio retain their original analysis settings."><i />Pitch <span>SENSITIVE · A4 = 440</span></h3><strong>{note ? `${note.name}${note.octave}` : '—'} <small>{note ? `${note.cents > 0 ? '+' : ''}${note.cents}¢ · ${Math.round(metrics.pitchHz!)} Hz` : active ? pitchStatus(metrics, LIVE_PITCH_MIN_DBFS) : 'note · Hz'}</small></strong></div>
             <div className="audio-history-surface"><div className="audio-y-axis audio-note-axis"><span>C6</span><span>C4</span><span>C2</span></div><canvas ref={pitchCanvas} role="img" aria-label="Trailing 25 seconds of detected pitch on a musical note scale from C2 to C sharp 6. Notes and cents use A4 equals 440 Hz. Gaps mean no reliable pitch." /></div>
             <div className="audio-axis audio-time-axis"><span>−25 s</span><span>now</span></div>
           </article>
