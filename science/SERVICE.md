@@ -17,6 +17,15 @@ Requests contain `operation` and `parameters`. Supported operations:
 - `fit_pcm`: canonical observation document, explicit finite `candidates`, and
   optional `max_synthesis_calls`. Uses B's exact extractor on native PCM with an
   equal-compute fixed-anatomy baseline. See [PCM_INVERSE.md](PCM_INVERSE.md).
+- `search_pcm`: canonical observation document, bounded anatomy search profile,
+  explicit nuisance profiles, total synthesis cap, rounds and seed. Keeps the
+  entire evaluated search history; see [PCM_SEARCH.md](PCM_SEARCH.md).
+- `design_pcm`: canonical frozen PCM hypothesis JSON, its expected digest,
+  prospective observation identity, declared simulator experiments and feature
+  scales. Writes `design.json` before any subsequent update.
+- `update_pcm`: original snapshot and design JSON with both expected digests,
+  selected experiment identity and newly supplied PCM frame. Writes a separate
+  update artifact with evidence lineage; see [PCM_DESIGN.md](PCM_DESIGN.md).
 - `fit_joint`: observation document, anatomy/articulation bounds, starts, seed,
   and per-model budget. See JOINT_INFERENCE.md for its synthetic evidence profile.
 - `predict`: canonical frozen snapshot JSON, expected digest and predict arguments.
