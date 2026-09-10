@@ -30,9 +30,8 @@ geometry calls can be interleaved; each explicitly supplies its pose.
 The adapter verifies the pinned speaker and local safety patch against build
 provenance. New native builds also pin the library hash in the manifest, and
 invalidate a previous manifest before rebuilding. Legacy manifests without a
-library hash remain usable; their runtime library hash is recorded rather than
-verified against build-time provenance. All new builds should use the updated
-build script. Native binaries were not rebuilt for this Python adapter change.
+certified library hash are rejected with an explicit rebuild instruction. Use the
+updated build script to create a certified manifest. Native binaries were not rebuilt for this Python adapter change.
 
 ## Reproduction
 

@@ -132,6 +132,8 @@ def test_manifest_mismatch_rejected_before_native_initialization(tmp_path, monke
     import singing_physics.engine as module
     original = module.BUILD
     manifest = json.loads((original/'manifest.json').read_text())
+    suffix = {'darwin': 'dylib', 'linux': 'so'}[sys.platform]
+    manifest['library_sha256'] = digest(original/f'source/lib/Release/libVocalTractLabApi.{suffix}')
     (tmp_path/'source').symlink_to(original/'source', target_is_directory=True)
     monkeypatch.setattr(module, 'BUILD', tmp_path)
     for key in ('patch_sha256', 'library_sha256'):
@@ -142,3 +144,27 @@ def test_manifest_mismatch_rejected_before_native_initialization(tmp_path, monke
     (tmp_path/'manifest.json').write_text(json.dumps(manifest))
     with Engine() as e:
         assert e.sample_rate > 0
+
+
+def test_missing_certified_hash_and_tampered_library_rejected(tmp_path, monkeypatch):
+    import singing_physics.engine as module
+    import shutil
+    original = module.BUILD
+    manifest = json.loads((original/'manifest.json').read_text())
+    suffix = {'darwin': 'dylib', 'linux': 'so'}[sys.platform]
+    relative_library = f'source/lib/Release/libVocalTractLabApi.{suffix}'
+    library = tmp_path/relative_library
+    library.parent.mkdir(parents=True)
+    shutil.copyfile(original/relative_library, library)
+    (tmp_path/'source/resources').symlink_to(original/'source/resources', target_is_directory=True)
+    manifest['library_sha256'] = digest(library)
+    monkeypatch.setattr(module, 'BUILD', tmp_path)
+    missing = {key: value for key, value in manifest.items() if key != 'library_sha256'}
+    (tmp_path/'manifest.json').write_text(json.dumps(missing))
+    with pytest.raises(RuntimeError, match='certified library hash: rebuild'):
+        Engine()
+    (tmp_path/'manifest.json').write_text(json.dumps(manifest))
+    with library.open('ab') as stream:
+        stream.write(b'changed binary')
+    with pytest.raises(RuntimeError, match='library differs from the build manifest'):
+        Engine()

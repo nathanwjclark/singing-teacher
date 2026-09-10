@@ -77,8 +77,11 @@ class Engine:
                 raise RuntimeError("Reference speaker differs from the build manifest")
             if digest(ROOT / "patches/anatomy-tongue-bounds.patch") != self.provenance["patch_sha256"]:
                 raise RuntimeError("Native patch differs from the build manifest")
+            certified_hash = self.provenance.get("library_sha256")
+            if not isinstance(certified_hash, str) or len(certified_hash) != 64 or any(c not in "0123456789abcdef" for c in certified_hash):
+                raise RuntimeError("Native build lacks a certified library hash: rebuild with python science/scripts/build_native.py")
             library_hash = digest(library)
-            if self.provenance.get("library_sha256", library_hash) != library_hash:
+            if certified_hash != library_hash:
                 raise RuntimeError("Native library differs from the build manifest")
             self.provenance = {**self.provenance, "library_sha256": library_hash}
             self.lib = ct.CDLL(str(library))
