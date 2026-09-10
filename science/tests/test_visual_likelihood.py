@@ -84,6 +84,30 @@ def test_duplicate_geometry_and_camera_ambiguity_are_retained(fixture):
     assert frozen['budget']['actual_geometry_calls'] == 4
 
 
+def test_fixed_camera_selected_on_calibration_never_refits_to_heldout_head_motion(fixture):
+    rotation = np.array([[0.,-1.,0.],[1.,0.,0.],[0.,0.,1.]])
+    rotated = {'camera_id':'rotated','rotation_3x3':rotation.tolist(),'scale_px_per_m':1000.}
+    fixture['camera_candidates'] = [CAMERA,rotated]
+    row = fixture['calibration_frames'][0]
+    old = np.asarray(row['upper_px'])-np.asarray(row['lower_px'])
+    row['upper_px'] = (np.asarray(row['lower_px'])+np.array([-old[1],old[0]])).tolist()
+    frozen = freeze_visual_forecast(**fixture)
+    retained = [p for p in frozen.data['pairs'] if p['retained']]
+    assert retained and all(p['camera_id'] == 'rotated' for p in retained)
+    matching = next(p for p in retained if p['hypothesis_id'] == 'first')
+    target = annotation(frozen.data['targets'][0],matching['target_vectors_px'][0])
+    score = score_visual_forecast(frozen,expected_digest=frozen.sha256,annotations=[target]).data
+    assert next(s for s in score['scores'] if s['hypothesis_id'] == 'first')['heldout_rms_px'] == pytest.approx(0,abs=1e-12)
+    # A camera orientation change in the target is an omitted-physics mismatch.
+    # It must not trigger another camera fit using the held-out target outcome.
+    unrotated = next(p for p in frozen.data['pairs'] if p['camera_id'] == 'front' and p['hypothesis_id'] == 'first')
+    moved = annotation(frozen.data['targets'][0],unrotated['target_vectors_px'][0])
+    changed = score_visual_forecast(frozen,expected_digest=frozen.sha256,annotations=[moved]).data
+    assert all(s['camera_id'] == 'rotated' for s in changed['scores'])
+    assert next(s for s in changed['scores'] if s['hypothesis_id'] == 'first')['heldout_rms_px'] > 1
+    assert changed['geometry_calls'] == 0
+
+
 def test_missing_calibration_and_heldout_keep_missing_not_zero(fixture):
     fixture['calibration_frames'][0] = annotation({k:v for k,v in fixture['calibration_frames'][0].items()
                                                  if k in base('x',0,0)})
