@@ -10,6 +10,7 @@ export type NeuralTip={x:number;y:number;depth:number;visibility:number;peak:num
  * nearest-template lookup, optical flow, or conversion of vertical motion to depth. */
 export async function loadTongueNetwork(signal?:AbortSignal){
  const [meta,weights]=await Promise.all([fetch('/api/tongue-neural/manifest',{cache:'no-store',signal}),fetch('/api/tongue-neural/model',{cache:'no-store',signal})]);
+ if(meta.status===404||weights.status===404||(meta.ok&&meta.headers.get('content-type')?.includes('text/html')))return (await import('./tongueBaseline')).loadTongueBaseline(signal);
  if(!meta.ok||!weights.ok)throw Error('Personal tongue network is not installed on this Mac');
  const manifest=await meta.json();if(manifest.schema!=='personal-tongue-neural/v1')throw Error('Unknown tongue network format');
  const buffer=await weights.arrayBuffer();const digest=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',buffer))).map(v=>v.toString(16).padStart(2,'0')).join('');
@@ -17,7 +18,7 @@ export async function loadTongueNetwork(signal?:AbortSignal){
  const session=await ort.InferenceSession.create(buffer,{executionProviders:['wasm'],graphOptimizationLevel:'all'});
  const canvas=document.createElement('canvas');canvas.width=128;canvas.height=128;const ctx=canvas.getContext('2d',{willReadFrequently:true})!;
  const source=document.createElement('canvas');const sc=source.getContext('2d')!;
- return {async infer(pixels:Uint8ClampedArray,w:number,h:number):Promise<NeuralTip>{
+ return {kind:'tip' as const,async infer(pixels:Uint8ClampedArray,w:number,h:number):Promise<NeuralTip>{
   source.width=w;source.height=h;sc.putImageData(new ImageData(new Uint8ClampedArray(pixels),w,h),0,0);ctx.drawImage(source,0,0,128,128);const rgba=ctx.getImageData(0,0,128,128).data;
   const data=new Float32Array(3*128*128);for(let i=0;i<128*128;i++)for(let c=0;c<3;c++)data[c*128*128+i]=(rgba[i*4+c]/255-mean[c])/std[c];
   const input=new ort.Tensor('float32',data,[1,3,128,128]);let result:ort.InferenceSession.OnnxValueMapType|undefined;
@@ -39,23 +40,31 @@ export function neuralTipObservation(tip:NeuralTip,face:Landmark[],width:number,
 }
 
 export function createNeuralTongueTracker(){
- let network:Awaited<ReturnType<typeof loadTongueNetwork>>|undefined,closed=false,busy=false,generation=0,last:TongueObservation|undefined;
+ let network:Awaited<ReturnType<typeof loadTongueNetwork>>|undefined,closed=false,busy=false,generation=0,last:TongueObservation|undefined,failures=0;
  let diagnostic:TongueDiagnostic={state:'unselected',reason:'Loading personal neural tongue model'};
  const abort=new AbortController();
- void loadTongueNetwork(abort.signal).then(n=>{if(closed){void n.close();return;}network=n;diagnostic={state:'selected',reason:'Neural model ready · show the tongue tip'};}).catch(e=>{if(!closed)diagnostic={state:'lost',reason:e instanceof Error?e.message:'Tongue network unavailable'};});
+ void loadTongueNetwork(abort.signal).then(n=>{if(closed){void n.close();return;}network=n;diagnostic={state:'selected',reason:n.kind==='region'?'TongueSAM baseline ready · visible region only':'Neural model ready · show the tongue tip'};}).catch(e=>{if(!closed)diagnostic={state:'lost',reason:e instanceof Error?e.message:'Tongue network unavailable'};});
  let reference:{x:number;y:number;z:number}|undefined;
  const track=(pixels:Uint8ClampedArray,width:number,height:number,face:Landmark[],timestamp:number)=>{
   if(!face.length){if(last||busy)generation++;last=undefined;return;}
   if(network&&!busy&&!closed){busy=true;const epoch=generation;
    void network.infer(pixels,width,height).then(prediction=>{
     if(closed||epoch!==generation)return;
-    const observation=neuralTipObservation(prediction,face,width,height,timestamp);
-    diagnostic={state:observation?'tracking':'lost',reason:observation?'Neural tip detected · depth is a learned estimate':'Neural model cannot identify a visible tip',score:prediction.visibility,margin:prediction.peak};
+    failures=0;
+    let observation:TongueObservation|undefined;
+    if('box' in prediction){
+     const b=prediction.box;
+     if(b)observation={trackingMode:'region',x:(b[0]+b[2])/2,y:(b[1]+b[3])/2,lateral:0,lift:0,visibleFraction:0,observedAt:timestamp,confidence:prediction.score,outline:[{x:b[0],y:b[1]},{x:b[2],y:b[1]},{x:b[2],y:b[3]},{x:b[0],y:b[3]}]};
+     diagnostic={state:observation?'tracking':'lost',reason:observation?'TongueSAM visible-region box · tip and depth unavailable':'TongueSAM cannot identify a visible tongue region',score:prediction.score};
+    }else{
+     observation=neuralTipObservation(prediction,face,width,height,timestamp);
+     diagnostic={state:observation?'tracking':'lost',reason:observation?'Neural tip detected · depth is a learned estimate':'Neural model cannot identify a visible tip',score:prediction.visibility,margin:prediction.peak};
+    }
     if(observation&&reference){observation.lateral-=reference.x;observation.elevation=(observation.elevation??0)-reference.y;observation.extension=(observation.extension??0)-reference.z;}
     last=observation;
-   }).catch(e=>{if(!closed&&epoch===generation){last=undefined;diagnostic={state:'lost',reason:`Neural inference failed: ${String(e)}`};}}).finally(()=>{busy=false;if(closed)void network?.close();});
+   }).catch(e=>{if(!closed&&epoch===generation){last=undefined;failures++;diagnostic={state:'lost',reason:`Neural inference failed: ${String(e)}`};if(failures>=3){void network?.close();network=undefined;diagnostic.reason='Tongue inference paused after repeated failures · restart camera to retry';}}}).finally(()=>{busy=false;if(closed)void network?.close();});
   }
-  return last&&timestamp-(last.observedAt??0)<300?last:undefined;
+  return last&&timestamp-(last.observedAt??0)<(network?.kind==='region'?800:300)?last:undefined;
  };
  return Object.assign(track,{diagnostics:()=>({...diagnostic}),resetMotionReference(){reference=last?{x:last.lateral,y:last.elevation??0,z:last.extension??0}:undefined;last=undefined;generation++;},close(){closed=true;generation++;abort.abort();if(!busy)void network?.close();}});
 }
