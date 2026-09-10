@@ -52,6 +52,7 @@ def test_native_capture_freezes_authoritative_session_and_verified_export(tmp_pa
         assert summary['source']=='development-fixture' and not summary['anatomyValidated']
         assert len(summary['jobs'])==3 and summary['nativeCalls']==46
         assert summary['modelId']==summary['forecast']['model_id']
+        assert summary['forecast']['profile']=={'sample_rate_hz':48000,'frame_start_sample':4800,'frame_size':4096,'duration_s':.25}
         receipt=json.loads((output/'session-ledger.json').read_text())
         state=receipt['state'];design=state['designs'][summary['designId']]
         assert state['snapshot']['model_id']==summary['modelId']
@@ -76,3 +77,10 @@ def test_http_configuration_rejects_remote_or_incomplete_auth(tmp_path,monkeypat
     monkeypatch.setenv('SCIENCE_URL','http://127.0.0.1:8766');monkeypatch.delenv('SCIENCE_TOKEN',raising=False)
     with pytest.raises(ValueError):
         with live.backend_for(tmp_path,'session'):pass
+
+
+def test_missing_eligible_capture_retains_protocol_without_fitting(tmp_path):
+    with pytest.raises(ValueError,match='No two eligible'):
+        live.pipeline({'fit_trial_options':[]},tmp_path,None,'session')
+    assert (tmp_path/'protocol.json').exists()
+    assert not (tmp_path/'fit.json').exists()

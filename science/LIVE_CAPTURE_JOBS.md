@@ -20,7 +20,10 @@ configuration fails explicitly. Run identity deterministically identifies a new
 session; existing session history is never replaced by a repeated calibration run.
 
 `summary.json` includes `sessionId`, `modelId`, `sessionVersion` and `designId`,
-which bind future outcome commands to the authoritative session. `hypotheses.json`
+which bind future outcome commands to the authoritative session. Forecasts use
+the first selected calibration window's native sample rate and canonical frame
+size, with a declared 100 ms offset and 0.25 second synthesis duration. That
+immutable profile binds the later outcome; recorded audio is not resampled. `hypotheses.json`
 is exactly the session snapshot; `forecast.json` is its committed design;
 `session-ledger.json` retains verified state/history even when a later stage fails.
 Search and forecast jobs are collected through SessionController; geometry export

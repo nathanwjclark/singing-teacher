@@ -143,7 +143,10 @@ def pipeline(data, output, backend, session_id):
     best=fit['joint']['best']
     if best is None or state['snapshot'] is None: raise ValueError('No scorable candidate; attempted hypotheses retained')
     snapshot=state['snapshot'];write_json(output/'hypotheses.json',snapshot)
-    state,forecast=session_job('propose_design',{'design_id':'prospective-'+output.name,'target_observation_id':'future-voice-'+output.name,
+    rate=trials[0]['sample_rate_hz']
+    forecast_profile={'sample_rate_hz':rate,'frame_start_sample':round(rate*.1),
+                      'frame_size':trials[0]['frame_size'],'duration_s':.25}
+    state,forecast=session_job('propose_design',{'profile':forecast_profile,'design_id':'prospective-'+output.name,'target_observation_id':'future-voice-'+output.name,
         'experiments':[{'experiment_id':p,'pose':p,'JA':-3.,'f0_hz':180.,'gain':4.} for p in ['a','e','i']],
         'feature_scales':{name:{'unit':unit,'scale':scale,'assumption':'Engineering discrepancy scale, not calibrated noise'} for name,(unit,scale) in FEATURES.items()},
         'minimum_separation':.05,'retention_margin':.05,'maximum_discrepancy':2.,'max_synthesis_calls':3*len(snapshot['hypotheses'])})
