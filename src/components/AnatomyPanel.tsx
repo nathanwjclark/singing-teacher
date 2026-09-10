@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { createModelHair, disposeModelHairTextures } from '../lib/modelHair';
 import { createMuscleMotion } from '../lib/muscleMotion';
 import { createShoulderMotion } from '../lib/shoulderMotion';
 import { createBoneMotion } from '../lib/boneMotion';
@@ -53,7 +52,7 @@ export function AnatomyPanel({ frame, activeRegion = 'jaw', activeMuscles, demo 
     controls.enableDamping = true; controls.dampingFactor = .08;
     controls.enablePan = false; controls.minDistance = 35; controls.maxDistance = 185;
     controls.minPolarAngle = .3; controls.maxPolarAngle = Math.PI - .3;
-    // Front-facing head and shoulders crop, with room above the skull for hair.
+    // Front-facing head and shoulders crop.
     const restore = () => {
       const damping = controls.enableDamping;
       controls.enableDamping = false;
@@ -86,8 +85,6 @@ export function AnatomyPanel({ frame, activeRegion = 'jaw', activeMuscles, demo 
     const meshes: AnatomyMesh[] = [];
     const decorative: THREE.Mesh[] = [];
     const eyes: THREE.Group[] = [];
-    const hair = createModelHair();
-    head.add(hair);
     // Deliberately cartoon eyes; the surrounding anatomical surfaces come from the dataset.
     for (const side of [-1, 1]) {
       const eye = new THREE.Group();eye.position.set(side * 3.15,8,8.1);head.add(eye);eyes.push(eye);
@@ -135,7 +132,6 @@ export function AnatomyPanel({ frame, activeRegion = 'jaw', activeMuscles, demo 
     let lastAppearance = '';
     renderer.setAnimationLoop((time) => {
       const props=latest.current;const m=props.frame?.metrics;
-      hair.visible=props.muscles;
       const simulation=props.demo&&!props.frame;
       // In a webcam crop the hips are often missing. Use a conservative share
       // of shoulder tilt for chest lean; shoulderPose removes this parent motion
@@ -189,7 +185,6 @@ export function AnatomyPanel({ frame, activeRegion = 'jaw', activeMuscles, demo 
       disposed=true;abort.abort();observer.disconnect();renderer.setAnimationLoop(null);controls.dispose();
       renderer.domElement.removeEventListener('pointermove',inspect);renderer.domElement.removeEventListener('pointerleave',leave);renderer.domElement.removeEventListener('webglcontextlost',contextLost);
       for(const mesh of meshes){mesh.geometry.dispose();mesh.material.dispose();}
-      disposeModelHairTextures(hair);
       for(const mesh of decorative){mesh.geometry.dispose();const mat=mesh.material;if(Array.isArray(mat))mat.forEach(m=>m.dispose());else mat.dispose();}
       renderer.dispose();renderer.domElement.remove();reset.current=()=>{};
     };
@@ -213,7 +208,7 @@ export function AnatomyPanel({ frame, activeRegion = 'jaw', activeMuscles, demo 
     </div>
     <div className="anatomy-focus"><span className="anatomy-focus-dot"/><div><span>RELATED MUSCLES</span><strong>{focused.length?focused.join(' · '):'Full movement reference'}</strong></div></div>
     <p className="anatomy-disclaimer">Reference anatomy follows estimated visible movement.<br/>Muscle highlights are teaching cues, not measured tension.</p>
-    <div className="anatomy-credits"><a className="anatomy-attribution" href={`${import.meta.env.BASE_URL}models/ATTRIBUTION.md`} target="_blank" rel="noreferrer">Anatomy · Z-Anatomy / BodyParts3D ↗</a><a className="anatomy-attribution" href={`${import.meta.env.BASE_URL}models/hair/ATTRIBUTION.md`} target="_blank" rel="noreferrer">Hair · MakeHuman CC0 ↗</a></div>
+    <div className="anatomy-credits"><a className="anatomy-attribution" href={`${import.meta.env.BASE_URL}models/ATTRIBUTION.md`} target="_blank" rel="noreferrer">Anatomy · Z-Anatomy / BodyParts3D ↗</a></div>
   </section>;
 }
 export default AnatomyPanel;
