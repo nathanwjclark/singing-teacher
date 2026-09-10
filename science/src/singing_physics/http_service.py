@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+from concurrent.futures import Future
 import base64
 import hashlib
 import stat
@@ -69,10 +70,45 @@ class ScientificHTTPServer(ThreadingHTTPServer):
         self.native_capabilities = capabilities()
         self.jobs = JobService(root, max_workers=max_workers, timeout_s=timeout_s)
         self.session_lock = threading.RLock()
+        self.session_read_lock = threading.Lock()
+        self.session_reads = {}
         try:
             super().__init__((host, port), Handler)
         except BaseException:
             self.jobs.close()
+            raise
+
+    def read_session(self, identity, action):
+        """Share only concurrently executing verified reads; never cache past completion.
+
+        GET and POST read commands use the same flight. Writes keep the existing
+        session lock; a completed read cannot conceal a later committed mutation.
+        """
+        from .session import SessionController
+        key = (identity, action)
+        with self.session_read_lock:
+            future = self.session_reads.get(key)
+            leader = future is None
+            if leader:
+                future = Future()
+                self.session_reads[key] = future
+        if not leader:
+            return future.result(timeout=30)
+        try:
+            with self.session_lock:
+                controller = SessionController(self.jobs.root / 'sessions', self.jobs, identity)
+                result = controller.execute({'action': action})
+                content = json.dumps(result, allow_nan=False, separators=(',', ':')).encode()
+                # Publish before releasing the writer lock, so a post-write read
+                # can never join a previously completed state.
+                with self.session_read_lock:
+                    self.session_reads.pop(key, None)
+                    future.set_result(content)
+            return content
+        except BaseException as error:
+            with self.session_read_lock:
+                self.session_reads.pop(key, None)
+                future.set_exception(error)
             raise
 
     def exports(self, identity):
@@ -124,6 +160,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def _respond(self, status, value):
         content = json.dumps(value, allow_nan=False, separators=(',', ':')).encode()
+        self._respond_bytes(status, content)
+
+    def _respond_bytes(self, status, content):
         self.send_response(status)
         self.send_header('Content-Type', 'application/json')
         self.send_header('Content-Length', str(len(content)))
@@ -205,6 +244,9 @@ class Handler(BaseHTTPRequestHandler):
                     command = body
                 else:
                     self._respond(404, {'error': 'unknown_route'}); return
+                if isinstance(command, dict) and command in ({'action': 'state'}, {'action': 'replay'}):
+                    content = self.server.read_session(identity, command['action'])
+                    self._respond_bytes(200, content); return
                 with self.server.session_lock:
                     controller = SessionController(self.server.jobs.root / 'sessions', self.server.jobs, identity)
                     result = controller.execute(command)
