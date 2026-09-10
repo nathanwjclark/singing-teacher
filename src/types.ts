@@ -1,5 +1,16 @@
 export type Landmark = { x: number; y: number; z?: number; visibility?: number };
-export type Metrics = { mouthOpen: number; headTilt: number; shoulderTilt: number; brightness: number; motion: number };
-export type TrackingFrame = { face: Landmark[]; pose: Landmark[]; metrics: Metrics; timestamp: number };
+export type BodyRegion = 'jaw' | 'neck' | 'shoulders' | 'lips' | 'chest' | 'torso' | 'general';
+export type Metrics = {
+  mouthOpen: number; headTilt: number; shoulderTilt: number; brightness: number; motion: number;
+  headYaw?: number; headPitch?: number; shoulderDepth?: number; torsoLean?: number;
+  lipWidth?: number; jawAsymmetry?: number; shoulderElevation?: number;
+  distanceCm?: number; relativeDepth?: number; faceDepthSpan?: number;
+};
+export type TrackingFrame = {
+  face: Landmark[]; pose: Landmark[]; metrics: Metrics; timestamp: number;
+  worldPose?: Landmark[];
+  blendshapes?: Record<string, number>;
+  faceTransform?: number[];
+};
 export type TrackingStatus = 'idle' | 'loading' | 'tracking' | 'no-face' | 'error';
-export type Tip = { id: string; title: string; detail: string; severity: 'focus' | 'adjust' | 'good'; region: 'jaw' | 'neck' | 'shoulders' | 'general'; score: number };
+export type Tip = { id: string; title: string; detail: string; severity: 'focus' | 'adjust' | 'good'; region: BodyRegion; score: number; muscles?: string[] };
