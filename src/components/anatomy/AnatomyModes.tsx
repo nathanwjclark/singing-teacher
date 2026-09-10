@@ -5,6 +5,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { validateRecord, type CandidateAnatomy } from '../../contracts';
 import { verifyGeometry } from './geometryArtifact';
 import './AnatomyModes.css';
+import {ScientificGeometry} from '../science/ScientificGeometry';
 
 
 function disposeObject(root: THREE.Object3D) {
@@ -76,7 +77,7 @@ function GeometryView({ bytes }: { bytes: ArrayBuffer }) {
   return <div className="mapped-geometry" ref={mount}>{error && <p role="alert">{error}</p>}</div>;
 }
 
-export function AnatomyModes({ children, candidates = [] }: { children: ReactNode; candidates?: CandidateAnatomy[] }) {
+export function AnatomyModes({ children, candidates = [], scientificPreview=false, onScientificPreview }: { children: ReactNode; candidates?: CandidateAnatomy[]; scientificPreview?:boolean; onScientificPreview?:(enabled:boolean)=>void }) {
   const [mode, setMode] = useState<'default' | 'mapped'>('default');
   const [imported, setImported] = useState<CandidateAnatomy[]>([]);
   const [selectedId, setSelectedId] = useState('');
@@ -113,12 +114,14 @@ export function AnatomyModes({ children, candidates = [] }: { children: ReactNod
   }
   return <div className="anatomy-modes">
     <div className="anatomy-mode-switch" role="group" aria-label="Anatomy mode">
-      <button aria-pressed={mode === 'default'} onClick={() => setMode('default')}>Default</button>
-      <button aria-pressed={mode === 'mapped'} onClick={() => setMode('mapped')}>Mapped</button>
-      <span>{mode === 'default' ? 'Reference anatomy' : 'Engine candidates'}</span>
+      <button aria-pressed={!scientificPreview&&mode === 'default'} onClick={() => {onScientificPreview?.(false);setMode('default')}}>Default</button>
+      <button aria-pressed={!scientificPreview&&mode === 'mapped'} onClick={() => {onScientificPreview?.(false);setMode('mapped')}}>Mapped</button>
+      <button aria-pressed={scientificPreview} onClick={()=>onScientificPreview?.(true)}>Model</button>
+      <span>{scientificPreview?'Hypothesis':mode === 'default' ? 'Reference anatomy' : 'Engine candidates'}</span>
     </div>
-    <div className="default-anatomy" hidden={mode !== 'default'}>{children}</div>
-    {mode === 'mapped' && <section className="mapped-anatomy" aria-label="Mapped anatomy">
+    {scientificPreview&&<ScientificGeometry/>}
+    <div className="default-anatomy" hidden={scientificPreview||mode !== 'default'}>{children}</div>
+    {!scientificPreview&&mode === 'mapped' && <section className="mapped-anatomy" aria-label="Mapped anatomy">
       <div className="mapped-imports">
         <label>Import candidate JSON<input type="file" accept=".json,application/json" onChange={event => { void importCandidate(event.target.files?.[0]); event.target.value = ''; }} /></label>
         {options.length > 0 && <label>Candidate<select value={selected?.id ?? ''} onChange={event => { request.current++; setSelectedId(event.target.value); setVerified(null); setMessage(''); }}>{options.map(candidate => <option key={candidate.id} value={candidate.id}>{candidate.id} · {candidate.modelVersion}</option>)}</select></label>}

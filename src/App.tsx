@@ -26,6 +26,8 @@ import { evaluatePrediction } from './evaluation'
 import type { PredictionCommit } from './contracts'
 import { MotionCapturePanel } from './components/motion/MotionCapturePanel'
 import CoachLearningPanel from './components/coach/CoachLearningPanel'
+import { ScientificModelPanel } from './components/science/ScientificModelPanel'
+import { ScientificSideView } from './components/science/ScientificGeometry'
 import './App.css'
 
 const demoFrame: TrackingFrame = {
@@ -103,6 +105,8 @@ function StudioApp() {
   const [message, setMessage] = useState('')
   const [seconds, setSeconds] = useState(0)
   const [help, setHelp] = useState(false)
+  const [trackingEpoch,setTrackingEpoch]=useState(0)
+  const [scientificPreview,setScientificPreview]=useState(false)
   const onStatus = useCallback((value: TrackingStatus, detail?: string) => { setStatus(previous => value === 'idle' && previous === 'error' ? previous : value); if (value !== 'idle') setMessage(detail ?? ''); if(value === 'error') setActive(false) }, [])
   useEffect(() => { if (!active) return; const timer = window.setInterval(() => setSeconds(s => s + 1), 1000); return () => window.clearInterval(timer) }, [active])
   useEffect(() => {
@@ -126,9 +130,10 @@ function StudioApp() {
   exampleWorld[24] = {x:-.14,y:0,z:0,visibility:1};
   const exampleFrame: TrackingFrame = { ...demoFrame, tongue: demoScenarios[scenario].name === 'Tongue' ? {x:.5,y:.5,lateral:Math.sin(demoTime*1.5)*.8,lift:.5+Math.sin(demoTime)*.3,visibleFraction:.45,extension:(1+Math.sin(demoTime*1.2))*.35,elevation:Math.sin(demoTime*1.8)*.8} : undefined, pose: examplePose, worldPose: exampleWorld, blendshapes: {browInnerUp:brow,browOuterUpLeft:brow,browOuterUpRight:brow*.6,cheekSquintLeft:brow*.5,cheekSquintRight:brow*.5,mouthSmileLeft:brow*.7,mouthSmileRight:brow*.7}, metrics: { ...demoFrame.metrics, distanceCm: 65, relativeDepth: 1, headYaw: 0, headPitch: 0, shoulderDepth: 0, torsoLean: 0, ...demoScenarios[scenario].metrics } }
   const shownFrame = demo ? exampleFrame : active && (status === 'tracking' || status === 'no-face') ? frame : null
-  const anatomyMotion = useAnatomyMotion(shownFrame, demo)
-  const { tips, now: cueNow } = useRecentTips(shownFrame, demo ? 'demo' : active ? 'live' : 'idle')
+  const anatomyMotion = useAnatomyMotion(shownFrame, demo, trackingEpoch)
+  const { tips, now: cueNow } = useRecentTips(shownFrame, `${trackingEpoch}:${demo ? 'demo' : active ? 'live' : 'idle'}`)
   const selectedTip = tips.find(tip => tip.id === selectedTipId) ?? tips[0]
+  async function resetTracking(){await recorder.current?.stop().catch(()=>{});setFrame(null);setDemo(false);setScientificPreview(false);setSelectedTipId(undefined);setSeconds(0);setStatus('loading');setMessage('');setTrackingEpoch(n=>n+1);setActive(true)}
   function toggleCamera() { setDemo(false); setFrame(null); setSeconds(0); setStatus(active ? 'idle' : 'loading'); setMessage(''); setActive(!active) }
   return (
     <div className="app-shell">
@@ -137,6 +142,7 @@ function StudioApp() {
         <div className="studio-label"><span className={`status-dot ${active || demo ? 'on' : ''}`}/>{demo ? 'DEMO' : active ? status === 'loading' ? 'CONNECTING' : 'LIVE' : 'CAMERA OFF'}<span className="session-time">{String(Math.floor(seconds / 60)).padStart(2, '0')}:{String(seconds % 60).padStart(2, '0')}</span></div>
         <div className="header-controls">
           <button className={active ? 'start-button stop' : 'start-button'} onClick={toggleCamera}>{active ? <Square size={12}/> : <Camera size={15}/>} {active ? 'Stop camera' : 'Start camera'}</button>
+          <button className="demo-button" onClick={()=>void resetTracking()} title="Reset tracking and calibration; preserve saved recordings and the learned tongue profile">Reset tracking</button>
           <button className="demo-button" onClick={() => { setActive(false); setFrame(null); setStatus('idle'); setMessage(''); setDemo(!demo) }}><Play size={11}/>{demo ? 'Exit demo' : 'Demo'}</button>
           <button className="icon-button" aria-label="How it works" onClick={() => setHelp(!help)}><CircleHelp size={17}/></button>
         </div>
@@ -150,9 +156,9 @@ function StudioApp() {
       <main style={tab==='studio'?undefined:{display:'none'}}>
         {help && <aside className="help-box"><strong>Your practice, in three views.</strong> Allow camera access, frame your head and shoulders, and try a comfortable sustained vowel. The 3D movement guide follows facial landmarks and estimated body depth. Drag to orbit the model and select a cue to highlight related muscles. Camera distance is an approximation; use the depth reference to compare your position. Tips are experimental visual prompts, not an assessment of your voice or internal anatomy. Live analysis stays in your browser. Explicit phone snapshots go to your local capture server; recordings are saved only when you press Start recording. Camera and microphone start automatically when browser permissions allow. If your browser pauses audio, use Enable audio in the audio pane. You can stop either device at any time. <button onClick={() => setHelp(false)}>Got it</button></aside>}
         <div className="studio-grid">
-          <section className="studio-column"><div className="column-title"><span className="column-number">01</span><h2>Your view</h2><Camera size={16}/></div><div className="panel-body camera-wrap"><CameraPanel active={active} onFrame={setFrame} onStatus={onStatus} onStream={setVideoStream}/>{demo && <div className="demo-cover"><div className="demo-avatar"><MicVocal size={48}/></div><span className="eyebrow">SAMPLE SESSION</span><h3>{demoScenarios[scenario].title}</h3><p>{demoScenarios[scenario].detail}</p><div className="demo-scenarios" aria-label="Demo scenario">{demoScenarios.map((item, index) => <button key={item.name} aria-pressed={scenario === index} onClick={() => { setScenario(index); setDemoTime(0); setSelectedTipId(undefined) }}>{item.name}</button>)}</div><span className="demo-pill">Demo · camera is off</span></div>}</div></section>
-          <section className="studio-column"><div className="column-title"><span className="column-number">02</span><h2>Movement map</h2><Activity size={16}/></div><div className="panel-body"><AnatomyModes candidates={candidates}><AnatomyPanel motion={anatomyMotion} frame={shownFrame} activeRegion={selectedTip?.region} activeMuscles={selectedTip?.muscles} demo={demo}/></AnatomyModes></div></section>
-          <section className="studio-column"><div className="column-title"><span className="column-number">03</span><h2>Inside view</h2><Activity size={16}/></div><div className="panel-body"><SideAnatomyPanel motion={anatomyMotion}/></div></section>
+          <section className="studio-column"><div className="column-title"><span className="column-number">01</span><h2>Your view</h2><Camera size={16}/></div><div className="panel-body camera-wrap"><CameraPanel key={trackingEpoch} active={active} onFrame={setFrame} onStatus={onStatus} onStream={setVideoStream}/>{demo && <div className="demo-cover"><div className="demo-avatar"><MicVocal size={48}/></div><span className="eyebrow">SAMPLE SESSION</span><h3>{demoScenarios[scenario].title}</h3><p>{demoScenarios[scenario].detail}</p><div className="demo-scenarios" aria-label="Demo scenario">{demoScenarios.map((item, index) => <button key={item.name} aria-pressed={scenario === index} onClick={() => { setScenario(index); setDemoTime(0); setSelectedTipId(undefined) }}>{item.name}</button>)}</div><span className="demo-pill">Demo · camera is off</span></div>}</div></section>
+          <section className="studio-column"><div className="column-title"><span className="column-number">02</span><h2>Movement map</h2><Activity size={16}/></div><div className="panel-body"><AnatomyModes candidates={candidates} scientificPreview={scientificPreview} onScientificPreview={setScientificPreview}><AnatomyPanel motion={anatomyMotion} frame={shownFrame} activeRegion={selectedTip?.region} activeMuscles={selectedTip?.muscles} demo={demo}/></AnatomyModes></div></section>
+          <section className="studio-column"><div className="column-title"><span className="column-number">03</span><h2>Inside view</h2><Activity size={16}/></div><div className="panel-body">{scientificPreview?<ScientificSideView/>:<SideAnatomyPanel motion={anatomyMotion}/>}</div></section>
           <section className="studio-column coach-column"><div className="column-title"><span className="column-number">04</span><h2>Your next adjustments</h2><span className="live-tag">{demo ? 'DEMO' : active && status === 'tracking' ? 'LIVE' : 'COACH'}</span></div><div className="panel-body"><CoachingPanel tips={tips} demo={demo} tracking={!!shownFrame?.face.length} selectedTipId={selectedTip?.id} now={cueNow} onSelectTip={tip => setSelectedTipId(tip.id)}/></div></section>
         </div>
         {message && status === 'error' && <p className={`session-message ${status === 'error' ? 'error' : ''}`} role="status">{message}</p>}
@@ -160,6 +166,7 @@ function StudioApp() {
       </main>
       <main className="research-workspace" style={tab==='experiments'?undefined:{display:'none'}}>
         <h2>Experiments and evidence</h2><p>{recordingNotice}</p>
+        <ScientificModelPanel onPreview={()=>{setScientificPreview(true);setTab('studio')}}/>
         <AcousticMappingPanel/>
         <MotionCapturePanel frame={!demo&&active?frame:null} videoStream={videoStream} audioStream={audioStream}/>
         <CoachLearningPanel videoStream={videoStream} audioStream={audioStream}/>

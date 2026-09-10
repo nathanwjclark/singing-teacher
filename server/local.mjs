@@ -1,4 +1,5 @@
 import http from 'node:http';
+import {scienceRoutes} from './science.mjs';
 import https from 'node:https';
 import {readFile,writeFile,mkdir} from 'node:fs/promises';
 import {randomBytes,randomUUID,timingSafeEqual} from 'node:crypto';
@@ -12,6 +13,7 @@ const localAddresses=new Set(['127.0.0.1','::1',...Object.values(networkInterfac
 const allowedHosts=new Set(['localhost','[::1]',hostname().toLowerCase(),hostname().toLowerCase()+'.local',...localAddresses,...(process.env.PHONE_BASE_URL?[new URL(process.env.PHONE_BASE_URL).hostname]:[])]);
 const mime={'.html':'text/html','.js':'text/javascript','.css':'text/css','.json':'application/json','.png':'image/png','.svg':'image/svg+xml','.bin':'application/octet-stream','.md':'text/plain','.wasm':'application/wasm','.mp4':'video/mp4'};
 const json=(res,status,body)=>{res.writeHead(status,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify(body))};
+const handleScience=scienceRoutes({repo:resolve(import.meta.dirname,'..'),dataRoot,json});
 const equal=(a,b)=>typeof a==='string'&&a.length===b.length&&timingSafeEqual(Buffer.from(a),Buffer.from(b));
 async function body(req){let size=0;const chunks=[];for await(const chunk of req){size+=chunk.length;if(size>12*1024*1024)throw Object.assign(Error('Request too large'),{status:413});chunks.push(chunk)}try{return JSON.parse(Buffer.concat(chunks).toString()||'{}')}catch{throw Object.assign(Error('Invalid JSON'),{status:400})}}
 function phoneBase(value){if(!value)return null;const u=new URL(value);if(u.protocol!=='https:'||u.username||u.password||['localhost','127.0.0.1','::1','[::1]'].includes(u.hostname))throw Object.assign(Error('Use a phone-reachable trusted HTTPS URL, not localhost'),{status:400});return u.origin}
@@ -20,6 +22,7 @@ const serverHandler=async(req,res)=>{try{
   if(!allowedHosts.has(new URL('http://'+req.headers.host).hostname.toLowerCase()))return json(res,403,{error:'Unrecognized local host. Configure PHONE_BASE_URL for this hostname.'});
   // Refuse cross-origin browser writes; pairing tokens authorize phone routes.
   if(req.method==='POST'&&req.headers.origin&&new URL(req.headers.origin).host!==req.headers.host)return json(res,403,{error:'Cross-origin write refused'});
+  if(await handleScience(req,res,url))return;
   if(url.pathname==='/api/status')return json(res,200,{local:true,https:!!process.env.HTTPS_CERT,phoneBaseUrl:process.env.PHONE_BASE_URL||null,engineAvailable:false,phoneSetupUrl:process.env.PHONE_SETUP_URL||null,certificateFingerprint:process.env.PHONE_CA_FINGERPRINT||null});
   if(url.pathname==='/api/pair'&&req.method==='POST'){
     const remote=req.socket.remoteAddress;
