@@ -49,12 +49,25 @@ budgets remain bounded. See [HTTP_SERVICE.md](HTTP_SERVICE.md) for the worker AP
 
 ## Recording handoff
 
+B's `/api/science/run`, `/status` and `/asset` routes coexist with the durable
+worker routes. With this launcher, the saved-capture run uses the running worker
+and publishes its authoritative `sessionId`, `modelId`, `sessionVersion` and
+`designId`; it does not open a competing scheduler. See
+[LIVE_CAPTURE_JOBS.md](LIVE_CAPTURE_JOBS.md). A private `science-input.json` may
+set `evidenceKind:"development-fixture"` for explicitly generated test captures;
+ordinary configured captures retain the human-observation declaration.
+
 - Combined native exports: [SESSION_BUNDLE.md](SESSION_BUNDLE.md) verifies and
   unpacks original video/probe archives without asserting simultaneous capture.
 - Ordinary native voice: [SINGING_SESSION_IMPORT.md](SINGING_SESSION_IMPORT.md)
   creates canonical calibration and an optional versioned ingestion command.
 - External probe recordings: [PROBE_IMPORT.md](PROBE_IMPORT.md) retains exact
   original source/calibration bindings and produces supported probe-fit inputs.
+- Later voice recordings: [SINGING_OUTCOME_IMPORT.md](SINGING_OUTCOME_IMPORT.md)
+  emits a versioned outcome command bound to the committed profile and capture
+  time. Submit it to the published session, poll and collect its numerical job.
+- Heldout probe targets: [PROBE_EVALUATION.md](PROBE_EVALUATION.md) reruns canonical
+  processing from original bytes and scores frozen forecasts without fitting.
 
 The numerical service uses actual native physics and B's canonical extractors.
 Live Astra invocation and the user-facing experiment flow remain B integration

@@ -1,5 +1,33 @@
 # Current Lead A integration status
 
+## B runtime continuation (main `1067c89`)
+
+The saved-capture app run now uses the authoritative session in the running HTTP
+worker. Search and forecast collection preserve its model/version/design IDs;
+verified native geometry is fetched from the same owner. B's status/run/asset and
+USB routes coexist with A's jobs/session routes after resolving their overlap.
+Standalone scientific runs remain supported without a second scheduler.
+
+Frozen forecast profiles now support native 44.1/48/96 kHz observations. The new
+outcome importer preserves the selected original frame and native capture time,
+then emits a versioned command for actual scoring, update and replay. A heldout
+probe scorer reruns canonical DSP from original bytes and reports per-hypothesis
+errors without fitting or asserting statistical confidence. See
+[LOCAL_HARNESS.md](LOCAL_HARNESS.md), [LIVE_CAPTURE_JOBS.md](LIVE_CAPTURE_JOBS.md),
+[SINGING_OUTCOME_IMPORT.md](SINGING_OUTCOME_IMPORT.md) and
+[PROBE_EVALUATION.md](PROBE_EVALUATION.md).
+
+Fresh verification: **37 focused Python tests passed** (37.44 s), plus **five
+native capture/app pipeline tests** (52.62 s). The latter includes the real Node
+app POST, native 48 kHz import, shared HTTP session and published geometry.
+The TypeScript outcome regression separately executes both 44.1 and 48 kHz
+original recording → native update → new model → replay; strict NodeNext passes.
+Build/lint and **five browser tests** pass, including unavailable baseline display.
+Independent review is recorded in [RUNTIME_REVIEW.md](RUNTIME_REVIEW.md).
+Evidence for these new checks is generated software data, not a human session.
+Live Astra, user-facing outcome recording and physical-device demonstration remain
+B-owned integration work. No paid API calls or upstream deployment were performed.
+
 ## Callable session integration
 
 The local app now forwards scientific jobs and durable session commands to the

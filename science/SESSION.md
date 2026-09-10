@@ -24,9 +24,9 @@ Dispatch itself adds an event, so always use the returned version.
 | register_model | snapshot: frozen PCM hypotheses dictionary |
 | ingest_calibration | document: canonical PCM observation document |
 | search | parameters: anatomy_bounds, nuisance_profiles, optional max_synthesis_calls, rounds, seed |
-| propose_design | parameters: design_id, target_observation_id, experiments, feature_scales; optional minimum_separation, max_synthesis_calls, retention_margin, maximum_discrepancy |
+| propose_design | parameters: design_id, target_observation_id, experiments, feature_scales; optional minimum_separation, max_synthesis_calls, retention_margin, maximum_discrepancy, profile |
 | collect_job | job_id |
-| submit_outcome | design_id, parameters: experiment_id, observation_id, artifact_id, observed_at, pcm, source_kind |
+| submit_outcome | design_id, parameters: experiment_id, observation_id, artifact_id, observed_at, pcm, source_kind; optional sample_rate_hz, frame_start_sample, frame_size matching the committed profile |
 | record_attempt | design_id, attempt_id, status (stopped or failed), reason |
 | record_sensation | attempt_id, text |
 
