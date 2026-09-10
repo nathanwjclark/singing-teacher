@@ -47,15 +47,29 @@ export function AnatomyPanel({ frame, activeRegion = 'jaw', activeMuscles, demo 
     const camera = new THREE.PerspectiveCamera(36, 1, .1, 600);
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true; controls.dampingFactor = .08;
-    controls.enablePan = false; controls.minDistance = 45; controls.maxDistance = 185;
+    controls.enablePan = false; controls.minDistance = 35; controls.maxDistance = 185;
     controls.minPolarAngle = .3; controls.maxPolarAngle = Math.PI - .3;
-    const restore = () => { camera.position.set(16, 144, 127); controls.target.set(0, 140, 0); controls.update(); };
+    // Front-facing head and shoulders crop, with room above the skull for hair.
+    const restore = () => {
+      const damping = controls.enableDamping;
+      controls.enableDamping = false;
+      controls.update(); // Consume any remaining orbit momentum before restoring.
+      camera.position.set(0, 153.5, 72);
+      controls.target.set(0, 153.5, 0);
+      controls.update();
+      controls.enableDamping = damping;
+    };
     reset.current = restore; restore();
     scene.add(new THREE.HemisphereLight(0xe8fff0, 0x303325, 2.2));
     const key = new THREE.DirectionalLight(0xffefd5, 3.2);key.position.set(-40,190,80);scene.add(key);
     const rim = new THREE.DirectionalLight(0x78d6c0, 2.7);rim.position.set(50,160,-50);scene.add(rim);
     const fill = new THREE.DirectionalLight(0xe9c3b4, .8);fill.position.set(25,110,60);scene.add(fill);
-    const torso = new THREE.Group();torso.position.set(0,130,0);scene.add(torso);
+    // Camera landmarks describe the unmirrored sensor image. Reflect the entire
+    // physical rig once, matching the webcam's scaleX(-1), including yaw and roll.
+    // Reflect geometry rather than the canvas so picking and orbit drag stay in
+    // normal screen coordinates. Do not invert the metric signs a second time.
+    const mirror = new THREE.Group();mirror.scale.x = -1;scene.add(mirror);
+    const torso = new THREE.Group();torso.position.set(0,130,0);mirror.add(torso);
     const head = new THREE.Group();head.position.set(0,21,-1);torso.add(head);
     const jaw = new THREE.Group();jaw.position.set(0,5,1);head.add(jaw);
     const rigPivots = { torso: new THREE.Vector3(0,130,0), head: new THREE.Vector3(0,151,-1), jaw: new THREE.Vector3(0,156,0) };
@@ -152,7 +166,7 @@ export function AnatomyPanel({ frame, activeRegion = 'jaw', activeMuscles, demo 
   }, []);
 
   return <section className="anatomy-panel" aria-label="Interactive anatomical movement model">
-    <div className="anatomy-heading"><span className="anatomy-kicker">ANATOMY IN MOTION</span><span className="anatomy-view">3D REFERENCE</span></div>
+    <div className="anatomy-heading"><span className="anatomy-kicker">ANATOMY IN MOTION</span><span className="anatomy-view">MIRRORED · 3D</span></div>
     <div className="anatomy-toolbar" aria-label="Anatomy layers">
       <button type="button" aria-pressed={bones} onClick={()=>setBones(!bones)}>Bones</button>
       <button type="button" aria-pressed={muscles} onClick={()=>setMuscles(!muscles)}>Muscles</button>
