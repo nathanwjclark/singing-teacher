@@ -36,7 +36,6 @@ export function NativePullButton() {
     <button className="native-pull-button" type="button" onClick={() => void pull()} disabled={busy||processing} title="Copy the latest saved native capture over USB. Keep the iPhone unlocked.">
       {busy||processing?<LoaderCircle size={14} className="capture-spinner" aria-hidden="true"/>:<Cable size={14} aria-hidden="true"/>}<span>{busy ? 'Pulling…' : processing ? progress?.label??(outcome.status==='running'?'Scoring capture…':'Fitting model…') : 'Pull iPhone'}</span>
     </button>
-    {processing&&<span className="capture-progress-label" role="status">{progress?.label??'Processing privately on this Mac…'}</span>}
     {notice && <div className={`native-pull-notice${notice.error ? ' is-error' : ''}`} role={notice.error ? 'alert' : 'status'}>
       <button className="native-pull-dismiss" type="button" aria-label="Dismiss import status" onClick={() => setNotice(null)}><X size={14}/></button>
       <strong>{busy ? 'USB import' : notice.error ? 'iPhone needs attention' : notice.receipt?.verification === 'native-rgbd-verified' ? 'Capture verified' : 'Capture downloaded'}</strong>
