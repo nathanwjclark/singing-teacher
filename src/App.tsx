@@ -162,7 +162,7 @@ function StudioApp() {
     <div className="app-shell">
       <CaptureProcessingOverlay/>
       <header className="site-header">
-        <a className="brand" href="./"><span className="brand-mark"><MicVocal size={19}/></span>singing<span className="brand-light">teacher</span></a>
+        <a className="brand" href="./" aria-label="Tract Star home"><img src="/brand/tract-star-mark.png" alt="" width={32} height={32} style={{marginRight:8,objectFit:'contain'}}/>tract<span className="brand-light">star</span></a>
         <div className="studio-label"><span className={`status-dot ${active || demo ? 'on' : ''}`}/>{demo ? 'DEMO' : active ? status === 'loading' ? 'CONNECTING' : 'LIVE' : 'CAMERA OFF'}<span className="session-time">{String(Math.floor(seconds / 60)).padStart(2, '0')}:{String(seconds % 60).padStart(2, '0')}</span></div>
         <div className="header-controls">
           <button className={active ? 'start-button stop' : 'start-button'} onClick={toggleCamera}>{active ? <Square size={12}/> : <Camera size={15}/>} {active ? 'Stop camera' : 'Start camera'}</button>
