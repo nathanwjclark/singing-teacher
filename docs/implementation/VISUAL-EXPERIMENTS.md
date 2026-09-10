@@ -58,10 +58,9 @@ adapter. The UI distinguishes **General explanation**, **Your model's
 prediction** and **Your recorded result**. Unsupported mechanisms remain
 educational rather than receiving fabricated personalized geometry or sound.
 
-At this documentation checkpoint, teaching browser acceptance is still pending;
-the existence of component and adapter commits is not a final end-to-end pass.
-The [teaching plan](../physiology/visual-teaching-plan.md) defines acceptance.
-The recovery audit is maintained separately on the fusion integration branch at
-commit `b4a6059`, in `docs/coordination/2026-09-10-delivery-audit.md`; it records
-active ownership, preserved user changes and evidence limits without duplicating
-that ledger here.
+Native teaching browser acceptance passed with real HTTP geometry, explicit
+A/B synthesis playback and a recorded numerical outcome, followed by historical,
+educational, reduced-motion and mobile checks. The decision in that fixture was
+seeded and no paid model call was made. See the [delivery audit](../coordination/2026-09-10-delivery-audit.md)
+for integration receipts and remaining physical/human evidence. The
+[teaching plan](../physiology/visual-teaching-plan.md) defines acceptance.
