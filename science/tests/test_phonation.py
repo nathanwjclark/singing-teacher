@@ -92,3 +92,22 @@ def test_tract_only_generator_does_not_require_source_change():
         assert result['fixed_source']['best']['score']<1e-8
         assert result['fixed_anatomy']['best']['score']>1e-8
         assert result['identifiability']=='not_established'
+
+
+@pytest.mark.parametrize('missing',[False,True])
+def test_frozen_score_preserves_baseline_when_extractor_changes_or_disappears(monkeypatch,missing):
+    with Engine() as engine:
+        doc,candidates=fixture(engine)
+        fitted=fit_phonation(engine,doc,candidates=candidates,max_synthesis_calls=9,enabled=True)
+        frozen=forecast_phonation(engine,fitted,family='joint',candidate_id='0',reference_trial_id='cal',
+            pose='a',controls={'JA':-3,'F0':200,'PR':8000,'gain':1.},target_id='later-unavailable')
+        before=deepcopy(frozen)
+        metadata=_metadata('later-unavailable',44100,'b'*64,'engine-generated')
+        def signature():
+            if missing:raise FileNotFoundError('removed optional extractor')
+            return {'changed-source':'c'*64}
+        monkeypatch.setattr('singing_physics.phonation.extractor_signature',signature)
+        result=score_phonation_forecast(frozen,[0.]*4096,metadata)
+        assert result['status']=='unsupported' and result['score'] is None
+        assert result['baseline_preserved'] and not result['model_updated']
+        assert frozen==before

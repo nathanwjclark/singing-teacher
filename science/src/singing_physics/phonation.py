@@ -258,7 +258,12 @@ def score_phonation_forecast(frozen,pcm,metadata):
     if forecast.get('kind')!='frozen-phonation-forecast-1' or metadata.get('observationId')!=forecast['target_id']:raise ValueError('Wrong heldout target')
     observed_at=datetime.fromisoformat(metadata['evidenceAt'])
     if observed_at.tzinfo is None or not datetime.fromisoformat(forecast['sealed_at'])<observed_at<=datetime.now(timezone.utc):raise ValueError('Heldout observation must follow forecast')
-    if extractor_signature()!=forecast['extractor_signature']:return _status('unsupported','Frozen extractor unavailable or changed')
+    try:
+        compatible=extractor_signature()==forecast['extractor_signature']
+    except OSError:
+        compatible=False
+    if not compatible:
+        return {**_status('unsupported','Frozen extractor unavailable or changed'),'model_updated':False,'score':None}
     observed=measure_phonation(pcm,44100,metadata)
     if observed['frameSha256'] in forecast['excluded_frame_hashes']:raise ValueError('Calibration frame reused as heldout')
     score=_score(forecast['record'],observed)
