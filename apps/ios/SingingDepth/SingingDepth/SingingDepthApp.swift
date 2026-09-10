@@ -20,8 +20,8 @@ struct ContentView: View {
         VStack(spacing: 12) {
             Toggle("Acoustic mapping", isOn: $mapping).disabled(capture.recording || capture.exporting || probe.running)
                 .onChange(of: mapping) { _, selected in
-                    probe.stop(reason: "mode-change")
-                    capture.setProbeMode(selected) { if selected { probe.prepare() } }
+                    probe.setModeActive(selected)
+                    capture.setProbeMode(selected) { if selected && mapping { probe.prepare() } }
                 }
             if mapping { AcousticProbeView(probe: probe) } else {
             Text("Mouth surface capture").font(.title2.bold())

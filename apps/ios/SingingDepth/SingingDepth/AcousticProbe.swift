@@ -33,6 +33,9 @@ final class AcousticProbe: ObservableObject {
     private var tapInstalled = false
     private var capturePose = "", capturePlacement = ""
     private var firstHost: UInt64?
+    private var firstHostSample = 0
+    private var modeActive = false
+    private var preparationGeneration = 0
     private let protocolID = "external-sweep-pilot-1"
     init() {
         engine.attach(player)
@@ -52,9 +55,16 @@ final class AcousticProbe: ObservableObject {
         func ports(_ p: [AVAudioSessionPortDescription]) -> [[String: Any]] { p.map { ["type": $0.portType.rawValue, "uid": $0.uid, "name": $0.portName, "dataSource": $0.selectedDataSource?.dataSourceName ?? "unknown"] } }
         return ["inputs": ports(s.currentRoute.inputs), "outputs": ports(s.currentRoute.outputs), "sampleRateHz": s.sampleRate, "outputVolume": s.outputVolume, "category": s.category.rawValue, "mode": s.mode.rawValue, "categoryOptions": s.categoryOptions.rawValue, "inputLatencySeconds": s.inputLatency, "outputLatencySeconds": s.outputLatency, "ioBufferDurationSeconds": s.ioBufferDuration, "inputChannels": s.inputNumberOfChannels, "outputChannels": s.outputNumberOfChannels, "processingVerifiedAbsent": false, "measurementModeRequested": true, "voiceProcessingEnabled": engine.inputNode.isVoiceProcessingEnabled, "device": UIDevice.current.model, "systemVersion": UIDevice.current.systemVersion]
     }
+    func setModeActive(_ active: Bool) {
+        modeActive = active; preparationGeneration += 1
+        if !active { ready = false; levelValid = false; stop(reason: "mode-change") }
+    }
     func prepare() {
-        guard !running else { return }
+        guard modeActive, !running else { return }
+        preparationGeneration += 1
+        let generation = preparationGeneration
         AVAudioApplication.requestRecordPermission { allowed in DispatchQueue.main.async {
+            guard self.modeActive, self.preparationGeneration == generation else { return }
             guard allowed else { self.status = "Microphone permission is required."; return }
             do {
                 let s = AVAudioSession.sharedInstance()
@@ -118,14 +128,14 @@ final class AcousticProbe: ObservableObject {
             engine.connect(player, to: engine.mainMixerNode, format: format)
             player.volume = 1; engine.mainMixerNode.outputVolume = 1
             let inputFormat = engine.inputNode.outputFormat(forBus: 0)
-            lock.lock(); raw = Data(); buffers = []; firstHost = nil; accepting = true; lock.unlock()
+            lock.lock(); raw = Data(); buffers = []; firstHost = nil; firstHostSample = 0; accepting = true; lock.unlock()
             engine.inputNode.installTap(onBus: 0, bufferSize: 1024, format: inputFormat) { [weak self] buffer, time in
                 guard let self, let data = buffer.floatChannelData else { return }
                 self.lock.lock(); defer { self.lock.unlock() }
                 guard self.accepting else { return }
                 let n = Int(buffer.frameLength), start = self.raw.count / 4
                 self.raw.append(UnsafeBufferPointer(start: data[0], count: n))
-                if self.firstHost == nil, time.isHostTimeValid { self.firstHost = time.hostTime }
+                if self.firstHost == nil, time.isHostTimeValid { self.firstHost = time.hostTime; self.firstHostSample = start }
                 var clipped = 0; for i in 0..<n { if abs(data[0][i]) >= 0.999 { clipped += 1 } }
                 self.buffers.append(["startSample": start, "sampleCount": n, "hostTime": time.isHostTimeValid ? String(time.hostTime) as Any : NSNull(), "sampleTime": time.isSampleTimeValid ? time.sampleTime as Any : NSNull(), "sampleRateHz": time.sampleRate, "clippedSamples": clipped, "sourceChannels": buffer.format.channelCount, "retainedChannel": 0, "asbdFormatID": buffer.format.streamDescription.pointee.mFormatID, "asbdFormatFlags": buffer.format.streamDescription.pointee.mFormatFlags, "bitsPerChannel": buffer.format.streamDescription.pointee.mBitsPerChannel])
             }
@@ -146,7 +156,7 @@ final class AcousticProbe: ObservableObject {
         player.stop(); engine.stop(); timer?.cancel(); timer = nil
         if tapInstalled { engine.inputNode.removeTap(onBus: 0); tapInstalled = false }
         lock.lock(); accepting = false
-        let received = raw, stamps = buffers, host = firstHost
+        let received = raw, stamps = buffers, host = firstHost, hostSample = firstHostSample
         lock.unlock()
         guard running else { return }; running = false; ready = false
         status = "Saving private probe recording…"
@@ -163,7 +173,7 @@ final class AcousticProbe: ObservableObject {
                     try data.write(to: folder.appendingPathComponent(name), options: [.atomic,.completeFileProtection])
                     return ["path": name, "sha256": self.digest(data), "byteCount": data.count, "format": "float32-le", "channels": 1, "sampleCount": data.count/4]
                 }
-                let offset = host.map { (AVAudioTime.seconds(forHostTime: scheduled) - AVAudioTime.seconds(forHostTime: $0))*sr }
+                let offset = host.map { (AVAudioTime.seconds(forHostTime: scheduled) - AVAudioTime.seconds(forHostTime: $0))*sr + Double(hostSample) }
                 let segments: [[String: Any]] = (0..<3).map { i in
                     let start = Int(sr*(0.5+Double(i)*1.5))
                     return ["driveStartSample": start, "receivedStartSample": offset.map { Int($0.rounded())+start } as Any? ?? NSNull(), "sampleCount": Int(sr*1.5), "repetition": i]
