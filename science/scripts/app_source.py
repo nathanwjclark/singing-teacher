@@ -131,8 +131,13 @@ def run(root,phase,output):
         command.update(command_id=identity,expected_version=state['version']);save(intent_path,{'command':command,'binding':binding,'baselineModelId':baseline})
     operation={'fit_source':'fit_phonation','forecast_source':'forecast_phonation','score_source':'score_phonation',
         'forecast_source_bank':'forecast_phonation_bank','score_source_bank':'score_phonation_bank'}[command['action']]
-    def publish(result,state):
-        if result is None:raise ValueError('Optional source worker failed; baseline retained')
+    def publish(result,state,job):
+        if result is None:
+            save(output/'failure-receipt.json',{'status':'failed','jobId':job.get('job_id'),'commandKey':job.get('key'),
+                'operation':operation,'baselineModelId':baseline,'sessionId':session_id,
+                'workerStatus':job.get('status'),'reason':job.get('error') or 'Optional source worker returned no result',
+                'baselinePreserved':True,'retryRequiresNewAttempt':True})
+            raise ValueError('Optional source worker failed; baseline retained; retry creates a new explicit attempt')
         ranking=next((r for r in reversed(state.get('source_rankings',[])) if r['forecast_id']==binding.get('forecastId')),None)
         lineage={'conditionalRanking':{'rankingId':ranking['ranking_id'],'parentRankingId':ranking['parent_ranking_id'],
             'version':ranking['version'],'bankSha256':ranking['bank_sha256'],'sourceModelId':ranking['source_model_id'],
@@ -142,7 +147,7 @@ def run(root,phase,output):
     if not state.get('pending'):
         done=next((j for j in state['jobs'] if j.get('request',{}).get('operation')==operation and j.get('key')== 'session:'+hashlib.sha256(json.dumps([session_id,identity],sort_keys=True,separators=(',',':')).encode()).hexdigest()),None)
         if done:
-            publish(done.get('result'),state);return
+            publish(done.get('result'),state,done);return
         state=backend.execute(command)['state']
     pending=state['pending']
     expected_key='session:'+hashlib.sha256(json.dumps([session_id,identity],sort_keys=True,separators=(',',':')).encode()).hexdigest()
@@ -155,7 +160,7 @@ def run(root,phase,output):
     else:raise ValueError('Source job is still running; retry to recover')
     state=backend.execute({'action':'collect_job','command_id':identity+'-collect','expected_version':state['version'],'job_id':job})['state']
     completed=next(j for j in state['jobs'] if j['job_id']==job)
-    publish(completed.get('result'),state)
+    publish(completed.get('result'),state,completed)
 
 
 if __name__=='__main__':
