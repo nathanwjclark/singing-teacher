@@ -61,3 +61,29 @@ def lip_distance_residual(observation, upper_uv, lower_uv, prediction, *,
             "model_sigma_m": model_sigma_m, "combined_sigma_m": sigma,
             "residual": (value - measurement["value_m"]) / sigma,
             "prediction": dict(prediction)}
+
+
+def joint_lip_measurement(observation, upper_uv, lower_uv, *, trial_id, split,
+                          correspondence_id, model_sigma_m):
+    """Create fit_joint geometry_observations payload from measured depth endpoints.
+
+    The receiving fitter validates trial/timebase/frame pairing and split. This
+    helper only encodes the observed distance, never a hidden anatomy parameter.
+    """
+    for label, value in (("trial_id", trial_id), ("correspondence_id", correspondence_id),
+                         ("evidence_id", observation.evidence_id), ("timebase_id", observation.timebase_id)):
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError(f"{label} must be a nonempty string")
+    if split not in ("calibration", "held_out"):
+        raise ValueError("split must be calibration or held_out")
+    _finite(model_sigma_m, "model_sigma_m", positive=True)
+    _finite(observation.timestamp_seconds, "timestamp_seconds")
+    _finite(observation.sync_uncertainty_seconds, "sync_uncertainty_seconds")
+    if observation.sync_uncertainty_seconds < 0:
+        raise ValueError("sync uncertainty cannot be negative")
+    measured = surface_distance(observation, upper_uv, lower_uv)
+    _finite(measured["value_m"], "observed lip distance", positive=True)
+    _finite(measured["sigma_m"], "observed lip sigma", positive=True)
+    return {**measured, "kind": "visible_lip_distance", "operator_id": OPERATOR_ID,
+            "trial_id": trial_id, "split": split, "correspondence_id": correspondence_id,
+            "model_sigma_m": float(model_sigma_m)}

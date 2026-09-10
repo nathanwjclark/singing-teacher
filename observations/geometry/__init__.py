@@ -5,3 +5,6 @@ __all__ = ["DepthFrame", "SurfaceObservation", "reconstruct", "surface_distance"
 from .lips import lip_predictions_from_ema, lip_distance_residual
 
 __all__ += ["lip_predictions_from_ema", "lip_distance_residual"]
+from .lips import joint_lip_measurement
+
+__all__ += ["joint_lip_measurement"]

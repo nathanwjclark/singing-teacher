@@ -111,3 +111,25 @@ def test_native_lip_marker_operator_units_provenance_and_residual(tmp_path):
         path.write_text(text)
         with pytest.raises(ValueError):
             lip_predictions_from_ema(path)
+
+
+def test_joint_lip_payload_is_measured_distance_with_trial_evidence():
+    from observations.geometry import joint_lip_measurement
+    observation = reconstruct(frame())
+    kwargs = dict(trial_id="trial-a", split="calibration", correspondence_id="outer-lip-marker-protocol-v1", model_sigma_m=.002)
+    payload = joint_lip_measurement(observation, [0, 1], [2, 1], **kwargs)
+    assert payload["kind"] == "visible_lip_distance"
+    assert payload["trial_id"] == "trial-a"
+    assert payload["value_m"] == pytest.approx(.01)
+    assert payload["model_sigma_m"] == .002
+    assert payload["timebase_id"] == "session-clock"
+    assert payload["evidence_id"] == "synthetic-depth-1"
+    assert payload["timestamp_seconds"] == 2.
+    assert payload["sigma_m"] > 0
+    assert "parameter" not in payload
+    for changes in ({"trial_id": ""}, {"split": "unknown"}, {"correspondence_id": " "}, {"model_sigma_m": 0}):
+        with pytest.raises(ValueError):
+            joint_lip_measurement(observation, [0, 1], [2, 1], **{**kwargs, **changes})
+    missing = reconstruct(frame(depth=None, missing_reason="unavailable"))
+    with pytest.raises(ValueError, match="no valid"):
+        joint_lip_measurement(missing, [0, 1], [2, 1], **kwargs)
