@@ -26,3 +26,5 @@ node --experimental-strip-types --test science/scripts/import_singing_outcome.te
 ```
 
 The regression seals a real native design through `SessionController`/`JobService`, generates a subsequent original native PCM bundle, imports its exact frame, submits the emitted command and runs the actual native update. It checks a new model/evidence lineage and replay, plus wrong pose and pre-commit capture rejection. No prerecorded favorable outcome or hand-built update PCM bypass is used. Scientific evidence is synthetic and conditional; passing verifies connected execution, not human recovery.
+
+Verified end to end at both **44100Hz and48000Hz** with the frozen-profile operator, controller whitelist and service whitelist integrated. Both original-bundle imports executed their emitted command, produced native update/model lineage and replayed successfully. Wrong session, pose and pre-commit timestamps were rejected. Strict NodeNext TypeScript checking also passed. The 48kHz test generates its fixture at that declared rate before writing native bytes; the importer never resamples those bytes.
