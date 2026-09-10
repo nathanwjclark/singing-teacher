@@ -64,20 +64,43 @@ def validate_observations(engine, document):
     return rows, mask, np.concatenate(data)
 
 
-def fit(engine: Engine, observations, *, starts=6, max_evaluations=100, seed=1):
+def fit(engine: Engine, observations, *, starts=6, max_evaluations=100, seed=1, max_spectrum_evaluations=20000):
     if type(starts) is not int or not 1 <= starts <= 32 or type(max_evaluations) is not int or not 5 <= max_evaluations <= 500:
         raise ValueError("starts must be 1-32 and max_evaluations 5-500")
     rows, mask, target = validate_observations(engine, observations)
+    if type(max_spectrum_evaluations) is not int or max_spectrum_evaluations < len(rows):
+        raise ValueError("max_spectrum_evaluations must fund at least one complete observation prediction")
     begin = time.monotonic()
     calls = 0
+    spectrum_calls = 0
+    best_seen = None
+    exhausted = False
+
+    class BudgetExhausted(Exception):
+        pass
     low, span = BOUNDS[:, 0], np.ptp(BOUNDS, axis=1)
 
     def residual(normalized):
-        nonlocal calls
+        nonlocal calls, spectrum_calls, best_seen
+        # Admit whole objectives only, so candidates always use all observations.
+        if spectrum_calls + len(rows) > max_spectrum_evaluations:
+            raise BudgetExhausted
         calls += 1
         engine.set_anatomy(dict(zip(FREE, low + normalized * span)))
-        predicted = np.concatenate([engine.spectrum(row["pose"], bins=512)[1][mask] for row in rows])
-        return predicted - target
+        parts = []
+        for row in rows:
+            spectrum_calls += 1
+            parts.append(engine.spectrum(row["pose"], bins=512)[1][mask])
+        difference = np.concatenate(parts) - target
+        rmse = float(np.sqrt(np.mean(difference**2)))
+        if not np.isfinite(rmse):
+            raise ValueError("Residual magnitude exceeds the finite numerical range")
+        if best_seen is None or rmse < best_seen["rmse_db"]:
+            best_seen = {"anatomy": dict(zip(FREE, (low + normalized * span).tolist())),
+                         "rmse_db": rmse, "optimizer_success": False,
+                         "message": "Best evaluated finite candidate; not a convergence claim",
+                         "function_evaluations": None}
+        return difference
 
     default = np.array([engine.base_anatomy[n] for n in FREE])
     default_normalized = (default-low)/span
@@ -85,20 +108,29 @@ def fit(engine: Engine, observations, *, starts=6, max_evaluations=100, seed=1):
     rng = np.random.default_rng(seed)
     # Tract geometry and parameter limiting make the objective nonconvex. A
     # bounded global search precedes local refinement; no target anatomy is used.
-    global_result = differential_evolution(
-        lambda x: float(np.mean(residual(x)**2)), [(0., 1.)] * len(FREE),
-        seed=seed, popsize=8, maxiter=60, tol=1e-7, polish=False,
-    )
-    initial = [global_result.x, *rng.uniform(.05, .95, size=(starts-1, len(FREE)))]
+    global_result = None
     candidates = []
-    # Finite differences need to exceed native geometric discretization noise.
-    for point in initial:
-        result = least_squares(residual, point, bounds=(np.zeros(2), np.ones(2)),
-                               max_nfev=max_evaluations, diff_step=1e-4, ftol=1e-8, xtol=1e-8, gtol=1e-8)
-        candidates.append({"anatomy": dict(zip(FREE, (low + result.x*span).tolist())),
-                           "rmse_db": float(np.sqrt(np.mean(result.fun**2))),
-                           "optimizer_success": bool(result.success), "message": result.message,
-                           "function_evaluations": result.nfev})
+    baseline_spectrum_calls = spectrum_calls
+    try:
+        global_result = differential_evolution(
+            lambda x: float(np.mean(residual(x)**2)), [(0., 1.)] * len(FREE),
+            seed=seed, popsize=8, maxiter=60, tol=1e-7, polish=False,
+        )
+        initial = [global_result.x, *rng.uniform(.05, .95, size=(starts-1, len(FREE)))]
+        # Finite differences need to exceed native geometric discretization noise.
+        for point in initial:
+            result = least_squares(residual, point, bounds=(np.zeros(2), np.ones(2)),
+                                   max_nfev=max_evaluations, diff_step=1e-4, ftol=1e-8, xtol=1e-8, gtol=1e-8)
+            candidates.append({"anatomy": dict(zip(FREE, (low + result.x*span).tolist())),
+                               "rmse_db": float(np.sqrt(np.mean(result.fun**2))),
+                               "optimizer_success": bool(result.success), "message": result.message,
+                               "function_evaluations": result.nfev})
+    except BudgetExhausted:
+        exhausted = True
+    if not candidates or best_seen["rmse_db"] < min(c["rmse_db"] for c in candidates):
+        if len(candidates) >= starts:
+            candidates.remove(max(candidates, key=lambda c: c["rmse_db"]))
+        candidates.append(best_seen)
     candidates.sort(key=lambda x: x["rmse_db"])
     best = candidates[0]
     observation_hash = hashlib.sha256(json.dumps(observations, sort_keys=True, allow_nan=False).encode()).hexdigest()
@@ -108,9 +140,16 @@ def fit(engine: Engine, observations, *, starts=6, max_evaluations=100, seed=1):
             "fixed_anatomy": {k: v for k, v in engine.base_anatomy.items() if k not in FREE},
             "articulation": "known reference-pose controls, limited by each candidate geometry",
             "best": best, "candidates": candidates, "candidate_spread_is_calibrated_posterior": False,
-            "fixed_anatomy_rmse_db": fixed_rmse, "actual_forward_evaluations": calls,
-            "global_search": {"generations": global_result.nit, "evaluations": global_result.nfev,
-                              "optimizer_success": bool(global_result.success)},
+            "fixed_anatomy_rmse_db": fixed_rmse,
+            "objective_evaluations": calls, "actual_forward_evaluations": spectrum_calls,
+            "spectrum_evaluations": spectrum_calls,
+            "baseline_spectrum_evaluations": baseline_spectrum_calls,
+            "optimization_spectrum_evaluations": spectrum_calls - baseline_spectrum_calls,
+            "max_spectrum_evaluations": max_spectrum_evaluations,
+            "termination": "spectrum_budget_exhausted" if exhausted else "search_completed",
+            "global_search": ({"generations": global_result.nit, "evaluations": global_result.nfev,
+                               "optimizer_success": bool(global_result.success)} if global_result is not None
+                              else {"optimizer_success": False, "message": "Spectrum budget exhausted during global search"}),
             "elapsed_seconds": time.monotonic()-begin, "seed": seed, "provenance": engine.provenance}
 
 
