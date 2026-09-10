@@ -70,6 +70,7 @@ export function ScientificModelPanel({onPreview}:{onPreview:()=>void}){
  <label><input type="checkbox" checked={voiceOnly} onChange={event=>setVoiceOnly(event.target.checked)} disabled={busy}/> This latest recording contains only my sustained a (ah) vowel, with no played probe or external excitation.</label></div>
  <div className="scientific-actions"><button onClick={()=>void run('calibration')} disabled={busy||!voiceOnly||state.status==='loading'||state.status==='unavailable'}>{state.status==='running'?'Model jobs running…':'Fit latest iPhone capture'}</button>{r&&<button onClick={onPreview}>Preview predicted geometry</button>}<span>Model: {state.status}</span></div>
  <p role="status">{notice||state.error}</p>
+ {r?.geometryModelId&&<p>Displayed geometry: original fitted model {r.geometryModelId}. Current experiment model: {r.modelId}. The current forecast reflects the selected experiment; the original geometry is historical.</p>}
  {r&&<section className="scientific-outcome" aria-label="Next recording experiment"><h4>Test the frozen prediction</h4>
  {selected?<><p>Record a new sustained <strong>{selected.pose}</strong> vowel on the iPhone, then use <strong>Pull iPhone</strong> again. Keep your setup consistent. The app compares this later recording with predictions made before hearing it.</p>
  <p>The forecast assumes jaw −3°, source pitch 180 Hz and digital gain 4. These are model settings; the app does not measure that you reproduced them.</p>

@@ -1,3 +1,6 @@
+import './environment.mjs';
+import {createAstraRoutes} from './astra.mjs';
+import {createLearningRoutes} from './learningMemory.mjs';
 import http from 'node:http';
 import {createAstraReviewRoutes} from './astraReview.mjs';
 import {scienceRoutes} from './science.mjs';
@@ -21,7 +24,9 @@ const json=(res,status,body)=>{res.writeHead(status,{'Content-Type':'application
 const handleScience=scienceRoutes({repo:resolve(import.meta.dirname,'..'),dataRoot,json});
 const handleVoiceCapture=createVoiceCaptureRoutes({repo:resolve(import.meta.dirname,'..'),dataRoot,json});
 const handleNativePull=createNativePullRoutes({repo:resolve(import.meta.dirname,'..'),dataRoot,json});
-const handleAstraReview=createAstraReviewRoutes({dataRoot,json,envFile:process.env.OPENAI_ENV_FILE||resolve(import.meta.dirname,'../../.env')});
+const handleAstraReview=createAstraReviewRoutes({dataRoot,json});
+const handleLearning=createLearningRoutes({repo:resolve(import.meta.dirname,'..'),dataRoot,json});
+const handleAstra=createAstraRoutes({repo:resolve(import.meta.dirname,'..'),dataRoot,json});
 const engineAvailable=await access(process.env.SINGING_PYTHON||resolve(import.meta.dirname,'../science/.venv/bin/python')).then(()=>true).catch(()=>false);
 const equal=(a,b)=>typeof a==='string'&&a.length===b.length&&timingSafeEqual(Buffer.from(a),Buffer.from(b));
 async function body(req){let size=0;const chunks=[];for await(const chunk of req){size+=chunk.length;if(size>12*1024*1024)throw Object.assign(Error('Request too large'),{status:413});chunks.push(chunk)}try{return JSON.parse(Buffer.concat(chunks).toString()||'{}')}catch{throw Object.assign(Error('Invalid JSON'),{status:400})}}
@@ -32,6 +37,8 @@ const serverHandler=async(req,res)=>{try{
   // Refuse cross-origin browser writes; pairing tokens authorize phone routes.
   if(req.method==='POST'&&req.headers.origin&&new URL(req.headers.origin).host!==req.headers.host)return json(res,403,{error:'Cross-origin write refused'});
   if(await handleAstraReview(req,res,url))return;
+  if(await handleLearning(req,res,url))return;
+  if(await handleAstra(req,res,url))return;
   if(await handleScience(req,res,url))return;
   if(await handleVoiceCapture(req,res,url))return;
   if(await handleNativePull(req,res,url))return;

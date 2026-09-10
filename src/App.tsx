@@ -27,7 +27,9 @@ import { evaluatePrediction } from './evaluation'
 import type { PredictionCommit } from './contracts'
 import { MotionCapturePanel } from './components/motion/MotionCapturePanel'
 import CoachLearningPanel from './components/coach/CoachLearningPanel'
+import LearningMemoryPanel from './components/coach/LearningMemoryPanel'
 import { ScientificModelPanel } from './components/science/ScientificModelPanel'
+import { AstraCoachPanel } from './components/science/AstraCoachPanel'
 import { ScientificSideView } from './components/science/ScientificGeometry'
 import { NativePullButton } from './components/phone/NativePullButton'
 import {ModelAdjustmentControls} from './components/science/ModelAdjustmentControls'
@@ -183,6 +185,8 @@ function StudioApp() {
       <main className="research-workspace" style={tab==='experiments'?undefined:{display:'none'}}>
         <h2>Experiments and evidence</h2><p>{recordingNotice}</p>
         <ScientificModelPanel onPreview={()=>{setScientificPreview(true);setTab('studio')}}/>
+        <AstraCoachPanel/>
+        <LearningMemoryPanel/>
         <AcousticMappingPanel/>
         <MotionCapturePanel frame={!demo&&active?frame:null} videoStream={videoStream} audioStream={audioStream}/>
         <CoachLearningPanel videoStream={videoStream} audioStream={audioStream}/>
