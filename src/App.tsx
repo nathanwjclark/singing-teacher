@@ -149,7 +149,11 @@ function StudioApp() {
   const anatomyMotion = useAnatomyMotion(shownFrame, demo, trackingEpoch)
   const { tips, now: cueNow } = useRecentTips(shownFrame, `${trackingEpoch}:${demo ? 'demo' : active ? 'live' : 'idle'}`, {voice:voiceActivity,demo})
   const selectedTip = tips.find(tip => tip.id === selectedTipId) ?? tips[0]
-  async function resetTracking(){await recorder.current?.stop().catch(()=>{});setModelAdjustments(null);setFrame(null);setDemo(false);setScientificPreview(false);setSelectedTipId(undefined);setSeconds(0);setStatus('loading');setMessage('');setTrackingEpoch(n=>n+1);setActive(true)}
+  async function resetTracking(){await recorder.current?.stop().catch(()=>{});setModelAdjustments(null);setFrame(null);setDemo(false);setScientificPreview(false);setSelectedTipId(undefined);setSeconds(0);setStatus('loading');setMessage('');setTrackingEpoch(n=>n+1);setActive(true);
+    try{const response=await fetch('/api/astra-review/reset',{method:'POST',signal:AbortSignal.timeout(10000)});if(!response.ok)throw Error('Reset failed');window.dispatchEvent(new Event('singing:astra-reset'))}
+    catch{window.alert('Tracking reset, but the saved model review could not be cleared. Try Reset tracking again when the local server is available.')}
+  }
+
   function toggleCamera() { setDemo(false); setFrame(null); setSeconds(0); setStatus(active ? 'idle' : 'loading'); setMessage(''); setActive(!active) }
   return (
     <div className="app-shell">
@@ -159,7 +163,7 @@ function StudioApp() {
         <div className="studio-label"><span className={`status-dot ${active || demo ? 'on' : ''}`}/>{demo ? 'DEMO' : active ? status === 'loading' ? 'CONNECTING' : 'LIVE' : 'CAMERA OFF'}<span className="session-time">{String(Math.floor(seconds / 60)).padStart(2, '0')}:{String(seconds % 60).padStart(2, '0')}</span></div>
         <div className="header-controls">
           <button className={active ? 'start-button stop' : 'start-button'} onClick={toggleCamera}>{active ? <Square size={12}/> : <Camera size={15}/>} {active ? 'Stop camera' : 'Start camera'}</button>
-          <button className="demo-button" onClick={()=>void resetTracking()} title="Reset tracking and calibration; preserve saved recordings and the learned tongue profile">Reset tracking</button>
+          <button className="demo-button" onClick={()=>void resetTracking()} title="Reset tracking, calibration and model review; preserve saved recordings and the learned tongue profile">Reset tracking</button>
           <button className="demo-button" onClick={() => { setActive(false); setFrame(null); setStatus('idle'); setMessage(''); setDemo(!demo) }}><Play size={11}/>{demo ? 'Exit demo' : 'Demo'}</button>
           <button className="icon-button" aria-label="How it works" onClick={() => setHelp(!help)}><CircleHelp size={17}/></button>
         </div>
