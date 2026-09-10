@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { RefObject } from 'react';
 import type { TrackingFrame } from '../types';
-import { getTips, resolvedTipIds } from '../lib/coaching';
+import { getTips, resolvedTipIds, isMouthOpen } from '../lib/coaching';
 import { updateRecentTips } from '../lib/recentTips';
 import type { RecentTip } from '../lib/recentTips';
 import { hasRecentVoice } from '../lib/voiceActivity';
@@ -17,12 +17,14 @@ export function useRecentTips(frame: TrackingFrame | null, scope: string, option
     let rows: RecentTip[] = [];
     let previous: TrackingFrame | null = null;
     let wasSinging = false;
+    let mouthWasOpen = false;
     const tick = () => {
       const now = Date.now(), clock = performance.now();
       const {frame:raw,options:activity} = latest.current;
       const current = activity.demo || (raw && clock - raw.timestamp < 1200) ? raw : null;
       const singing = !!activity.demo || hasRecentVoice(activity.voice?.current,clock);
-      const cues = getTips(current,{limit:12,uniqueRegions:false,singing});
+      const cues = getTips(current,{limit:12,uniqueRegions:false,singing,mouthWasOpen});
+      mouthWasOpen = !!current?.face.length && isMouthOpen(current.metrics.mouthOpen,mouthWasOpen);
       const resolved = singing && wasSinging ? resolvedTipIds(previous,current) : new Set<string>();
       rows = updateRecentTips(rows,cues,now,resolved);
       previous = current; wasSinging = singing;

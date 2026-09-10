@@ -4,12 +4,22 @@ const tip = (id: string, title: string, detail: string, severity: Tip['severity'
   ({ id, title, detail, severity, region, score, ...(muscles ? { muscles } : {}) });
 const finite = (value: number | undefined): value is number => typeof value === 'number' && Number.isFinite(value);
 const visible = (point: Landmark | undefined) => point && finite(point.x) && finite(point.y) && (point.visibility ?? 1) >= 0.5;
+// A visual coaching heuristic, not a universal ideal for every vowel. The metric
+// is inner-lip gap / inner-mouth width; 0.12 admitted only a nearly closed slit.
+const CLOSED_MOUTH = 0.08;
+const OPEN_MOUTH = 0.10;
+/** The gap is aspect-corrected in vision.ts. Leave a deadband for lip-landmark
+ * jitter: require a clearly open gap to start, but close immediately below 8%. */
+export function isMouthOpen(amount: number | undefined, wasOpen = false): boolean {
+  return finite(amount) && amount > (wasOpen ? CLOSED_MOUTH : OPEN_MOUTH);
+}
+const VOWEL_ROOM = 0.24;
 const score = (base: number, amount: number, threshold: number, scale: number) => Math.min(95, base + (amount - threshold) * scale);
 
 /** Visual prompts only. Muscle IDs identify anatomical references, never measured activity.
  * Optional 3D metrics are omitted when unavailable; do not substitute zero for them.
  */
-export function getTips(frame: TrackingFrame | null, { limit = 3, uniqueRegions = true, singing = true }: {limit?:number; uniqueRegions?:boolean; singing?:boolean} = {}): Tip[] {
+export function getTips(frame: TrackingFrame | null, { limit = 3, uniqueRegions = true, singing = true, mouthWasOpen = false }: {limit?:number; uniqueRegions?:boolean; singing?:boolean; mouthWasOpen?:boolean} = {}): Tip[] {
   if (!frame) return [tip('start', 'Make room for your voice.', 'Start your camera, then bring your face and shoulders into view.', 'good', 'general', 0)];
   if (frame.face.length === 0) return [tip('find-face', 'Let’s find your face.', 'Face the camera in even light. Your cues will return when your face is visible.', 'adjust', 'general', 100)];
 
@@ -18,7 +28,7 @@ export function getTips(frame: TrackingFrame | null, { limit = 3, uniqueRegions 
   if (finite(m.brightness) && m.brightness < 45) return [tip('lighting', 'Bring a little light in.', 'Try a light in front of you so the camera can see your face clearly.', 'adjust', 'general', 100)];
   if (!finite(m.mouthOpen) || !finite(m.headTilt) || m.mouthOpen < 0) return [tip('measurement-unavailable', 'Find a clear view.', 'Face the camera and keep your face fully in frame while we look for reliable landmarks.', 'adjust', 'general', 100)];
 
-  if (!singing || m.mouthOpen <= 0.035) return [tip('no-singing', 'No singing detected', 'Sing a comfortable vowel to see live adjustments.', 'good', 'general', 0)];
+  if (!singing || !isMouthOpen(m.mouthOpen, mouthWasOpen)) return [tip('no-singing', 'No singing detected', 'Sing a comfortable vowel to see live adjustments.', 'good', 'general', 0)];
 
   // Resolve framing before interpreting geometry near the edge of the image.
   const clipped = frame.face.some(point => point.x < 0.025 || point.x > 0.975 || point.y < 0.025 || point.y > 0.975);
@@ -37,8 +47,8 @@ export function getTips(frame: TrackingFrame | null, { limit = 3, uniqueRegions 
   // Face width and asymmetry are strongly distorted by head rotation.
   const frontal = yaw !== undefined && yaw < 15 && pitch !== undefined && pitch < 15;
   const mouthReliable = (yaw === undefined || yaw < 20) && (pitch === undefined || pitch < 20);
-  if (mouthReliable && m.mouthOpen > 0.035 && m.mouthOpen < 0.12) {
-    tips.push(tip('mouth-open', 'Give the vowel room.', 'On a sustained vowel, try a little more mouth opening—only as far as feels easy. A small opening is normal between phrases.', 'adjust', 'jaw', score(48, 0.12 - m.mouthOpen, 0, 100), ['Masseter', 'Digastric']));
+  if (mouthReliable && m.mouthOpen > CLOSED_MOUTH && m.mouthOpen < VOWEL_ROOM) {
+    tips.push(tip('mouth-open', 'Give the vowel room.', 'On a sustained vowel, try a little more mouth opening—only as far as feels easy. A small opening is normal between phrases.', 'adjust', 'jaw', score(48, VOWEL_ROOM - m.mouthOpen, 0, 100), ['Masseter', 'Digastric']));
   }
   if (Math.abs(m.headTilt) > 9) {
     tips.push(tip('head-level', 'Find an easy balance.', 'Your head appears tilted sideways. Try returning toward center without holding it rigidly.', 'adjust', 'neck', score(62, Math.abs(m.headTilt), 9, 1.5), ['Sternocleidomastoid']));
@@ -106,7 +116,7 @@ export function resolvedTipIds(previous: TrackingFrame | null, current: Tracking
   if (changedBelow('headPitch',16)) resolved.add('head-pitch');
   const frontal = finite(after.headYaw) && Math.abs(after.headYaw) < 15 && finite(after.headPitch) && Math.abs(after.headPitch) < 15;
   const mouthReliable = (after.headYaw === undefined || Math.abs(after.headYaw) < 20) && (after.headPitch === undefined || Math.abs(after.headPitch) < 20);
-  if (mouthReliable && before.mouthOpen > 0.035 && before.mouthOpen < 0.12 && after.mouthOpen >= 0.12) resolved.add('mouth-open');
+  if (mouthReliable && before.mouthOpen > CLOSED_MOUTH && before.mouthOpen < VOWEL_ROOM && after.mouthOpen >= VOWEL_ROOM) resolved.add('mouth-open');
   if (frontal && after.mouthOpen > 0.12) {
     if (changedBelow('jawAsymmetry',0.18,false)) resolved.add('jaw-asymmetry');
     if (changedBelow('lipWidth',0.88,false)) resolved.add('lip-spread');

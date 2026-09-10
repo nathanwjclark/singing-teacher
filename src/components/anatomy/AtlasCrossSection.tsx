@@ -3,8 +3,9 @@ import * as THREE from 'three';
 import {getModelAdjustments,useModelAdjustments} from '../science/modelAdjustments';
 import {createModelTractOverlay} from '../science/modelSpaceTexture';
 import { createTractOverlay } from './tractOverlay';
+import { createOralOverlay } from './oralOverlay';
 import type { AnatomyMotionState } from '../../lib/anatomyState';
-import { ATLAS_WIDTH as W, ATLAS_HEIGHT as H, deformAtlasPoint } from '../../lib/atlasMotion';
+import { ATLAS_WIDTH as W, ATLAS_HEIGHT as H, deformAtlasPoint, nativeTongueRig, referenceTongueRig } from '../../lib/atlasMotion';
 
 // Original image remains intact on disk. A silhouette mask and deformable texture
 // display the licensed medical plate without its rectangular white background.
@@ -33,7 +34,7 @@ export function AtlasCrossSection({ motion }: { motion: RefObject<AnatomyMotionS
     const scene = new THREE.Scene();
     const camera = new THREE.OrthographicCamera(0, W, 0, -H, .1, 10);
     camera.position.z = 2;
-    const geometry = new THREE.PlaneGeometry(W, H, 64, 76);
+    const geometry = new THREE.PlaneGeometry(W, H, 96, 112);
     const positions = geometry.getAttribute('position');
     const rest = new Float32Array(positions.count * 2);
     for (let i = 0; i < positions.count; i++) {
@@ -46,12 +47,15 @@ export function AtlasCrossSection({ motion }: { motion: RefObject<AnatomyMotionS
     scene.add(mesh);
     let tractTexture = createTractOverlay();
     let appliedModel = getModelAdjustments();
+    let tongueRig=appliedModel?nativeTongueRig(appliedModel.diff.reference.tongue):referenceTongueRig;
+    let markerRig=appliedModel?nativeTongueRig(appliedModel.diff.candidate.tongue):referenceTongueRig;
     if(appliedModel){tractTexture.dispose();tractTexture=createModelTractOverlay(appliedModel.diff,appliedModel.showDiff)}
     const tractMaterial = new THREE.MeshBasicMaterial({ map: tractTexture, transparent: true, side: THREE.DoubleSide, depthWrite: false });
     const tractMesh = new THREE.Mesh(geometry, tractMaterial);
     tractMesh.frustumCulled = false; tractMesh.renderOrder = 1;
     scene.add(tractMesh);
-    const tipMarker=new THREE.Mesh(new THREE.CircleGeometry(15,20),new THREE.MeshBasicMaterial({color:0x75ffc1,depthTest:false}));tipMarker.renderOrder=5;scene.add(tipMarker);
+    const oral = createOralOverlay(); scene.add(oral.group);
+    const tipMarker=new THREE.Mesh(new THREE.CircleGeometry(7,20),new THREE.MeshBasicMaterial({color:0x75ffc1,depthTest:false}));tipMarker.renderOrder=5;scene.add(tipMarker);
     let texture: THREE.CanvasTexture | undefined;
     const image = new Image();
     image.onload = () => {
@@ -84,18 +88,21 @@ export function AtlasCrossSection({ motion }: { motion: RefObject<AnatomyMotionS
     renderer.setAnimationLoop(() => {
       if (!texture) return;
       const state = motion.current;
+      oral.update(state);
       const nextModel=getModelAdjustments();
       if(nextModel!==appliedModel){
         appliedModel=nextModel;tractTexture.dispose();
+        tongueRig=nextModel?nativeTongueRig(nextModel.diff.reference.tongue):referenceTongueRig;
+        markerRig=nextModel?nativeTongueRig(nextModel.diff.candidate.tongue):referenceTongueRig;
         tractTexture=nextModel?createModelTractOverlay(nextModel.diff,nextModel.showDiff):createTractOverlay();
         tractMaterial.map=tractTexture;tractMaterial.needsUpdate=true;
       }
       for (let i = 0; i < positions.count; i++) {
-        const [x, y] = deformAtlasPoint(rest[i * 2], rest[i * 2 + 1], state);
+        const [x, y] = deformAtlasPoint(rest[i * 2], rest[i * 2 + 1], state,tongueRig);
         // Both plate and cast share these exact vertices, projection and motion.
         positions.setXYZ(i, W - x, -y, 0);
       }
-      const tip=deformAtlasPoint(175.8,877.8,state);tipMarker.position.set(W-tip[0],-tip[1],.1);tipMarker.visible=state.tongue.visible;
+      const tip=deformAtlasPoint(markerRig.tipX,markerRig.tipY,state,tongueRig);tipMarker.position.set(W-tip[0],-tip[1],.1);tipMarker.visible=state.tongue.visible;
       host.dataset.tipPosition=JSON.stringify([W-tip[0],-tip[1]]);
       positions.needsUpdate = true;
       renderer.render(scene, camera);
@@ -105,7 +112,7 @@ export function AtlasCrossSection({ motion }: { motion: RefObject<AnatomyMotionS
       observer.disconnect(); renderer.setAnimationLoop(null);
       renderer.domElement.removeEventListener('webglcontextlost', lost);
       tipMarker.geometry.dispose();tipMarker.material.dispose();
-      geometry.dispose(); material.dispose(); tractMaterial.dispose(); tractTexture.dispose(); texture?.dispose(); renderer.dispose();
+      oral.dispose(); geometry.dispose(); material.dispose(); tractMaterial.dispose(); tractTexture.dispose(); texture?.dispose(); renderer.dispose();
       renderer.domElement.remove();
     };
   }, [motion]);
