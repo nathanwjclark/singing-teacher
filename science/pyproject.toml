@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "singing-physics"
+version = "0.1.0"
+description = "Physical vocal-tract simulation and controlled synthetic anatomy recovery"
+requires-python = ">=3.12,<3.14"
+license = "AGPL-3.0-or-later"
+dependencies = ["numpy==2.2.6", "scipy==1.15.3"]
+
+[project.optional-dependencies]
+test = ["pytest==8.3.5"]
+
+[project.scripts]
+singing-physics = "singing_physics.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
