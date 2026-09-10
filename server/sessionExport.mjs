@@ -187,7 +187,15 @@ export function createSessionExportRoutes({dataRoot, json, fetchImpl = fetch, en
           if (original.sha256 !== result.archiveSha256 || original.sha256 !== result.importId) throw Error('Original LiDAR archive changed');
           artifacts.push({...artifact, binding: {sessionId, modelId: result.modelId, current: result.modelId === state.snapshot?.model_id,
             role: 'experimental-lidar-fusion', originalBytesVerified: true, modelUpdated: adoption.model_updated === true}});
-          await optional(`lidar-fits/${fitId}/experimental-declaration.json`);
+          const declarationSource = `lidar-fits/${fitId}/experimental-declaration.json`;
+          try {
+            const declaration = await read(declarationSource);
+            const annotation = job.result.annotation;
+            if (!annotation?.registration?.source_hashes?.includes(declaration.sha256)
+                || !annotation?.correspondence?.source_hashes?.includes(declaration.sha256)) throw Error('Declaration changed');
+            if (artifacts.length < MAX_FILES) artifacts.push(declaration);
+            else missing.push({source: declarationSource, reason: 'Artifact count limit reached'});
+          } catch { missing.push({source: declarationSource, reason: 'Declaration is unavailable or does not match the frozen annotation hashes'}); }
         } catch { missing.push({source, reason: 'LiDAR receipt, original archive or authoritative lineage unavailable or exceeds verification bounds; excluded'}); }
       }
       const summary = {
