@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {importMotionCapture,readMotionStatus,motionAssetUrl,readMotionAnalysis,analyzeMotionAudio,rankMotionCandidates} from './motionClient.ts';
+import {importMotionCapture,readMotionStatus,motionAssetUrl,readMotionAnalysis,analyzeMotionAudio,rankMotionCandidates,motionAnalysisRequestIdentity} from './motionClient.ts';
 test('motion uploads preserve original JSON and companion bytes',async()=>{
  const original=globalThis.fetch,raw='{ "original": true }\n';
  globalThis.fetch=async(input,init)=>{
@@ -43,4 +43,12 @@ test('candidate ranking retains unscored hypotheses without inventing zero discr
  assert.deepEqual(rankMotionCandidates(candidates).map(row=>row.candidate_id),['lower','higher','missing']);
  assert.equal(candidates[0].candidate_id,'missing');
  assert.equal(rankMotionCandidates(candidates)[2].weighted_mean_square_discrepancy,null);
+});
+
+test('analysis identity keeps uncertain retries stable and renews after a baseline change',()=>{
+ const first=motionAnalysisRequestIdentity(null,'capture','a','model-A');
+ assert.deepEqual(motionAnalysisRequestIdentity(first,'capture','a','model-A'),first);
+ const changed=motionAnalysisRequestIdentity(first,'capture','a','model-B');
+ assert.notEqual(changed.id,first.id);
+ assert.notEqual(motionAnalysisRequestIdentity(changed,'capture','i','model-B').id,changed.id);
 });

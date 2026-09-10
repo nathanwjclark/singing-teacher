@@ -3,7 +3,7 @@ import type { TrackingFrame } from '../../types'
 import type { MotionObservation, MotionMarker } from '../../contracts/learning'
 import { validateLearningRecord } from '../../contracts/learning'
 import { motionSample, observedEnvelope, phaseAt, motionMediaBinding, verifyMotionMedia } from '../../capture/motion'
-import {importMotionCapture,readMotionStatus,motionAssetUrl,readMotionAnalysis,analyzeMotionAudio,rankMotionCandidates} from './motionClient'
+import {importMotionCapture,readMotionStatus,motionAssetUrl,readMotionAnalysis,analyzeMotionAudio,rankMotionCandidates,motionAnalysisRequestIdentity} from './motionClient'
 import type {SavedMotionStatus,MotionAnalysisStatus,MotionVowel} from './motionClient'
 import './MotionCapturePanel.css'
 const save=(blob:Blob,name:string)=>{const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
@@ -24,10 +24,17 @@ export function MotionCapturePanel({frame,videoStream,audioStream}:{frame:Tracki
  },[captureId,analysisRefresh]);
  async function analyze(){
   if(!captureId||analysisBusy||confirmedAnalysis!==analysisKey)return;
-  const key=analysisKey;
-  if(analysisRequest.current?.key!==key)analysisRequest.current={key,id:crypto.randomUUID()};
   setAnalysisStarting(true);setAnalysisError('');
-  try{await analyzeMotionAudio(captureId,analysisPose,analysisRequest.current.id);if(mounted.current){setConfirmedAnalysis('');setAnalysisRefresh(value=>value+1)}}
+  try{
+   const latest=await readMotionAnalysis(captureId);
+   if(!mounted.current)return;
+   setAnalysisEntry({captureId,value:latest});
+   if(latest.status==='running'){setAnalysisRefresh(value=>value+1);return}
+   if(!latest.availability.available)throw Error(latest.availability.reason||'Audio analysis unavailable');
+   analysisRequest.current=motionAnalysisRequestIdentity(analysisRequest.current,captureId,analysisPose,latest.currentModelId);
+   await analyzeMotionAudio(captureId,analysisPose,analysisRequest.current.id);
+   if(mounted.current){setConfirmedAnalysis('');setAnalysisRefresh(value=>value+1)}
+  }
   catch(cause){if(mounted.current)setAnalysisError(String(cause))}
   finally{if(mounted.current)setAnalysisStarting(false)}
  }

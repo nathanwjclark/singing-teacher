@@ -17,6 +17,10 @@ export async function importMotionCapture(record:Blob,media:Blob,filename:string
 }
 export const motionAssetUrl=(id:string,kind:'record'|'media')=>`/api/motion/${kind}?id=${encodeURIComponent(id)}`;
 export type MotionVowel='a'|'e'|'i'|'o'|'u';
+export function motionAnalysisRequestIdentity(previous:{key:string;id:string}|null,captureId:string,pose:MotionVowel,modelId:string|null){
+ const key=JSON.stringify([captureId,pose,modelId]);
+ return previous?.key===key?previous:{key,id:crypto.randomUUID()};
+}
 export interface MotionCandidateScore {candidate_id:string;status:string;weighted_mean_square_discrepancy:number|null;missing_features?:Array<{reason:string;feature?:string}>}
 export const rankMotionCandidates=(candidates:MotionCandidateScore[])=>[...candidates].sort((a,b)=>(a.weighted_mean_square_discrepancy??Infinity)-(b.weighted_mean_square_discrepancy??Infinity));
 export interface MotionAudioResult {
