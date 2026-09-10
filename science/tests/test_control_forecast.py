@@ -141,3 +141,26 @@ def test_inferred_point_support_does_not_invent_uncertainty(anatomy):
     result = forecast(anatomy, control).data
     assert all(n['measurement_sigma_deg'] is None for n in result['numeric']['nodes'])
     assert result['execution_distribution']['estimated_between_attempt_variance_deg2'] is None
+
+
+@pytest.mark.parametrize('field,value', [
+    ('model_id', 'wrong-model'), ('provenance', {'library_sha256': 'different'}),
+    ('anatomy_evidence_ids', ['unrelated']), ('anatomy_frozen_at', '2025-01-01T00:00:00Z'),
+    ('control_evidence_ids', ['unrelated']), ('control_profile_sha256', 'different'),
+    ('control_fitted_at', '2025-01-01T00:00:00Z'), ('cue_id', 'different'),
+    ('context', {**CONTEXT, 'vowel': 'i'}), ('target_evidence_id', 'anatomy-fit'),
+])
+def test_conditional_rejects_rehashed_inconsistent_lineage_before_native(anatomy, field, value):
+    import json
+
+    data = forecast(anatomy, profile([-4., -3., -2.])).data
+    data[field] = value
+    altered = Artifact(json.dumps(data, sort_keys=True, separators=(',', ':'), allow_nan=False).encode())
+    # Holding native ownership proves rejection happens before any new native work.
+    with Engine():
+        with pytest.raises(ValueError, match='binding|leaks'):
+            condition_on_execution(altered, anatomy,
+                expected_prospective_digest=altered.sha256, expected_anatomy_digest=anatomy.sha256,
+                prediction_id='conditional', generated_at='2026-01-01T00:04:00Z',
+                observed_at='2026-01-01T00:03:00Z', observed_evidence_id=data['target_evidence_id'],
+                measured_ja_deg=-2.5, measurement_sigma_deg=.1)

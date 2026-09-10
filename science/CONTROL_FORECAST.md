@@ -87,3 +87,10 @@ Native tests compare bimodal support to explicit weighted native spectra and rej
 the shortcut of simulating mean JA. They verify failed/missing/unknown mass,
 inferred uncertainty limits, deterministic replay, context and identity checks,
 computational bounds, and conditional artifact isolation/no-overwrite behavior.
+
+Conditional intake also cross-checks the prospective model ID, native provenance,
+anatomy evidence IDs and freeze time against the supplied anatomy snapshot. Its
+embedded control distribution must agree with the top-level control model, profile,
+evidence, cue and context identities. Rehashing an inconsistent artifact does not
+bypass these checks, which run before native calculation. This verifies internal
+lineage consistency; it does not authenticate externally supplied hashes.

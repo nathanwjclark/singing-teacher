@@ -170,6 +170,31 @@ def condition_on_execution(prospective, snapshot, *, expected_prospective_digest
     anatomy = _candidates(snapshot, expected_anatomy_digest)
     if snapshot.sha256 != prior.get('anatomy_snapshot_sha256'):
         raise ValueError('Conditional anatomy differs from frozen prospective model')
+    anatomy_bindings = {'model_id': 'model_id', 'provenance': 'provenance',
+                        'anatomy_evidence_ids': 'evidence_ids', 'anatomy_frozen_at': 'frozen_at'}
+    if any(prior.get(key) != anatomy[value] for key, value in anatomy_bindings.items()):
+        raise ValueError('Prospective anatomy identity, provenance or evidence binding mismatch')
+    distribution = prior.get('execution_distribution')
+    if not isinstance(distribution, dict):
+        raise ValueError('Prospective control evidence binding is missing')
+    control_bindings = {'anatomy_model_id': 'model_id', 'profile_sha256': 'control_profile_sha256',
+                        'evidence_ids': 'control_evidence_ids', 'fitted_at': 'control_fitted_at',
+                        'cue_id': 'cue_id', 'cue_version': 'cue_version', 'context': 'context', 'mode': 'mode'}
+    if any(key not in distribution or value not in prior or distribution[key] != prior[value]
+           for key, value in control_bindings.items()):
+        raise ValueError('Prospective control identity or evidence binding mismatch')
+    control_ids = prior['control_evidence_ids']
+    if not isinstance(control_ids, list) or not control_ids:
+        raise ValueError('Prospective control evidence IDs are required')
+    for identity in control_ids:
+        _identity(identity, 'control evidence ID')
+    if len(set(control_ids)) != len(control_ids):
+        raise ValueError('Duplicate prospective control evidence IDs')
+    if prior.get('target_evidence_id') in anatomy['evidence_ids'] + control_ids:
+        raise ValueError('Prospective target leaks into frozen evidence')
+    if _timestamp(prior['generated_at']) < max(_timestamp(anatomy['frozen_at']),
+                                              _timestamp(prior['control_fitted_at'])):
+        raise ValueError('Prospective prediction precedes frozen evidence cutoff')
     _identity(prediction_id, 'prediction_id')
     if prediction_id == prior['prediction_id']:
         raise ValueError('Conditional prediction needs its own identity')
