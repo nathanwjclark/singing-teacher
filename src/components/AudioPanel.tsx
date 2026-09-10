@@ -4,8 +4,8 @@ import { analyzeAudio } from '../lib/audio';
 import type { AudioMetrics } from '../lib/audio';
 import './AudioPanel.css';
 
-type AudioPanelProps = { demo?: boolean };
-type AudioStatus = 'idle' | 'requesting' | 'live' | 'error';
+type AudioPanelProps = { demo?: boolean; autoStart?: boolean };
+type AudioStatus = 'idle' | 'requesting' | 'live' | 'suspended' | 'error';
 type Point = AudioMetrics & { time: number };
 type Resources = { stream: MediaStream; context: AudioContext; source: MediaStreamAudioSourceNode; analyser: AnalyserNode };
 const WINDOW_SECONDS = 25;
@@ -81,7 +81,7 @@ function drawWave(canvas: HTMLCanvasElement | null, wave: Float32Array, active: 
   ctx.stroke();
 }
 
-export function AudioPanel({ demo = false }: AudioPanelProps) {
+export function AudioPanel({ demo = false, autoStart = false }: AudioPanelProps) {
   const [status, setStatus] = useState<AudioStatus>('idle');
   const [error, setError] = useState('');
   const [metrics, setMetrics] = useState<AudioMetrics>(EMPTY);
@@ -118,7 +118,7 @@ export function AudioPanel({ demo = false }: AudioPanelProps) {
     setMetrics(EMPTY);
   }, [release]);
 
-  const start = async () => {
+  const start = useCallback(async () => {
     if (demo || resources.current || pendingContext.current) return;
     const id = ++requestId.current;
     setError('');
@@ -127,11 +127,10 @@ export function AudioPanel({ demo = false }: AudioPanelProps) {
     let acquiredContext: AudioContext | null = null;
     try {
       if (!navigator.mediaDevices?.getUserMedia) throw new Error('Microphone access needs HTTPS or localhost in a supported browser.');
-      // Resume inside the click gesture so Safari can activate the audio context.
+      // Never await resume: autoplay policy can leave its promise pending until a gesture.
       acquiredContext = new AudioContext();
       pendingContext.current = acquiredContext;
-      await acquiredContext.resume();
-      if (id !== requestId.current) { void acquiredContext.close().catch(() => {}); return; }
+      void acquiredContext.resume().catch(() => {});
       acquiredStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
       if (id !== requestId.current) {
         acquiredStream.getTracks().forEach(track => track.stop());
@@ -154,7 +153,14 @@ export function AudioPanel({ demo = false }: AudioPanelProps) {
       }));
       history.current = [];
       setWindowMs(Math.round(analyser.fftSize / acquiredContext.sampleRate * 1000));
-      setStatus('live');
+      const context = acquiredContext;
+      const reflectContextState = () => {
+        if (id === requestId.current) setStatus(context.state === 'running' ? 'live' : 'suspended');
+      };
+      context.addEventListener('statechange', reflectContextState);
+      reflectContextState();
+      // Granting microphone permission may unlock the context without a separate gesture.
+      void context.resume().catch(() => {});
     } catch (cause) {
       acquiredStream?.getTracks().forEach(track => track.stop());
       if (acquiredContext && acquiredContext.state !== 'closed') void acquiredContext.close().catch(() => {});
@@ -164,6 +170,16 @@ export function AudioPanel({ demo = false }: AudioPanelProps) {
       setError(name === 'NotAllowedError' ? 'Microphone permission was denied. Allow microphone access in your browser and try again.' : name === 'NotFoundError' ? 'No microphone was found. Connect one and try again.' : name === 'NotReadableError' ? 'Your microphone is unavailable or in use. Check your device and try again.' : cause instanceof Error ? cause.message : 'Could not start your microphone. Please try again.');
       setStatus('error');
     }
+  }, [demo, stop]);
+
+  const enableAudio = () => {
+    const current = resources.current;
+    if (!current) return;
+    setError('');
+    // This call remains directly in the click gesture, including on Safari.
+    void current.context.resume().catch(() => {
+      if (resources.current === current) setError('Your browser paused audio. Try Enable audio again, or stop and restart the microphone.');
+    });
   };
 
   useEffect(() => {
@@ -171,6 +187,7 @@ export function AudioPanel({ demo = false }: AudioPanelProps) {
     history.current = [];
     waveform.current.fill(0);
     let resetDisplay = true;
+    const resetRequestId = requestId.current;
     const spectrum = new Float32Array(1024);
     let animation = 0;
     let lastSample = 0;
@@ -181,10 +198,13 @@ export function AudioPanel({ demo = false }: AudioPanelProps) {
 
     const render = (ms: number) => {
       if (resetDisplay) {
-        setStatus('idle');
-        setError('');
-        setMetrics(EMPTY);
-        setWindowMs(43);
+        // An automatic request can settle before the first animation frame.
+        if (requestId.current === resetRequestId) {
+          setStatus('idle');
+          setError('');
+          setMetrics(EMPTY);
+          setWindowMs(43);
+        }
         resetDisplay = false;
       }
       const now = ms / 1000;
@@ -208,12 +228,12 @@ export function AudioPanel({ demo = false }: AudioPanelProps) {
           waveform.current.fill(0);
           latest = EMPTY;
         }
-        if ((demo || live) && now - lastSample >= 0.1) {
+        if ((demo || live?.context.state === 'running') && now - lastSample >= 0.1) {
           lastSample = now;
           history.current.push({ ...latest, time: now });
         }
         history.current = history.current.filter(point => now - point.time <= WINDOW_SECONDS);
-        drawWave(waveCanvas.current, waveform.current, demo || !!live);
+        drawWave(waveCanvas.current, waveform.current, demo || live?.context.state === 'running');
         drawHistory(volumeCanvas.current, history.current, now, 'dbfs', -70, 0, '#a3d8c3');
         drawHistory(brightnessCanvas.current, history.current, now, 'centroidHz', 0, 10000, '#eeb08f');
         drawHistory(textureCanvas.current, history.current, now, 'flatness', 0, 1, '#c7bbec');
@@ -224,6 +244,13 @@ export function AudioPanel({ demo = false }: AudioPanelProps) {
     animation = requestAnimationFrame(render);
     return () => { cancelAnimationFrame(animation); release(); };
   }, [demo, release]);
+
+  useEffect(() => {
+    if (!autoStart || demo) return;
+    // A cancelable task prevents StrictMode's rehearsal mount from opening a second stream.
+    const task = window.setTimeout(() => { void start(); }, 0);
+    return () => window.clearTimeout(task);
+  }, [autoStart, demo, start]);
 
   const active = demo || status === 'live';
   const signal = active && metrics.dbfs >= -60;
@@ -236,10 +263,12 @@ export function AudioPanel({ demo = false }: AudioPanelProps) {
           <div><p className="audio-eyebrow">04 / LISTEN TO THE SHAPE</p><h2 id="audio-title">Your voice, over time.</h2></div>
         </div>
         <div className="audio-actions">
-          <span className={`audio-status ${active ? 'audio-status--active' : ''}`}><i />{demo ? 'SYNTHETIC DEMO' : status === 'requesting' ? 'AWAITING PERMISSION' : status === 'live' ? signal ? 'MICROPHONE LIVE' : 'LISTENING · QUIET' : 'MICROPHONE OFF'}</span>
-          {!demo && (status === 'live' || status === 'requesting' ? <button className="audio-control" type="button" onClick={stop}><Square size={13} />{status === 'requesting' ? 'Cancel' : 'Stop microphone'}</button> : <button className="audio-control" type="button" onClick={() => void start()}><Mic size={14} />Start microphone</button>)}
+          <span className={`audio-status ${active ? 'audio-status--active' : ''}`}><i />{demo ? 'SYNTHETIC DEMO' : status === 'requesting' ? 'AWAITING PERMISSION' : status === 'suspended' ? 'AUDIO NEEDS A CLICK' : status === 'live' ? signal ? 'MICROPHONE LIVE' : 'LISTENING · QUIET' : 'MICROPHONE OFF'}</span>
+          {!demo && status === 'suspended' && <button className="audio-control" type="button" onClick={enableAudio}><AudioLines size={14} />Enable audio</button>}
+          {!demo && (status === 'live' || status === 'requesting' || status === 'suspended' ? <button className="audio-control" type="button" onClick={stop}><Square size={13} />{status === 'requesting' ? 'Cancel' : 'Stop microphone'}</button> : <button className="audio-control" type="button" onClick={() => void start()}><Mic size={14} />Start microphone</button>)}
         </div>
       </header>
+      {!demo && status === 'suspended' && <p className="audio-chart-caption" role="status">Microphone connected. Select Enable audio so your browser can start the live analysis.</p>}
       {error && <p className="audio-error" role="alert">{error}</p>}
       <div className="audio-plots">
         <article className="audio-wave-card">
