@@ -1,12 +1,12 @@
 # Personal Vocal Physiology and Acoustics
 
-**Moonshot implementation specification - revision 7, September 10, 2026.**
+**Moonshot implementation specification - revision 8, September 10, 2026.**
 
 ## 1. Research objective and change of direction
 
 Build a system that attempts to infer a person's internal vocal anatomy, dynamic articulation, and eventually vocal-fold mechanics from ordinary audiovisual observations plus actively selected vocal experiments. The resulting personal physical model must generate sound, explain multiple observations with shared anatomy, and predict the consequences of interventions. Singing coaching is the downstream application of that model.
 
-This plan supersedes the current remote repository architecture and scope; existing code is optional reusable material. Revision 7 integrates active acoustic probing into acquisition, external-drive physics, joint inference and runtime Astra teaching, retaining embodied cues and dynamic control mapping. It retains the integrated iPhone depth work and physiological reconstruction objective.
+This plan supersedes the current remote repository architecture and scope; existing code is optional reusable material. Revision 8 defines hackathon completion as a fully connected research harness with runtime Astra, retaining the active probing, embodied teaching and physiological reconstruction scope. Positive accuracy or learning results are separate scientific outcomes. It retains the integrated iPhone depth work and physiological reconstruction objective.
 
 This revision supersedes the earlier recommendation to make empirical cue personalization the main product. Failure to recover physiology is an acceptable research outcome. A cue recommendation engine is not a substitute deliverable. Scientific uncertainty determines what we test and how we interpret the result; it does not remove the moonshot from scope.
 
@@ -23,7 +23,7 @@ The statement that complete reconstruction is not established belongs in the res
 | Success means better practice performance | Success means evidence of parameter recovery and prospective physical prediction |
 | Coaching interface gets most engineering time | Forward physics, inverse fitting and experiment design get most engineering time |
 
-**Working assumptions:** two human leads, each coordinating parallel Astra agents, with local development hardware and the available iPhones. Work is ordered by dependencies and acceptance evidence; no hackathon duration or delivery estimates are assumed.
+**Working assumptions:** two human leads, each coordinating parallel Astra agents, with local development hardware and the available iPhones. Work is ordered by dependencies and acceptance evidence. The current three-hour finish schedule is defined in the research-harness finish plan.
 
 ## 2. What counts as progress, success and failure
 
@@ -36,7 +36,9 @@ Separate four levels of evidence. Publish all completed levels, including negati
 | C: independent physiology | Compare hidden-state predictions with withheld, modality-appropriate measurements from that person. | Evidence for the specific anatomical or physiological variables measured. |
 | D: coaching benefit | Use the inferred model to choose interventions and test retained learning on new material. | Downstream educational value; not a replacement for A-C. |
 
-The minimum meaningful hackathon build runs A and attempts B with genuine physiology parameters, a working forward simulator, multiple candidate solutions, and a reproducible log. Attempt C during the hackathon only if suitable paired data and permission are already available. Otherwise report C as untested. A failed live fit, non-identifiable parameters, or no gain from active experiments is a valid outcome; a polished coaching demo does not repair that result.
+The hackathon deliverable is a working research harness, not a fully tuned or validated physiological model. The authoritative [research-harness finish plan](research-harness-finish-plan.md) defines completion, gate interpretation, agent rebalancing and the three-hour execution window. A real recording must reach a physical model; runtime Astra must use its hypotheses/forecasts to choose and explain a supported action; a subsequent observation must be scored before update; actual model state and experiment history must be displayed and replayable. Poor predictions, ambiguity and negative learning results are acceptable. Missing feature connections or fabricated model outputs are not.
+
+Track implementation status, evidence source and scientific outcome separately. The evidence levels above describe what a study can establish, not mandatory favorable outcomes before software completion. Keep numerical/unit checks, provenance, held-out chronology and explicit failure handling. Defer broad tuning and accuracy studies until the connected loop works. Retain independent physiology and coaching-benefit studies as research goals rather than hackathon release gates.
 
 Pre-register two primary comparisons before human evaluation: personalized shared anatomy versus fixed generic anatomy with equally flexible articulation; and active experiment selection versus a fixed protocol under the same recording and computation budgets. Also test audio-only versus audiovisual inference. A population acoustic predictor is a useful additional baseline. Do not let the personalized model win simply by giving it more per-recording free parameters.
 
@@ -298,7 +300,7 @@ The distinctive training/evaluation corpus must be collected with consent: calib
 
 ## 11. Parallel-agent implementation responsibilities
 
-Two human leads coordinate bounded Astra agents through dependency gates, without fixed hackathon timing. A owns scientific interpretation and numerical acceptance; B owns the experimental system, independent evaluation and repository integration queue. The companion [parallel-agent execution plan](two-person-execution-plan.md) defines exclusive module ownership, dispatch rules, acceptance experiments and human checklists. Its complete text is also included as the execution appendix in the PDF.
+Two human leads coordinate bounded Astra agents through dependency gates and the current three-hour finish schedule. A owns scientific interpretation and numerical acceptance; B owns the experimental system, independent evaluation and repository integration queue. The companion [parallel-agent execution plan](two-person-execution-plan.md) defines exclusive module ownership, dispatch rules, acceptance experiments and human checklists. Its complete text is also included as the execution appendix in the PDF.
 
 Start with KIT-01: a runnable contract kit defining observations, model candidates, forecasts, immutable prediction commits, evaluation records, units, coordinate frames and evidence provenance. Publish schemas and validation commands first; add a genuine synthesized audio/geometry pair and actual synchronized phone capture as their producers become available. The engine capability manifest evolves from verified support. No production consumer uses fabricated fitted anatomy.
 

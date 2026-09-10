@@ -26,6 +26,7 @@ raw = SOURCE.read_text() + '\n\n' + (ROOT / 'two-person-execution-plan.md').read
 )
 raw += '\n\n' + (ROOT / 'embodied-learning-and-motion-plan.md').read_text()
 raw += '\n\n' + (ROOT / 'active-acoustic-probing-plan.md').read_text()
+raw += '\n\n' + (ROOT / 'research-harness-finish-plan.md').read_text()
 definitions = dict(re.findall(r'^\[\^([^]]+)\]:\s*(.+)$', raw, re.M))
 body = re.sub(r'^\[\^[^]]+\]:.*$', '', raw, flags=re.M).strip()
 order = list(dict.fromkeys(re.findall(r'\[\^([^]]+)\]', body)))
@@ -137,7 +138,7 @@ class ReportDoc(BaseDocTemplate):
     def __init__(self, path):
         super().__init__(str(path), pagesize=letter, leftMargin=LEFT, rightMargin=RIGHT,
                          topMargin=TOP, bottomMargin=BOTTOM, title='Personal Vocal Physiology and Acoustics',
-                         author='', subject='Moonshot research and implementation specification, revision 7')
+                         author='', subject='Moonshot research and implementation specification, revision 8')
         self.current_refs = []
         self.page_log = []
         frame = Frame(LEFT, BOTTOM, TEXT_WIDTH, HEIGHT - TOP - BOTTOM,
