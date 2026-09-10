@@ -111,3 +111,18 @@ def test_frozen_score_preserves_baseline_when_extractor_changes_or_disappears(mo
         assert result['status']=='unsupported' and result['score'] is None
         assert result['baseline_preserved'] and not result['model_updated']
         assert frozen==before
+
+
+def test_frozen_scoring_policy_cannot_change_with_live_feature_scales(monkeypatch):
+    import singing_physics.phonation as phonation
+    with Engine() as engine:
+        doc,candidates=fixture(engine)
+        fitted=fit_phonation(engine,doc,candidates=candidates,max_synthesis_calls=9,enabled=True)
+        frozen=forecast_phonation(engine,fitted,family='joint',candidate_id='0',reference_trial_id='cal',
+            pose='a',controls={'JA':-3,'F0':200,'PR':8000,'gain':1.},target_id='policy-target')
+        before=deepcopy(frozen)
+        changed=deepcopy(phonation.FEATURES);changed['harmonicSpectralSlopeDbOctave']=('dB/octave',30.)
+        monkeypatch.setattr(phonation,'FEATURES',changed)
+        result=score_phonation_forecast(frozen,[0.]*4096,_metadata('policy-target',44100,'c'*64,'engine-generated'))
+        assert result['status']=='unsupported' and result['score'] is None
+        assert not result['model_updated'] and frozen==before

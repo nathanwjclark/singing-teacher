@@ -30,6 +30,8 @@ import { MotionCapturePanel } from './components/motion/MotionCapturePanel'
 import CoachLearningPanel from './components/coach/CoachLearningPanel'
 import LearningMemoryPanel from './components/coach/LearningMemoryPanel'
 import PhonationPanel from './phonation/PhonationPanel'
+import { SourceInferencePanel } from './phonation/SourceInferencePanel'
+import SessionReplayPanel from './components/science/SessionReplayPanel'
 import { ScientificModelPanel } from './components/science/ScientificModelPanel'
 import { AstraCoachPanel } from './components/science/AstraCoachPanel'
 import { ScientificSideView } from './components/science/ScientificGeometry'
@@ -56,6 +58,8 @@ const demoScenarios: { name: string; title: string; detail: string; metrics: Par
 function StudioApp() {
   const [pairOpen,setPairOpen]=useState(false)
   const [tab,setTab]=useState<'studio'|'experiments'>('studio')
+  const [learningRecall,setLearningRecall]=useState(false)
+  const setLearningAssistance=useCallback((hidden:boolean)=>{setLearningRecall(hidden);if(hidden)setTab('experiments')},[])
   const [videoStream,setVideoStream]=useState<MediaStream|null>(null)
   const [audioStream,setAudioStream]=useState<MediaStream|null>(null)
   const [phoneMicrophone,setPhoneMicrophone]=useState<MediaStream|null>(null)
@@ -172,13 +176,13 @@ function StudioApp() {
         </div>
       </header>
       <div className="workspace-tools">
-        <nav aria-label="Workspace"><button aria-pressed={tab==='studio'} onClick={()=>setTab('studio')}>Studio</button><button aria-pressed={tab==='experiments'} onClick={()=>setTab('experiments')}>Experiments</button></nav>
+        <nav aria-label="Workspace"><button aria-pressed={tab==='studio'} disabled={learningRecall} onClick={()=>setTab('studio')}>Studio</button><button aria-pressed={tab==='experiments'} onClick={()=>setTab('experiments')}>Experiments</button></nav>
         <button onClick={()=>setPairOpen(true)}>Connect phone / QR</button>
         <ModelAdjustmentControls/><NativePullButton/>
         {phoneMicrophone && <span>Phone microphone connected</span>}
         <RecordingControls controllerRef={recorder} videoStream={videoStream} audioStream={audioStream} onRecording={onRecording} transformRecording={transformRecording}/>
       </div>
-      <main style={tab==='studio'?undefined:{display:'none'}}>
+      <main style={tab==='studio'&&!learningRecall?undefined:{display:'none'}}>
         {help && <aside className="help-box"><strong>Your practice, in three views.</strong> Allow camera access, frame your head and shoulders, and try a comfortable sustained vowel. The 3D movement guide follows facial landmarks and estimated body depth. Drag to orbit the model and select a cue to highlight related muscles. Camera distance is an approximation; use the depth reference to compare your position. Tips are experimental visual prompts, not an assessment of your voice or internal anatomy. Live analysis stays in your browser. Explicit phone snapshots go to your local capture server; recordings are saved only when you press Start recording. Camera and microphone start automatically when browser permissions allow. If your browser pauses audio, use Enable audio in the audio pane. You can stop either device at any time. <button onClick={() => setHelp(false)}>Got it</button></aside>}
         <div className="studio-grid">
           <section className="studio-column"><div className="column-title"><span className="column-number">01</span><h2>Your view</h2><Camera size={16}/></div><div className="panel-body camera-wrap"><CameraPanel key={trackingEpoch} active={active} onFrame={setFrame} onStatus={onStatus} onStream={setVideoStream}/>{demo && <div className="demo-cover"><div className="demo-avatar"><MicVocal size={48}/></div><span className="eyebrow">SAMPLE SESSION</span><h3>{demoScenarios[scenario].title}</h3><p>{demoScenarios[scenario].detail}</p><div className="demo-scenarios" aria-label="Demo scenario">{demoScenarios.map((item, index) => <button key={item.name} aria-pressed={scenario === index} onClick={() => { setScenario(index); setDemoTime(0); setSelectedTipId(undefined) }}>{item.name}</button>)}</div><span className="demo-pill">Demo · camera is off</span></div>}</div></section>
@@ -189,15 +193,21 @@ function StudioApp() {
         {message && status === 'error' && <p className={`session-message ${status === 'error' ? 'error' : ''}`} role="status">{message}</p>}
         <AudioPanel onVoiceActivity={value=>{voiceActivity.current=value}} demo={demo} autoStart externalStream={phoneMicrophone} onStream={setAudioStream}/>
       </main>
-      <main className="research-workspace" style={tab==='experiments'?undefined:{display:'none'}}>
+      <main className="research-workspace" style={tab==='experiments'||learningRecall?undefined:{display:'none'}}>
         <h2>Experiments and evidence</h2><p>{recordingNotice}</p>
+        {learningRecall&&<p role="status">Coaching cues are hidden during this unprompted learning phase. Return to the prompted phase to show them again.</p>}
+        <div data-learning-assistance style={learningRecall?{display:'none'}:undefined}>
         <ScientificModelPanel onPreview={()=>{setScientificPreview(true);setTab('studio')}}/>
         <AstraCoachPanel/>
         <LearningMemoryPanel/>
         <PhonationPanel audioStream={audioStream}/>
+        <SourceInferencePanel/>
+        <SessionReplayPanel/>
         <AcousticMappingPanel/>
         <MotionCapturePanel frame={!demo&&active?frame:null} videoStream={videoStream} audioStream={audioStream}/>
-        <CoachLearningPanel videoStream={videoStream} audioStream={audioStream}/>
+        </div>
+        <CoachLearningPanel videoStream={videoStream} audioStream={audioStream} onAssistanceHiddenChange={setLearningAssistance}/>
+        <div data-learning-assistance style={learningRecall?{display:'none'}:undefined}>
         <p>{observations.length} recorded observations · {measurements.length} measured audio windows</p>
         <p>The native scientific engine is available locally. Import validated engine artifacts to inspect them; human-audio fitting and measured phone depth remain separate acceptance steps.</p>
         <ExperimentDashboard observations={observations} measurements={measurements} onCandidates={setCandidates} onRecords={setImportedRecords}>
@@ -211,6 +221,7 @@ function StudioApp() {
         <ReproducibilityPanel records={[...observations,...measurements,...importedRecords]} trials={ledger}/>
         <DepthProtocolPanel observation={latestTrial?.observation??observations[0]} commit={latestTrial?.commit??undefined} captureStartedAt={latestTrial?.captureStartedAt??undefined}/>
         </ExperimentDashboard>
+        </div>
       </main>
       <PhonePairing open={pairOpen} onClose={()=>setPairOpen(false)} onMicrophoneStream={setPhoneMicrophone}/>
     </div>

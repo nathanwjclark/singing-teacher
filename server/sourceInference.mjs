@@ -1,0 +1,45 @@
+import {readFile,writeFile,mkdir,rename,lstat} from 'node:fs/promises';
+import {resolve} from 'node:path';
+import {randomUUID} from 'node:crypto';
+import {spawn} from 'node:child_process';
+
+const read=async path=>JSON.parse(await readFile(path,'utf8'));
+async function save(path,value){const temporary=path+'.'+randomUUID()+'.tmp';await writeFile(temporary,JSON.stringify(value),{mode:0o600});await rename(temporary,path);}
+async function context(dataRoot){const c=await read(resolve(dataRoot,'science-current.json'));if(c.status!=='succeeded'||!/^run-[A-Za-z0-9_-]+$/.test(c.runId||''))throw Error('A completed voice fit is required');const dir=resolve(dataRoot,'science-runs',c.runId),summary=await read(resolve(dir,'summary.json'));return {dir,runId:c.runId,sessionId:summary.sessionId};}
+async function readContext({dataRoot,enabled=process.env.PHONATION_SOURCE_ENABLED==='1'}){
+ const unavailable={status:enabled?'unsupported':'disabled',reason:enabled?'Analyze a saved voice recording first':'Optional source inference is disabled'};let c;try{c=await context(dataRoot);}catch{return {enabled,running:false,fit:unavailable,forecast:unavailable,score:unavailable};}
+ if(!enabled)return {enabled,running:false,runId:c.runId,sessionId:c.sessionId,fit:unavailable,forecast:unavailable,score:unavailable,baselinePreserved:true};
+ const phases={};for(const name of ['fit','forecast','score']){try{phases[name]=await read(resolve(c.dir,'source-'+name+'.json'));}catch{phases[name]=unavailable;}}
+ let baselineModelId=null,state=null;
+ if(process.env.SCIENCE_URL&&process.env.SCIENCE_TOKEN){try{const base=new URL(process.env.SCIENCE_URL);if(base.protocol!=='http:'||base.hostname!=='127.0.0.1')throw Error('Local scientific service required');const response=await fetch(new URL('/sessions/'+c.sessionId+'/state',base),{headers:{Authorization:'Bearer '+process.env.SCIENCE_TOKEN},signal:AbortSignal.timeout(3000)});if(!response.ok)throw Error('Unavailable session');state=(await response.json()).state;baselineModelId=state.snapshot?.model_id;}catch{baselineModelId=null;}}
+ for(const phase of Object.values(phases)){if(phase.status==='running')phase.status='interrupted';if(phase.result&&phase.result.baselineModelId!==baselineModelId){phase.status='unsupported';phase.reason='Source result is historical or its baseline model is unavailable';delete phase.result;}}
+ const target=phases.forecast.result?.forecast?.target_id,authoritative=target?state?.source_forecasts?.[target]:null;
+ phases.forecast.current=Boolean(authoritative?.status==='committed'&&authoritative?.source_model_id===state?.source_model?.model_id&&authoritative?.baseline_model_id===baselineModelId&&phases.forecast.result?.forecast?.status==='available');
+ phases.forecast.authoritativeStatus=authoritative?.status||'unavailable';
+ let resting=false;try{await lstat(resolve(c.dir,'astra-rest.json'));resting=true;}catch(error){if(error.code!=='ENOENT')resting=true;}
+ if(resting){phases.forecast.current=false;phases.forecast.authoritativeStatus='rest';phases.forecast.reason='Astra selected rest; request a new recording decision before continuing';}
+ return {enabled,runId:c.runId,sessionId:c.sessionId,running:false,...phases,baselineModelId,sourceModelId:state?.source_model?.model_id||null,sourceScoreCount:(state?.source_receipts||[]).filter(r=>r.operation==='score_phonation').length,baselinePreserved:true,interpretation:'Conditional source/tract acoustic comparison; not vocal-fold contact or closure measurement'};
+}
+export async function readSourceInferenceContext(options){const status=await readContext(options);if(!options.compact)return status;const {fit,forecast,score,...base}=status;const fitted=fit.result;return {...base,fit:{status:fit.status,reason:fit.reason,sourceModelVersion:fitted?.source_model_version,alternatives:fitted?Object.fromEntries(['joint','fixed_source','fixed_anatomy'].map(family=>[family,(fitted[family]?.candidates||[]).slice(0,8).map(row=>({candidateId:row.candidate_id,anatomy:row.anatomy,status:row.status,discrepancy:row.score,sourceControls:row.predictions?.[0]?.controls}))])):null},forecast:{status:forecast.status,current:forecast.current,reason:forecast.reason,targetId:forecast.result?.forecast?.target_id,pose:forecast.result?.pose,sourceControls:forecast.current?forecast.result?.forecast?.controls:null,descriptors:forecast.current?forecast.result?.forecast?.record?.descriptors:null},score:{status:score.status,reason:score.reason,discrepancy:score.result?.score,modelUpdated:score.result?.model_updated,forecastSha256:score.result?.forecast_sha256},supportedActionScope:'Optional source context may inform existing supported vowel actions; source parameters are not new physical actions or measured controls'};}
+export function createSourceInferenceRoutes({repo,dataRoot,json,enabled=process.env.PHONATION_SOURCE_ENABLED==='1'}){
+ let running=false,activePhase=null,childProcess=null;
+ const terminate=()=>{if(childProcess)childProcess.kill('SIGTERM');};process.once('exit',terminate);for(const signal of ['SIGTERM','SIGINT'])process.once(signal,()=>{terminate();process.exit(0);});
+ return async(req,res,url)=>{
+  if(!url.pathname.startsWith('/api/source/'))return false;
+  const host=req.headers.host,address=req.socket.remoteAddress?.replace(/^::ffff:/,'');if(!['127.0.0.1','::1'].includes(address)||!host||!/^((localhost|127\.0\.0\.1)|\[::1\])(:\d+)?$/.test(host)||(req.headers.origin&&!['http://'+host,'https://'+host].includes(req.headers.origin))){json(res,403,{error:'Use source inference from the local app'});return true;}
+  try{
+   if(req.method==='GET'&&url.pathname==='/api/source/status'){const wasRunning=running,phaseAtRead=activePhase;const status=await readSourceInferenceContext({dataRoot,enabled});const busy=wasRunning||running,phase=phaseAtRead||activePhase;if(busy&&phase)status[phase].status='running';json(res,200,{...status,running:busy});return true;}
+   const phase={'/api/source/analyze':'fit','/api/source/forecast':'forecast','/api/source/score':'score'}[url.pathname];if(req.method!=='POST'||!phase){json(res,405,{error:'Method not allowed'});return true;}
+   if(!enabled){json(res,200,await readSourceInferenceContext({dataRoot,enabled}));return true;}
+   if(running){json(res,409,{error:'An optional source job is running'});return true;}
+   if(url.search||Number(req.headers['content-length']||0)>0||req.headers['transfer-encoding']){json(res,400,{error:'This action uses saved original audio and takes no parameters'});return true;}
+   running=true;const c=await context(dataRoot),path=resolve(c.dir,'source-'+phase+'.json');let previous;try{previous=await read(path);}catch{previous=null;}
+   const status=await readSourceInferenceContext({dataRoot,enabled});let key=phase+':'+status.baselineModelId;
+   if(phase==='forecast')key+=':'+status.sourceModelId+':'+status.sourceScoreCount;
+   if(phase==='score'){const pull=await read(resolve(dataRoot,'native-pull-latest.json'));key+=':'+status.forecast.result?.forecast?.target_id+':'+pull.sha256;}
+   if(previous?.key===key&&status[phase].status==='succeeded'&&(phase!=='forecast'||status.forecast.current)){running=false;json(res,200,previous);return true;}
+   const attempt=previous?.key===key?previous.id:randomUUID(),record={id:attempt,key,status:'running',createdAt:previous?.id===attempt?previous.createdAt:new Date().toISOString()};await save(path,record);
+   const output=resolve(c.dir,'source-attempts',attempt);await mkdir(output,{recursive:true,mode:0o700});const child=spawn(process.env.SINGING_PYTHON||resolve(repo,'science/.venv/bin/python'),[resolve(repo,'science/scripts/app_source.py'),'--data-root',dataRoot,'--phase',phase,'--output',output],{cwd:repo,env:{...process.env,PYTHONPATH:repo+':'+resolve(repo,'science/src')},stdio:['ignore','pipe','pipe']});activePhase=phase;childProcess=child;child.stdout.resume();child.stderr.resume();const timer=setTimeout(()=>child.kill('SIGTERM'),150000);let launchError=false;child.on('error',()=>{launchError=true;});child.on('close',async code=>{clearTimeout(timer);try{let result;try{result=await read(resolve(output,'result.json'));}catch{result=null;}await save(path,{...record,status:code===0&&result?'succeeded':'failed',result,reason:code===0?null:launchError?'Optional source runner unavailable':'Optional source job failed; baseline retained',completedAt:new Date().toISOString()});}catch{console.error('Optional source receipt could not be saved');}finally{running=false;activePhase=null;childProcess=null;}});json(res,202,record);return true;
+  }catch{running=false;json(res,409,{error:'Optional source operation unavailable; complete a voice fit and start the scientific worker'});return true;}
+ };
+}

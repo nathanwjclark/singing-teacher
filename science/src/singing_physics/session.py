@@ -96,6 +96,9 @@ class SessionController:
                 except (ValueError, RuntimeError) as exc:
                     state['jobs'].append({**pending,'status':'submission_failed','error':str(exc)})
                     state['pending']=None
+                    if pending.get('source_binding'):
+                        from .session_source import collect
+                        collect(state,pending,'submission_failed',None)
                     if pending['request']['operation']=='update_pcm':
                         for design in state['designs'].values():
                             if design['status']=='outcome_pending': design['status']='failed'
@@ -117,6 +120,7 @@ class SessionController:
         fields={'register_model':{'snapshot'},'ingest_calibration':{'document'},'search':{'parameters'},'fit_probe':{'parameters'},
             'select_experiment':{'source_design_id','design_id','target_observation_id','experiment_id','selection_reason'},
             'propose_design':{'parameters'},'collect_job':{'job_id'},'submit_outcome':{'design_id','parameters'},
+            'fit_source':{'parameters'},'forecast_source':{'parameters'},'score_source':{'forecast_id','pcm','metadata'},
             'record_attempt':{'design_id','attempt_id','status','reason'},'record_sensation':{'attempt_id','text'}}
         if action not in fields or set(command)!={'action','command_id','expected_version'}|fields[action]:
             raise ValueError('Unsupported session command fields')
@@ -142,7 +146,12 @@ class SessionController:
                           'key':'session:'+_hash([self.session_id,command_id]),'job_id':None,'base_model_id':model}
 
     def _apply(self,state,action,c):
-        if action=='register_model':
+        if action in ('fit_source','forecast_source','score_source'):
+            from .session_source import prepare
+            operation,parameters,binding=prepare(state,action,c)
+            self._launch(state,operation,parameters,c['command_id'])
+            state['pending']['source_binding']=binding
+        elif action=='register_model':
             if state['pending']:
                 raise ValueError('Collect outstanding job before registering a model')
             artifact=Artifact(_encode(c['snapshot'])); _snapshot(artifact,artifact.sha256)
@@ -280,6 +289,9 @@ class SessionController:
                 raise ValueError('Job has not completed')
             result=self.service.result(c['job_id']) if status['status']=='succeeded' else None
             operation=pending['request']['operation']
+            if operation in ('fit_phonation','forecast_phonation','score_phonation'):
+                from .session_source import collect
+                collect(state,pending,status['status'],result)
             if result is not None:
                 if operation=='search_pcm':
                     rows=sorted([r for r in result['joint']['candidates'] if r['status']=='scored'],key=lambda r:(r['weighted_mean_square_discrepancy'],r['candidate_id']))
@@ -375,4 +387,7 @@ class SessionController:
             if not any(a['attempt_id']==c['attempt_id'] for a in state['attempts']) or not isinstance(c['text'],str) or not 1<=len(c['text'])<=2000:
                 raise ValueError('Sensation must reference recorded attempt and bounded text')
             state['sensations'].append({'attempt_id':c['attempt_id'],'text':c['text'],'kind':'subjective_report_not_model_constraint'})
+        if state.get('source_model'):
+            from .session_source import invalidate_stale
+            invalidate_stale(state)
         return {'command_id':c['command_id'],'input_sha256':_hash(c)}

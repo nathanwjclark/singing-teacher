@@ -114,3 +114,40 @@ This ranking uses original PCM calibration and newly supplied probe measurements
 Later PCM outcomes are preserved in lineage/current support but are not rescored
 by this operator. Ranking is a finite discrepancy comparison, not a cumulative
 Bayesian posterior, likelihood calibration, or physiological identification.
+
+## Optional source-model lifecycle
+
+Three additive commands reuse the existing isolated numerical JobService:
+
+- `fit_source`: `parameters` has document/candidates and optional
+  max_synthesis_calls/timeout_s. The source document uses PHONATION_SOURCE.md.
+  Candidate anatomies must exactly cover the current baseline's full retained
+  geometries. Every trial's metadata must identify this session and original
+  artifact hashes. A successful worker result is adopted only when all candidates
+  in all three comparison families are scorable with equal recorded compute.
+- `forecast_source`: `parameters` has family, candidate_id, reference_trial_id,
+  pose, controls (JA/F0/PR/gain), and fresh target_id. It injects the authoritative
+  source fit. Collecting the completed worker commits an immutable artifact in
+  source_forecasts[target_id] before accepting capture.
+- `score_source`: forecast_id, pcm, metadata. It requires the current baseline
+  and source model, exact target, post-session-commit evidence timestamp and
+  disjoint original artifact IDs/hashes. Native sample rate, window and scoring
+  policy are frozen. The numerical score records explicit model_updated:false;
+  it never silently refits anatomy or source parameters.
+
+Usual command_id and expected_version rules apply. All worker requests explicitly
+opt into the optional capability. source_model is a separate artifact containing
+model_id, baseline_model_id, parent_source_model_id, result, result_sha256,
+evidence_ids/hashes and adopted_at. source_forecasts records source/baseline IDs,
+artifact, committed_at, status and later score_result. source_receipts records
+attempts, failures and adoption; source_status reports the latest optional result.
+Old sessions may lack these fields and remain valid. A baseline model change makes
+source forecasts stale. Failed, cancelled, incomplete or unavailable enhancements
+preserve both the baseline snapshot and any prior valid source artifact.
+
+Calibration evidenceAt may be null when absolute capture UTC is unknown;
+calibration fitting does not require prospective time proof. Do not replace unknown
+capture time with receipt/re-import time. Held-out evidenceAt must represent the later capture,
+not a re-import timestamp. Original hashes are excluded conservatively across
+calibration/heldout artifacts. The low-level session API cannot authenticate device
+clocks or supplied raw files; app importers retain that responsibility.

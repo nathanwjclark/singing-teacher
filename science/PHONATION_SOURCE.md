@@ -2,8 +2,9 @@
 
 This additive module is scientifically executable and defaults off. It does not
 modify Engine.synthesize, baseline models, sessions, app startup or live coaching.
-The app's source-inference capability must remain disabled until a worker consumer
-and optional prediction/update policy are connected and independently verified.
+The optional session lifecycle uses isolated worker operations and separate
+source-model adoption. The app consumer is verified with actual native synthetic
+recordings through fit, forecast, later score and Astra context; see `SOURCE_RUNTIME.md`.
 Measurement-only phonation coaching can run independently.
 
 The pinned JD3 speaker XML selects **Geometric glottis**. The module verifies its
@@ -52,8 +53,10 @@ comparisons preserve the existing baseline; callers retain errors/status separat
 explicit known JA/F0/PR/gain conditions, with a new target ID, source/extractor
 lineage and digest. `score_phonation_forecast` checks digest, target, post-forecast
 observation time and calibration-frame exclusion, runs the same extractor, and
-returns a discrepancy without updating the model. Forecast profile is currently
-44100 Hz/4096 samples/start4410. The function consumes one synthesis call outside
+returns a discrepancy without updating the model. Forecast profiles retain the fitted reference observation's 44100/48000/96000 Hz
+rate and canonical frame size, with the declared 100 ms crop. Generated audio is
+resampled; observed audio is not. Frozen scoring policy includes feature scales,
+source model version and adapter hash; a changed policy returns unsupported. The function consumes one synthesis call outside
 the fitting budget and declares that count explicitly.
 
 Native tests recover a declared PS/anatomy candidate and score a later a-vowel at

@@ -1,4 +1,5 @@
 import './environment.mjs';
+import {createSessionExportRoutes} from './sessionExport.mjs';
 import {createProbeRoutes} from './probe.mjs';
 import {createAstraRoutes} from './astra.mjs';
 import {createLearningRoutes} from './learningMemory.mjs';
@@ -29,7 +30,11 @@ const handleAstraReview=createAstraReviewRoutes({dataRoot,json});
 const handleLearning=createLearningRoutes({repo:resolve(import.meta.dirname,'..'),dataRoot,json});
 const handleAstra=createAstraRoutes({repo:resolve(import.meta.dirname,'..'),dataRoot,json});
 const handleProbe=createProbeRoutes({repo:resolve(import.meta.dirname,'..'),dataRoot,json});
+const handleSessionExport=createSessionExportRoutes({dataRoot,json});
 let handlePhonation;
+let handleSource;
+try{const {createSourceInferenceRoutes}=await import('./sourceInference.mjs');handleSource=createSourceInferenceRoutes({repo:resolve(import.meta.dirname,'..'),dataRoot,json});}
+catch{handleSource=async(req,res,url)=>{if(!url.pathname.startsWith('/api/source/'))return false;json(res,req.method==='GET'?200:503,{enabled:false,running:false,reason:'Optional source module is unavailable',baselinePreserved:true});return true;};}
 try{const {createPhonationRoutes}=await import('./phonation.mjs');handlePhonation=createPhonationRoutes({repo:resolve(import.meta.dirname,'..'),dataRoot,json});}
 catch{handlePhonation=async(req,res,url)=>{if(!url.pathname.startsWith('/api/phonation/'))return false;json(res,req.method==='GET'?200:503,{measurement:{status:'unsupported',reason:'Optional phonation module is unavailable'},inference:{status:'disabled'},coaching:{status:'disabled'},baselineScoring:'unchanged'});return true;};}
 const engineAvailable=await access(process.env.SINGING_PYTHON||resolve(import.meta.dirname,'../science/.venv/bin/python')).then(()=>true).catch(()=>false);
@@ -45,7 +50,9 @@ const serverHandler=async(req,res)=>{try{
   if(await handleLearning(req,res,url))return;
   if(await handleAstra(req,res,url))return;
   if(await handleProbe(req,res,url))return;
+  if(await handleSessionExport(req,res,url))return;
   if(await handlePhonation(req,res,url))return;
+  if(await handleSource(req,res,url))return;
   if(await handleScience(req,res,url))return;
   if(await handleVoiceCapture(req,res,url))return;
   if(await handleNativePull(req,res,url))return;

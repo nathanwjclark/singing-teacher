@@ -77,7 +77,7 @@ export function ExperimentRunner({ onStartCapture, onStopCapture, onEvaluate }: 
   return <section className="experiment-runner" aria-label="Prospective experiment runner">
     <h3>Run a prospective experiment</h3>
     <p>Propose → import forecast → freeze prediction → record → score → release for update.</p>
-    <p>The forecasting and fitting engine is not connected. Import its KIT forecast to continue; the app does not invent predictions or fitted anatomy.</p>
+    <p>This section reviews imported KIT experiments. For the connected recording, fitting and Astra workflow, use the Scientific model and Astra controls above. Import a KIT forecast here to review a separate experiment.</p>
     <form onSubmit={event => { event.preventDefault(); void run(() => proposeExperiment(experimentId, task)) }}>
       <label>Experiment ID <input value={experimentId} onChange={event => setExperimentId(event.target.value)} required placeholder="Match the forecast experimentId" /></label>{' '}
       <label>Capture instruction <input value={task} onChange={event => setTask(event.target.value)} required placeholder="Match the forecast intervention" /></label>{' '}
