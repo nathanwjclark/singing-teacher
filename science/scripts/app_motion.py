@@ -30,7 +30,14 @@ def load(path,limit=64*1024*1024):
         return raw
     finally:os.close(fd)
 def write(path,value):
-    with path.open('x') as f:os.chmod(path,0o600);json.dump(value,f,allow_nan=False)
+    # Status polling must never observe partially serialized numerical output.
+    fd,temporary=tempfile.mkstemp(prefix=path.name+'.',dir=path.parent)
+    try:
+        with os.fdopen(fd,'w') as f:
+            json.dump(value,f,allow_nan=False);f.flush();os.fsync(f.fileno())
+        os.link(temporary,path)  # Atomic publication, preserving exclusive creation.
+    finally:
+        os.unlink(temporary)
 def process(args,timeout=20):
     p=subprocess.Popen(args,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
     try:
@@ -113,6 +120,8 @@ def run(data_root,capture_id,pose,output,expected_model_id=None):
             except (ValueError,RuntimeError) as error:
                 row.update(status='failed',reason=str(error));continue
             row.update(status='scored' if fitted['joint']['best'] is not None else 'insufficient-quality',fit=fitted,reason=None if fitted['joint']['best'] is not None else 'No complete scorable candidate prediction')
+    from singing_physics.motion_path import couple_motion_hypotheses
+    result['temporalAnalysis']=couple_motion_hypotheses(result['windows'])
     result['status']='available' if any(w['status']=='scored' for w in result['windows']) else 'insufficient-quality'
     write(output/'summary.json',result);return result
 

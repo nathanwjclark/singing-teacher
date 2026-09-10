@@ -1,3 +1,4 @@
+import {TemporalAnalysis} from './TemporalAnalysis'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { TrackingFrame } from '../../types'
 import type { MotionObservation, MotionMarker } from '../../contracts/learning'
@@ -123,6 +124,7 @@ export function MotionCapturePanel({frame,videoStream,audioStream}:{frame:Tracki
  {analysis?.result&&<div>{!analysis.resultCurrent&&<p><strong>Historical analysis:</strong> these results use an earlier model, not the current baseline {analysis.currentModelId||'(unavailable)'}.</p>}<p>Numerical result: {analysis.result.status} · declared vowel {analysis.result.pose} · {analysis.result.actualSynthesisCalls} synthesis calls. Baseline model unchanged; visual synchronization unknown.</p>
  <p>Used {analysis.result.hypothesisSubset.selectedIds.length} of {analysis.result.hypothesisSubset.totalRetained} retained anatomy hypotheses. Selection: {analysis.result.hypothesisSubset.selection}.</p>
  <details><summary>Model subset and fixed simulation assumptions</summary><p>Session: {analysis.result.sessionId} · Model: {analysis.result.modelId}</p><p>{analysis.result.hypothesisSubset.selectedIds.join(', ')}</p><ul>{analysis.result.assumptions.map((assumption,i)=><li key={i}>{assumption}</li>)}</ul></details>
+ <TemporalAnalysis result={analysis.result.temporalAnalysis}/>
  {analysis.result.windows.map(window=><details key={window.index}><summary>Window {window.index+1} · sample {window.startSample} · {window.status}</summary>{window.reason&&<p>{window.reason}</p>}{window.fit?.joint.candidates.length?<table><thead><tr><th>Ranked hypothesis</th><th>Weighted mean-square discrepancy</th></tr></thead><tbody>{rankMotionCandidates(window.fit.joint.candidates).map(candidate=><tr key={candidate.candidate_id}><td>{candidate.candidate_id}</td><td>{candidate.weighted_mean_square_discrepancy==null?`Unavailable: ${candidate.status}. ${candidate.missing_features?.map(m=>m.reason).join('; ')||''}`:candidate.weighted_mean_square_discrepancy.toFixed(3)}</td></tr>)}</tbody></table>:<p>No numerical hypothesis scores are available for this window.</p>}</details>)}
  </div>}
  </fieldset>}

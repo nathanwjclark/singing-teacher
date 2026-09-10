@@ -1,3 +1,4 @@
+import {readMotionContext} from './motionContext.mjs';
 import {readFile, writeFile, mkdir, rename, readdir, unlink} from 'node:fs/promises';
 import {resolve} from 'node:path';
 import {randomUUID} from 'node:crypto';
@@ -73,6 +74,7 @@ export function createAstraRoutes({dataRoot,json,provider,fetchImpl=fetch,callBu
         catch{prompt.phonation={measurement:{status:'unsupported',reason:'Optional phonation context unavailable'},inference:{status:'disabled'},coaching:{status:'disabled'},baselineScoring:'unchanged'};}
         try{const {readSourceInferenceContext}=await import('./sourceInference.mjs');prompt.sourceInference=await readSourceInferenceContext({dataRoot,compact:true});}
         catch{prompt.sourceInference={enabled:false,status:'unsupported',reason:'Optional source context unavailable',baselinePreserved:true};}
+        prompt.motionAudio=await readMotionContext({dataRoot,sessionId:context.sessionId,modelId:state.snapshot.model_id});
         const dir=resolve(dataRoot,'astra-decisions',context.sessionId);await mkdir(dir,{recursive:true,mode:0o700});path=resolve(dir,input.requestId+'.json');receipt={requestId:input.requestId,sessionId:context.sessionId,runId:context.runId,modelId:state.snapshot.model_id,status:'running',goal:input.goal||'',createdAt:new Date().toISOString(),input:prompt,sessionVersion:state.version};await save(path,receipt);
         const result=await p.generateDecision({instructions,input:prompt,schema,signal:AbortSignal.timeout(90000)}),decision=result.decision;
         if(!decision||Object.keys(decision).sort().join(',')!=='action,cue,experimentId,explanation'||!['record','rest'].includes(decision.action)||!['cue','explanation'].every(k=>typeof decision[k]==='string'&&decision[k].trim().length>0&&decision[k].length<=2000)|| (decision.action==='rest'?decision.experimentId!==null:!options.some(r=>r.experiment.experiment_id===decision.experimentId)))throw failure('Astra returned an unsupported decision',502);

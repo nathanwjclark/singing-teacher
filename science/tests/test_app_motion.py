@@ -40,6 +40,10 @@ def test_encoded_native_pcm_real_decode_canonical_fit_unchanged_model(tmp_path,m
         assert result['status']=='available' and result['actualSynthesisCalls']==36
         assert len(result['windows'])==3 and all(w['status']=='scored' for w in result['windows'])
         assert result['decode']['sampleRateHz']==48000
+        assert result['temporalAnalysis']['status']=='available'
+        assert result['temporalAnalysis']['additionalSynthesisCalls']==0
+        assert len(result['temporalAnalysis']['sensitivity'])==3
+        assert all(len(s['best']['path'])==3 for s in result['temporalAnalysis']['sensitivity'])
         assert backend.execute({'action':'state'})['state']['snapshot']==model
         assert result['visualSync']=='unknown' and not result['modelUpdated']
         monkeypatch.setattr(app_motion,'fit_pcm',lambda *args,**kwargs:{'joint':{'best':None,'candidates':[{'status':'missing_predicted_features'}]},'actual_synthesis_calls':0})
@@ -60,3 +64,14 @@ def test_decoder_timeout_reaps_process(tmp_path):
     with pytest.raises(subprocess.TimeoutExpired):app_motion.process([sys.executable,'-c',code],timeout=.2)
     pid=int(pidfile.read_text())
     with pytest.raises(ProcessLookupError):os.kill(pid,0)
+
+
+def test_summary_publication_is_atomic_and_exclusive(tmp_path):
+    import pytest
+    target=tmp_path/'summary.json'
+    with pytest.raises(ValueError):app_motion.write(target,{'invalid':float('nan')})
+    assert not target.exists() and not list(tmp_path.iterdir())
+    app_motion.write(target,{'status':'complete'})
+    with pytest.raises(FileExistsError):app_motion.write(target,{'status':'replacement'})
+    assert json.loads(target.read_text())=={'status':'complete'}
+    assert list(tmp_path.iterdir())==[target]
