@@ -91,3 +91,10 @@ Current integration evidence: source/replay/learning browser suite 20 passed;
 actual native source lifecycle and source-to-Astra route checks passed; motion
 persistence adds two real-server browser tests with exact original downloads
 and rejection/fallback coverage. Build/typecheck and lint passed.
+
+The optional motion-audio path additionally passed actual encoded-media app
+runtime checks (voiced, silent, no-audio, missing decoder, restart reuse and
+unchanged baseline), plus real-server browser checks for actual native results
+and unavailable states. The final UI refreshes baseline identity before a new
+analysis while preserving uncertain retry identities. See
+[motion audio review](motion-audio-review.md).
