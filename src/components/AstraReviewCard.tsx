@@ -27,7 +27,7 @@ export function AstraReviewCard(){
   if(!review)return null;
   return <aside className="astra-review-card" aria-label="Astra model review" data-status={review.status}>
     <header><strong>ASTRA · MODEL REVIEW</strong><span>{review.status==='complete'?'SAVED':review.status==='running'?'REVIEWING':review.status==='error'?'RETRY NEEDED':'WAITING'}</span></header>
-    {review.text?<details><summary>{review.text.split('\n').find(line=>line.trim())}</summary><p>{review.text}</p><small>gpt-6-astra · {review.captureId?.slice(0,8)} · {review.runId}<br/>Model hypotheses; stays until the next phone capture.</small></details>:<p>{review.message||'Reviewing model geometry and predicted voice effects…'}</p>}
+    {review.text?<details><summary>{review.text.split('\n').find(line=>line.trim())}</summary><p>{review.text.includes('\n') ? review.text.slice(review.text.indexOf('\n') + 1).trim() : ''}</p><small>gpt-6-astra · {review.captureId?.slice(0,8)} · {review.runId}<br/>Model hypotheses; stays until the next phone capture.</small></details>:<p>{review.message||'Reviewing model geometry and predicted voice effects…'}</p>}
     {review.status==='error'&&review.canReview&&<button type="button" disabled={retrying} onClick={()=>void retry()}>{retrying?'Starting…':'Retry review'}</button>}
   </aside>;
 }
