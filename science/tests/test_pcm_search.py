@@ -84,7 +84,7 @@ def test_invalid_budget_bounds_lineage_and_partial_native_failure(monkeypatch):
         kwargs = dict(anatomy_bounds={'hard_palate_length': [4., 4.8]}, nuisance_profiles=profiles,
                       max_synthesis_calls=10, rounds=2, seed=1, node_binary=NODE)
         for options in ({'max_synthesis_calls': 5}, {'max_synthesis_calls': True}, {'rounds': 0},
-                        {'seed': -1}, {'anatomy_bounds': {'lip_width': [1., 1.2]}},
+                        {'seed': -1}, {'anatomy_bounds': {'lip_width': [.4, 1.2]}},
                         {'nuisance_profiles': profiles*2}):
             with pytest.raises(ValueError):
                 search_pcm(engine, doc, **{**kwargs, **options})
@@ -129,3 +129,23 @@ def test_all_unscorable_predictions_are_a_retained_failure_outcome():
         assert all(r['status'] == 'missing_predicted_features' for r in result['joint']['candidates'])
         assert result['actual_synthesis_calls'] == 6
         assert result['completed_comparison_calls_equal'] is True
+
+
+def test_native_lip_width_search_retains_discriminable_geometry_at_fixed_budget():
+    with Engine() as engine:
+        doc, profiles, _ = search_fixture(engine)
+        original = engine.anatomy()
+        result = search_pcm(engine, doc, anatomy_bounds={'lip_width': [.5, 1.5]},
+            nuisance_profiles=profiles, max_synthesis_calls=12, rounds=1, seed=7, node_binary=NODE)
+        assert result['actual_synthesis_calls'] <= 12
+        assert result['parameter_units']['lip_width'] == 'cm'
+        assert result['joint']['actual_synthesis_calls'] == result['fixed_anatomy_baseline']['actual_synthesis_calls']
+        assert engine.anatomy() == original
+        distances = []
+        for row in result['joint']['candidates']:
+            if row['status'] == 'scored':
+                assert .5 <= row['anatomy']['lip_width'] <= 1.5
+                engine.set_anatomy(row['anatomy'])
+                distances.append(engine.lip_markers('a', {'JA': -3.})['distance_m'])
+        engine.set_anatomy(original)
+        assert len(distances) >= 2 and max(distances)-min(distances) > .001

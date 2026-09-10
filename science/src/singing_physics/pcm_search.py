@@ -9,7 +9,7 @@ from scipy.stats import qmc
 from .engine import Engine, finite
 from .pcm_inverse import _hash, fit_pcm
 
-SUPPORTED_BOUNDS = {"hard_palate_length": (3.8, 5.1), "pharynx_length": (5.7, 7.4)}
+SUPPORTED_BOUNDS = {"hard_palate_length": (3.8, 5.1), "pharynx_length": (5.7, 7.4), "lip_width": (.5, 1.5)}
 
 
 class _CountedEngine:
@@ -49,7 +49,7 @@ def search_pcm(engine: Engine, document, *, anatomy_bounds, nuisance_profiles,
     if any(not isinstance(t, str) or not t.strip() for t in trial_ids) or len(set(trial_ids)) != len(trial_ids):
         raise ValueError("Invalid or duplicate trial identities")
     if not isinstance(anatomy_bounds, dict) or not anatomy_bounds or set(anatomy_bounds)-set(SUPPORTED_BOUNDS):
-        raise ValueError("Specify one or both supported anatomy bounds")
+        raise ValueError("Specify one or more supported anatomy bounds")
     bounds = {}
     for name in sorted(anatomy_bounds):
         interval = anatomy_bounds[name]
