@@ -1,0 +1,23 @@
+# Private acoustic probe importer and response extraction
+
+`node --experimental-strip-types scripts/import-acoustic-probe.ts CAPTURE_DIRECTORY PRIVATE_OUTPUT_DIRECTORY`
+
+Input is an unpacked native `probe-native-1.0.0` directory. Original microphone and exact complete drive timeline remain untouched. The importer checks SHA-256, byte count, Float32 little-endian mono dimensions, finite samples, sample rate/band, calibration evidence artifact bytes, equal-length nonoverlapping repeated windows, and bounds. Unsafe paths/symlinks and corrupt files reject ingestion. Valid hashed stopped attempts with incomplete windows, and unknown native sample alignment, remain captured with no response estimate. Unexplained incomplete windows in a completed attempt reject ingestion. Reimport of identical manifest/media yields the same measurement identity; calibration changes change identity. Hashes establish consistency, not physical authenticity.
+
+Outputs:
+
+- `probe-measurement.json`: browser-safe review summary, up to 128 nonoverlapping frequency bands, explicit captured/response usable/included-in-fit states.
+- `probe-response-HASH.json`: full complex spectrum, repeat coherence, variability, valid mask and source hashes.
+- `probe-impulse-HASH.json`: inverse-FFT impulse estimate, with finite/circular-window and unverified time-zero limitations.
+- `probe-records.json`: additive `probe-records-1.0.0` definition/calibration/attempt/measurement records retaining the exact native source metadata.
+- `probe-kit-observation.json`: existing KIT 1.0 observation and raw artifact references, with absent RGB/depth explicitly declared. External probe audio is marked `notSingingAudio`; it must not enter the canonical singing/glottal observation operator. Paths point to original private files; keep them local. Participant remains unassigned unless supplied explicitly by native metadata.
+
+DSP uses repeated complete-event rectangular windows (the emitted sweep has its own smooth envelope), zero-padding to a power-of-two FFT, mean cross/power spectra, and `H = S_yx / (S_xx + epsilon)`. Epsilon is maximum drive spectral power × 1e-8. No arbitrary direct-path time gate is applied. Windows must include the response tail; a truncated window is a biased estimate. Drive-power threshold 1e-5 of maximum, coherence >= .6 and relative repeat standard deviation <= 1 are heuristic usability limits, not a posterior likelihood. Saturation, reported failures and buffer discontinuities invalidate usable bands. Hardware processing/nonlinearity remain uncharacterized and explicitly flagged. Native sample offsets currently derive from host clocks; they have unknown acoustic alignment uncertainty. Absolute phase/time-of-flight is disabled. No automatic cross-correlation alignment or calibrated drift estimate is claimed.
+
+Single repetitions retain a response estimate but cannot report coherence or become response usable. SNR is repeat-coherent power divided by residual power, not an independently measured silence noise floor. Repeated deterministic room response can be highly coherent: coherence does not identify anatomy. Summary magnitude is averaged separately from complex components to avoid misreading complex cancellation. Correlated bins are grouped for display; this is not a fitted covariance or an independent evidence count.
+
+All response and impulse units are **recorded PCM per digital drive**, not impedance, calibrated pressure, reflection coefficient or airway area. Timing and calibration must be honored by future consumers. Human capture playback requires the separate native reviewed output-level gate; this importer emits no sound.
+
+PROBE-02 software checks: `node --experimental-strip-types --test scripts/import-acoustic-probe.test.ts`. A software-only three-repeat known FIR fixture recovers `.6 + .2 z^-3` complex response to mean error below 1e-4. Single-repeat confidence is withheld, malformed JSON is rejected, and altered original PCM fails hash verification. The fixture is not a human or physical-reference measurement.
+
+Acceptance still pending: a genuine reviewed native probe recording replay; calibrated device/placement response, acoustic timing/drift and nonlinearity checks; A-owned external-drive observation operator; joint anatomical fitting and held-out comparison; runtime Astra adaptation. `includedInFit` is always false from this producer, with its dependency reason. Nicole's glottis-to-mouth response is not an external-speaker observation operator. G8/G9 are not claimed complete.
