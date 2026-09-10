@@ -5,6 +5,21 @@ const result={runId:'ui-test',sessionId:'session-test',modelId:'model-before',na
  forecast:{selected_experiment_id:'vowel-a',rankings:[{experiment:{experiment_id:'vowel-a',pose:'a'},predictions:[]}]},
  forecastRole:'Software interface test',interpretation:'No anatomical validation',files:{}};
 
+test('Astra rest disables scoring and capture event submissions',async({page})=>{
+ let submitted=0;
+ await page.route('**/api/science/status',r=>r.fulfill({json:{status:'succeeded',runId:'ui-test',result:{...result,recordingAllowed:false,restDecision:{sessionId:'session-test',decisionId:'rest',createdAt:'2026-09-10T12:00:00Z'},recordingMessage:'Astra selected rest. Ask for a new recording decision.'}}}));
+ await page.route('**/api/science/outcome',r=>r.fulfill({json:{status:'not-run'}}));
+ await page.route('**/api/science/use-latest-capture',r=>{submitted++;return r.fulfill({json:{prepared:true}})});
+ await page.goto('/');await page.getByRole('button',{name:'Experiments',exact:true}).click();
+ await expect(page.locator('.scientific-outcome')).toContainText('Astra selected rest');
+ await expect(page.getByRole('button',{name:'Score latest iPhone capture'})).toBeDisabled();
+ await expect(page.getByLabel(/The latest capture is a new/)).toBeDisabled();
+ await page.evaluate(()=>window.dispatchEvent(new CustomEvent('singing:process-capture',{detail:{purpose:'outcome',pose:'a'}})));
+ await expect(page.locator('.scientific-model')).toContainText('Ask for a new recording decision');
+ expect(submitted).toBe(0);
+ await expect(page.locator('.scientific-model')).toContainText('Selected experiment: vowel-a');
+});
+
 test('capture preparation failure is visible and never starts a model job',async({page})=>{
  let runs=0;
  await page.route('**/api/science/status',r=>r.fulfill({json:{status:'not-run'}}));

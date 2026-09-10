@@ -1,6 +1,7 @@
 import {useEffect,useState} from 'react';
 export interface ScientificResult {
  geometryModelId?:string;decisionId?:string;designId?:string;
+ recordingAllowed?:boolean;recordingMessage?:string;restDecision?:{sessionId:string;decisionId:string;createdAt:string};
  schemaVersion:string;runId:string;sessionId?:string;modelId?:string;sourceCaptureId:string|null;createdAt:string;nativeCalls:number;calibrationWindows:number;eligibleWindows:number;candidateId:string;
  anatomy:Record<string,number>;referenceAnatomy:Record<string,number>;fitDiscrepancy:number;baselineDiscrepancy:number|null;interpretation:string;geometryRole:string;forecastRole:string;
  files:Record<string,{sha256:string;byteLength:number}>;
