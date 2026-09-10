@@ -1,4 +1,5 @@
 import http from 'node:http';
+import {createAstraReviewRoutes} from './astraReview.mjs';
 import {scienceRoutes} from './science.mjs';
 import {createNativePullRoutes} from './nativePull.mjs';
 import https from 'node:https';
@@ -18,6 +19,7 @@ const mime={'.html':'text/html','.js':'text/javascript','.css':'text/css','.json
 const json=(res,status,body)=>{res.writeHead(status,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify(body))};
 const handleScience=scienceRoutes({repo:resolve(import.meta.dirname,'..'),dataRoot,json});
 const handleNativePull=createNativePullRoutes({repo:resolve(import.meta.dirname,'..'),dataRoot,json});
+const handleAstraReview=createAstraReviewRoutes({dataRoot,json,envFile:process.env.OPENAI_ENV_FILE||resolve(import.meta.dirname,'../../.env')});
 const engineAvailable=await access(process.env.SINGING_PYTHON||resolve(import.meta.dirname,'../science/.venv/bin/python')).then(()=>true).catch(()=>false);
 const equal=(a,b)=>typeof a==='string'&&a.length===b.length&&timingSafeEqual(Buffer.from(a),Buffer.from(b));
 async function body(req){let size=0;const chunks=[];for await(const chunk of req){size+=chunk.length;if(size>12*1024*1024)throw Object.assign(Error('Request too large'),{status:413});chunks.push(chunk)}try{return JSON.parse(Buffer.concat(chunks).toString()||'{}')}catch{throw Object.assign(Error('Invalid JSON'),{status:400})}}
@@ -27,6 +29,7 @@ const serverHandler=async(req,res)=>{try{
   if(!allowedHosts.has(new URL('http://'+req.headers.host).hostname.toLowerCase()))return json(res,403,{error:'Unrecognized local host. Configure PHONE_BASE_URL for this hostname.'});
   // Refuse cross-origin browser writes; pairing tokens authorize phone routes.
   if(req.method==='POST'&&req.headers.origin&&new URL(req.headers.origin).host!==req.headers.host)return json(res,403,{error:'Cross-origin write refused'});
+  if(await handleAstraReview(req,res,url))return;
   if(await handleScience(req,res,url))return;
   if(await handleNativePull(req,res,url))return;
   if(url.pathname.startsWith('/api/science/')){
