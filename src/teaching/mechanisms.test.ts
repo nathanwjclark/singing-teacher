@@ -23,3 +23,9 @@ test('every teaching mechanism has explicit evidence limits and traceable refere
     assert.equal(new Set(item.cues.map(cue => cue.id)).size, item.cues.length)
   }
 })
+
+test('server decision catalog matches the versioned mechanism library',async()=>{
+ const {readFile}=await import('node:fs/promises');
+ const catalog=JSON.parse(await readFile(new URL('./decisionCatalog.json',import.meta.url),'utf8'));
+ assert.deepEqual(catalog,{version:TEACHING_VERSION,demonstrations:MECHANISMS.map(m=>({id:m.id,title:m.title,mechanism:m.mechanism,cues:m.cues}))});
+});
