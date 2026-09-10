@@ -16,12 +16,12 @@ export function ScientificModelPanel({onPreview}:{onPreview:()=>void}){
  const selected=r?.forecast.rankings.find(rank=>rank.experiment.experiment_id===r.forecast.selected_experiment_id)?.experiment;
  const recordingAllowed=r?.recordingAllowed!==false&&!r?.restDecision;
  const busy=starting||state.status==='running'||outcome.status==='running';
- async function run(purpose:'calibration'|'outcome'){
+ async function run(purpose:'calibration'|'outcome',resume=false){
   if(busy)return;
-  if(purpose==='outcome'&&!recordingAllowed){setNotice(r?.recordingMessage||'Astra selected rest. Request a new recording decision before scoring.');return;}
+  if(purpose==='outcome'&&!resume&&!recordingAllowed){setNotice(r?.recordingMessage||'Astra selected rest. Request a new recording decision before scoring.');return;}
   setStarting(true);setNotice('');setProcessingLabel('Verifying iPhone capture…');setCaptureProgress({stage:'preparing',label:'Verifying capture…'});
   try{
-   await scienceAction('use-latest-capture',{purpose,pose:purpose==='calibration'?'a':selected?.pose,contains_external_excitation:false});
+   if(!resume)await scienceAction('use-latest-capture',{purpose,pose:purpose==='calibration'?'a':selected?.pose,contains_external_excitation:false});
    const launched=await scienceAction(purpose==='calibration'?'run':'outcome');
    if(purpose==='outcome'&&launched.status==='succeeded'){requested.current=null;setCaptureProgress(null);setProcessingLabel('');setRefresh(value=>value+1);setNotice('This recording was already scored. Showing its retained outcome.');setOutcomeConfirmed(false);window.dispatchEvent(new Event('singing:show-science'));return}
    requested.current={kind:purpose==='calibration'?'fit':'outcome',id:purpose==='calibration'?launched.runId:launched.outcomeId};
@@ -78,8 +78,9 @@ export function ScientificModelPanel({onPreview}:{onPreview:()=>void}){
  {selected?<>{recordingAllowed&&<><p>Record a new sustained <strong>{selected.pose}</strong> vowel on the iPhone, then use <strong>Pull iPhone</strong> again. Keep your setup consistent. The app compares this later recording with predictions made before hearing it.</p>
  <p>The forecast assumes jaw −3°, source pitch 180 Hz and digital gain 4. These are model settings; the app does not measure that you reproduced them.</p></>}
  <label><input type="checkbox" checked={outcomeConfirmed} onChange={event=>setOutcomeConfirmed(event.target.checked)} disabled={busy||!recordingAllowed}/> The latest capture is a new {selected.pose} vowel recording, without played probes or external excitation.</label>
- <div className="scientific-actions"><button onClick={()=>void run('outcome')} disabled={busy||!recordingAllowed||!outcomeConfirmed||state.status!=='succeeded'}>{outcome.status==='running'?'Scoring latest recording…':outcome.status==='failed'||outcome.status==='interrupted'?'Retry latest iPhone capture':'Score latest iPhone capture'}</button><span>Outcome processing: {outcome.status}</span></div></>:<p>No separating experiment was selected. There is no committed next recording to score.</p>}
+ <div className="scientific-actions"><button onClick={()=>void run('outcome')} disabled={busy||!recordingAllowed||!outcomeConfirmed||state.status!=='succeeded'}>{outcome.status==='running'?'Scoring latest recording…':'Score latest iPhone capture'}</button><span>Outcome processing: {outcome.status}</span></div></>:<p>No separating experiment was selected. There is no committed next recording to score.</p>}
  {outcome.error&&<p role="alert">{outcome.error}</p>}
+ {outcome.outcomeId&&['failed','interrupted'].includes(outcome.status)&&<p><button disabled={busy} onClick={()=>void run('outcome',true)}>Resume interrupted scoring</button> Retries the same prepared recording and retained outcome. No new capture is prepared.</p>}
  {outcome.result&&<div role="status"><p>Scientific result: <strong>{outcome.result.scientificStatus||outcome.result.status}</strong>. {outcome.result.modelUpdated?'The session model was updated from the recorded evidence.':'No model update was applied.'} This does not validate the inferred anatomy.</p>{outcome.result.modelUpdated&&<p>The retained candidate set was updated. The displayed geometry remains the original fitted/reference pair until a newly exported geometry artifact is available.</p>}
  {outcome.result.reasons?.length? <p>Recording could not be used: {outcome.result.reasons.join('; ')}</p>:null}
  {outcome.result.error&&<p>{outcome.result.error}</p>}

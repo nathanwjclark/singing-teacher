@@ -98,19 +98,23 @@ export function scienceRoutes({repo,dataRoot,json,fetchImpl=fetch}) {
         json(res,200,previous);return true;
       }
       if(running||starting){json(res,409,{error:'A scientific job is already running'});return true}
-      if(active.recordingAllowed===false){json(res,409,{error:active.recordingMessage});return true}
       if(url.search||Number(req.headers['content-length']||0)>0||req.headers['transfer-encoding']){json(res,400,{error:'This action takes no parameters'});return true}
       if(!process.env.SCIENCE_URL||!process.env.SCIENCE_TOKEN){json(res,409,{error:'Start the shared worker with npm run science:local'});return true}
       starting=true;try{
         let config;try{config=JSON.parse(await readFile(resolve(dataRoot,'science-outcome-input.json'),'utf8'))}catch{json(res,409,{error:'No later voice capture configured'});return true}
-        if(config.design_id!==active.designId||config.experiment_id!==active.forecast?.selected_experiment_id||config.observation_id!==active.forecast?.target_observation_id){json(res,409,{error:'Prepared capture belongs to a different experiment. Prepare a new capture for the current decision.'});return true}
+        if(config.design_id!==active.designId||config.experiment_id!==active.forecast?.selected_experiment_id||config.observation_id!==active.forecast?.target_observation_id){json(res,409,{error:active.recordingAllowed===false?active.recordingMessage:'Prepared capture belongs to a different experiment. Prepare a new capture for the current decision.'});return true}
         const {sourceDirectory,...parameters}=config;
         if(typeof sourceDirectory!=='string'){json(res,400,{error:'A private sourceDirectory is required'});return true}
         const source=resolve(dataRoot,sourceDirectory);
         if(!source.startsWith(dataRoot+'/')){json(res,400,{error:'Voice source must remain in the private data directory'});return true}
         const manifest=await readFile(resolve(source,'manifest.json'));
         const inputHash=createHash('sha256').update(JSON.stringify(config)).update(manifest).digest('hex');
-        const reuse=previous.inputHash===inputHash&&/^outcome-[a-f0-9-]+$/.test(previous.outcomeId||'');
+        const reuse=previous.inputHash===inputHash&&previous.runId===current.runId&&previous.designId===active.designId&&/^outcome-[a-f0-9-]+$/.test(previous.outcomeId||'');
+        if(!reuse&&active.recordingAllowed===false){json(res,409,{error:active.recordingMessage});return true}
+        if(reuse){
+          let retained;try{retained=JSON.parse(await readFile(resolve(runDirectory,'outcomes',previous.outcomeId+'-input.json'),'utf8'))}catch{json(res,409,{error:'Retained outcome configuration unavailable; existing results were preserved'});return true}
+          if(JSON.stringify(retained)!==JSON.stringify(parameters)){json(res,409,{error:'Retained outcome configuration changed; refusing to resume'});return true}
+        }
         if(reuse&&previous.status==='succeeded'){json(res,200,previous);return true}
         const outcomeId=reuse?previous.outcomeId:'outcome-'+randomUUID();
         const output=resolve(runDirectory,'outcomes',outcomeId);

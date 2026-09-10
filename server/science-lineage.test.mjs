@@ -5,6 +5,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {scienceRoutes} from './science.mjs';
 import {createVoiceCaptureRoutes} from './voiceCapture.mjs';
+import {createHash} from 'node:crypto';
 
 test('active decisions retain geometry provenance and reject stale prepared captures',async()=>{
   const dataRoot=await mkdtemp(join(tmpdir(),'science-lineage-'));
@@ -58,6 +59,38 @@ test('active decisions retain geometry provenance and reject stale prepared capt
     const declaration=Buffer.from(JSON.stringify({purpose:'outcome',pose:'a',contains_external_excitation:false}));
     await prepareRoute({method:'POST',socket:{remoteAddress:'127.0.0.1'},headers:{host:'localhost','content-type':'application/json','content-length':String(declaration.length)},async *[Symbol.asyncIterator](){yield declaration}},{},new URL('http://localhost/api/science/use-latest-capture'));
     assert.equal(result.status,409);
+    assert.match(result.body.error,/worker is unavailable/);
+    // A completed receipt may be replayed even after its model/design ceased being current,
+    // but only with the exact original request and retained configuration.
+    const replayConfig={sourceDirectory:'prepared-voice/replay',design_id:'d3',experiment_id:'e3',observation_id:'o3'};
+    const manifest='{}';
+    await mkdir(join(dataRoot,replayConfig.sourceDirectory),{recursive:true});
+    await writeFile(join(dataRoot,replayConfig.sourceDirectory,'manifest.json'),manifest);
+    await put('science-outcome-input.json',replayConfig);
+    await put('science-runs/run-test/outcomes/outcome-abcd-input.json',{design_id:'d3',experiment_id:'e3',observation_id:'o3'});
+    const receipt={status:'succeeded',runId:'run-test',outcomeId:'outcome-abcd',designId:'d3',inputHash:createHash('sha256').update(JSON.stringify(replayConfig)).update(manifest).digest('hex')};
+    await put('science-runs/run-test/outcome-current.json',receipt);
+    const replay=await call('outcome','POST');
+    assert.equal(replay.status,200);assert.equal(replay.body.outcomeId,'outcome-abcd');
+    // Test HTTP dispatch identity separately from the real native interruption tests.
+    const oldPython=process.env.SINGING_PYTHON;
+    try{
+      process.env.SINGING_PYTHON='/usr/bin/true';
+      await put('science-runs/run-test/outcome-current.json',{...receipt,status:'failed'});
+      const resumed=await call('outcome','POST');
+      assert.equal(resumed.status,202);assert.equal(resumed.body.outcomeId,'outcome-abcd');
+      for(let attempt=0;attempt<100;attempt++){
+        const persisted=JSON.parse(await readFile(join(dataRoot,'science-runs/run-test/outcome-current.json'),'utf8'));
+        if(persisted.status!=='running')break;
+        await new Promise(resolve=>setTimeout(resolve,10));
+      }
+      assert.equal(JSON.parse(await readFile(join(dataRoot,'science-runs/run-test/outcome-current.json'),'utf8')).status,'succeeded');
+    }finally{if(oldPython===undefined)delete process.env.SINGING_PYTHON;else process.env.SINGING_PYTHON=oldPython}
+    await put('science-runs/run-test/outcomes/outcome-abcd-input.json',{design_id:'changed'});
+    assert.equal((await call('outcome','POST')).status,409);
+    assert.match(result.body.error,/configuration changed/);
+    await put('science-outcome-input.json',{...replayConfig,segment_index:1});
+    assert.equal((await call('outcome','POST')).status,409);
     assert.match(result.body.error,/worker is unavailable/);
     workerUnavailable=false;workerState=stateFor(3);
     assert.equal(await readFile(join(dataRoot,'science-runs/run-test/summary.json'),'utf8'),original);
