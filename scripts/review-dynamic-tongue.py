@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Offline head-stabilized visible tongue tracking; no live model or hidden anatomy."""
-import argparse,base64,io,json,zipfile
+import argparse,base64,hashlib,io,json,zipfile
 from pathlib import Path
 import cv2
 import numpy as np
@@ -55,6 +55,7 @@ def main():
  x0,y0,x1,y1=ann['mouth_exclusion_depth_xyxy'];face[y0*2:y1*2,x0*2:x1*2]=0
  features=cv2.goodFeaturesToTrack(refgray,maxCorners=250,qualityLevel=.005,minDistance=5,mask=face,blockSize=5)
  if features is None or len(features)<20:raise ValueError('Insufficient non-mouth face features')
+ rgb_features=features.copy();rgb_reference_uv=rgb_features[:,0].copy()
  reference_uv=features[:,0];reference_xyz,refvalid=sampled_points(depths[refidx],reference_uv,ref['calibration'],preview)
  features=features[refvalid];reference_uv=reference_uv[refvalid];reference_xyz=reference_xyz[refvalid]
  if len(features)<20:raise ValueError('Insufficient face features with valid depth')
@@ -62,7 +63,18 @@ def main():
  seed=np.zeros((360,640),np.uint8);polygon=np.round(np.array(ann['tongue_seed_polygon_depth_xy'])*2).astype(np.int32);cv2.fillPoly(seed,[polygon],255);seed=cv2.erode(seed,np.ones((3,3),np.uint8))
  yy,xx=np.indices((360,640),dtype=np.float32);rows=[];samples=[]
  for i,(f,gray,image,d) in enumerate(zip(frames,grays,images,depths)):
-  row={'frame':f['sequence'],'seconds':f['relative_seconds'],'head':{},'tongue':{}}
+  row={'frame':f['sequence'],'seconds':f['relative_seconds'],'head':{},'head_rgb':{},'tongue':{}}
+  rgb_next,rgb_ok,_=cv2.calcOpticalFlowPyrLK(refgray,gray,rgb_features,None,winSize=(21,21),maxLevel=3)
+  rgb_back,rgb_bok,_=cv2.calcOpticalFlowPyrLK(gray,refgray,rgb_next,None,winSize=(21,21),maxLevel=3)
+  rgb_valid=rgb_ok.ravel().astype(bool)&rgb_bok.ravel().astype(bool)&(np.linalg.norm(rgb_back[:,0]-rgb_reference_uv,axis=1)<.8)
+  rgb_ids=np.flatnonzero(rgb_valid);rgb_train=rgb_ids[rgb_ids%5!=0];rgb_test=rgb_ids[rgb_ids%5==0];affine=None
+  if len(rgb_train)>=12 and len(rgb_test)>=6:
+   affine,inliers_rgb=cv2.estimateAffinePartial2D(rgb_next[rgb_train,0],rgb_reference_uv[rgb_train],method=cv2.RANSAC,ransacReprojThreshold=2,maxIters=1000,confidence=.99)
+   if affine is not None:
+    predicted_rgb=rgb_next[rgb_test,0]@affine[:,:2].T+affine[:,2]
+    rgb_error=float(np.median(np.linalg.norm(predicted_rgb-rgb_reference_uv[rgb_test],axis=1)))
+    row['head_rgb']={'valid':int(inliers_rgb.sum())>=12 and rgb_error<2,'kind':'2D similarity only; not 3D pose','independent_check_median_pixels_640':rgb_error,'inliers':int(inliers_rgb.sum()),'independent_check_anchors':len(rgb_test),'current_to_reference_affine':affine.tolist()}
+  if not row['head_rgb']:row['head_rgb']={'valid':False,'reason':'insufficient independent RGB face correspondences'}
   nxt,ok,_=cv2.calcOpticalFlowPyrLK(refgray,gray,features,None,winSize=(21,21),maxLevel=3)
   back,bok,_=cv2.calcOpticalFlowPyrLK(gray,refgray,nxt,None,winSize=(21,21),maxLevel=3)
   xyz,valid=sampled_points(d,nxt[:,0],f['calibration'],preview);fb=np.linalg.norm(back[:,0]-reference_uv,axis=1)
@@ -93,13 +105,16 @@ def main():
   support=float(mask.sum()/max(1,(seed>0).sum()))
   native=cv2.resize(mask.astype(np.uint8),(320,180),interpolation=cv2.INTER_NEAREST).astype(bool)
   validdepth=np.isfinite(d)&(d>.08)&(d<.6);native&=validdepth
-  n=int(native.sum());visible=support>=.5 and n>=45
-  row['tongue'].update({'candidate_visible':visible,'mask_area_ratio_to_seed':support,'depth_samples':n,'tracking_kind':'manual-seed optical-flow candidate; not semantic tongue detection'})
+  n=int(native.sum());rgb_visible=support>=.5;visible=rgb_visible and n>=45
+  if rgb_visible:
+   my,mx=np.where(mask);uv=np.array([mx.mean(),my.mean()]);row['tongue']['centroid_camera_pixels_640']=uv.tolist()
+   if row['head_rgb']['valid']:row['tongue']['centroid_head_pixels_640']=(affine[:,:2]@uv+affine[:,2]).tolist()
+  row['tongue'].update({'candidate_visible':visible,'rgb_candidate_visible':rgb_visible,'depth_failure_reason':None if n>=45 else 'insufficient measured depth on the RGB tongue candidate','mask_area_ratio_to_seed':support,'depth_samples':n,'tracking_kind':'manual-seed optical-flow candidate; not semantic tongue detection'})
   overlay=image.copy();overlay[mask]=(overlay[mask]*.4+np.array([120,255,150])*.6).astype(np.uint8)
   for point in nxt[:,0][valid]:cv2.circle(overlay,tuple(np.round(point).astype(int)),2,(255,210,70),-1)
   # Preserve camera context and distinguish unseen from not measured.
-  crop=overlay[100:230,350:470];crop=cv2.rotate(crop,cv2.ROTATE_90_CLOCKWISE)
-  sample={'frame':f['sequence'],'seconds':f['relative_seconds'],'image':uri(crop),'head':row['head'],'tongue':row['tongue'],'observed':[],'fitted':[],'faces':[]}
+  cx0,cy0,cx1,cy1=ann.get('preview_depth_xyxy',[175,50,235,115]);crop=overlay[cy0*2:cy1*2,cx0*2:cx1*2];crop=cv2.rotate(crop,cv2.ROTATE_90_CLOCKWISE)
+  sample={'frame':f['sequence'],'seconds':f['relative_seconds'],'image':uri(crop),'head':row['head'],'head_rgb':row['head_rgb'],'tongue':row['tongue'],'observed':[],'fitted':[],'faces':[]}
   if visible and row['head']['valid']:
    xyzgrid,_,_=preview.project(d,f['calibration']);pts=xyzgrid[native]*1000;stabilized=pts@r.T+t
    center=stabilized[:,:2].mean(0);scale=np.maximum(stabilized[:,:2].std(0),1);design=fit.basis(stabilized[:,:2],center,scale)
@@ -114,6 +129,18 @@ def main():
       ii=[int(index[j,k]) for j,k in cells]
       if min(ii)>=0 and np.ptp(stabilized[ii,2])<4:faces.append(ii)
     sample['faces']=faces
+  # Separate display of actually measured camera depth, without tissue labels,
+  # registration, hole filling, or a fitted anatomical surface. Decimate grid only.
+  gx0,gy0,gx1,gy1=ann['mouth_exclusion_depth_xyxy'];raw_mask=np.zeros((180,320),bool);raw_mask[gy0:gy1:2,gx0:gx1:2]=True;raw_mask&=validdepth
+  raw_grid,_,_=preview.project(d,f['calibration']);raw_points=raw_grid[raw_mask]*1000
+  raw_indices=np.full((180,320),-1,int);raw_indices[raw_mask]=np.arange(len(raw_points));raw_faces=[]
+  ry,rx=np.where(raw_mask)
+  for py,px in zip(ry,rx):
+   if py>=178 or px>=318:continue
+   for cells in [((py,px),(py,px+2),(py+2,px)),((py+2,px),(py,px+2),(py+2,px+2))]:
+    ii=[int(raw_indices[j,k]) for j,k in cells]
+    if min(ii)>=0 and np.ptp(raw_points[ii,2])<4:raw_faces.append(ii)
+  sample['measured_camera_depth']={'points_mm':np.round(raw_points,3).tolist(),'faces':raw_faces,'image_crop_depth_xyxy':[gx0,gy0,gx1,gy1],'grid_stride':2,'kind':'unregistered camera-depth samples; image crop is not tissue segmentation'}
   samples.append(sample);rows.append(row)
   if i%25==0:print(f'Processed {i+1}/{len(frames)} frames',flush=True)
  # Sparse independent visual audit. This is validation only, never tracker input.
@@ -121,8 +148,10 @@ def main():
  for key,label in ann['visibility_review'].items():
   row=next(r for r in rows if r['frame']==int(key));audit.append({'frame':int(key),'visually_visible':label,'candidate_visible':row['tongue']['candidate_visible'],'agrees':label==row['tongue']['candidate_visible']})
  good=[r for r in rows if r['head']['valid']];fits=[r for r in good if r['tongue'].get('fit_valid')];allfits=[r for r in good if 'spatial_holdout_mae_mm' in r['tongue']]
- report={'head_features_seeded':len(features),'head_valid_frames':len(good),'total_frames':len(rows),'independent_face_median_error_before_mm':float(np.median([r['head']['before_median_mm'] for r in good])) if good else None,'independent_face_median_error_after_mm':float(np.median([r['head']['after_median_mm'] for r in good])) if good else None,'tongue_candidate_frames':sum(r['tongue']['candidate_visible'] for r in rows),'surface_fit_valid_frames':len(fits),'surface_fit_evaluated_frames':len(allfits),'surface_spatial_holdout_median_all_mm':float(np.median([r['tongue']['spatial_holdout_mae_mm'] for r in allfits])) if allfits else None,'surface_spatial_holdout_median_mae_mm':float(np.median([r['tongue']['spatial_holdout_mae_mm'] for r in fits])) if fits else None,'visibility_audit':audit,'live_model_ready':False,'limitations':['Sparse manual visibility audit is not a segmentation or tip-position benchmark.','Optical flow tracks a seeded visible patch and may follow lips after occlusion.','Per-frame fitted surface changes may include sensor noise, changing visible support, or tracking error.','No hidden tongue, anatomical tip, or muscle motion is inferred.','No temporal fusion; no interpolation over failed frames.','Independent face anchors are spatially held out but share the same sensor and frame; not external accuracy validation.']}
- args.output.mkdir(parents=True);(args.output/'analysis.json').write_text(json.dumps({'summary':report,'frames':rows},indent=2,allow_nan=False))
- (args.output/'index.html').write_text(Path(__file__).with_name('dynamic-tongue-preview.html').read_text().replace('__DYNAMIC_DATA__',json.dumps({'summary':report,'samples':samples},separators=(',',':'),allow_nan=False)))
+ report={'head_rgb_features_seeded':len(rgb_features),'head_rgb_valid_frames':sum(r['head_rgb']['valid'] for r in rows),'tongue_rgb_candidate_frames':sum(r['tongue']['rgb_candidate_visible'] for r in rows),'tongue_rgb_stabilized_frames':sum('centroid_head_pixels_640' in r['tongue'] for r in rows),'head_features_seeded':len(features),'head_valid_frames':len(good),'total_frames':len(rows),'independent_face_median_error_before_mm':float(np.median([r['head']['before_median_mm'] for r in good])) if good else None,'independent_face_median_error_after_mm':float(np.median([r['head']['after_median_mm'] for r in good])) if good else None,'tongue_candidate_frames':sum(r['tongue']['candidate_visible'] for r in rows),'surface_fit_valid_frames':len(fits),'surface_fit_evaluated_frames':len(allfits),'surface_spatial_holdout_median_all_mm':float(np.median([r['tongue']['spatial_holdout_mae_mm'] for r in allfits])) if allfits else None,'surface_spatial_holdout_median_mae_mm':float(np.median([r['tongue']['spatial_holdout_mae_mm'] for r in fits])) if fits else None,'visibility_audit':audit,'live_model_ready':False,'limitations':['RGB-only similarity correction removes estimated image-plane face motion, not perspective or 3D head pose.','Sparse manual visibility audit is not a segmentation or tip-position benchmark.','Optical flow tracks a seeded visible patch and may follow lips after occlusion.','Per-frame fitted surface changes may include sensor noise, changing visible support, or tracking error.','No hidden tongue, anatomical tip, or muscle motion is inferred.','No temporal fusion; no interpolation over failed frames.','Independent face anchors are spatially held out but share the same sensor and frame; not external accuracy validation.']}
+ provenance={'capture_id':manifest['capture_id'],'seed_frame':ann['seed_frame'],'annotations_sha256':hashlib.sha256(args.annotations.read_bytes()).hexdigest(),'capture_zip_sha256':hashlib.sha256(args.capture_zip.read_bytes()).hexdigest(),'temporal_split':ann.get('temporal_split'),'script_sha256':hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),'head_rgb_validation_threshold_pixels_640':2,'coordinates':'millimeters in reference camera axes, current-to-reference head transform; not anatomical coordinates'}
+ args.output.mkdir(parents=True);(args.output/'analysis.json').write_text(json.dumps({'provenance':provenance,'summary':report,'frames':rows},indent=2,allow_nan=False))
+ (args.output/'surfaces.json').write_text(json.dumps({'provenance':provenance,'samples':[{k:v for k,v in sample.items() if k!='image'} for sample in samples]},separators=(',',':'),allow_nan=False))
+ (args.output/'index.html').write_text(Path(__file__).with_name('dynamic-tongue-preview.html').read_text().replace('__DYNAMIC_DATA__',json.dumps({'provenance':provenance,'summary':report,'samples':samples},separators=(',',':'),allow_nan=False)))
  print(json.dumps(report,indent=2))
 if __name__=='__main__':main()
