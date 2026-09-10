@@ -1,5 +1,6 @@
 export interface CueReview { reviewer: string; role: string; evidence: string; reviewedAt: string }
-export interface TeachingCue { id: string; version: 1; title: string; wording: string; variant: string; hypothesis: string; observable: string; source: string; evidenceLevel: string; alternatives: string[]; stopRule: string; review: CueReview | null }
+export interface CueLineage { sessionId: string; runId: string; modelId: string; designId: string; decisionId: string; attemptId: string; memoryId: string; sensation: string; recordedAt: string }
+export interface TeachingCue { id: string; version: 1; title: string; wording: string; variant: string; hypothesis: string; observable: string; source: string; evidenceLevel: string; alternatives: string[]; stopRule: string; review: CueReview | null; lineage?: CueLineage }
 export type LearningPhase = 'prompted' | 'recall' | 'transfer' | 'retention'
 export type LearningArm = 'baseline' | 'variant'
 export interface LearningProtocol { schema: 'singing-teacher/learning/1'; id: string; frozenAt: string; digest: string; cue: TeachingCue; targetHz: number; toleranceCents: number; context: string; phrase: string; retentionHours: number; minimumVoicedWindows: number; minimumVoicedFraction: number; scoring: 'median-absolute-cents/1'; sessionId: string }
