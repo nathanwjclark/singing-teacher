@@ -1,8 +1,32 @@
 import Foundation
+import CryptoKit
 
 /// Small uncompressed ZIP writer. No network transfer and no archive dependencies.
 /// Capture limits keep entries under classic ZIP's 4 GiB/65535-entry bounds.
 enum CaptureZip {
+    /// Preserve both original archives byte-for-byte, linked by explicit sequential-session metadata.
+    static func linkedSession(id: String, video: URL, sound: URL, soundStopReason: String) throws -> URL {
+        let root = try FileManager.default.url(for: .documentDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
+        let folder = root.appendingPathComponent("session-\(id)", isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        try (folder as NSURL).setResourceValue(true, forKey: .isExcludedFromBackupKey)
+        func retained(_ source: URL) throws -> [String: Any] {
+            let target = folder.appendingPathComponent(source.lastPathComponent)
+            try FileManager.default.copyItem(at: source, to: target)
+            try FileManager.default.setAttributes([.protectionKey: FileProtectionType.complete], ofItemAtPath: target.path)
+            let data = try Data(contentsOf: target)
+            return ["path": target.lastPathComponent, "sha256": SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined(), "byteCount": data.count]
+        }
+        let manifest: [String: Any] = ["schemaVersion": "singing-collection-session-1.0.0", "sessionId": id,
+            "videoDepth": try retained(video), "sound": try retained(sound), "soundStopReason": soundStopReason,
+            "phaseOrder": ["video-depth", "sound"], "simultaneous": false, "sameAnatomicalPoseVerified": false,
+            "includedInFit": false, "note": "Original raw capture packages retained unchanged. Response and depth usability need analysis."]
+        try JSONSerialization.data(withJSONObject: manifest, options: [.prettyPrinted, .sortedKeys]).write(to: folder.appendingPathComponent("session.json"), options: [.atomic, .completeFileProtection])
+        let archive = folder.appendingPathExtension("zip")
+        try create(folder: folder, destination: archive)
+        try (archive as NSURL).setResourceValue(true, forKey: .isExcludedFromBackupKey)
+        return archive
+    }
     private static let crcTable: [UInt32] = (0..<256).map { i in
         var c = UInt32(i); for _ in 0..<8 { c = (c & 1) == 1 ? 0xedb88320 ^ (c >> 1) : c >> 1 }; return c
     }
