@@ -16,6 +16,7 @@ export default function CameraPanel({ active, onFrame, onStatus }: Props) {
   const [status, setStatus] = useState<TrackingStatus>('idle');
   const [message, setMessage] = useState('');
   const [depth, setDepth] = useState<{ distance?: number; relative?: number; points: number }>({ points: 0 });
+  const [tongueStatus, setTongueStatus] = useState('Searching for visible tongue');
   const [calibration, setCalibration] = useState('');
 
   useEffect(() => {
@@ -75,6 +76,7 @@ export default function CameraPanel({ active, onFrame, onStatus }: Props) {
             if (video.readyState >= 2 && video.currentTime !== lastTime && time - lastTick >= 90) {
               lastTime = video.currentTime; lastTick = time;
               const frame = engine.process(video, time);
+              setTongueStatus(frame.tongueStatus ?? 'Searching for visible tongue');
               setDepth({ distance: frame.metrics.distanceCm, relative: frame.metrics.relativeDepth, points: frame.face.length + frame.pose.filter(point => (point.visibility ?? 0) >= .5).length });
               const canvas = canvasRef.current;
               if (canvas) {
@@ -121,6 +123,7 @@ export default function CameraPanel({ active, onFrame, onStatus }: Props) {
         {status === 'idle' && <span className="camera-private"><ShieldCheck size={14} /> Video stays on your device</span>}
       </div>}
       {status === 'no-face' && <div className="camera-no-face"><ScanFace size={18} /> Bring your face into the frame</div>}
+      {status === 'tracking' && <div className="camera-tongue-status">{tongueStatus}<small>Experimental visible-tissue estimate</small></div>}
       <div className="camera-stage-label"><span className={status === 'tracking' ? 'camera-light live' : 'camera-light'} /> {status === 'tracking' ? 'LIVE CAMERA' : 'CAMERA VIEW'}<span>MIRRORED</span></div>
     </div>
     <div className="camera-depth">
