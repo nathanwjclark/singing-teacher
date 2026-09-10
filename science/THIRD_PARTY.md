@@ -13,3 +13,7 @@
   contain their authoritative license notices.
 
 Generated benchmark recordings are synthetic and contain no user media.
+
+Original code under `observations/geometry/` is also AGPL-3.0-or-later; its scoped
+LICENSE preserves the existing frontend licensing boundary. No participant media
+is distributed by the scientific tests or replay scripts.
