@@ -141,7 +141,7 @@ export async function createVisionEngine(): Promise<VisionEngine> {
           const localFace=landmarks.map(p=>({...p,x:(p.x-x)/width,y:(p.y-y)/height}));
           const local=trackTongue(tongueContext.getImageData(0,0,160,128).data,160,128,localFace);
           if(local) {
-            tongue={...local,x:x+local.x*width,y:y+local.y*height,outline:local.outline?.map(p=>({x:x+p.x*width,y:y+p.y*height}))};
+            tongue={...local,x:x+local.x*width,y:y+local.y*height,tip:local.tip ? {x:x+local.tip.x*width,y:y+local.tip.y*height} : undefined,outline:local.outline?.map(p=>({x:x+p.x*width,y:y+p.y*height}))};
             tongueStatus='Tongue detected · pink outline';
           }
         } else trackTongue(new Uint8ClampedArray(0),0,0,[]);
@@ -192,7 +192,7 @@ export function drawTracking(context: CanvasRenderingContext2D, frame: TrackingF
   if(frame.tongue) {
     context.fillStyle='#ff71aa';context.strokeStyle='#ffb3d0';context.lineWidth=2;
     for(const p of frame.tongue.outline??[]){context.beginPath();context.arc(p.x*width,p.y*height,1.6,0,Math.PI*2);context.fill();}
-    const x=frame.tongue.x*width,y=frame.tongue.y*height;
+    const x=(frame.tongue.tip?.x??frame.tongue.x)*width,y=(frame.tongue.tip?.y??frame.tongue.y)*height;
     context.beginPath();context.arc(x,y,6,0,Math.PI*2);context.moveTo(x-10,y);context.lineTo(x+10,y);context.moveTo(x,y-10);context.lineTo(x,y+10);context.stroke();
   }
   context.restore();

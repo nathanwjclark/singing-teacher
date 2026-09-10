@@ -55,7 +55,18 @@ export function detectVisibleTongue(pixels: Uint8ClampedArray, width: number, he
   const outline=boundary.filter((_,i)=>i%stride===0).map(p=>({x:(p%width)/width,y:Math.floor(p/width)/height}));
   const x=largest.reduce((sum,p)=>sum+p%width,0)/largest.length;
   const y=largest.reduce((sum,p)=>sum+Math.floor(p/width),0)/largest.length;
-  return {x:x/width,y:y/height,lateral:Math.max(-1,Math.min(1,((x-minX)/(maxX-minX)-.5)*2)),lift:Math.max(0,Math.min(1,1-(y-minY)/(maxY-minY))),visibleFraction:fraction,outline};
+  // Follow the exposed tip, not blob area: area saturates when the tongue
+  // fills the aperture even though the tip is still moving outside it.
+  const lowest=Math.max(...largest.map(p=>Math.floor(p/width)));
+  const tipPixels=largest.filter(p=>Math.floor(p/width)>=lowest-Math.max(2,mouthWidth*.06));
+  const tipX=tipPixels.reduce((sum,p)=>sum+p%width,0)/tipPixels.length;
+  const tipY=tipPixels.reduce((sum,p)=>sum+Math.floor(p/width),0)/tipPixels.length;
+  return {x:x/width,y:y/height,
+    lateral:Math.max(-1,Math.min(1,(tipX-(minX+maxX)/2)/(mouthWidth*.5))),
+    lift:Math.max(0,Math.min(1,1-(y-minY)/(maxY-minY))),
+    extension:Math.max(0,Math.min(1,(tipY-maxY)/(mouthWidth*.45))),
+    elevation:Math.max(-1,Math.min(1,((minY+maxY)/2-y)/(mouthWidth*.35))),
+    tip:{x:tipX/width,y:tipY/height},visibleFraction:fraction,outline};
 }
 
 export function createTongueTracker() {
@@ -65,7 +76,7 @@ export function createTongueTracker() {
     const observed=detectVisibleTongue(pixels,width,height,face);
     if(!observed){hits=0;smooth=undefined;return undefined;}
     hits++;
-    if(smooth) for(const key of ['x','y','lateral','lift','visibleFraction'] as const) observed[key]=smooth[key]+(observed[key]-smooth[key])*.3;
+    if(smooth) for(const key of ['x','y','lateral','lift','visibleFraction','extension','elevation'] as const) observed[key]=(smooth[key]??observed[key]??0)+((observed[key]??0)-(smooth[key]??0))*.45;
     smooth=observed;
     return hits>=2 ? observed : undefined;
   };

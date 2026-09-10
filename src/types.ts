@@ -6,7 +6,7 @@ export type Metrics = {
   lipWidth?: number; jawAsymmetry?: number; shoulderElevation?: number;
   distanceCm?: number; relativeDepth?: number; faceDepthSpan?: number;
 };
-export type TongueObservation = { x: number; y: number; lateral: number; lift: number; visibleFraction: number; outline?: Landmark[] };
+export type TongueObservation = { x: number; y: number; lateral: number; lift: number; visibleFraction: number; extension?: number; elevation?: number; tip?: Landmark; outline?: Landmark[] };
 export type TrackingFrame = {
   tongue?: TongueObservation;
   tongueStatus?: string;

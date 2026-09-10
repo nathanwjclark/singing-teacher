@@ -179,7 +179,7 @@ export function AnatomyPanel({ frame, activeRegion = 'jaw', activeMuscles, demo 
         }
       }
       tongueModel.mesh.visible=props.tongue;
-      tongueModel.update(props.frame?.tongue);
+      tongueModel.update(props.frame?.tongue,time);
       boneMotion.update();
       muscleMotion.update(props.frame?.blendshapes);
       const blink=props.frame?.blendshapes;
