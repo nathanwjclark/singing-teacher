@@ -26,7 +26,7 @@ export function createSourceInferenceRoutes({repo,dataRoot,json,enabled=process.
   if(!url.pathname.startsWith('/api/source/'))return false;
   const host=req.headers.host,address=req.socket.remoteAddress?.replace(/^::ffff:/,'');if(!['127.0.0.1','::1'].includes(address)||!host||!/^((localhost|127\.0\.0\.1)|\[::1\])(:\d+)?$/.test(host)||(req.headers.origin&&!['http://'+host,'https://'+host].includes(req.headers.origin))){json(res,403,{error:'Use source inference from the local app'});return true;}
   try{
-   if(req.method==='GET'&&url.pathname==='/api/source/status'){const status=await readSourceInferenceContext({dataRoot,enabled});if(running&&activePhase)status[activePhase].status='running';json(res,200,{...status,running});return true;}
+   if(req.method==='GET'&&url.pathname==='/api/source/status'){const wasRunning=running,phaseAtRead=activePhase;const status=await readSourceInferenceContext({dataRoot,enabled});const busy=wasRunning||running,phase=phaseAtRead||activePhase;if(busy&&phase)status[phase].status='running';json(res,200,{...status,running:busy});return true;}
    const phase={'/api/source/analyze':'fit','/api/source/forecast':'forecast','/api/source/score':'score'}[url.pathname];if(req.method!=='POST'||!phase){json(res,405,{error:'Method not allowed'});return true;}
    if(!enabled){json(res,200,await readSourceInferenceContext({dataRoot,enabled}));return true;}
    if(running){json(res,409,{error:'An optional source job is running'});return true;}
