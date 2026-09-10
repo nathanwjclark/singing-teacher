@@ -148,7 +148,7 @@ export function AnatomyPanel({ frame, activeRegion = 'jaw', activeMuscles, demo 
       const torsoDepth=hipsVisible?(world[23].z??0)-(world[24].z??0):(shouldersVisible ? bounded(m?.shoulderDepth,-.5,.5) : 0);
       const torsoYaw=THREE.MathUtils.clamp(Math.atan2(torsoDepth,hipWidth),-.75,.75);
       torso.rotation.z=THREE.MathUtils.lerp(torso.rotation.z,-shoulderRoll,.1);
-      torso.rotation.y=THREE.MathUtils.lerp(torso.rotation.y,-torsoYaw,.1);
+      torso.rotation.y=THREE.MathUtils.lerp(torso.rotation.y,torsoYaw,.1);
       torso.rotation.x=0;
       const shoulderTargets=shoulderPose.update(props.frame,torso.rotation);
       [leftShoulder,rightShoulder].forEach((shoulder,i)=>{
@@ -158,7 +158,7 @@ export function AnatomyPanel({ frame, activeRegion = 'jaw', activeMuscles, demo 
         shoulder.position.x=THREE.MathUtils.lerp(shoulder.position.x,side+target.spread*.35,.18);
       });
       const yaw=bounded(m?.headYaw,-55,55)*radians+(simulation?Math.sin(time*.00032)*.075:0);
-      head.rotation.y=THREE.MathUtils.lerp(head.rotation.y,-yaw-torso.rotation.y,.14);
+      head.rotation.y=THREE.MathUtils.lerp(head.rotation.y,yaw-torso.rotation.y,.14);
       head.rotation.z=THREE.MathUtils.lerp(head.rotation.z,-bounded(m?.headTilt,-30,30)*radians-torso.rotation.z,.14);
       head.rotation.x=THREE.MathUtils.lerp(head.rotation.x,bounded(m?.headPitch,-35,35)*radians-torso.rotation.x,.14);
       const mouth=bounded(m?.mouthOpen,0,1)||(simulation?.17+Math.sin(time*.0018)*.08:0);
