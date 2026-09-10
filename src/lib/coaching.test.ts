@@ -20,9 +20,20 @@ test('no camera and lost face provide setup instructions without anatomical infe
 
 test('three physical cues are prioritized and mouth opening is conditional on singing a vowel', () => {
   const tips = getTips(frame({ mouthOpen: 0.05, headTilt: -15, shoulderTilt: 12 }));
-  assert.deepEqual(tips.map(tip => tip.id), ['mouth-open', 'head-level', 'shoulder-level']);
-  assert.match(tips[0].detail, /sustained vowel/);
-  assert.match(tips[0].detail, /between phrases/);
+  assert.deepEqual(tips.map(tip => tip.id), ['head-level', 'shoulder-level', 'mouth-open']);
+  assert.match(tips[2].detail, /sustained vowel/);
+  assert.match(tips[2].detail, /between phrases/);
+});
+
+test('depth cues span regions and unreliable facial angles suppress lip and elevation cues', () => {
+  const tips = getTips(frame({ headYaw: 30, headPitch: 25, shoulderDepth: 0.19, torsoLean: 19, lipWidth: 1.2, jawAsymmetry: 0.5, shoulderElevation: 0.1 }));
+  assert.equal(tips.length, 3);
+  assert.equal(new Set(tips.map(tip => tip.region)).size, 3);
+  assert.ok(tips.some(tip => tip.id === 'shoulder-rotation'));
+  assert.ok(tips.some(tip => tip.id === 'torso-lean'));
+  assert.ok(tips.every(tip => tip.muscles?.length));
+  assert.ok(!tips.some(tip => ['lip-spread', 'jaw-asymmetry', 'shoulder-elevation'].includes(tip.id)));
+  assert.equal(getTips(frame({ distanceCm: 25, torsoLean: 19 }))[0].id, 'camera-close');
 });
 
 test('missing or low confidence shoulders never produce shoulder correction', () => {
