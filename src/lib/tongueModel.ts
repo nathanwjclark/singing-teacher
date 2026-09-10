@@ -15,7 +15,7 @@ export function createTongueModel() {
   }
   const rest=new Float32Array(positions.array);
   const mesh=new Mesh(geometry,new MeshStandardMaterial({color:0xc96e83,roughness:.66}));
-  mesh.name='Tongue · illustrative surface';mesh.position.set(0,-3.9,4.7);
+  mesh.name='Tongue · illustrative surface';mesh.position.set(0,-2.5,4.7);
   // A visible endpoint marker is attached to the actual deformed vertex, not
   // a second animation. Its coordinates can be inspected independently.
   const marker=new Mesh(new SphereGeometry(.28,12,8),new MeshBasicMaterial({color:0x75ffc1,depthTest:false,depthWrite:false}));

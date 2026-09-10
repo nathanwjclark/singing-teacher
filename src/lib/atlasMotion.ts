@@ -7,21 +7,36 @@ const smooth = (a: number, b: number, x: number) => {
   const t = Math.max(0, Math.min(1, (x - a) / (b - a)));
   return t * t * (3 - 2 * t);
 };
+export type AtlasTongueRig = {tipX:number;tipY:number;rootX:number;taper:boolean};
+export const referenceTongueRig:AtlasTongueRig={tipX:175.8,tipY:877.8,rootX:565,taper:false};
+/** Native model contours have a different tip/root than the teaching cast.
+ * One reference registration deforms both sides of the red/green comparison. */
+export function nativeTongueRig(points:[number,number][]):AtlasTongueRig {
+  const native=points.map(([x,y])=>[535-1.85*x,750+2.12*y]);
+  const tipX=Math.min(...native.map(p=>p[0]));
+  const edge=native.filter(p=>p[0]<tipX+1);
+  return {tipX,tipY:edge.reduce((s,p)=>s+p[1],0)/edge.length,rootX:Math.max(...native.map(p=>p[0])),taper:true};
+}
+
 // Rig coordinates refer to the unmodified Lynch plate, facing left, in pixels.
 // These weights animate a teaching illustration; they are not tissue measurements.
-export function deformAtlasPoint(x: number, y: number, state: AnatomyMotionState): [number, number] {
+export function deformAtlasPoint(x: number, y: number, state: AnatomyMotionState, rig:AtlasTongueRig=referenceTongueRig): [number, number] {
   const jawWeight = smooth(842, 925, y) * (1 - smooth(440, 660, x)) * (1 - smooth(1090, 1240, y));
   const jawAngle = -state.jawOpen * jawWeight;
   let px = 610 + (x - 610) * Math.cos(jawAngle) - (y - 735) * Math.sin(jawAngle);
   let py = 735 + (x - 610) * Math.sin(jawAngle) + (y - 735) * Math.cos(jawAngle);
-  // The foreground tongue tip is (175.8, 877.8) on the native plate.
-  // Its old support started at x=180, so the actual tip had zero motion.
-  // Keep the root anchored and use the same anterior displacement as the front mesh.
-  const progress = Math.max(0, Math.min(1, (565 - x) / (565 - 175.8)));
-  const tongueMask = smooth(80, 130, x) * smooth(792, 835, y) * (1 - smooth(910, 1000, y));
+  const progress = Math.max(0, Math.min(1, (rig.rootX-x)/Math.max(1,rig.rootX-rig.tipX)));
+  const tongueMask = smooth(rig.tipX-96,rig.tipX-46,x)*smooth(rig.tipY-86,rig.tipY-43,y)*(1-smooth(rig.tipY+32,rig.tipY+122,y));
   const displacement = tongueDisplacement(progress, state.tongue);
-  px -= displacement.z * 18 * tongueMask;
-  py -= displacement.y * 13 * tongueMask;
+  // Display gain: two times the previous anterior travel and ~2.3x elevation.
+  // Tracking measurements remain unchanged; the shared pose stays independent.
+  px -= displacement.z * 36 * tongueMask;
+  py -= displacement.y * 30 * tongueMask;
+  if(rig.taper){
+    const tipWeight=(1-smooth(rig.tipX,rig.tipX+105,x))*(1-smooth(65,115,Math.abs(y-rig.tipY)));
+    px-=12*tipWeight;
+    py-=(y-rig.tipY)*.65*tipWeight;
+  }
   // Lateral displacement is perpendicular to this sagittal view, not extension.
   // Full skull rotation, blended continuously into a stationary lower neck.
   const pitch = -state.head.x * (1 - smooth(960, 1355, y));
