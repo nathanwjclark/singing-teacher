@@ -13,7 +13,7 @@ test('prepare reserves the operation before reading a delayed body and releases 
  const body=Buffer.from(JSON.stringify({demonstrationId:'soft-palate-coupling',modelId:'m',designId:'d'}));
  try{
   const first=route({...base,async *[Symbol.asyncIterator](){await gate;yield body;}},'first',new URL('http://localhost/api/teaching/prepare'));
-  await route({...base,async *[Symbol.asyncIterator](){throw Error('Busy request body must not be read');}},'second',new URL('http://localhost/api/teaching/prepare'));
+  await route({...base,[Symbol.asyncIterator](){throw Error('Busy request body must not be read');}},'second',new URL('http://localhost/api/teaching/prepare'));
   assert.equal(replies.get('second').code,409);assert.match(replies.get('second').body.error,/already running/);
   // A separate failed read-only request must not release another request's reservation.
   await route({...base,method:'GET'},'asset',new URL('http://localhost/api/teaching/asset?attempt=teaching-abcd&name=before-tract.svg'));
