@@ -30,8 +30,11 @@ Dispatch itself adds an event, so always use the returned version.
 | record_attempt | design_id, attempt_id, status (stopped or failed), reason |
 | record_sensation | attempt_id, text |
 
-Session calibration currently supports the 44100 Hz, 4096 sample, offset 4410,
-0.25 second canonical profile. Ingestion checks canonical feature validity and
+Session calibration supports the fitter's 44100, 48000 and 96000 Hz rates,
+B canonical frame size for each rate, declared 0.1–5 second duration and exact
+source-window offsets. Frames must fit inside the declared duration; repeated
+physical intervals are rejected. Prospective design retains its separate fixed
+44100 Hz, 4096 sample, offset 4410, 0.25 second profile. Ingestion checks canonical feature validity and
 B contract validation; source crop/pose and complete operator support are checked
 again by the real search job. This is a restricted supported path, not acceptance
 of arbitrary microphone artifacts. Calibration is immutable after modeling starts.

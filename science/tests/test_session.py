@@ -154,3 +154,29 @@ def test_crash_after_submit_recovers_intent_and_concurrent_cas(tmp_path,monkeypa
         assert final['snapshot']==original_snapshot and final['pending'] is None
         with pytest.raises(ValueError,match='owned'):
             send(recovered,'collect_job',job_id=finished_job)
+
+
+def test_native_48k_calibration_profile_ingest_search_and_window_guards(tmp_path):
+    from singing_physics.pcm_inverse import resample_native_pcm
+    with Engine() as engine:
+        audio=engine.synthesize('a',{'JA':-2.},f0_hz=180.,duration_s=.3)
+        native,_=resample_native_pcm(audio,44100,48000)
+    measurement=extract_pcm(native[4800:8896]*.8,48000,measurement_id='native-measurement',
+        observation_id='native',artifact_id='native-audio',start_ms=100.)['measurement']
+    doc={'schema_version':'0.1.0','kind':'canonical_pcm_observations','trials':[{'id':'native','pose':'a',
+        'measurement':measurement,'sample_rate_hz':48000,'frame_start_sample':4800,'frame_size':4096,'duration_s':.3}]}
+    with JobService(tmp_path/'jobs') as service:
+        controller=SessionController(tmp_path/'sessions',service,'native')
+        for change in ({'frame_start_sample':4801},{'frame_size':4095},{'duration_s':.1},{'sample_rate_hz':True}):
+            bad=deepcopy(doc);bad['trials'][0].update(change)
+            with pytest.raises(ValueError):send(controller,'ingest_calibration',document=bad)
+        duplicate=deepcopy(doc);second=deepcopy(doc['trials'][0]);second['id']='renamed';second['measurement']['id']='renamed-measurement'
+        duplicate['trials'].append(second)
+        with pytest.raises(ValueError):send(controller,'ingest_calibration',document=duplicate)
+        state=send(controller,'ingest_calibration',document=doc)
+        assert state['calibration']==doc
+        send(controller,'search',parameters={'anatomy_bounds':{'hard_palate_length':[4.,4.8]},
+            'nuisance_profiles':[{'profile_id':'declared','trials':{'native':{'JA':-2.,'f0_hz':180.,'gain':.8}}}],
+            'max_synthesis_calls':6,'rounds':1,'seed':7})
+        result=collect(controller,service)
+        assert result['snapshot'] and result['jobs'][-1]['result']['actual_synthesis_calls']==6

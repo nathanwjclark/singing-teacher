@@ -4,6 +4,7 @@ from copy import deepcopy
 from datetime import datetime, timezone
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import sqlite3
@@ -12,7 +13,7 @@ from .service import canonical
 from .prediction import Artifact, _encode, _timestamp
 from .pcm_design import _snapshot, SCHEMA
 from .pcm_inverse import _bridge, _features
-from .engine import ANATOMY
+from .engine import ANATOMY, finite
 
 
 def _now():
@@ -162,10 +163,27 @@ class SessionController:
                 _id(trial['id']); _id(trial['pose'])
                 if trial['id'] in ids: raise ValueError('Duplicate calibration trial')
                 ids.add(trial['id'])
-                if (trial['sample_rate_hz'],trial['frame_start_sample'],trial['frame_size'],trial['duration_s'])!=(44100,4410,4096,.25):
-                    raise ValueError('Session supports canonical 44100 Hz quarter-second profile only')
+                rate,start,size=trial['sample_rate_hz'],trial['frame_start_sample'],trial['frame_size']
+                duration=finite(trial['duration_s'],'duration_s')
+                if type(rate) is not int or rate not in (44100,48000,96000) or type(start) is not int or start<0 or type(size) is not int or not 256<=size<=32768 or not .1<=duration<=5 or start+size>round(duration*rate):
+                    raise ValueError('Unsupported canonical rate, duration or frame bounds')
                 _features(trial['measurement'])
-            _bridge({'operation':'validate','records':[t['measurement'] for t in doc['trials']],'sampleRates':[44100]},None)
+            profiles=_bridge({'operation':'validate','records':[t['measurement'] for t in doc['trials']],
+                'sampleRates':sorted({t['sample_rate_hz'] for t in doc['trials']})},None)
+            sizes={p['sampleRate']:p['frameSize'] for p in profiles['audioProfiles']}
+            intervals=set(); measurement_ids=set()
+            for trial in doc['trials']:
+                record=trial['measurement']; window=record['window']; rate=trial['sample_rate_hz']
+                if record['id'] in measurement_ids: raise ValueError('Duplicate canonical measurement')
+                measurement_ids.add(record['id'])
+                if trial['frame_size']!=sizes[rate] or not math.isclose(window['endMs']-window['startMs'],trial['frame_size']/rate*1000,abs_tol=1e-6,rel_tol=0) or not math.isclose(window['startMs'],trial['frame_start_sample']/rate*1000,abs_tol=1e-6,rel_tol=0):
+                    raise ValueError('Canonical frame size or window mismatch')
+                keys={('hash',h,window['startMs'],window['endMs']) for h in record['provenance']['sourceHashes']}
+                keys.add(('artifact',record['artifactId'],window['startMs'],window['endMs']))
+                if intervals & keys: raise ValueError('Duplicate source audio interval')
+                intervals.update(keys)
+                if sum(v['value'] is not None for v in _features(record).values())<3:
+                    raise ValueError('Insufficient observed canonical descriptors')
             state['calibration']=deepcopy(doc)
         elif action=='search':
             if state['calibration'] is None or state['snapshot']:
