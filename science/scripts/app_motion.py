@@ -113,6 +113,8 @@ def run(data_root,capture_id,pose,output,expected_model_id=None):
             except (ValueError,RuntimeError) as error:
                 row.update(status='failed',reason=str(error));continue
             row.update(status='scored' if fitted['joint']['best'] is not None else 'insufficient-quality',fit=fitted,reason=None if fitted['joint']['best'] is not None else 'No complete scorable candidate prediction')
+    from singing_physics.motion_path import couple_motion_hypotheses
+    result['temporalAnalysis']=couple_motion_hypotheses(result['windows'])
     result['status']='available' if any(w['status']=='scored' for w in result['windows']) else 'insufficient-quality'
     write(output/'summary.json',result);return result
 
