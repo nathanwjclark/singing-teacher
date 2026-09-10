@@ -1,0 +1,87 @@
+import { useEffect, useState } from 'react';
+import { getSourceStatus, sourceAction } from './sourceClient';
+import type { SourceAction, SourceInferenceStatus } from './sourceClient';
+import './SourceInferencePanel.css';
+
+function object(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+function text(value: unknown, fallback = 'Unavailable'): string {
+  return typeof value === 'string' ? value : typeof value === 'number' && Number.isFinite(value) ? String(value) : fallback;
+}
+function number(value: unknown): string { return typeof value === 'number' && Number.isFinite(value) ? value.toFixed(3) : 'Unavailable'; }
+function parameters(value: unknown): string {
+  return Object.entries(object(value)).filter(([, entry]) => typeof entry === 'number' && Number.isFinite(entry)).map(([key, entry]) => `${key}: ${number(entry)}`).join(' · ') || 'Unavailable';
+}
+
+export function SourceInferencePanel() {
+  const [status, setStatus] = useState<SourceInferenceStatus | null>(null);
+  const [enabled, setEnabled] = useState(false), [confirmed, setConfirmed] = useState(false);
+  const [error, setError] = useState(''), [starting, setStarting] = useState(false), [refresh, setRefresh] = useState(0);
+  useEffect(() => {
+    const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout>;
+    async function poll() {
+      try {
+        const value = await getSourceStatus(controller.signal);
+        if (!controller.signal.aborted) setStatus(value);
+      } catch (failure) {
+        if (!controller.signal.aborted) { setStatus(null); setError(failure instanceof Error ? failure.message : String(failure)); }
+      } finally { if (!controller.signal.aborted) timer = setTimeout(() => void poll(), 5000); }
+    }
+    void poll();
+    return () => { controller.abort(); clearTimeout(timer); };
+  }, [refresh]);
+  async function run(action: SourceAction) {
+    setStarting(true); setError('');
+    try {
+      await sourceAction(action);
+      setConfirmed(false);
+      setStatus(previous => previous ? { ...previous, running: true } : previous);
+    } catch (failure) { setError(failure instanceof Error ? failure.message : String(failure)); }
+    finally { setStarting(false); setRefresh(value => value + 1); }
+  }
+  const busy = starting || Boolean(status?.running);
+  const ready = enabled && status?.enabled && !busy;
+  const fit = object(status?.fit?.result), joint = object(fit.joint);
+  const alternatives = Array.isArray(joint.candidates) ? joint.candidates.map(object) : [];
+  const forecast = object(status?.forecast?.result?.forecast);
+  const scored = object(status?.score?.result);
+  const hasForecast = typeof forecast.target_id === 'string';
+  return <section className="source-inference-panel" aria-label="Optional source and tract inference" aria-busy={busy}>
+    <h2>Optional source and tract inference</h2>
+    <p>Test competing sound-source and vocal-tract explanations using original recordings. Source parameters are conditional simulator hypotheses; audio does not establish vocal-fold contact, complete closure or tissue mechanics.</p>
+    <label><input type="checkbox" checked={enabled} onChange={event => setEnabled(event.target.checked)} disabled={busy}/> Enable optional source experiments</label>
+    <p role="status">{busy ? 'Optional scientific jobs are running.' : !enabled ? 'Optional experiments are off.' : !status?.enabled ? 'Optional source service is unavailable or disabled.' : 'Optional source service connected.'} The baseline model and ordinary coaching remain available.</p>
+    {error && <p role="alert">{error}</p>}
+    <div className="source-inference-actions"><button disabled={!ready} onClick={() => void run('analyze')}>Analyze latest capture for source hypotheses</button>
+      <button onClick={() => { setError(''); setRefresh(value => value + 1); }}>Refresh optional status</button></div>
+    <p>First record a comfortable sustained ah vowel and use Pull iPhone. The optional analysis uses that original capture; it does not reinterpret microphone trends as closure measurements.</p>
+    {status?.fit && <p>Source fit: {status.fit.status}. {status.fit.reason}</p>}
+    {Object.keys(fit).length > 0 && <><p>Scientific outcome: {text(fit.status)}. {text(fit.reason, '')}</p>
+      <dl><div><dt>Source + tract discrepancy</dt><dd>{number(object(joint.best).score)}</dd></div>
+        <div><dt>Fixed-source comparison</dt><dd>{number(object(object(fit.fixed_source).best).score)}</dd></div>
+        <div><dt>Fixed-anatomy comparison</dt><dd>{number(object(object(fit.fixed_anatomy).best).score)}</dd></div></dl>
+      <p>Actual synthesis calls: {text(fit.actual_synthesis_calls)}. Source model: {text(fit.source_model_version)}.</p>
+      {alternatives.length > 0 && <details><summary>Competing source and tract hypotheses ({alternatives.length})</summary>
+        <div className="source-inference-table"><table><thead><tr><th>Hypothesis</th><th>Status / discrepancy</th><th>Source and articulation controls</th><th>Tract parameters</th></tr></thead>
+          <tbody>{alternatives.map((candidate, index) => <tr key={text(candidate.candidate_id, String(index))}><td>{text(candidate.candidate_id)}</td><td>{text(candidate.status)} · {number(candidate.score)}</td>
+            <td>{(Array.isArray(candidate.predictions) ? candidate.predictions : []).map((prediction, i) => <p key={i}>{parameters(object(prediction).controls)}</p>)}</td><td>{parameters(candidate.anatomy)}</td></tr>)}</tbody></table></div>
+        <p>PS, F0, PR, JA and gain are simulator controls, not measurements of vocal-fold contact or instructions to reproduce internal pressures.</p></details>}
+      {typeof fit.identifiability === 'string' && <p>{fit.identifiability}</p>}
+    </>}
+    <div className="source-inference-actions"><button disabled={!ready || alternatives.length === 0} onClick={() => void run('forecast')}>Freeze optional prediction</button></div>
+    {status?.forecast && <p>Forecast: {status.forecast.status}. {status.forecast.reason}</p>}
+    {hasForecast && <div className="source-inference-forecast"><h3>Prospective source experiment</h3>
+      <p>A prediction was saved for a comfortable sustained ah. Record a new attempt after the prediction, keeping the vowel, comfortable pitch and microphone placement consistent, then Pull iPhone.</p>
+      <p>Declared simulator controls: {parameters(forecast.controls)}. These conditions are assumptions; do not force your voice to match a source parameter.</p>
+      <p>Prediction status: {text(forecast.status)}. Saved: {text(forecast.sealed_at)}.</p>
+      <label><input type="checkbox" checked={confirmed} onChange={event => setConfirmed(event.target.checked)} disabled={busy}/> The latest pulled capture is a new comfortable ah attempt recorded after this prediction.</label>
+      <button disabled={!ready || !confirmed} onClick={() => void run('score')}>Score later capture against source prediction</button>
+    </div>}
+    {status?.score && <p>Scoring: {status.score.status}. {status.score.reason}</p>}
+    {Object.keys(scored).length > 0 && <div><p>Scientific result: {text(scored.status)}. {text(scored.reason, '')} Discrepancy: {number(scored.score)}.</p>
+      <p>{scored.model_updated === true ? 'The optional model was updated.' : 'No model update was applied; the baseline is retained.'}</p></div>}
+    {status?.sessionId && <details><summary>Optional experiment lineage</summary><p>Session: {status.sessionId}<br/>Run: {status.runId}<br/>Prediction: {text(forecast.target_id)}<br/>Forecast hash: {text(status.forecast?.result?.sha256)}</p></details>}
+  </section>;
+}
