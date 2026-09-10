@@ -6,6 +6,8 @@ outer-lip marker correspondence is compared; no hidden surfaces are reconstructe
 from copy import deepcopy
 import hashlib
 import math
+import os
+import json
 from pathlib import Path
 
 import numpy as np
@@ -15,7 +17,7 @@ from observations.geometry.native_capture import read_native_capture
 from observations.geometry.rectification import rectify_depth_points
 from observations.geometry.lips import OPERATOR_ID
 from .pcm_design import _snapshot
-from .prediction import Artifact, _encode
+from .prediction import Artifact, _encode, _timestamp
 
 VERSION = 'experimental-rear-lidar-lip-1'
 
@@ -105,6 +107,15 @@ def rank_lidar_hypotheses(engine, snapshot, capture_directory, annotation, *, en
             raise ValueError('Annotation does not bind original capture manifest')
         if capture.manifest_sha256 in frozen['evidence_hashes']:
             raise ValueError('Depth capture has already contributed to the baseline')
+        manifest_artifact = capture.artifacts[f'{capture.capture_id}/artifact/manifest.json']
+        descriptor = os.open(Path(capture_directory) / 'manifest.json', os.O_RDONLY | os.O_NOFOLLOW)
+        with os.fdopen(descriptor, 'rb') as source:
+            raw_manifest = source.read(manifest_artifact['bytes'] + 1)
+        if hashlib.sha256(raw_manifest).hexdigest() != capture.manifest_sha256:
+            raise ValueError('Native manifest changed during annotation binding')
+        created_at = json.loads(raw_manifest).get('created_at')
+        if created_at is not None:
+            _timestamp(created_at)
         sequence = doc.get('frame_sequence')
         if type(sequence) is not int or sequence < 0:
             raise ValueError('Explicit source frame_sequence required')
@@ -131,6 +142,8 @@ def rank_lidar_hypotheses(engine, snapshot, capture_directory, annotation, *, en
             baseline_snapshot_sha256=artifact.sha256, source_kind=doc['source_kind'],
             annotation_sha256=_hash(doc), annotation=doc,
             source_evidence_id=frame.evidence_id, source_manifest_sha256=capture.manifest_sha256,
+            source_artifact_hashes={identity: value['sha256'] for identity, value in capture.artifacts.items()},
+            source_capture_created_at=created_at,
             projection_lineage=projected['lineage'], timestamp_seconds=frame.timestamp_seconds,
             timebase_id=frame.timebase_id, observed_distance_m=distance,
             observed_endpoints_camera_m=[p.tolist() for p in points], combined_sigma_m=sigma,

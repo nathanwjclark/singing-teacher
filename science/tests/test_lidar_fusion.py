@@ -60,6 +60,8 @@ def test_original_depth_changes_native_support_order_without_mutating_baseline(t
         assert result['comparison']['native_geometry_calls_shared_by_both_conditions'] == 2
         assert result['projection_lineage']['source_manifest_sha256'] == doc['manifest_sha256']
         assert result['baseline_preserved'] and not result['model_updated']
+        assert result['source_capture_created_at'] is None
+        assert result['source_artifact_hashes'][result['source_evidence_id']] == result['projection_lineage']['source_artifact_sha256']
         assert snapshot == original and engine.anatomy() == anatomy
         replay = rank_lidar_hypotheses(engine, snapshot, tmp_path, doc, enabled=True, max_geometry_calls=2)
         assert replay == result
