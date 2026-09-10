@@ -277,3 +277,144 @@ def score_phonation_forecast(frozen,pcm,metadata):
     score=_score(forecast['record'],observed)
     return {**_status('available' if score is not None else 'insufficient-quality','Conditional heldout discrepancy'),
         'score':score,'forecast_sha256':frozen['sha256'],'observation':observed,'model_updated':False}
+
+
+def _bank_policy():
+    return {'version':'phonation-bank-score-1','features':deepcopy(FEATURES),
+        'source_model_version':SOURCE_VERSION,'source_adapter_sha256':digest(Path(__file__)),
+        'ranking':'dense ranks over available discrepancies only; unavailable alternatives retained',
+        'model_update':'none; conditional acoustic ranking is not a posterior or closure measurement'}
+
+
+def forecast_phonation_bank(engine,fit_result,*,reference_trial_id,pose,controls,target_id,
+                            max_synthesis_calls=24,timeout_s=120.,cancelled=None):
+    """Freeze every retained family/candidate under one shared prospective task."""
+    fitted=deepcopy(fit_result)
+    if fitted.get('status')!='available' or fitted.get('kind')!='phonation-source-tract-fit-1':
+        raise ValueError('Available completed source fit required')
+    if type(max_synthesis_calls) is not int or not 1<=max_synthesis_calls<=24:
+        raise ValueError('Bank synthesis budget must be 1–24')
+    timeout_s=finite(timeout_s,'timeout_s')
+    if not 0<timeout_s<=120:raise ValueError('Bank deadline must be 0–120 seconds')
+    if not isinstance(controls,dict) or set(controls)!={'JA','F0','PR','gain'}:
+        raise ValueError('Bank requires shared declared JA/F0/PR/gain controls')
+    _controls({**controls,'PS':0.})
+    if pose not in engine.poses:raise ValueError('Unsupported prospective vowel')
+    if not isinstance(target_id,str) or not target_id.strip() or target_id in fitted['evidence_ids']:
+        raise ValueError('Fresh source bank target required')
+    capability=source_capability(engine)
+    signature=extractor_signature()
+    if signature!=fitted['extractor_signature'] or capability!=fitted['capability']:
+        raise ValueError('Frozen source/extractor capability changed')
+    observations=[row for row in fitted['observations'] if row['observationId']==reference_trial_id]
+    if len(observations)!=1:raise ValueError('One fitted reference observation required')
+    window=observations[0]['window'];rate=window['sampleRateHz']
+    if rate not in (44100,48000,96000):raise ValueError('Unsupported bank sample rate')
+    profile={'sampleRateHz':rate,'startSample':round(.1*rate),'sampleCount':8192 if rate==96000 else 4096}
+    rows=[]
+    for family in ('joint','fixed_source','fixed_anatomy'):
+        candidates=fitted.get(family,{}).get('candidates')
+        if not isinstance(candidates,list) or not candidates:raise ValueError('Every comparison family must be represented')
+        ids=set()
+        for row in candidates:
+            identity=row.get('candidate_id')
+            if not isinstance(identity,str) or not identity or identity in ids:raise ValueError('Duplicate or invalid bank candidate')
+            if row.get('score') is not None:finite(row['score'],'calibration score')
+            if row.get('status')=='scored' and row.get('score') is None:raise ValueError('Scored source candidate lacks calibration discrepancy')
+            ids.add(identity);rows.append((family,row))
+    if not 1<=len(rows)<=24 or sum(row.get('status')=='scored' for _,row in rows)>max_synthesis_calls:
+        raise ValueError('Complete source bank exceeds finite synthesis budget')
+    saved=engine.anatomy();deadline=time.monotonic()+timeout_s;calls=0;alternatives=[]
+    try:
+        for family,row in rows:
+            entry={'alternative_id':family+':'+row['candidate_id'],'family':family,'candidate_id':row['candidate_id'],
+                'calibration_score':row.get('score'),'anatomy':deepcopy(row['anatomy']),
+                'record':None,'controls':None,'status':'unavailable','reason':None}
+            alternatives.append(entry)
+            if row.get('status')!='scored':entry['reason']='Calibration alternative was unscorable';continue
+            refs=[r for r in row.get('predictions',[]) if r['trial_id']==reference_trial_id]
+            if len(refs)!=1:entry['reason']='Fitted source reference unavailable';continue
+            control=_controls({**controls,'PS':refs[0]['controls']['PS']});entry['controls']=control
+            if time.monotonic()>=deadline or cancelled is not None and cancelled.is_set():
+                entry.update(status='timed-out',reason='Bank deadline or cancellation reached');continue
+            engine.set_anatomy(row['anatomy'])
+            try:
+                calls+=1
+                audio,native=synthesize_phonation(engine,pose=pose,**{k:control[k] for k in ('JA','F0','PR','PS')})
+                frame,conversion=_frame(audio,rate);frame=frame*control['gain']
+                frame_hash=hashlib.sha256(frame.astype('<f4').tobytes()).hexdigest()
+                predicted=measure_phonation(frame,rate,_metadata('bank:'+target_id+':'+entry['alternative_id'],rate,frame_hash,'engine-generated'))
+                usable=_features(predicted) is not None
+                entry.update(record=predicted,native_state=native,resampling=conversion,
+                    status='available' if usable else 'insufficient-quality',reason=None if usable else 'Required predicted descriptor unavailable')
+            except (ValueError,RuntimeError,subprocess.TimeoutExpired) as exc:
+                entry.update(status='failed',reason=str(exc)[:500])
+    finally:engine.set_anatomy(saved)
+    if signature!=extractor_signature():raise RuntimeError('Extractor changed during source bank generation')
+    available=sum(row['status']=='available' for row in alternatives)
+    excluded=sorted({h for row in fitted['observations'] for h in row['sourceHashes']})
+    result={'kind':'frozen-phonation-bank-1','fit_sha256':_hash(fitted),'target_id':target_id,
+        'reference_trial_id':reference_trial_id,'pose':pose,'profile':profile,'shared_controls':deepcopy(controls),
+        'alternatives':alternatives,'extractor_signature':signature,'scoring_policy':_bank_policy(),
+        'native_provenance':deepcopy(engine.provenance),'source_capability':capability,
+        'excluded_frame_hashes':list(fitted['evidence_frame_hashes']),'excluded_artifact_hashes':excluded,
+        'sealed_at':datetime.now(timezone.utc).isoformat(),'actual_synthesis_calls':calls,'max_synthesis_calls':max_synthesis_calls,
+        'coverage':{'total':len(alternatives),'available':available,'unavailable':len(alternatives)-available,'complete':available==len(alternatives)},
+        'status':'available' if available else 'insufficient-quality',
+        'scope':'Competing conditional source/tract predictions; shared control assumptions are not verified human execution, anatomical identification or vocal-fold contact'}
+    return {'forecast':result,'sha256':_hash(result)}
+
+
+def score_phonation_bank(frozen,pcm,metadata):
+    """Extract one original held-out frame and compare every frozen alternative."""
+    if not isinstance(frozen,dict) or set(frozen)!={'forecast','sha256'} or _hash(frozen['forecast'])!=frozen['sha256']:
+        raise ValueError('Frozen source bank hash mismatch')
+    bank=frozen['forecast']
+    if bank.get('kind')!='frozen-phonation-bank-1' or metadata.get('observationId')!=bank.get('target_id'):
+        raise ValueError('Wrong source bank target')
+    rows=bank.get('alternatives')
+    if not isinstance(rows,list) or not 1<=len(rows)<=24 or len({r['alternative_id'] for r in rows})!=len(rows):
+        raise ValueError('Invalid source bank coverage')
+    observed_at=datetime.fromisoformat(metadata['evidenceAt']);sealed=datetime.fromisoformat(bank['sealed_at'])
+    if observed_at.tzinfo is None or sealed.tzinfo is None or not sealed<observed_at<=datetime.now(timezone.utc):
+        raise ValueError('Heldout observation must follow source bank commitment')
+    profile=bank['profile']
+    if metadata.get('windowStartSample')!=profile['startSample'] or len(pcm)!=profile['sampleCount']:
+        raise ValueError('Source scoring frame differs from frozen bank profile')
+    if set(metadata.get('sourceHashes',[])) & set(bank['excluded_artifact_hashes']):
+        raise ValueError('Calibration artifact reused as heldout bank evidence')
+    reason=None
+    try:
+        if _hash(bank['scoring_policy'])!=_hash(_bank_policy()) or bank['extractor_signature']!=extractor_signature():
+            reason='Frozen source bank scoring capability changed'
+    except OSError:reason='Frozen source bank extractor unavailable'
+    observed=None
+    if reason is None:
+        observed=measure_phonation(pcm,profile['sampleRateHz'],metadata)
+        if observed['frameSha256'] in bank['excluded_frame_hashes']:raise ValueError('Calibration frame reused as heldout bank evidence')
+    alternatives=[]
+    for row in rows:
+        score=None;unavailable=reason or row.get('reason')
+        if reason is None and row['status']=='available' and row['record'] is not None:
+            score=_score(row['record'],observed)
+            if score is None:unavailable='Required observed or predicted descriptor unavailable'
+        alternatives.append({key:row[key] for key in ('alternative_id','family','candidate_id','calibration_score')}|
+            {'score':score,'status':'scored' if score is not None else 'unavailable','reason':None if score is not None else unavailable or 'Frozen prediction unavailable',
+             'calibration_rank':None,'heldout_rank':None,'rank_change':None})
+    for field,rank in (('calibration_score','calibration_rank'),('score','heldout_rank')):
+        unique=sorted({r[field] for r in alternatives if r[field] is not None})
+        for row in alternatives:
+            if row[field] is not None:row[rank]=unique.index(row[field])+1
+    complete=all(row['heldout_rank'] is not None and row['calibration_rank'] is not None for row in alternatives)
+    for row in alternatives:
+        if complete:
+            row['rank_change']=row['calibration_rank']-row['heldout_rank']
+    ranked=sorted((row for row in alternatives if row['score'] is not None),key=lambda r:(r['score'],r['alternative_id']))
+    return {**_status('unsupported' if reason else 'available' if ranked else 'insufficient-quality',reason or 'Conditional heldout bank discrepancies'),
+        'kind':'phonation-bank-score-1','forecast_sha256':frozen['sha256'],'alternatives':alternatives,
+        'ranking':[row['alternative_id'] for row in ranked],'observation':observed,'model_updated':False,
+        'actual_synthesis_calls':0,'canonical_extractions':int(observed is not None),
+        'coverage':{'total':len(alternatives),'scored':len(ranked),'unavailable':len(alternatives)-len(ranked),'complete':len(ranked)==len(alternatives)},
+        'rank_change_comparison_ids':[row['alternative_id'] for row in alternatives] if complete else [],
+        'rank_change_reason':None if complete else 'Rank changes unavailable because calibration and heldout comparison coverage differs',
+        'ranking_interpretation':'Dense discrepancy ranks among available alternatives only; incomplete coverage is not a full-bank winner or calibrated posterior'}
