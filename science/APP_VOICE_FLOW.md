@@ -72,3 +72,13 @@ Historical summaries lacking those fields remain unchanged.
 The four focused browser checks include a simulated USB receipt through the
 Studio-mounted hidden processor, spinner and hash-bound diff application. They
 verify orchestration, not a physical-phone recording or anatomy accuracy.
+
+## Private local launcher
+
+After the existing trusted HTTPS setup, run `npm run science:private` on the Mac.
+This starts both the persistent numerical worker and private HTTPS app, with the
+desktop at `http://127.0.0.1:5173`. Use a new initial fit before later scoring;
+sessions from temporary development workers are not imported automatically.
+Astra reads `OPENAI_API_KEY` from the server environment or the configured private
+`.env` file and sends only derived model evidence through the Responses API. Its
+review stays attached to that capture until a different capture is pulled.

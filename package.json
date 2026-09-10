@@ -13,7 +13,8 @@
     "local": "node server/local.mjs",
     "science:local": "node scripts/start-science-local.mjs",
     "https:prepare": "node scripts/prepare-local-https.mjs",
-    "local:private": "node scripts/start-local-https.mjs"
+    "local:private": "node scripts/start-local-https.mjs",
+    "science:private": "PRIVATE_HTTPS=1 node scripts/start-science-local.mjs"
   },
   "dependencies": {
     "@mediapipe/tasks-vision": "^1.0.1",

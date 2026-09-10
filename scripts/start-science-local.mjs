@@ -15,5 +15,5 @@ const children=[];let stopping=false;
 function stop(code){if(stopping)return;stopping=true;process.exitCode=code;for(const child of children)child.kill('SIGTERM');setTimeout(()=>{for(const child of children)if(child.exitCode===null)child.kill('SIGKILL')},2000).unref()}
 function start(command,args){const child=spawn(command,args,{cwd:root,env,stdio:'inherit'});children.push(child);child.on('error',error=>{console.error(`Local service could not start: ${error.code||'process error'}`);stop(1)});child.on('exit',(code,signal)=>{if(!stopping)stop(code??(signal?1:0))});return child}
 start(python,['-m','singing_physics.http_service','--root',resolve(root,process.env.SCIENCE_DATA_DIR||'.local-data/science-jobs'),'--port',String(port)]);
-start(process.execPath,['server/local.mjs']);
+start(process.execPath,[process.env.PRIVATE_HTTPS==='1'?'scripts/start-local-https.mjs':'server/local.mjs']);
 process.on('SIGINT',()=>stop(0));process.on('SIGTERM',()=>stop(0));
