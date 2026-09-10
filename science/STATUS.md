@@ -1,5 +1,17 @@
 # Current Lead A integration status
 
+Lead B's contracts, canonical PCM extractor, native acquisition/import and
+independent scoring are received through main `55ff619`. New consumers are in
+[PCM_INVERSE.md](PCM_INVERSE.md), [KIT_BRIDGE.md](KIT_BRIDGE.md),
+[NATIVE_GEOMETRY.md](NATIVE_GEOMETRY.md), [DEPTH_RECTIFICATION.md](DEPTH_RECTIFICATION.md)
+and [FROZEN_CONTROL.md](FROZEN_CONTROL.md).
+
+Native forwards now start in the same 13-parameter reconstructed geometry basis
+used for fitted candidates. Previously detailed default JD3 geometry differed
+from reapplying its reported parameters (~1.24 dB in one /a/ comparison).
+New provenance includes `geometry_basis`; older snapshots lacking it must be
+regenerated, never silently relabeled. The native binary is unchanged.
+
 The initial foundation results below are retained as historical evidence. The
 parallel expansion is now implemented and reviewed in PR #3:
 
@@ -26,8 +38,9 @@ artifact with unchanged prospective replay bytes.
 See [JOINT_INFERENCE.md](JOINT_INFERENCE.md) for improved but still ambiguous joint
 recovery and [MISMATCH.md](MISMATCH.md) for all three fixed-budget perturbation
 attempts. Low fitting error does not establish correct anatomy. Measured-audio
-likelihoods await B's canonical extractor; real-phone calibration/correspondence
-and human-anatomy recovery remain unvalidated.
+comparisons now use B's canonical PCM extractor under explicit finite source/gain
+hypotheses. Real-phone calibration/correspondence and human-anatomy recovery
+remain unvalidated.
 
 The complete ownership and unmet acceptance gates are in the repository
 [coordination record](../docs/coordination/lead-a-handoff.md). The Python job/replay

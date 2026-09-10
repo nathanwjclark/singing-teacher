@@ -55,8 +55,8 @@ cross-lead acceptance gates are unfinished. No A agent merged repository main.
 
 | Input / gate | Responsible owner | A action after receipt | Current status |
 |---|---|---|---|
-| KIT-01 public schemas and designated integration commit | B | Adapt executable local jobs/observations; run B validators | Awaiting branch/commit |
-| AUD-01 canonical extractor and defined source/capture likelihood inputs | B, A scientific review | Implement measured-audio source/articulation/capture fitting | Awaiting runnable handoff |
+| KIT-01 public schemas and designated integration commit | B | Adapt executable local jobs/observations; run B validators | Received through B main `4c801ac`; A adapters in progress |
+| AUD-01 canonical extractor and defined source/capture likelihood inputs | B, A scientific review | Implement measured-audio source/articulation/capture fitting | Exact PCM extractor 1.1.0 received; finite candidate/source/gain comparison in progress |
 | CAP-01/02 actual rectified depth, calibration, clock and quality evidence | B + person with phones | Replay real geometry and verify FUSE timing/operator correspondence | No actual device bundle supplied |
 | G2 independent hidden scoring and equal-budget protocol | B, A numerical signoff | Reproduce independent results and report ambiguity | Internal controlled tests exist; B gate unfinished |
 | G3 human multimodal anatomy fit | A + B | Fit calibrated audio/geometry and validate claims | Blocked on the inputs above; not proven |
@@ -185,3 +185,30 @@ B integrated the reviewed PR #3 head `615fde362960c0452a233e80c1f75d2b4d7a03de` 
 This receipt supersedes earlier “no KIT/AUD artifacts received” descriptions for repository availability. It does not assert that A has reviewed the new adapter or completed the microphone likelihood. No actual phone depth, specialist cue review or human G3/G6/G7 evidence has been supplied by this integration.
 
 Additional B producer now available: `apps/ios/SingingDepth/SingingDepth.xcodeproj` compiles for unsigned iPhoneOS and exports native RGB/TrueDepth plus optional PCM/ASBD source data. `scripts/import-native-capture.ts` converts its validated original artifacts into KIT observations; `scripts/review-native-depth.py` reports raw coverage. No device was attached, so these are build/fixture results rather than physical acceptance. See `docs/implementation/NATIVE-KIT-IMPORT.md` for exact source clock/calibration semantics. The fitting consumer must handle the recorded lens distortion, missing head/world transforms and unknown synchronization uncertainty explicitly.
+
+## A consumption of B handoff
+
+Starting merged commit: `91d3380` (A `bdee764`, B `4c801ac`). This supersedes
+historical missing-KIT/AUD statements above. B owns main/release integration;
+A's queue is PR #3. Public contracts remain KIT 1.0.0; canonical PCM extraction
+remains B's `src/lib/audio.ts` version 1.1.0. No parallel extractor is introduced.
+
+| Ticket | Exclusive owner / branch | Concrete acceptance | Status |
+|---|---|---|---|
+| PCM-01 | a_forward / codex/a-pcm-inverse | Native PCM and recorded canonical features compared under explicit anatomy/source/JA/gain hypotheses, bounded fair baseline | running |
+| KIT-A-01 | a_prediction / codex/a-kit-forecast | Actual A jobs/candidates mapped to B contracts; PCM commitment precedes target synthesis and B scoring | running |
+| NATIVE-GEO-01 | a_geometry / codex/a-native-geometry | Hash-verified native decoding, preserved calibration and explicit fusion gates | reviewed, 14 software tests passed |
+| RECT-01 | a_geometry / codex/a-depth-rectification | Authoritatively specified LUT ray/point transformation and analytic tests | running |
+| MOT-03 verification | a_inverse / codex/a-frozen-verified | Direct native recovery, malformed lineage, hard call cap and no anatomy update | running |
+| SVC-B-01 | A coordinator / codex/a-b-handoff | Actual spawned PCM/control/ranking jobs, immutable replay and stale-model rejection | running |
+| SCI-B-01 | a_scientific_review / codex/a-b-scientific-review | Independent unit/source/evidence review of new consumers | initial B review complete; new consumers pending |
+
+The previous 154-test pass did not exercise frozen-control recovery or its
+spawned service route. New direct tests found a local-search recovery failure;
+this is being resolved and is not counted as passing evidence. A test-suite
+count cannot substitute for coverage of a newly connected operation.
+
+Actual phone media, calibrated depth error/head pose/cross-clock alignment,
+specialist cue review and human held-out outcomes remain required external
+inputs. Available software can be built and replayed without those inputs;
+human acceptance gates cannot.

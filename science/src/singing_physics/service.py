@@ -90,6 +90,9 @@ def _worker(root, job_id, parent_pid, timeout_s):
                     result = engine.export(destination / 'forward', **params)
                 elif request['operation'] == 'fit_transfer':
                     result = fit(engine, params['observations'], **{k: v for k, v in params.items() if k != 'observations'})
+                elif request['operation'] == 'fit_pcm':
+                    from .pcm_inverse import fit_pcm
+                    result = fit_pcm(engine, params['observations'], **{k:v for k,v in params.items() if k != 'observations'})
                 elif request['operation'] == 'fit_frozen_control':
                     from .prediction import Artifact
                     from .frozen_control import fit_frozen_control
@@ -185,9 +188,10 @@ class JobService:
         self._identity(idempotency_key, 'idempotency_key')
         if not isinstance(request, dict) or set(request) - {'operation', 'parameters', 'session_id', 'model_id'}:
             raise ValueError('Invalid local job request fields')
-        if request.get('operation') not in {'forward', 'fit_transfer', 'fit_joint', 'predict', 'fit_dynamic', 'fit_control', 'control_predict', 'condition_prediction', 'fit_frozen_control', 'rank_interventions'} or not isinstance(request.get('parameters'), dict):
+        if request.get('operation') not in {'forward', 'fit_transfer', 'fit_joint', 'predict', 'fit_dynamic', 'fit_control', 'control_predict', 'condition_prediction', 'fit_frozen_control', 'rank_interventions', 'fit_pcm'} or not isinstance(request.get('parameters'), dict):
             raise ValueError('Unsupported operation or missing parameters')
         allowed = {
+            'fit_pcm': {'observations', 'candidates', 'max_synthesis_calls'},
             'fit_frozen_control': {'snapshot_json', 'observations', 'expected_digest', 'candidate_id', 'budget', 'seed'},
             'rank_interventions': {'snapshot_json', 'expected_digest', 'ranking_id', 'target_evidence_id', 'generated_at', 'interventions', 'noise_sigma_db', 'noise_assumption', 'frequency_band_hz', 'bins', 'max_native_calls', 'separation_threshold'},
             'forward': {'pose', 'anatomy', 'articulation', 'f0_hz', 'duration_s'},
@@ -206,6 +210,7 @@ class JobService:
         if request['operation'] == 'predict' and not {'snapshot_json', 'expected_digest', 'prediction_id', 'target_evidence_id', 'generated_at', 'intervention'} <= set(request['parameters']):
             raise ValueError('Missing prediction parameters')
         required = {
+            'fit_pcm': {'observations', 'candidates'},
             'fit_frozen_control': {'snapshot_json', 'observations', 'expected_digest', 'candidate_id'},
             'rank_interventions': {'snapshot_json', 'expected_digest', 'ranking_id', 'target_evidence_id', 'generated_at', 'interventions', 'noise_sigma_db', 'noise_assumption'},
             'fit_control': {'attempts', 'anatomy_model_id', 'fitted_at'},

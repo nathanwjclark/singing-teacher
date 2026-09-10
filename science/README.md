@@ -3,8 +3,10 @@
 Lead A's scientific implementation integrates VocalTractLab, shared-anatomy and
 per-trial articulation fitting, calibrated visible-lip constraints, frozen numerical
 forecasts and durable subprocess jobs. It exports real sound and corresponding
-SVG/OBJ geometry. Human microphone fitting, tissue-mechanics recovery and actual
-phone acceptance remain unfinished; B owns the Astra experimental system.
+SVG/OBJ geometry. B's contracts and canonical extractor are now integrated: a
+finite PCM fitter compares explicit anatomy/source/articulation/gain hypotheses.
+Human anatomical accuracy, tissue-mechanics recovery and phone acceptance remain
+unvalidated; B owns the Astra experimental system.
 
 See [verified results and owner handoff](STATUS.md) for measured recovery results,
 checks run and the next integrated tasks.
@@ -116,10 +118,14 @@ Run the integrated synthetic handoff with:
 science/.venv/bin/python science/scripts/replay_science.py science/artifacts/replay --budget 20
 ```
 
-Next, A consumes B's KIT-01/AUD-01 contracts and extractor to add unknown source and
-capture response to microphone likelihoods. Actual CAP-01/02 recordings must validate
-phone calibration, timing and lip correspondence before human multimodal acceptance.
-B's independent evaluator and prospective ledger are needed for the release gates.
+The [PCM fitter](PCM_INVERSE.md) uses B's exact extractor; [KIT adapters](KIT_BRIDGE.md)
+connect native forecasts to B's commitment and independent scoring code.
+[Frozen control inference](FROZEN_CONTROL.md) holds anatomy constant during
+single-vowel trajectories. [Native ingestion](NATIVE_GEOMETRY.md) and
+[ray rectification](DEPTH_RECTIFICATION.md) preserve original sensor evidence.
+Actual CAP-01/02 recordings must validate calibration, timing and correspondence
+before human multimodal acceptance. Unknown microphone/room filters and source
+mechanics remain unsupported by the finite PCM hypothesis model.
 See the repository [coordination record](../docs/coordination/lead-a-handoff.md).
 
 Original `science/` code is AGPL-3.0-or-later; dependencies retain their own terms.
