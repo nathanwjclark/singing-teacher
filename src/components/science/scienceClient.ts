@@ -41,7 +41,7 @@ export function useScienceOutcome(runId:string|undefined,refreshKey=0){
  return runId&&entry.runId===runId?entry.state:{status:runId?'loading':'not-run'} as OutcomeStatus;
 }
 export async function verifiedScienceAsset(result:ScientificResult,name:string){
- const expected=result.files[name];if(!expected)throw Error('No bound model artifact');
+ const expected=result.files?.[name];if(!expected)throw Error('No bound model artifact');
  const response=await fetch(scienceAsset(result.runId,name),{cache:'no-store'});if(!response.ok)throw Error('Model artifact unavailable');
  const bytes=await response.arrayBuffer();const hash=[...new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))].map(v=>v.toString(16).padStart(2,'0')).join('');
  if(bytes.byteLength!==expected.byteLength||hash!==expected.sha256)throw Error('Model artifact hash/size mismatch');return bytes;
