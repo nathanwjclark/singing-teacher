@@ -11,9 +11,10 @@ sys.path.insert(0,str(Path(__file__).parents[1]/'scripts'))
 import app_motion
 
 
-def encoded_capture(data,temporary,ffmpeg='/opt/homebrew/bin/ffmpeg'):
+def encoded_capture(data,temporary,ffmpeg='/opt/homebrew/bin/ffmpeg',silent=False):
     with Engine() as engine:
         audio,_=synthesize_phonation(engine,pose='a',JA=-3,F0=180,PR=8000,PS=0,duration_s=1.)
+    if silent:audio[:]=0
     raw=temporary/'source.f32';raw.write_bytes(audio.astype('<f4').tobytes());video=temporary/'source.webm'
     app_motion.process([ffmpeg,'-v','error','-f','f32le','-ar','44100','-ac','1','-i',str(raw),'-c:a','libopus',str(video)])
     media=video.read_bytes();mh=app_motion.sha(media)
@@ -41,6 +42,14 @@ def test_encoded_native_pcm_real_decode_canonical_fit_unchanged_model(tmp_path,m
         assert result['decode']['sampleRateHz']==48000
         assert backend.execute({'action':'state'})['state']['snapshot']==model
         assert result['visualSync']=='unknown' and not result['modelUpdated']
+        monkeypatch.setattr(app_motion,'fit_pcm',lambda *args,**kwargs:{'joint':{'best':None,'candidates':[{'status':'missing_predicted_features'}]},'actual_synthesis_calls':0})
+        unsupported=app_motion.run(data,identity,'a',tmp_path/'missing-predictions')
+        assert unsupported['status']=='insufficient-quality' and all(w['status']=='insufficient-quality' for w in unsupported['windows'])
+        silent_dir=tmp_path/'silent-source';silent_dir.mkdir()
+        silent_id=encoded_capture(data,silent_dir,silent=True)
+        silence=app_motion.run(data,silent_id,'a',tmp_path/'silence')
+        assert silence['status']=='insufficient-quality' and silence['actualSynthesisCalls']==0 and len(silence['windows'])==3
+        assert all(w['status']=='unavailable' for w in silence['windows'])
     finally:server.shutdown();thread.join();server.server_close()
 
 
