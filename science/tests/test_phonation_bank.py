@@ -98,3 +98,38 @@ def test_cancellation_keeps_the_full_bank_manifest(fitted):
         assert frozen['forecast']['actual_synthesis_calls']==0
         assert len(frozen['forecast']['alternatives'])==9
         assert all(row['status']=='timed-out' for row in frozen['forecast']['alternatives'])
+
+
+def test_five_anatomies_keep_matched_source_support_with_thirty_calls():
+    import time
+    started=time.monotonic()
+    with Engine() as engine:
+        engine.set_anatomy({'lip_width':1.1})
+        audio,_=synthesize_phonation(engine,pose='a',JA=-3,F0=180,PR=8000,PS=.2)
+        pcm,_=_frame(audio,48000);frame_hash=hashlib.sha256(pcm.astype('<f4').tobytes()).hexdigest()
+        document={'schema_version':'phonation-fit-1','trials':[{'id':'matched-cal','pose':'a','pcm':pcm.tolist(),
+            'sample_rate_hz':48000,'metadata':_metadata('matched-cal',48000,frame_hash,'engine-generated')}]}
+        choices=[{'candidate_id':f'lip-{i}-ps-{j}','anatomy':{'lip_width':width},
+            'trials':{'matched-cal':{'JA':-3,'F0':180,'PR':8000,'PS':ps,'gain':1.}}}
+            for i,width in enumerate((.7,.9,1.1,1.3,1.5)) for j,ps in enumerate((-.2,.2))]
+        fitted=fit_phonation(engine,document,candidates=choices,max_synthesis_calls=30,enabled=True)
+        assert fitted['status']=='available'
+        assert sum(fitted[family]['actual_synthesis_calls'] for family in ('joint','fixed_source','fixed_anatomy'))==30
+        for family in ('joint','fixed_source','fixed_anatomy'):
+            assert len(fitted[family]['candidates'])==10
+        frozen=forecast_phonation_bank(engine,fitted,reference_trial_id='matched-cal',pose='a',
+            controls={'JA':-3,'F0':200,'PR':8000,'gain':1.},target_id='matched-later',max_synthesis_calls=30)
+        assert frozen['forecast']['actual_synthesis_calls']==30
+        assert frozen['forecast']['coverage']=={'total':30,'available':30,'unavailable':0,'complete':True}
+        engine.set_anatomy({'lip_width':1.1})
+        audio,_=synthesize_phonation(engine,pose='a',JA=-3,F0=200,PR=8000,PS=-.2)
+        observed,_=_frame(audio,48000);observed_hash=hashlib.sha256(observed.astype('<f4').tobytes()).hexdigest()
+        result=score_phonation_bank(frozen,observed,_metadata('matched-later',48000,observed_hash,'engine-generated'))
+        assert len(result['alternatives'])==30 and result['coverage']['complete']
+        assert result['actual_synthesis_calls']==0 and result['canonical_extractions']==1
+        with pytest.raises(ValueError,match='1–16'):
+            fit_phonation(engine,document,candidates=choices+choices[:7],max_synthesis_calls=96,enabled=True)
+        with pytest.raises(ValueError,match='1–48'):
+            forecast_phonation_bank(engine,fitted,reference_trial_id='matched-cal',pose='a',
+                controls={'JA':-3,'F0':200,'PR':8000,'gain':1.},target_id='too-large',max_synthesis_calls=49)
+    print(f'matched five-anatomy 30+30 native calls and heldout score: {time.monotonic()-started:.2f}s')

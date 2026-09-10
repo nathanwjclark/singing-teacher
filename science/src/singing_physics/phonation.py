@@ -168,7 +168,7 @@ def fit_phonation(engine,document,*,candidates,max_synthesis_calls=96,enabled=Fa
         except RuntimeError as exc:return _status('unsupported',str(exc))
         if record['frameSha256']!=sha:raise ValueError('Canonical phonation frame hash mismatch')
         observations.append(record)
-    if not isinstance(choices,list) or not 1<=len(choices)<=8:raise ValueError('Require 1–8 finite phonation candidates')
+    if not isinstance(choices,list) or not 1<=len(choices)<=16:raise ValueError('Require 1–16 finite phonation candidates')
     names=set()
     for candidate in choices:
         if not isinstance(candidate,dict) or set(candidate)!={'candidate_id','anatomy','trials'} or not isinstance(candidate['candidate_id'],str) or candidate['candidate_id'] in names or not isinstance(candidate['anatomy'],dict) or set(candidate['trials'])!=ids:
@@ -287,13 +287,13 @@ def _bank_policy():
 
 
 def forecast_phonation_bank(engine,fit_result,*,reference_trial_id,pose,controls,target_id,
-                            max_synthesis_calls=24,timeout_s=120.,cancelled=None):
+                            max_synthesis_calls=48,timeout_s=120.,cancelled=None):
     """Freeze every retained family/candidate under one shared prospective task."""
     fitted=deepcopy(fit_result)
     if fitted.get('status')!='available' or fitted.get('kind')!='phonation-source-tract-fit-1':
         raise ValueError('Available completed source fit required')
-    if type(max_synthesis_calls) is not int or not 1<=max_synthesis_calls<=24:
-        raise ValueError('Bank synthesis budget must be 1–24')
+    if type(max_synthesis_calls) is not int or not 1<=max_synthesis_calls<=48:
+        raise ValueError('Bank synthesis budget must be 1–48')
     timeout_s=finite(timeout_s,'timeout_s')
     if not 0<timeout_s<=120:raise ValueError('Bank deadline must be 0–120 seconds')
     if not isinstance(controls,dict) or set(controls)!={'JA','F0','PR','gain'}:
@@ -322,7 +322,7 @@ def forecast_phonation_bank(engine,fit_result,*,reference_trial_id,pose,controls
             if row.get('score') is not None:finite(row['score'],'calibration score')
             if row.get('status')=='scored' and row.get('score') is None:raise ValueError('Scored source candidate lacks calibration discrepancy')
             ids.add(identity);rows.append((family,row))
-    if not 1<=len(rows)<=24 or sum(row.get('status')=='scored' for _,row in rows)>max_synthesis_calls:
+    if not 1<=len(rows)<=48 or sum(row.get('status')=='scored' for _,row in rows)>max_synthesis_calls:
         raise ValueError('Complete source bank exceeds finite synthesis budget')
     saved=engine.anatomy();deadline=time.monotonic()+timeout_s;calls=0;alternatives=[]
     try:
@@ -373,7 +373,7 @@ def score_phonation_bank(frozen,pcm,metadata):
     if bank.get('kind')!='frozen-phonation-bank-1' or metadata.get('observationId')!=bank.get('target_id'):
         raise ValueError('Wrong source bank target')
     rows=bank.get('alternatives')
-    if not isinstance(rows,list) or not 1<=len(rows)<=24 or len({r['alternative_id'] for r in rows})!=len(rows):
+    if not isinstance(rows,list) or not 1<=len(rows)<=48 or len({r['alternative_id'] for r in rows})!=len(rows):
         raise ValueError('Invalid source bank coverage')
     observed_at=datetime.fromisoformat(metadata['evidenceAt']);sealed=datetime.fromisoformat(bank['sealed_at'])
     if observed_at.tzinfo is None or sealed.tzinfo is None or not sealed<observed_at<=datetime.now(timezone.utc):
