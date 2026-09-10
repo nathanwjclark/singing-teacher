@@ -47,7 +47,7 @@ export function SourceInferencePanel() {
   const alternatives = Array.isArray(joint.candidates) ? joint.candidates.map(object) : [];
   const forecast = object(status?.forecast?.result?.forecast);
   const scored = object(status?.score?.result);
-  const hasForecast = typeof forecast.target_id === 'string' && status?.forecast?.current === true && status.forecast.authoritativeStatus === 'committed' && forecast.status === 'available';
+  const hasForecast = typeof forecast.target_id === 'string' && status?.forecast?.status === 'succeeded' && status.forecast.current === true && status.forecast.authoritativeStatus === 'committed' && forecast.status === 'available';
   const pose = text(status?.forecast?.result?.pose, 'a');
   const forecastKey = JSON.stringify([status?.sessionId,status?.runId,forecast.target_id,status?.forecast?.result?.sha256,forecast.sealed_at]);
   const confirmed = hasForecast && confirmedKey === forecastKey;
