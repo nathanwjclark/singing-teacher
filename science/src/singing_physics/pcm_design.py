@@ -7,7 +7,7 @@ import re
 import numpy as np
 
 from .engine import ANATOMY, Engine, finite
-from .pcm_inverse import FEATURES, _bridge, _features, extract_pcm
+from .pcm_inverse import FEATURES, _bridge, _features, extract_pcm, resample_native_pcm
 from .prediction import Artifact, _encode, _identity, _timestamp
 
 PROFILE = {'sample_rate_hz': 44100, 'frame_start_sample': 4410, 'frame_size': 4096, 'duration_s': .25}
@@ -107,9 +107,22 @@ def _snapshot(snapshot, expected):
     return value
 
 
-def _extractor(node_binary):
-    result = _bridge({'operation': 'validate', 'records': [], 'sampleRates': [44100]}, node_binary)
-    if result['audioProfiles'] != [{'sampleRate': 44100, 'frameSize': 4096}]:
+def _profile(value):
+    if not isinstance(value, dict) or set(value) != set(PROFILE):
+        raise ValueError('PCM profile requires sample_rate_hz, frame_start_sample, frame_size and duration_s')
+    rate, start, size = (value[k] for k in ('sample_rate_hz', 'frame_start_sample', 'frame_size'))
+    if any(type(x) is not int for x in (rate, start, size)) or rate not in (44100, 48000, 96000) or size != (8192 if rate == 96000 else 4096):
+        raise ValueError('Unsupported canonical PCM frame profile')
+    duration = finite(value['duration_s'], 'duration_s')
+    if start < 0 or not .1 <= duration <= 5 or start+size > min(round(duration*rate), int(np.ceil(round(duration*44100)*rate/44100))):
+        raise ValueError('PCM profile frame lies outside synthesis duration')
+    return dict(value)
+
+
+def _extractor(node_binary, profile):
+    rate = profile['sample_rate_hz']
+    result = _bridge({'operation': 'validate', 'records': [], 'sampleRates': [rate]}, node_binary)
+    if result['audioProfiles'] != [{'sampleRate': rate, 'frameSize': profile['frame_size']}]:
         raise ValueError('Canonical PCM profile changed')
     return {k: result[k] for k in ('extractorSha256', 'contractsSha256', 'extractorVersion', 'contractVersion')}
 
@@ -139,9 +152,10 @@ def _available(canonical, scales):
 
 def design_pcm(snapshot, *, expected_digest, design_id, target_observation_id, generated_at,
                experiments, feature_scales, minimum_separation=1., retention_margin=1.,
-               maximum_discrepancy=2., max_synthesis_calls=64, node_binary=None):
+               maximum_discrepancy=2., max_synthesis_calls=64, node_binary=None, profile=None):
     """Freeze conservative pair discrimination using actual synthesized PCM features."""
     data = _snapshot(snapshot, expected_digest)
+    profile = _profile(PROFILE if profile is None else profile)
     _identity(design_id, 'design_id'); _identity(target_observation_id, 'target_observation_id')
     if target_observation_id in data['evidence_ids'] or target_observation_id+':canonical' in data['evidence_ids']:
         raise ValueError('Target observation leaks into fitting evidence')
@@ -167,7 +181,7 @@ def design_pcm(snapshot, *, expected_digest, design_id, target_observation_id, g
     calls = len(experiments)*len(data['hypotheses'])
     if type(max_synthesis_calls) is not int or not 1 <= max_synthesis_calls <= 512 or calls > max_synthesis_calls:
         raise ValueError('Native synthesis budget exceeded or invalid')
-    extractor = _extractor(node_binary)
+    extractor = _extractor(node_binary, profile)
     rankings = []
     with Engine() as engine:
         if engine.provenance != data['provenance']:
@@ -179,16 +193,18 @@ def design_pcm(snapshot, *, expected_digest, design_id, target_observation_id, g
             for hypothesis in data['hypotheses']:
                 engine.set_anatomy(hypothesis['anatomy'])
                 audio = engine.synthesize(experiment['pose'], {'JA': experiment['JA']},
-                    f0_hz=experiment['f0_hz'], duration_s=PROFILE['duration_s'])
-                frame = audio[4410:8506]*experiment['gain']
-                canonical = extract_pcm(frame, 44100, measurement_id=f"{design_id}:{experiment['experiment_id']}:{hypothesis['hypothesis_id']}",
-                    observation_id=design_id, artifact_id='simulated-design-frame', start_ms=100., node_binary=node_binary)
+                    f0_hz=experiment['f0_hz'], duration_s=profile['duration_s'])
+                audio, resampling = resample_native_pcm(audio, engine.sample_rate, profile['sample_rate_hz'])
+                start = profile['frame_start_sample']
+                frame = audio[start:start+profile['frame_size']]*experiment['gain']
+                canonical = extract_pcm(frame, profile['sample_rate_hz'], measurement_id=f"{design_id}:{experiment['experiment_id']}:{hypothesis['hypothesis_id']}",
+                    observation_id=design_id, artifact_id='simulated-design-frame', start_ms=start/profile['sample_rate_hz']*1000, node_binary=node_binary)
                 if any(canonical[k] != extractor[k] for k in extractor):
                     raise ValueError('Extractor changed during design')
                 features, reason = _available(canonical, feature_scales)
                 predictions.append({'hypothesis_id': hypothesis['hypothesis_id'],
                                     'native_controls': engine.pose(experiment['pose'], {'JA': experiment['JA']})[1], 'features': features,
-                                    'missing_reason': reason, 'canonical': canonical})
+                                    'missing_reason': reason, 'canonical': canonical, 'resampling': resampling})
             pairs = []
             if all(p['features'] is not None for p in predictions):
                 for left, right in combinations(predictions, 2):
@@ -208,7 +224,7 @@ def design_pcm(snapshot, *, expected_digest, design_id, target_observation_id, g
         'design_id': design_id, 'model_id': data['model_id'], 'hypothesis_snapshot_sha256': snapshot.sha256,
         'evidence_ids': data['evidence_ids'], 'evidence_hashes': data['evidence_hashes'],
         'provenance': data['provenance'], 'extractor': extractor, 'generated_at': generated_at, 'sealed_at': _now(),
-        'target_observation_id': target_observation_id, 'profile': PROFILE, 'feature_scales': feature_scales,
+        'target_observation_id': target_observation_id, 'profile': profile, 'feature_scales': feature_scales,
         'minimum_separation': minimum_separation, 'retention_margin': retention_margin,
         'maximum_discrepancy': maximum_discrepancy, 'rankings': rankings,
         'selected_experiment_id': chosen, 'actual_synthesis_calls': calls,
@@ -229,19 +245,20 @@ def update_pcm(design, snapshot, *, expected_design_digest, expected_snapshot_di
     _identity(observation_id, 'observation_id'); _identity(artifact_id, 'artifact_id')
     if observation_id != frozen['target_observation_id'] or any(identity in data['evidence_ids'] for identity in (observation_id, artifact_id, observation_id+':canonical')):
         raise ValueError('Observation identity is not disjoint prospective target')
-    if any(type(x) is not int for x in (sample_rate_hz, frame_start_sample, frame_size)) or (sample_rate_hz, frame_start_sample, frame_size) != (44100, 4410, 4096) or frozen.get('profile') != PROFILE:
+    profile = _profile(frozen.get('profile'))
+    if any(type(x) is not int for x in (sample_rate_hz, frame_start_sample, frame_size)) or (sample_rate_hz, frame_start_sample, frame_size) != tuple(profile[k] for k in ('sample_rate_hz', 'frame_start_sample', 'frame_size')):
         raise ValueError('Unsupported or mismatched canonical PCM frame profile')
     if source_kind not in ('engine-generated', 'human-observation'):
         raise ValueError('Observation source kind must be explicit synthetic or human evidence')
     if observation_id == artifact_id:
         raise ValueError('Observation and artifact IDs must be distinct')
     values = np.asarray(pcm, dtype=np.float32)
-    if values.shape != (4096,) or not np.isfinite(values).all():
-        raise ValueError('Actual PCM must contain exactly 4096 finite mono samples')
+    if values.shape != (frame_size,) or not np.isfinite(values).all():
+        raise ValueError(f'Actual PCM must contain exactly {frame_size} finite mono samples')
     frame_hash = hashlib.sha256(values.astype('<f4').tobytes()).hexdigest()
     if frame_hash in data['evidence_hashes']:
         raise ValueError('Repeated physical source frame despite observation identity')
-    if _extractor(node_binary) != frozen.get('extractor'):
+    if _extractor(node_binary, profile) != frozen.get('extractor'):
         raise ValueError('Canonical extractor source hashes changed')
     selected = [r for r in frozen['rankings'] if r['experiment']['experiment_id'] == experiment_id]
     if len(selected) != 1:
@@ -258,6 +275,16 @@ def update_pcm(design, snapshot, *, expected_design_digest, expected_snapshot_di
         canonical_prediction = prediction.get('canonical')
         if not isinstance(canonical_prediction, dict) or any(canonical_prediction.get(k) != frozen['extractor'][k] for k in frozen['extractor']):
             raise ValueError('Prediction extractor lineage mismatch')
+        conversion = prediction.get('resampling')
+        if (conversion is None and profile != PROFILE) or (conversion is not None and (
+                not isinstance(conversion, dict) or conversion.get('target_rate_hz') != sample_rate_hz
+                or conversion.get('source_rate_hz') != 44100 or conversion.get('observations_resampled') is not False)):
+            raise ValueError('Prediction resampling profile binding mismatch')
+        window = canonical_prediction.get('measurement', {}).get('window', {})
+        expected_start = frame_start_sample/sample_rate_hz*1000
+        expected_end = (frame_start_sample+frame_size)/sample_rate_hz*1000
+        if window.get('startMs') != expected_start or not np.isclose(window.get('endMs', float('nan')), expected_end, rtol=0, atol=1e-6):
+            raise ValueError('Prediction frame profile binding mismatch')
         predicted_features, predicted_reason = _available(canonical_prediction, frozen['feature_scales'])
         if prediction.get('features') != predicted_features or prediction.get('missing_reason') != predicted_reason:
             raise ValueError('Prediction feature binding mismatch')
@@ -269,14 +296,14 @@ def update_pcm(design, snapshot, *, expected_design_digest, expected_snapshot_di
         'separated_at_assumed_threshold' if worst >= frozen['minimum_separation'] else 'no_separation_at_assumed_threshold')
     if selected.get('status') != expected_status or selected.get('worst_pair_standardized_rms') != worst:
         raise ValueError('Frozen discrimination score/status binding mismatch')
-    canonical = extract_pcm(values, 44100, measurement_id=observation_id+':canonical',
-        observation_id=observation_id, artifact_id=artifact_id, start_ms=100., source_kind=source_kind, node_binary=node_binary)
+    canonical = extract_pcm(values, sample_rate_hz, measurement_id=observation_id+':canonical',
+        observation_id=observation_id, artifact_id=artifact_id, start_ms=frame_start_sample/sample_rate_hz*1000, source_kind=source_kind, node_binary=node_binary)
     if any(canonical[k] != frozen['extractor'][k] for k in frozen['extractor']):
         raise ValueError('Extractor changed during observation receipt')
     features, reason = _available(canonical, frozen['feature_scales'])
     receipt = {'observation_id': observation_id, 'artifact_id': artifact_id, 'observed_at': observed_at,
         'received_at': received_at, 'frame_sha256': frame_hash, 'hash_scope': 'little-endian-float32-frame-bytes',
-        'design_sha256': design.sha256, 'profile': PROFILE, 'canonical': canonical,
+        'design_sha256': design.sha256, 'profile': profile, 'canonical': canonical,
         'capture_time_attestation': 'caller-declared capture time; server-attested local receipt only',
         'window_provenance': 'caller-supplied crop; start offset declared, not independently recovered from source recording'}
     scores = []

@@ -6,10 +6,12 @@ import {readFile,writeFile,mkdir,access} from 'node:fs/promises';
 import {randomBytes,randomUUID,timingSafeEqual} from 'node:crypto';
 import {resolve,extname} from 'node:path';
 import {networkInterfaces,hostname} from 'node:os';
+import {createScienceProxy} from './science-proxy.mjs';
 
 const port=Number(process.env.PORT||5173),host=process.env.HOST||'127.0.0.1';
 const root=resolve(import.meta.dirname,'../dist'),dataRoot=resolve(process.env.LOCAL_DATA_DIR||'.local-data');
 const sessions=new Map();
+const scienceProxy=createScienceProxy({url:process.env.SCIENCE_URL,token:process.env.SCIENCE_TOKEN});
 const localAddresses=new Set(['127.0.0.1','::1',...Object.values(networkInterfaces()).flat().filter(Boolean).map(n=>n.address)]);
 const allowedHosts=new Set(['localhost','[::1]',hostname().toLowerCase(),hostname().toLowerCase()+'.local',...localAddresses,...(process.env.PHONE_BASE_URL?[new URL(process.env.PHONE_BASE_URL).hostname]:[])]);
 const mime={'.html':'text/html','.js':'text/javascript','.css':'text/css','.json':'application/json','.png':'image/png','.svg':'image/svg+xml','.bin':'application/octet-stream','.md':'text/plain','.wasm':'application/wasm','.mp4':'video/mp4'};
@@ -27,7 +29,11 @@ const serverHandler=async(req,res)=>{try{
   if(req.method==='POST'&&req.headers.origin&&new URL(req.headers.origin).host!==req.headers.host)return json(res,403,{error:'Cross-origin write refused'});
   if(await handleScience(req,res,url))return;
   if(await handleNativePull(req,res,url))return;
-  if(url.pathname==='/api/status')return json(res,200,{local:true,https:!!process.env.HTTPS_CERT,phoneBaseUrl:process.env.PHONE_BASE_URL||null,engineAvailable,phoneSetupUrl:process.env.PHONE_SETUP_URL||null,certificateFingerprint:process.env.PHONE_CA_FINGERPRINT||null});
+  if(url.pathname.startsWith('/api/science/')){
+    if(!scienceProxy)return json(res,503,{error:'Scientific service is not configured'});
+    return await scienceProxy(req,res);
+  }
+  if(url.pathname==='/api/status')return json(res,200,{local:true,https:!!process.env.HTTPS_CERT,phoneBaseUrl:process.env.PHONE_BASE_URL||null,engineAvailable,scienceConfigured:!!scienceProxy,scienceHealthPath:scienceProxy?'/api/science/health':null,phoneSetupUrl:process.env.PHONE_SETUP_URL||null,certificateFingerprint:process.env.PHONE_CA_FINGERPRINT||null});
   if(url.pathname==='/api/pair'&&req.method==='POST'){
     const remote=req.socket.remoteAddress;
     if(!localAddresses.has(remote?.replace(/^::ffff:/,'')))return json(res,403,{error:'Create pairing from this computer'});

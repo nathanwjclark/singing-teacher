@@ -1,5 +1,67 @@
 # Current Lead A integration status
 
+## B runtime continuation (main `1067c89`)
+
+The saved-capture app run now uses the authoritative session in the running HTTP
+worker. Search and forecast collection preserve its model/version/design IDs;
+verified native geometry is fetched from the same owner. B's status/run/asset and
+USB routes coexist with A's jobs/session routes after resolving their overlap.
+Standalone scientific runs remain supported without a second scheduler.
+
+Frozen forecast profiles now support native 44.1/48/96 kHz observations. The new
+outcome importer preserves the selected original frame and native capture time,
+then emits a versioned command for actual scoring, update and replay. A heldout
+probe scorer reruns canonical DSP from original bytes and reports per-hypothesis
+errors without fitting or asserting statistical confidence. See
+[LOCAL_HARNESS.md](LOCAL_HARNESS.md), [LIVE_CAPTURE_JOBS.md](LIVE_CAPTURE_JOBS.md),
+[SINGING_OUTCOME_IMPORT.md](SINGING_OUTCOME_IMPORT.md) and
+[PROBE_EVALUATION.md](PROBE_EVALUATION.md).
+
+Fresh verification: **37 focused Python tests passed** (37.44 s), plus **five
+native capture/app pipeline tests** (52.62 s). The latter includes the real Node
+app POST, native 48 kHz import, shared HTTP session and published geometry.
+The TypeScript outcome regression separately executes both 44.1 and 48 kHz
+original recording → native update → new model → replay; strict NodeNext passes.
+Build/lint and **five browser tests** pass, including unavailable baseline display.
+Independent review is recorded in [RUNTIME_REVIEW.md](RUNTIME_REVIEW.md).
+Evidence for these new checks is generated software data, not a human session.
+Live Astra, user-facing outcome recording and physical-device demonstration remain
+B-owned integration work. No paid API calls or upstream deployment were performed.
+
+## Callable session integration
+
+The local app now forwards scientific jobs and durable session commands to the
+isolated numerical worker. `npm run science:local` starts both services with an
+ephemeral transport secret; no paid model calls or account system are introduced.
+See [LOCAL_HARNESS.md](LOCAL_HARNESS.md) for the executable B handoff and
+[SESSION.md](SESSION.md) for versioned commands, scoring, stop/failure and replay.
+Original combined phone archives and ordinary voice recordings now have import
+adapters alongside the existing probe adapter. Imported evidence remains distinct
+from a successful physiological reconstruction.
+
+This continuation incorporates B main `da55bf3`. Twenty-two focused Python
+session/HTTP/archive tests pass with warnings treated as errors; five Node proxy
+and actual HTTP-to-native integration tests pass. Build, lint and all four browser
+tests pass. The one-command launcher was exercised against a real session route;
+shutdown closed both listener ports. These are new-path checks, separate from the
+prior full-suite checkpoint below. Actual phone capture and live Astra invocation
+still require B's device/runtime integration.
+
+Review then identified and fixed importer command identity, synthesis-budget and
+recording-profile mismatches. Four singing adapter tests now include original
+48 kHz recording → canonical extraction → real fit and versioned session ingestion
+with idempotent replay. Four final session tests pass, including actual 48 kHz
+search. Strict NodeNext TypeScript passes. See
+[SESSION_HARNESS_REVIEW.md](SESSION_HARNESS_REVIEW.md) for independent review.
+Explicit type-import changes alter the canonical extractor source hashes; rebuild
+derived evidence rather than reuse receipts from the earlier source revision.
+
+The assembled full Python regression run passed **308 tests in 253.10 seconds**
+with warnings treated as errors. That run collected before the final profile
+regression was added; the final four-test session suite was also run separately
+and passed in 15.14 seconds. The four final singing-import tests passed in 2.85
+seconds against the integrated controller, and strict NodeNext checks passed.
+
 ## Revision 8 continuation
 
 Final assembled verification: **286 Python tests passed with warnings treated as
