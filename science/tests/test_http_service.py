@@ -100,3 +100,33 @@ def test_session_state_replay_and_stale_command(server):
     assert code==409 and error['error']=='stale_session_version'
     assert request(server,'GET','/sessions/research-session/replay')[1]['events']==[]
     assert request(server,'POST','/sessions/research-session/commands',{'action':'run','path':'/tmp/arbitrary'})[0]==400
+
+
+def test_concurrent_get_and_post_state_share_one_verified_read_without_caching(server, monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor
+    from singing_physics.session import SessionController
+    real=SessionController.execute
+    calls=[];entered=threading.Event();release=threading.Event()
+    def delayed(controller,command):
+        if command=={'action':'state'}:
+            calls.append(1);entered.set();assert release.wait(10)
+        return real(controller,command)
+    monkeypatch.setattr(SessionController,'execute',delayed)
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        jobs=[pool.submit(request,server,'GET','/sessions/read-test/state')]
+        assert entered.wait(5)
+        for _ in range(5):jobs.append(pool.submit(request,server,'POST','/sessions/read-test/commands',{'action':'state'}))
+        time.sleep(.2);release.set()
+        results=[future.result(timeout=10) for future in jobs]
+    assert len(calls)==1 and all(result==results[0] for result in results)
+    assert server.session_reads=={}
+    request(server,'GET','/sessions/read-test/state')
+    assert len(calls)==2
+    # Even historical corruption introduced after a successful read is reverified.
+    controller=SessionController(server.jobs.root/'sessions',server.jobs,'read-test')
+    state=results[0][1]['state']
+    with controller._db() as db:controller._append(db,state,'test-event',{})
+    assert request(server,'GET','/sessions/read-test/state')[1]['state']['version']==1
+    with controller._db() as db:db.execute('UPDATE events SET digest=? WHERE session=?',('f'*64,'read-test'))
+    assert request(server,'GET','/sessions/read-test/state')[0]==409
+    assert server.session_reads=={}
