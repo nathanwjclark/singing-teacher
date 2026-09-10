@@ -92,3 +92,11 @@ export the selected native geometry, map the result into KIT, and create its PCM
 forecast. This is a finite-hypothesis test, not an anatomical-identification result.
 When testing across worktrees, `SINGING_SCIENCE_ROOT` can point to the checkout
 containing the updated native basis and PCM service implementation.
+
+`candidateFromPcmSearch` also accepts a genuine completed `search_pcm` job and
+matching native export. It preserves declared search bounds and labels only
+searched dimensions as inferred. Incomplete/unpaired comparisons, missing selected
+candidates, stale models and mismatched geometry/provenance are rejected. Its
+uncertainty text explicitly says search support is not a posterior and low
+residual does not validate anatomy. The eight-test bridge suite includes actual
+search → native export → KIT candidate → PCM forecast execution.
