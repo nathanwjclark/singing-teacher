@@ -71,6 +71,12 @@ A reviews the separation of anatomy, articulation and learned control; B secures
 
 ## 4. Dependency-driven activation
 
+### Phonation and closure inference extension
+
+The [phonation and closure plan](phonation-and-closure-plan.md) adds PHON-01 through PHON-05. A is accountable for physiological source inference and its integration with tract mapping; B owns canonical acoustic measurements, capture, live coaching and independent evaluation. Both connect this feature to the existing prospective Astra loop. Audio-derived closure estimates remain conditional hypotheses, never confirmed vocal-fold contact. The addendum defines deliverables, shared contracts and acceptance criteria; all new tickets start as planned.
+
+These tickets are optional and do not gate the existing release or block other lanes. A owns fallback/model integrity; B owns non-blocking capture/UI behavior. Independently gate measurement, inference and coaching capabilities. Missing implementation, invalid evidence or runtime failure preserves the existing verified flow with explicit limitations; it never produces a fabricated closure result. See the addendum's graceful-degradation acceptance checks.
+
 These waves describe prerequisites, not dates or mandatory group-wide barriers. A lane starts its next task as soon as its own inputs pass, without waiting for unrelated lanes.
 
 ### Wave 1: foundations and uncertainty removal
