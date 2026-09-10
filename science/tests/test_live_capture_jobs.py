@@ -50,7 +50,7 @@ def test_native_capture_freezes_authoritative_session_and_verified_export(tmp_pa
     try:
         summary=live.run(source,output,development_fixture=True)
         assert summary['source']=='development-fixture' and not summary['anatomyValidated']
-        assert len(summary['jobs'])==4 and summary['nativeCalls']==47
+        assert len(summary['jobs'])==4 and summary['nativeCalls']==77
         assert summary['modelId']==summary['forecast']['model_id']
         assert summary['forecast']['profile']=={'sample_rate_hz':48000,'frame_start_sample':4800,'frame_size':4096,'duration_s':.25}
         comparison=json.loads((output/'space-diff.json').read_text())
@@ -60,6 +60,8 @@ def test_native_capture_freezes_authoritative_session_and_verified_export(tmp_pa
         receipt=json.loads((output/'session-ledger.json').read_text())
         state=receipt['state'];design=state['designs'][summary['designId']]
         assert state['snapshot']['model_id']==summary['modelId']
+        assert len({h['anatomy']['lip_width'] for h in state['snapshot']['hypotheses']}) > 1
+        assert json.loads((output/'protocol.json').read_text())['search_budget']==60
         assert design['status'] in ('committed','unsupported')
         assert len(state['jobs'])==2
         for name,details in summary['files'].items():

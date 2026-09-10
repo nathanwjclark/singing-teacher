@@ -41,7 +41,10 @@ def collect(state, pending, status, result):
         capture = read_native_capture(params['capture_directory'], allow_rear_lidar=True)
         if capture.manifest_sha256 != result['source_manifest_sha256']:
             raise ValueError('Original LiDAR archive changed after evaluation')
-        hashes = {a['sha256'] for a in capture.artifacts.values()}
+        original_hashes = {k:a['sha256'] for k,a in capture.artifacts.items()}
+        if original_hashes != result['source_artifact_hashes']:
+            raise ValueError('Original LiDAR artifact hashes differ from evaluated evidence')
+        hashes = set(original_hashes.values())
         ids = set(capture.artifacts) | {capture.capture_id, result['source_evidence_id']}
         if hashes & set(parent['evidence_hashes']) or ids & set(parent['evidence_ids']):
             raise ValueError('LiDAR original evidence already contributed to model')
@@ -58,8 +61,10 @@ def collect(state, pending, status, result):
             ids.add(annotation[role]['evidence_id']); hashes.update(annotation[role]['source_hashes'])
         fusion = {key: deepcopy(result[key]) for key in ('baseline_model_id','baseline_snapshot_sha256','annotation_sha256',
             'source_evidence_id','source_manifest_sha256','projection_lineage','timestamp_seconds','timebase_id',
-            'source_kind','without_depth_order','with_depth_order','rankings','operator_sha256','adapter_source_hashes','limitations')}
+            'observed_distance_m','combined_sigma_m','source_kind','without_depth_order','with_depth_order','rankings','operator_sha256','adapter_source_hashes','limitations')}
+        fusion['distance_equivalence']=deepcopy(result.get('distance_equivalence'))
         fusion.update(result_sha256=digest(result), job_id=pending['job_id'], source_artifact_hashes={k:a['sha256'] for k,a in capture.artifacts.items()},
+            measurement_sigma_m=annotation['measurement_sigma_m'], model_sigma_m=annotation['model_sigma_m'],
             scan_pose=annotation['pose'], scan_JA_values=annotation['JA_values'], scan_JA_weights=annotation['JA_weights'],
             source_capture_created_at=result.get('source_capture_created_at'),
             scope='Conditional depth ordering; acoustic support retained, no calibrated posterior or simultaneous singing pose')

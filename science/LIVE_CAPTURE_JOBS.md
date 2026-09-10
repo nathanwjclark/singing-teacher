@@ -60,7 +60,10 @@ The live path exports both candidate and reference anatomy through the same loca
 or HTTP backend. Both forward results and every copied file are verified before
 `space-diff.json` is paired and hashed into the summary. Reference files remain in
 `reference/` under the private run. The two exports add two PCM synthesis calls;
-the current three-hypothesis protocol uses 47 calls total. These forward jobs are
+the current five-hypothesis protocol uses 77 calls total. The initial search varies
+both hard palate length and lip width with three declared gain alternatives; its
+60-call budget covers the full two-dimensional initial design and fixed-anatomy
+comparison (previously 36 calls for one anatomical dimension). These forward jobs are
 bound to the session/model but do not alter the committed forecast ledger. The
 Studio model-adjustment control consumes this paired artifact while retaining
 live tongue motion. The explicit fixed jaw pose is a preview, not a fitted jaw

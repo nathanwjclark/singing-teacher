@@ -53,3 +53,21 @@ def test_disabled_stale_and_changed_archive_preserve_baseline(tmp_path):
         state=collect(controller,service)
         assert state['snapshot']==baseline
         assert state['lidar_fusions'][-1]['status']=='rejected'
+
+
+def test_adoption_rejects_partial_support_and_stales_committed_design(tmp_path):
+    from singing_physics.lidar_fusion import rank_lidar_hypotheses
+    from singing_physics.session_lidar import collect as adopt
+    directory=tmp_path/'capture';directory.mkdir()
+    with Engine() as engine:
+        baseline,annotation=preparation(directory,engine)
+        result=rank_lidar_hypotheses(engine,baseline,directory,annotation,enabled=True,max_geometry_calls=2)
+    pending={'job_id':'checked-job','base_model_id':baseline['model_id'], 'request':{'parameters':{
+        'snapshot':baseline,'capture_directory':str(directory),'annotation':annotation}}}
+    state={'snapshot':deepcopy(baseline),'designs':{'old':{'status':'committed'}}}
+    partial=deepcopy(result);partial['rankings'].pop()
+    adopt(state,pending,'succeeded',partial)
+    assert state['snapshot']==baseline and state['lidar_fusions'][-1]['status']=='rejected'
+    adopt(state,pending,'succeeded',result)
+    assert state['designs']['old']['status']=='stale'
+    assert state['snapshot']['lidar_fusion']['observed_distance_m']==result['observed_distance_m']
