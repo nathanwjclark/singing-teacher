@@ -17,20 +17,32 @@ struct ContentView: View {
     var body: some View {
         VStack(spacing: 12) {
             Text("Mouth surface capture").font(.title2.bold())
-            CameraPreview(session: capture.session).frame(maxHeight: .infinity).clipShape(RoundedRectangle(cornerRadius: 14))
+            CameraPreview(session: capture.session)
+                .frame(maxHeight: .infinity)
+                .clipShape(RoundedRectangle(cornerRadius: 14))
+                .overlay(alignment: .topLeading) {
+                    Label(capture.recording ? "Recording" : capture.exporting ? "Saving capture" : "Preview · not recording",
+                          systemImage: capture.recording ? "record.circle.fill" : capture.exporting ? "square.and.arrow.down" : "eye")
+                        .font(.caption.bold())
+                        .foregroundStyle(.white)
+                        .padding(8)
+                        .background(capture.recording ? Color.red : Color.black.opacity(0.7), in: Capsule())
+                        .padding(10)
+                        .accessibilityIdentifier("capture-mode")
+                }
             Text(capture.status).font(.callout).accessibilityIdentifier("capture-status")
             Picker("Held pose", selection: $pose) {
                 Text("Comfortable ah — hold still").tag("Comfortable ah — hold still")
                 Text("Visible tongue — comfortable hold").tag("Visible tongue — comfortable hold")
                 Text("Relaxed neutral").tag("Relaxed neutral")
             }.disabled(capture.recording)
-            Text("Hold one comfortable pose per capture. Keep the phone steady. Ten-second limit. Stop if uncomfortable. Separate poses are separate surfaces; hidden tissue is not scanned.").font(.footnote)
+            Text("Frame your whole mouth in the front camera. Hold one comfortable pose and keep the phone steady; do not sweep around your mouth. Capture ends after ten seconds or when you press Stop.").font(.footnote)
             HStack {
                 Button("Start capture") { capture.start(pose: pose) }.disabled(!capture.ready || capture.recording || capture.exporting)
                 Button("Stop") { capture.stop(reason: "user-stop") }.disabled(!capture.recording)
             }.buttonStyle(.borderedProminent)
             Button("Share latest private capture") { share = true }.disabled(capture.archiveURL == nil || capture.exporting || capture.recording)
-            Text("RGB + measured TrueDepth, with audio when microphone access is allowed. No internal anatomy or measured head pose. Files stay on this phone until you share.").font(.caption).foregroundStyle(.secondary)
+            Text("Front camera + available TrueDepth, with optional microphone audio. Depth can be missing inside the mouth; hidden tissue is not scanned. Files stay on this phone until you share.").font(.caption).foregroundStyle(.secondary)
         }.padding().task { capture.requestCamera() }
         .onChange(of: scenePhase) { _, phase in if phase != .active { capture.stop(reason: "app-backgrounded") } }
         .sheet(isPresented: $share) { if let url = capture.archiveURL { ShareCapture(url: url) } }

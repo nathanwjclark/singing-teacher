@@ -12,9 +12,23 @@ xcodebuild -project apps/ios/SingingDepth/SingingDepth.xcodeproj \
   -derivedDataPath /tmp/singing-depth-build CODE_SIGNING_ALLOWED=NO build
 ```
 
-For device testing, open the project in Xcode, choose the user's signing team and an attached compatible iPhone/iPad, then run. This repository does not include signing credentials or a provisioning profile. Simulator compilation cannot establish TrueDepth functionality.
+For the user's **iPhone 13 Pro Max** (iOS 17 or newer):
+
+1. Connect and unlock the iPhone, and accept its **Trust This Computer** prompt if shown.
+2. Open `apps/ios/SingingDepth/SingingDepth.xcodeproj` in Xcode. Select the **SingingDepth** target, then **Signing & Capabilities**, and choose your own development team. Keep automatic signing enabled. If that team cannot register `com.singingteacher.depth`, set a unique bundle identifier for your local installation.
+3. Select the connected iPhone as the run destination. Enable **Developer Mode** on the phone if Xcode requests it, following the phone's restart/confirmation prompts, then run the **SingingDepth** scheme.
+4. Allow camera access. Microphone access is optional. Confirm the preview badge says **Preview · not recording** before pressing **Start capture**.
+
+Signing requires a development identity available to Xcode; this repository does not include signing credentials or a provisioning profile. An unsigned build cannot be installed by itself. Simulator compilation cannot establish TrueDepth functionality. This native capture path needs no HTTPS certificate, QR pairing or web server.
 
 The app requests camera and microphone permissions. Camera preview does not record files. Microphone denial leaves RGB-D capture available with an explicit missing reason. Choose a comfortable held pose, press **Start capture**, hold the phone and pose comfortably still, then **Stop**. Capture stops automatically after ten seconds or when the app backgrounds. Each capture is independent; don't fuse a changing tongue/jaw into a static scan. Share the resulting ZIP through the system share sheet only when ready. Files have complete file protection and are excluded from device backups; the chosen share destination determines its subsequent storage. Captures remain in the app's local Documents container; remove the app to delete its local capture history.
+
+## First physical acceptance check (keep it small)
+
+- With the front camera facing you, frame the whole mouth in comfortable lighting. Record one relaxed, still pose for 2–3 seconds, then stop. The badge must switch from preview to recording to saving; the share button becomes available only after saving.
+- Share the ZIP explicitly to the Mac (for example using AirDrop), preserve it unchanged, and inspect its manifest and media. Confirm actual RGB/depth artifacts and timestamp/calibration fields exist; microphone audio must either exist or have a recorded missing reason.
+- Inspect finite positive depth coverage **within visible mouth pixels** before attempting fitting. A successful ZIP or readable selfie does not prove inside-mouth depth. Do not ask for more captures until this first one establishes useful coverage.
+- For a second quick check, background the app while recording: it should end the capture and save a ZIP with an app-backgrounded stop reason. Permission-denial cases can be checked if a permission issue occurs; no broad automated device suite is required.
 
 ## Exact acquisition and export
 
