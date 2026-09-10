@@ -32,11 +32,12 @@ import {resolve} from 'node:path';
 const repo=process.cwd(),dataRoot=process.env.LOCAL_DATA_DIR;
 const load=name=>import(pathToFileURL(resolve(repo,'server',name)));
 const json=(res,status,value)=>{res.writeHead(status,{'Content-Type':'application/json'});res.end(JSON.stringify(value))};
-const routes=[(await load('motion.mjs')).createMotionRoutes({repo,dataRoot,json}),
+const routes=[(await load('sessionExport.mjs')).createSessionExportRoutes({dataRoot,json}), (await load('motion.mjs')).createMotionRoutes({repo,dataRoot,json}),
   (await load('science.mjs')).scienceRoutes({repo,dataRoot,json}),
   (await load('voiceCapture.mjs')).createVoiceCaptureRoutes({repo,dataRoot,json})];
 const proxy=(await load('science-proxy.mjs')).createScienceProxy({url:process.env.SCIENCE_URL,token:process.env.SCIENCE_TOKEN});
 http.createServer(async(req,res)=>{try{const url=new URL(req.url,'http://localhost');
+  if(url.pathname==='/test/motion-context'){json(res,200,await (await load('motionContext.mjs')).readMotionContext({dataRoot,sessionId:url.searchParams.get('session'),modelId:url.searchParams.get('model')}));return;}
   for(const route of routes)if(await route(req,res,url))return;
   if(url.pathname.startsWith('/api/science/'))return proxy(req,res);
   json(res,404,{error:'No test route'});
@@ -224,6 +225,18 @@ def test_encoded_motion_audio_ranks_native_windows_without_changing_baseline(tmp
             discrepancies = [candidate['weighted_mean_square_discrepancy'] for candidate in rankings]
             assert all(np.isfinite(value) and value >= 0 for value in discrepancies)
             assert fit['joint']['best']['weighted_mean_square_discrepancy'] == min(discrepancies)
+        temporal = result['temporalAnalysis']
+        assert temporal['additionalSynthesisCalls'] == 0 and temporal['modelUpdated'] is False
+        for comparison in temporal['sensitivity']:
+            for alternative in comparison['alternatives']:
+                assert len({step['anatomySha256'] for step in alternative['path']}) == 1
+                for step in alternative['path']:
+                    assert step['candidateId'] in [c['candidate_id'] for c in result['windows'][step['position']]['fit']['joint']['candidates']]
+        compact = call('/test/motion-context?session=' + result['sessionId'] + '&model=' + result['modelId'])
+        assert compact['receiptSha256'] and compact['temporal']['status'] == temporal['status']
+        exported = call('/api/session-export')
+        assert exported['summary']['motionAnalysisCount'] == 1
+        assert next(a for a in exported['artifacts'] if a.get('binding', {}).get('role') == 'conditional-motion-audio-analysis')['data']['temporalAnalysis'] == temporal
         assert any(row['status'] == 'unavailable' for row in result['windows'])
         assert call('/api/motion/status')['record']['timebase']['syncUncertaintyMs'] is None
         unchanged()

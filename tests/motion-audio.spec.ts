@@ -53,5 +53,8 @@ test('prepared native motion audio runs from declaration to actual scientific re
  const final=await (await request.get('/api/motion/analysis?captureId='+nativeCapture)).json();expect(final.result).not.toBeNull();expect(final.result.captureId).toBe(nativeCapture);expect(final.result.actualSynthesisCalls).toBeGreaterThan(0);expect(final.result.modelUpdated).toBe(false);
  await expect(group).toContainText(`Numerical result: ${final.result.status}`);await expect(group).toContainText(`${final.result.actualSynthesisCalls} synthesis calls`);await expect(group).toContainText('Baseline model unchanged; visual synchronization unknown');await expect(group).toContainText(`Used ${final.result.hypothesisSubset.selectedIds.length} of ${final.result.hypothesisSubset.totalRetained}`);
  await group.getByText('Model subset and fixed simulation assumptions',{exact:true}).click();await expect(group).toContainText(final.result.modelId);
+ await group.getByText('Conditional temporal comparison',{exact:true}).click();
+ await expect(group).toContainText('Anatomy stays fixed across the recording');
+ if(final.result.temporalAnalysis.sensitivity.length){await group.getByText('Fixed-anatomy comparison without smoothing',{exact:true}).click();await expect(group).toContainText('acoustic cost');}
  await expect(panel.getByRole('link',{name:'Download saved video'})).toBeVisible();expect((await request.get('/api/motion/media?id='+nativeCapture)).ok()).toBe(true);
 });

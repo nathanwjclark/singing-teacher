@@ -141,3 +141,25 @@ with JobService(root/'worker') as service:
   assert.ok(output.data.omissions.some(row => row.path.endsWith('/pcm')));
   assert.ok(output.data.artifacts.some(row => row.source.includes('outcomes/outcome-one')));
 });
+
+test('motion export binds actual originals and excludes foreign or altered evidence', async t => {
+ const {root,put}=await fixture(t), digest=b=>createHash('sha256').update(b).digest('hex');
+ const record=Buffer.from('{"kind":"motion-observation"}'),media=Buffer.from('fixture media bytes');
+ const recordSha=digest(record),mediaSha=digest(media),id=digest(recordSha+mediaSha);
+ const capture={id,recordSha256:recordSha,mediaSha256:mediaSha,mediaByteLength:media.length};
+ await put(`motion-captures/${id}/summary.json`,capture);
+ await writeFile(join(root,`motion-captures/${id}/record.json`),record);
+ await writeFile(join(root,`motion-captures/${id}/media`),media);
+ const receiptSha=digest(await readFile(join(root,`motion-captures/${id}/summary.json`)));
+ const result={kind:'motion-pcm-fit-1',captureId:id,sessionId:'session-one',modelId:'updated-model',modelUpdated:false,
+  sourceHashes:{record:recordSha,media:mediaSha,receipt:receiptSha},temporalAnalysis:{status:'no-temporal-links'}};
+ await put(`motion-analyses/${id}/analysis-one/summary.json`,result);
+ await put(`motion-analyses/${id}/analysis-foreign/summary.json`,{...result,sessionId:'foreign-session'});
+ let output;const route=createSessionExportRoutes({dataRoot:root,env,fetchImpl:async()=>Response.json(replay()),json:(_r,status,data)=>{output={status,data}}});
+ await request(route);assert.equal(output.status,200);assert.equal(output.data.summary.motionAnalysisCount,1);
+ const row=output.data.artifacts.find(a=>a.binding?.role==='conditional-motion-audio-analysis');
+ assert.equal(row.binding.current,true);assert.equal(row.data.temporalAnalysis.status,'no-temporal-links');
+ assert.ok(!JSON.stringify(output).includes('fixture media bytes'));assert.ok(!JSON.stringify(output).includes('foreign-session'));
+ await writeFile(join(root,`motion-captures/${id}/media`),'changed');await request(route);
+ assert.equal(output.data.summary.motionAnalysisCount,0);assert.ok(output.data.missing.some(a=>a.source.includes('analysis-one')));
+});

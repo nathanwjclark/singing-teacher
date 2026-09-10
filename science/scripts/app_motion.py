@@ -30,7 +30,14 @@ def load(path,limit=64*1024*1024):
         return raw
     finally:os.close(fd)
 def write(path,value):
-    with path.open('x') as f:os.chmod(path,0o600);json.dump(value,f,allow_nan=False)
+    # Status polling must never observe partially serialized numerical output.
+    fd,temporary=tempfile.mkstemp(prefix=path.name+'.',dir=path.parent)
+    try:
+        with os.fdopen(fd,'w') as f:
+            json.dump(value,f,allow_nan=False);f.flush();os.fsync(f.fileno())
+        os.link(temporary,path)  # Atomic publication, preserving exclusive creation.
+    finally:
+        os.unlink(temporary)
 def process(args,timeout=20):
     p=subprocess.Popen(args,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
     try:

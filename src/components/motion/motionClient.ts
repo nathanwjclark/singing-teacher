@@ -1,3 +1,4 @@
+import type {TemporalResult} from './TemporalAnalysis'
 export interface MotionReceipt {
  id:string;observationId:string;attemptId:string;recordSha256:string;mediaSha256:string;
  mediaByteLength:number;mimeType:string;sampleCount:number;timingGaps:number;unsuccessfulMarkers:number;
@@ -24,6 +25,7 @@ export function motionAnalysisRequestIdentity(previous:{key:string;id:string}|nu
 export interface MotionCandidateScore {candidate_id:string;status:string;weighted_mean_square_discrepancy:number|null;missing_features?:Array<{reason:string;feature?:string}>}
 export const rankMotionCandidates=(candidates:MotionCandidateScore[])=>[...candidates].sort((a,b)=>(a.weighted_mean_square_discrepancy??Infinity)-(b.weighted_mean_square_discrepancy??Infinity));
 export interface MotionAudioResult {
+ temporalAnalysis?:TemporalResult;
  kind:'motion-pcm-fit-1';captureId:string;pose:MotionVowel;status:string;
  windows:Array<{index:number;startSample:number;measurement:unknown;status:string;reason?:string|null;
   fit?:{joint:{candidates:MotionCandidateScore[]}}|null}>;

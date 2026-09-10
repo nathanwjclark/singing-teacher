@@ -110,6 +110,68 @@ export function createSessionExportRoutes({dataRoot, json, fetchImpl = fetch, en
         try { const artifact = await read(source); if (inSession(artifact.data) && artifacts.length < MAX_FILES) artifacts.push(artifact); } catch { /* Incomplete optional probe fits remain represented by the authoritative job ledger. */ }
       }
       const state = replay?.state;
+      const knownModels = new Set([original.data.modelId, state?.snapshot?.model_id,
+        ...(replay?.events || []).map(event => event.state?.snapshot?.model_id)].filter(Boolean));
+      let verifiedMotionBytes = 0, inspectedMotionAnalyses = 0;
+      const verifiedCaptures = new Map();
+      async function digestOriginal(source, limit) {
+        const path = await realpath(resolve(root, source));
+        if (!path.startsWith(root + sep)) throw Error('Original leaves private root');
+        const handle = await open(path, 'r');
+        try {
+          const stat = await handle.stat();
+          if (!stat.isFile() || stat.size > limit || verifiedMotionBytes + stat.size > 128 * 1024 * 1024) throw Error('Original verification size limit');
+          verifiedMotionBytes += stat.size;
+          const digest = createHash('sha256'), buffer = Buffer.alloc(65536);
+          let size = 0;
+          for (;;) {
+            const {bytesRead} = await handle.read(buffer, 0, buffer.length, null);
+            if (!bytesRead) break;
+            size += bytesRead;
+            if (size > stat.size) throw Error('Original changed while verifying');
+            digest.update(buffer.subarray(0, bytesRead));
+          }
+          if (size !== stat.size) throw Error('Original changed while verifying');
+          return {sha256: digest.digest('hex'), byteLength: size};
+        } finally { await handle.close(); }
+      }
+      for (const captureId of await folders('motion-analyses')) {
+        if (!/^[a-f0-9]{64}$/.test(captureId)) continue;
+        for (const analysisId of await folders('motion-analyses/' + captureId)) {
+          if (++inspectedMotionAnalyses > MAX_FILES || artifacts.length >= MAX_FILES) {
+            missing.push({source: 'motion-analyses', reason: 'Motion analysis receipt count exceeds export limit'}); break;
+          }
+          const source = `motion-analyses/${captureId}/${analysisId}/summary.json`;
+          try {
+            const artifact = await read(source), result = artifact.data;
+            // The unbound 2D capture and decoder failures carry no session identity.
+            // Only an actual audio-analysis receipt can associate this evidence.
+            if (result.sessionId !== sessionId) continue;
+            if (result.kind !== 'motion-pcm-fit-1' || result.captureId !== captureId || !knownModels.has(result.modelId)
+              || result.modelUpdated !== false) throw Error('Motion analysis session/model binding invalid');
+            let receipt = verifiedCaptures.get(captureId);
+            if (!receipt) {
+              receipt = await read(`motion-captures/${captureId}/summary.json`);
+              const record = await digestOriginal(`motion-captures/${captureId}/record.json`, 4 * 1024 * 1024);
+              const media = await digestOriginal(`motion-captures/${captureId}/media`, 64 * 1024 * 1024);
+              if (receipt.data.id !== captureId || receipt.data.recordSha256 !== record.sha256 || receipt.data.mediaSha256 !== media.sha256
+                || receipt.data.mediaByteLength !== media.byteLength || hash(record.sha256 + media.sha256) !== captureId) throw Error('Motion original evidence mismatch');
+              verifiedCaptures.set(captureId, receipt);
+            }
+            if (result.sourceHashes?.receipt !== receipt.sha256 || result.sourceHashes?.record !== receipt.data.recordSha256
+              || result.sourceHashes?.media !== receipt.data.mediaSha256) throw Error('Motion source hashes mismatch');
+            const binding = {sessionId, modelId: result.modelId, captureId,
+              current: state?.snapshot ? result.modelId === state.snapshot.model_id : null,
+              role: 'conditional-motion-audio-analysis', originalBytesVerified: true, modelUpdated: false};
+            artifacts.push({...artifact, binding});
+            if (!artifacts.some(a => a.source === receipt.source)) {
+              if (artifacts.length < MAX_FILES) artifacts.push({...receipt, binding: {...binding, current: null, role: 'original-motion-capture-receipt'}});
+              else missing.push({source: receipt.source, reason: 'Artifact count limit reached'});
+            }
+          } catch { missing.push({source, reason: 'Motion analysis or original hashes are invalid, unavailable or exceed verification bounds; excluded'}); }
+        }
+        if (inspectedMotionAnalyses > MAX_FILES || artifacts.length >= MAX_FILES) break;
+      }
       const summary = {
         modelId: state?.snapshot?.model_id || null,
         sessionVersion: state?.version ?? null,
@@ -118,6 +180,7 @@ export function createSessionExportRoutes({dataRoot, json, fetchImpl = fetch, en
         attemptCount: state?.attempts?.length || 0,
         scoreCount: (state?.jobs || []).filter(job => job.result?.scores).length,
         probeFitCount: artifacts.filter(a => a.source.startsWith('probe-fits/')).length,
+        motionAnalysisCount: artifacts.filter(a => a.binding?.role === 'conditional-motion-audio-analysis').length,
       };
       // Recheck the app pointer after asynchronous collection; never mix two active runs.
       const finalIndex = await read('science-current.json');
@@ -136,6 +199,7 @@ export function createSessionExportRoutes({dataRoot, json, fetchImpl = fetch, en
       function redact(value, path = '', depth = 0) {
         if (depth > 80) { omissions.push({path, reason: 'Nested value exceeds export depth limit'}); return null; }
         if (typeof value === 'string') {
+          if (value.includes(root + sep)) { omissions.push({path, reason: 'Private data-root path replaced'}); value = value.replaceAll(root + sep, '[private-data-root]/'); }
           if (/^data:(audio|video|image)\//.test(value) || secrets.some(secret => value.includes(secret))) { omissions.push({path, reason: 'Media or credential value omitted'}); return null; }
           // Embedded scientific request JSON also contains PCM; parse and redact it rather than leak media inside a string.
           if (value.startsWith('{') || value.startsWith('[')) { try { const parsed = JSON.parse(value); return JSON.stringify(redact(parsed, path + ':json', depth + 1)); } catch { /* Ordinary free-form text stays text. */ } }

@@ -64,3 +64,14 @@ def test_decoder_timeout_reaps_process(tmp_path):
     with pytest.raises(subprocess.TimeoutExpired):app_motion.process([sys.executable,'-c',code],timeout=.2)
     pid=int(pidfile.read_text())
     with pytest.raises(ProcessLookupError):os.kill(pid,0)
+
+
+def test_summary_publication_is_atomic_and_exclusive(tmp_path):
+    import pytest
+    target=tmp_path/'summary.json'
+    with pytest.raises(ValueError):app_motion.write(target,{'invalid':float('nan')})
+    assert not target.exists() and not list(tmp_path.iterdir())
+    app_motion.write(target,{'status':'complete'})
+    with pytest.raises(FileExistsError):app_motion.write(target,{'status':'replacement'})
+    assert json.loads(target.read_text())=={'status':'complete'}
+    assert list(tmp_path.iterdir())==[target]

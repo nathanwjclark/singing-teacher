@@ -55,3 +55,20 @@ test('status stops advertising a committed recording after outcome, probe model 
  const unavailable=await get();assert.equal(unavailable.latestCurrent,false);assert.match(unavailable.error,/unavailable/);
 });
 test('first-run status explains how to begin without exposing a path or calling the provider',async t=>{const s=await setup(t);await rm(join(s.root,'science-current.json'));const status=await s.request(undefined,'/api/astra/status');assert.equal(status.status,200);assert.equal(status.data.provider.available,true);assert.equal(status.data.sessionId,null);assert.equal(status.data.error,'Import a voice capture and fit the scientific model before asking Astra');assert.ok(!JSON.stringify(status).includes(s.root));assert.equal((await s.request({requestId:'too-early'})).status,409);assert.equal(s.calls(),0);await writeFile(join(s.root,'science-current.json'),'invalid-json');const corrupt=await s.request(undefined,'/api/astra/status');assert.notEqual(corrupt.data.error,status.data.error);assert.equal(s.calls(),0);});
+
+test('Astra receives bound current motion evidence and rejects altered or stale originals',async t=>{
+ const {createHash}=await import('node:crypto');const hash=b=>createHash('sha256').update(b).digest('hex');let received;
+ const s=await setup(t,{decide:args=>{received=args.input.motionAudio;return {action:'rest',experimentId:null,cue:'Rest.',explanation:'Inspect conditional evidence.'}}});
+ const record=Buffer.from('{"kind":"motion-observation"}'),media=Buffer.from('encoded-fixture-bytes'),rh=hash(record),mh=hash(media),id=hash(rh+mh);
+ const put=async(path,value)=>{await mkdir(join(s.root,path,'..'),{recursive:true});await writeFile(join(s.root,path),typeof value==='string'||Buffer.isBuffer(value)?value:JSON.stringify(value));};
+ const receipt={id,recordSha256:rh,mediaSha256:mh,mediaByteLength:media.length};
+ await put(`motion-captures/${id}/summary.json`,receipt);await put(`motion-captures/${id}/record.json`,record);await put(`motion-captures/${id}/media`,media);
+ await put('motion-latest.json',{id});await put(`motion-analyses/${id}/current.json`,{status:'succeeded',captureId:id,expectedModelId:'model-one',analysisId:'analysis-one',pose:'a'});
+ await put(`motion-analyses/${id}/analysis-one/summary.json`,{kind:'motion-pcm-fit-1',status:'available',captureId:id,pose:'a',sessionId:'session-one',modelId:'model-one',modelUpdated:false,
+ sourceHashes:{record:rh,media:mh,receipt:hash(JSON.stringify(receipt))},windows:[{index:0,status:'scored',fit:{joint:{candidates:[{candidate_id:'actual-candidate',status:'scored',weighted_mean_square_discrepancy:.25}]}}}],assumptions:['fixed controls']});
+ assert.equal((await s.request({requestId:'motion-current'})).status,200);assert.equal(received.windows[0].candidates[0].discrepancy,.25);assert.equal(received.modelId,'model-one');assert.ok(!JSON.stringify(received).includes('encoded-fixture-bytes'));
+ const {readMotionContext}=await import('./motionContext.mjs');
+ assert.equal((await readMotionContext({dataRoot:s.root,sessionId:'session-one',modelId:'other'})).status,'unavailable');
+ assert.equal((await readMotionContext({dataRoot:s.root,sessionId:'other',modelId:'model-one'})).status,'unavailable');
+ await put(`motion-captures/${id}/media`,'altered');assert.equal((await readMotionContext({dataRoot:s.root,sessionId:'session-one',modelId:'model-one'})).status,'unavailable');
+});

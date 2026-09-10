@@ -74,11 +74,18 @@ not enter the physical fitting objective.
 
 ## Remaining ownership
 
-- **Lead A, further research:** validate and extend the conditional audio windows
-  into a temporally coupled model, and define a calibrated visual forward
-  observation model before fitting visible trajectories jointly. The current
-  independent-window audio fit must not be described as recovered dynamic
-  anatomy or verified motor control.
+- **Lead A, further research:** define and validate a calibrated visual forward
+  observation model before fitting visible trajectories jointly. The optional
+  fixed-anatomy temporal comparison now reports heuristic path penalties and
+  sensitivity over existing audio windows; it does not recover continuous
+  motion or verified motor control. See [temporal comparisons](../../science/MOTION_PATH.md).
+- **Lead A, source forecast comparison:** extend the current best-candidate
+  forecast to a sealed, bounded bank of competing source/tract predictions.
+  Score the same new original against every frozen alternative, preserving
+  unsupported candidates; revise ranking separately from baseline anatomy.
+  This is unimplemented software work, not blocked on Lane B. Acceptance must
+  include fixed scoring/native versions, original exclusion, partial-bank
+  failures, restart idempotency and second-round ranking provenance.
 - **Lead B, acquisition evidence:** collect real phone/depth/probe captures with
   declared device calibration and timing uncertainty; complete native iOS build
   and device checks in an Xcode-capable environment.
@@ -98,3 +105,8 @@ unchanged baseline), plus real-server browser checks for actual native results
 and unavailable states. The final UI refreshes baseline identity before a new
 analysis while preserving uncertain retry identities. See
 [motion audio review](motion-audio-review.md).
+
+Motion-analysis receipts now enter session exports only after original byte/hash
+verification and session/model binding. Astra receives bounded current-model
+motion evidence and optional temporal comparisons; unavailable or stale motion
+evidence does not block the existing decision flow. Raw media is not sent.
