@@ -11,6 +11,15 @@
 .coaching-tip--focus { --cue: #f5a68b; background: linear-gradient(110deg, #f5a68b0b, #ffffff02); }
 .coaching-tip--adjust { --cue: #ddc18b; }
 .coaching-tip--good { --cue: #98cdbd; }
+.coaching-tip--selected { border-color: var(--cue); background-color: #ffffff07; }
+.coaching-tip { position: relative; }
+.coaching-select { color: inherit; background: none; border: 0; font: inherit; letter-spacing: inherit; text-align: left; padding: 0; cursor: pointer; }
+.coaching-select::after { content: ''; position: absolute; inset: 0; border-radius: 13px; }
+.coaching-select:focus-visible { outline: none; }
+.coaching-select:focus-visible::after { outline: 2px solid var(--cue); outline-offset: 4px; }
+.coaching-select-arrow { color: var(--cue); font-size: 18px; display: inline-block; margin-left: 8px; opacity: .65; }
+.coaching-select:hover .coaching-select-arrow { opacity: 1; }
+.coaching-reference { color: var(--cue); font-size: 8px; letter-spacing: .1em; display: block; margin-top: 12px; opacity: .8; }
 .coaching-tip-topline { display: flex; gap: 8px; align-items: center; color: var(--cue); }
 .coaching-tip-number { font-size: 11px; font-variant-numeric: tabular-nums; }
 .coaching-tip-region { font-size: 8px; letter-spacing: .15em; opacity: .8; }
