@@ -54,3 +54,6 @@
 .audio-note-axis span:nth-child(1) { top: 2%; }
 .audio-note-axis span:nth-child(2) { top: 51%; transform: translateY(-50%); }
 .audio-note-axis span:nth-child(3) { bottom: 0; }
+.audio-calibration { display: flex; flex-direction: column; gap: 3px; font-size: 8px; color: #a3b5a8; line-height: 1.25; max-width: 230px; }
+.audio-calibration--clip { color: #ffb495; }
+@media (max-width: 760px) { .audio-actions { flex-wrap: wrap; } .audio-calibration { font-size: 8px; } }

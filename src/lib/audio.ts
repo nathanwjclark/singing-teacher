@@ -1,3 +1,7 @@
+import { CONTRACT_VERSION } from '../contracts/index.ts';
+import type { AudioMeasurement, Measurement, Timebase } from '../contracts/index.ts';
+import type { AudioCalibration } from './audioCalibration';
+
 export type AudioMetrics = { dbfs: number; centroidHz: number | null; flatness: number | null; pitchHz: number | null; periodicity: number | null };
 export type MusicalNote = { name: string; octave: number; cents: number; midi: number };
 
@@ -110,4 +114,65 @@ export function analyzeAudio(waveform: Float32Array, spectrumDb: Float32Array, s
     centroidHz: weightedSum / powerSum,
     flatness: Math.min(1, Math.exp(logSum / count) / (powerSum / count)),
   };
+}
+
+
+export const AUDIO_EXTRACTOR_VERSION = '1.0.0';
+/** Same PCM/Blackman spectrum path for live, recorded and engine-generated audio.
+ * No temporal spectral smoothing; captures the current window only.
+ * Window convention: https://www.w3.org/TR/webaudio/#blackman-window
+ */
+export function analyzeAudioFrame(waveform: Float32Array, sampleRate: number): AudioMetrics {
+  const n = waveform.length;
+  if (n < 256 || n > 32768 || (n & (n - 1)) || !Number.isFinite(sampleRate) || sampleRate <= 0 || waveform.some(v => !Number.isFinite(v))) {
+    throw new Error('Audio extraction requires finite PCM, positive sample rate and a power-of-two window (256–32768 samples).');
+  }
+  const real = new Float64Array(n);
+  const imag = new Float64Array(n);
+  for (let i = 0; i < n; i++) real[i] = waveform[i] * (0.42 - 0.5 * Math.cos(2 * Math.PI * i / n) + 0.08 * Math.cos(4 * Math.PI * i / n));
+  for (let i = 1, j = 0; i < n; i++) {
+    let bit = n >> 1;
+    for (; j & bit; bit >>= 1) j ^= bit;
+    j ^= bit;
+    if (i < j) [real[i], real[j]] = [real[j], real[i]];
+  }
+  for (let width = 2; width <= n; width *= 2) {
+    const half = width / 2;
+    for (let offset = 0; offset < n; offset += width) for (let j = 0; j < half; j++) {
+      const angle = -2 * Math.PI * j / width;
+      const a = offset + j, b = a + half;
+      const re = Math.cos(angle) * real[b] - Math.sin(angle) * imag[b];
+      const im = Math.sin(angle) * real[b] + Math.cos(angle) * imag[b];
+      real[b] = real[a] - re; imag[b] = imag[a] - im;
+      real[a] += re; imag[a] += im;
+    }
+  }
+  const spectrum = new Float32Array(n / 2);
+  for (let i = 0; i < spectrum.length; i++) spectrum[i] = 20 * Math.log10(Math.max(1e-12, Math.hypot(real[i], imag[i]) / n));
+  return analyzeAudio(waveform, spectrum, sampleRate, n);
+}
+export type AudioMeasurementMetadata = {
+  id: string; observationId: string; artifactId: string; startMs: number; timebase: Timebase;
+  sourceKind?: 'human-observation' | 'engine-generated' | 'development-fixture'; sourceHashes?: string[];
+  calibration?: AudioCalibration | null; qualityFlags?: string[];
+};
+export function extractAudioMeasurement(waveform: Float32Array, sampleRate: number, metadata: AudioMeasurementMetadata): AudioMeasurement {
+  return serializeAudioMeasurement(analyzeAudioFrame(waveform, sampleRate), waveform.length, sampleRate, metadata);
+}
+/** Serialize already-extracted live metrics without re-running the FFT. */
+export function serializeAudioMeasurement(metrics: AudioMetrics, sampleCount: number, sampleRate: number, metadata: AudioMeasurementMetadata): AudioMeasurement {
+  const fields: [keyof AudioMetrics, Measurement['unit']][] = [['dbfs', 'dBFS'], ['centroidHz', 'Hz'], ['flatness', 'ratio'], ['pitchHz', 'Hz'], ['periodicity', 'ratio']];
+  const calibration = metadata.calibration;
+  const flags = [...(metadata.qualityFlags ?? [])];
+  if (calibration?.clipping) flags.push('clipping');
+  if (!calibration || calibration.state !== 'ready') flags.push('ambient-not-calibrated');
+  if (calibration?.noiseFloorDbfs !== null && calibration?.noiseFloorDbfs !== undefined && metrics.dbfs < calibration.noiseFloorDbfs + 6) flags.push('low-signal-to-noise');
+  const measurements: Measurement[] = fields.map(([name, unit]) => ({ name, unit, value: metrics[name], uncertainty: null, missingReason: metrics[name] === null ? 'low-confidence' : null }));
+  measurements.push({ name: 'noiseFloorDbfs', unit: 'dBFS', value: calibration?.noiseFloorDbfs ?? null, uncertainty: null, missingReason: calibration?.noiseFloorDbfs != null ? null : 'not-calibrated' });
+  measurements.push({ name: 'signalToNoisePowerRatio', unit: 'ratio', value: calibration?.snrDb != null ? Math.pow(10, calibration.snrDb / 10) : null, uncertainty: null, missingReason: calibration?.snrDb != null ? null : calibration?.state === 'ready' ? 'low-confidence' : 'not-calibrated' });
+  return { schemaVersion: CONTRACT_VERSION, kind: 'audio-measurement', id: metadata.id, createdAt: new Date().toISOString(),
+    provenance: { kind: 'derived-measurement', producer: `singing-teacher/audio/${metadata.sourceKind ?? 'human-observation'}`, producerVersion: AUDIO_EXTRACTOR_VERSION, sourceIds: [metadata.observationId, metadata.artifactId], sourceHashes: metadata.sourceHashes ?? [] },
+    observationId: metadata.observationId, artifactId: metadata.artifactId, timebase: metadata.timebase,
+    window: { startMs: metadata.startMs, endMs: metadata.startMs + sampleCount / sampleRate * 1000 },
+    method: `pcm-blackman-power-yin/${AUDIO_EXTRACTOR_VERSION}`, measurements, quality: { flags, missingReason: null }, calibrationId: calibration?.state === 'ready' ? calibration.id : null };
 }
