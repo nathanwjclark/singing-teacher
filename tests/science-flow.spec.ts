@@ -42,9 +42,12 @@ test('app prepares captures and displays actual outcome scores without backend i
 
 test('process success does not conceal a stopped outcome and polling refreshes changed results',async({page})=>{
  let inner={status:'stopped_without_model_update',modelUpdated:false,reasons:[] as string[]};
+ let outcomeRun='prior-run';
  await page.route('**/api/science/status',r=>r.fulfill({json:{status:'succeeded',runId:'ui-test',result}}));
- await page.route('**/api/science/outcome',r=>r.fulfill({json:{status:'succeeded',outcomeId:'same',result:inner}}));
+ await page.route('**/api/science/outcome',r=>r.fulfill({json:{status:'succeeded',runId:outcomeRun,outcomeId:'same',result:inner}}));
  await page.goto('/');await page.getByRole('button',{name:'Experiments',exact:true}).click();
+ await expect(page.locator('.scientific-outcome')).toContainText('Outcome processing: not-run');
+ outcomeRun='ui-test';
  await expect(page.locator('.scientific-outcome')).toContainText('stopped_without_model_update');
  await expect(page.locator('.scientific-outcome')).toContainText('No model update was applied');
  inner={status:'ineligible',modelUpdated:false,reasons:['Recording was clipped']};

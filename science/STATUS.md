@@ -20,6 +20,14 @@ USB transfer is simulated with explicitly generated native bytes in these tests;
 no physical device or human validation is claimed. Existing bundle-size advisory
 remains. Live Astra and actual device demonstration are still separate work.
 
+Final integration also includes B main `457574f` (neural tongue inference,
+voice-activity coaching and paired model/reference geometry). The affected
+**12 native pipeline/recovery tests passed in 84.48 s** after merging; build/lint
+and **eight browser tests** passed. A final stale-outcome display fix passed its
+three browser checks and TypeScript. Independent review separately executed the
+complete app preparation/fit/update path successfully. See
+[OUTCOME_RUNTIME_REVIEW.md](OUTCOME_RUNTIME_REVIEW.md).
+
 ## B runtime continuation (main `1067c89`)
 
 The saved-capture app run now uses the authoritative session in the running HTTP

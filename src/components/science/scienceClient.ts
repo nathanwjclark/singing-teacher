@@ -31,7 +31,7 @@ export function useScienceOutcome(runId:string|undefined,refreshKey=0){
   const refresh=async()=>{try{
    const response=await fetch('/api/science/outcome',{cache:'no-store'}),data=await response.json();
    if(!response.ok)throw Error(data.error||'Outcome service unavailable');
-   if(data.runId&&data.runId!==runId)return;
+   if(data.runId&&data.runId!==runId){if(active)setEntry({runId,state:{status:'not-run'}});return;}
    if(active)setEntry(previous=>previous.runId===runId&&JSON.stringify(previous.state)===JSON.stringify(data)?previous:{runId,state:data});
   }catch(error){if(active)setEntry({runId,state:{status:'unavailable',error:String(error)}})}finally{if(active)timer=setTimeout(()=>void refresh(),3000)}};
   void refresh();return()=>{active=false;clearTimeout(timer)};
