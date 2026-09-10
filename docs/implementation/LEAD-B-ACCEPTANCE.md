@@ -41,3 +41,5 @@ The tongue-label export is a real visible-tip annotation set with invalid direct
 - The pitch fix was checked on 28 frequency/sample-rate combinations and Chrome's real MediaRecorder/decode path with A3 → A4 → silence → E4. Hardware microphone and phone audio-route checks still require the actual devices.
 
 The reconstruction direction is recorded in [mouth-reconstruction-direction.md](../research/mouth-reconstruction-direction.md).
+
+Revision 6 learning exports include `kit.records` alongside the local protocol/replay envelope. Run `node --experimental-strip-types scripts/validate-learning.ts EXPORT_JSON` to check the shared record schema and cue/attempt references. The validator cannot verify specialist credentials or substitute for actual learner evidence.
