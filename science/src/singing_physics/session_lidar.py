@@ -46,7 +46,11 @@ def collect(state, pending, status, result):
             raise ValueError('Original LiDAR artifact hashes differ from evaluated evidence')
         hashes = set(original_hashes.values())
         ids = set(capture.artifacts) | {capture.capture_id, result['source_evidence_id']}
-        if hashes & set(parent['evidence_hashes']) or ids & set(parent['evidence_ids']):
+        # Calibration/reference artifacts may legitimately recur across new scans.
+        # Observation reuse is bound to the selected depth bytes and its manifest.
+        observation_hashes = {capture.manifest_sha256, result['projection_lineage']['source_artifact_sha256']}
+        observation_ids = {capture.capture_id, result['source_evidence_id']}
+        if observation_hashes & set(parent['evidence_hashes']) or observation_ids & set(parent['evidence_ids']):
             raise ValueError('LiDAR original evidence already contributed to model')
         by_id = {h['hypothesis_id']: h for h in parent['hypotheses']}
         rows = result['rankings']; order = result['with_depth_order']

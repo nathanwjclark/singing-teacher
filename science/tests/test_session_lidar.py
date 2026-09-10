@@ -71,3 +71,51 @@ def test_adoption_rejects_partial_support_and_stales_committed_design(tmp_path):
     adopt(state,pending,'succeeded',result)
     assert state['designs']['old']['status']=='stale'
     assert state['snapshot']['lidar_fusion']['observed_distance_m']==result['observed_distance_m']
+
+
+def test_distinct_scans_share_calibration_but_not_depth_observations(tmp_path):
+    import hashlib
+    import json
+    import numpy as np
+    with JobService(tmp_path/'jobs') as service:
+        controller=SessionController(tmp_path/'sessions',service,'session')
+        baseline,parameters=setup(tmp_path,controller)
+        first=tmp_path/'capture'
+        manifest=json.loads((first/'manifest.json').read_text())
+        calibration=json.dumps(manifest['frames'][0]['calibration']).encode()
+        calibration_hash=hashlib.sha256(calibration).hexdigest()
+        (first/'calibration.json').write_bytes(calibration)
+        manifest['calibration_artifact']={'path':'calibration.json','bytes':len(calibration),'sha256':calibration_hash}
+        (first/'manifest.json').write_text(json.dumps(manifest))
+        parameters['annotation']['manifest_sha256']=hashlib.sha256((first/'manifest.json').read_bytes()).hexdigest()
+        send(controller,'fit_lidar',parameters=parameters)
+        state=collect(controller,service)
+        assert state['lidar_fusions'][-1]['status']=='adopted'
+        assert calibration_hash in state['snapshot']['evidence_hashes']
+        second=tmp_path/'second';second.mkdir()
+        (second/'calibration.json').write_bytes(calibration)
+        (second/'audio.pcm').write_bytes((first/'audio.pcm').read_bytes())
+        # Different observed depth at the same calibrated pixel locations.
+        depth=np.full((2,2),.36,dtype='<f4').tobytes()
+        (second/'depth.f32').write_bytes(depth)
+        manifest['capture_id']='independent-second-scan'
+        manifest['frames'][0]['depth']['sha256']=hashlib.sha256(depth).hexdigest()
+        (second/'manifest.json').write_text(json.dumps(manifest))
+        next_parameters=deepcopy(parameters)
+        next_parameters['capture_directory']=str(second)
+        next_parameters['annotation'].update(model_id=state['snapshot']['model_id'],snapshot_sha256=digest(state['snapshot']),
+            capture_id=manifest['capture_id'],manifest_sha256=hashlib.sha256((second/'manifest.json').read_bytes()).hexdigest())
+        send(controller,'fit_lidar',parameters=next_parameters)
+        second_state=collect(controller,service)
+        assert second_state['lidar_fusions'][-1]['status']=='adopted',second_state['lidar_fusions'][-1]
+        assert second_state['snapshot']['model_id']!=state['snapshot']['model_id']
+        assert second_state['snapshot']['lidar_fusion']['projection_lineage']['calibration_sha256']==state['snapshot']['lidar_fusion']['projection_lineage']['calibration_sha256']
+        # Relabeling the exact depth bytes still cannot add another likelihood.
+        manifest['capture_id']='relabelled-second-scan'
+        (second/'manifest.json').write_text(json.dumps(manifest))
+        next_parameters['annotation'].update(model_id=second_state['snapshot']['model_id'],snapshot_sha256=digest(second_state['snapshot']),
+            capture_id=manifest['capture_id'],manifest_sha256=hashlib.sha256((second/'manifest.json').read_bytes()).hexdigest())
+        send(controller,'fit_lidar',parameters=next_parameters)
+        rejected=collect(controller,service)
+        assert rejected['snapshot']==second_state['snapshot']
+        assert not rejected['lidar_fusions'][-1]['model_updated']
