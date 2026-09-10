@@ -61,3 +61,40 @@ response. The runner retries collection and retains one update job. Independentl
 ran this new case: **1 passed in 4.64 seconds**. Combined with the earlier four-case
 run, all five runner scenarios have passed independently. No remaining functional
 blocker was found in the reviewed continuation and cancellation paths.
+
+## App-operated preparation and scoring acceptance
+
+Reviewed `server/voiceCapture.mjs`, `prepare_voice_capture.py`,
+`ScientificModelPanel.tsx`, and `scienceClient.ts` against the assembled app
+through `488c666`. The UI declares the vowel and absence of external excitation,
+prepares the latest transferred archive, then invokes the real fitting or outcome
+route. The server whitelist allows the preparation handler to run. Preparation
+verifies the original archive receipt and nested artifacts, retains original
+bytes, stages extracted files before publication, and atomically replaces the
+fixed input configuration. Existing outcome importer/controller checks remain
+responsible for frozen experiment identity, timing and admissibility.
+
+Independent checks with the existing model virtualenv and
+`PYTHONPATH=science/src:science/scripts`:
+
+- `pytest science/tests/test_prepare_voice_capture.py -q -W error`: **4 passed
+  in 0.05 seconds**, including interrupted publication and a successful retry.
+- `pytest science/tests/test_app_science_pipeline.py -q -W error`: **1 passed
+  in 22.03 seconds**. This runs the actual Node app and native HTTP worker,
+  prepares a ZIP, fits a shared session, prepares a later ZIP, applies the
+  resulting update, and verifies authoritative model/evidence lineage and
+  idempotent completed retry. USB/device acquisition is simulated with generated
+  PCM; this verifies software wiring, not human anatomical accuracy.
+
+One nonblocking P2 finding was sent to the owner: `useScienceOutcome` returns
+early for a response belonging to an older model run, leaving the current run's
+display at `loading` indefinitely. Treat that response as `not-run` for the
+requested run; do not display the older outcome. Scoring remains usable because
+the button is not disabled by this status.
+
+No TODO, FIXME, placeholder, dummy, fake or stub logic was found in these four
+production files. No orphaned preparation or scoring path was found. The change
+reuses the existing archive validator, native importer and session jobs without
+new dependencies or a second scientific execution abstraction. No new blocking
+functional defect was found in this bounded review; device measurements and
+scientific accuracy remain separate from the demonstrated software flow.
