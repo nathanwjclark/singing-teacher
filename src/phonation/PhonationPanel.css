@@ -1,0 +1,11 @@
+.phonation-panel { margin: 1rem 0; padding: 1rem; border: 1px solid var(--border, #596575); border-radius: 12px; }
+.phonation-panel h2 { margin-top: 0; font-size: 1.05rem; }
+.phonation-panel label { display: block; margin: .7rem 0; }
+.phonation-panel label > input:not([type=checkbox]) { display: block; width: min(100%, 36rem); box-sizing: border-box; margin-top: .3rem; }
+.phonation-panel p { line-height: 1.5; }
+.phonation-panel dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(135px, 1fr)); gap: .7rem; }
+.phonation-panel dt { font-size: .8rem; opacity: .8; }
+.phonation-panel dd { margin: .3rem 0; font-variant-numeric: tabular-nums; }
+.phonation-capabilities { font-size: .8rem; }
+.phonation-cue { padding: .6rem; border-left: 3px solid currentColor; }
+.phonation-panel ol { max-height: 14rem; overflow: auto; padding-left: 1.5rem; font-size: .85rem; }
