@@ -133,15 +133,25 @@ def geometry_export_job(backend, request, output):
 def finish(backend,intent,output):
     command=intent['command'];key='session:'+digest(canonical([intent['sessionId'],command['command_id']]).encode())
     def owned(state):return next((j for j in state['jobs'] if j.get('key')==key),None)
+    def reject_unsubmitted_stale(state):
+        # A completed or pending matching intent must always remain recoverable.
+        # Only the authoritative session can establish that submission never won.
+        if (not owned(state) and not state['pending']
+                and (state.get('snapshot') or {}).get('model_id') != intent['parentModelId']):
+            seal(output/'failure.json', {'reason':'Baseline changed before LiDAR submission; start a new fit',
+                'status':'stale_before_submission','modelUpdated':False,'sessionId':intent['sessionId'],
+                'intentKey':key,'parentModelId':intent['parentModelId']})
+            raise ValueError('Baseline changed before LiDAR submission; start a new fit')
     state=backend.execute({'action':'state'})['state'];record=owned(state)
     if not record and (not state['pending'] or state['pending'].get('key')!=key):
         if state['pending']:raise ValueError('Another scientific job is running; retry after it completes')
-        if state.get('snapshot',{}).get('model_id')!=intent['parentModelId']:raise ValueError('Baseline changed before LiDAR submission; start a new fit')
+        reject_unsubmitted_stale(state)
         for attempt in range(3):
             try:state=backend.execute({**command,'expected_version':state['version']})['state'];break
             except Exception:
                 state=backend.execute({'action':'state'})['state']
                 if owned(state) or state['pending'] and state['pending'].get('key')==key:break
+                reject_unsubmitted_stale(state)
                 if attempt==2:raise
     record=owned(state)
     if record is None:

@@ -86,6 +86,7 @@ def test_adoption_receipt_survives_subsequent_geometry_export_failure(tmp_path):
     receipt=json.loads((tmp_path/'adoption-summary.json').read_text())
     assert receipt['modelId']=='adopted' and receipt['includedInFit'] is True
     assert receipt['geometry'] is None and not (tmp_path/'summary.json').exists()
+    assert not (tmp_path/'failure.json').exists()
 
 
 def test_geometry_terminal_failure_gets_new_identity_without_repeating_success(tmp_path, monkeypatch):
@@ -124,3 +125,49 @@ def test_geometry_lost_submit_response_resumes_same_identity(tmp_path, monkeypat
     with pytest.raises(OSError):app_lidar.geometry_export_job(backend,{},tmp_path)
     assert app_lidar.geometry_export_job(backend,{},tmp_path)=='accepted-job'
     assert keys[0]==keys[1]
+
+
+@pytest.mark.parametrize('pending',[None,{'key':'another-operation','job_id':'other-job'}])
+def test_only_idle_unsubmitted_stale_intent_is_released(tmp_path,pending):
+    from science.scripts.app_lidar import finish
+    intent={'sessionId':'session','parentModelId':'parent','command':{'command_id':'unsubmitted'}}
+    state={'jobs':[],'pending':pending,'snapshot':{'model_id':'new-parent'}}
+    class Backend:
+        def execute(self,command):
+            assert command=={'action':'state'}
+            return {'state':state}
+    with pytest.raises(ValueError):finish(Backend(),intent,tmp_path)
+    failure=tmp_path/'failure.json'
+    assert failure.exists()==(pending is None)
+    if failure.exists():
+        receipt=json.loads(failure.read_text())
+        assert receipt['status']=='stale_before_submission' and receipt['modelUpdated'] is False
+
+
+def test_matching_pending_stale_intent_is_not_abandoned(tmp_path,monkeypatch):
+    from science.scripts import app_lidar
+    from singing_physics.service import canonical
+    intent={'sessionId':'session','parentModelId':'parent','command':{'command_id':'submitted'}}
+    key='session:'+app_lidar.digest(canonical(['session','submitted']).encode())
+    state={'jobs':[],'pending':{'key':key,'job_id':'existing-job'},'snapshot':{'model_id':'new-parent'}}
+    class Backend:
+        def execute(self,command):return {'state':state}
+    def unavailable(*args):raise RuntimeError('existing operation still needs recovery')
+    monkeypatch.setattr(app_lidar,'wait',unavailable)
+    with pytest.raises(RuntimeError,match='needs recovery'):app_lidar.finish(Backend(),intent,tmp_path)
+    assert not (tmp_path/'failure.json').exists()
+    assert json.loads((tmp_path/'job.json').read_text())['jobId']=='existing-job'
+
+
+def test_baseline_changed_during_unaccepted_submission_is_released(tmp_path):
+    from science.scripts.app_lidar import finish
+    intent={'sessionId':'session','parentModelId':'parent','command':{'command_id':'unsubmitted'}}
+    state={'jobs':[],'pending':None,'snapshot':{'model_id':'parent'},'version':1}
+    class Backend:
+        def execute(self,command):
+            if command['action']=='state':return {'state':state}
+            state['snapshot']['model_id']='new-parent'
+            raise RuntimeError('stale_session_version')
+    intent['command']['action']='fit_lidar'
+    with pytest.raises(ValueError,match='Baseline changed'):finish(Backend(),intent,tmp_path)
+    assert json.loads((tmp_path/'failure.json').read_text())['status']=='stale_before_submission'
