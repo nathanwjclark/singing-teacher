@@ -16,7 +16,7 @@ function parameters(value: unknown): string {
 
 export function SourceInferencePanel() {
   const [status, setStatus] = useState<SourceInferenceStatus | null>(null);
-  const [enabled, setEnabled] = useState(false), [confirmed, setConfirmed] = useState(false);
+  const [enabled, setEnabled] = useState(false), [confirmedKey, setConfirmedKey] = useState<string | null>(null);
   const [error, setError] = useState(''), [starting, setStarting] = useState(false), [refresh, setRefresh] = useState(0);
   useEffect(() => {
     const controller = new AbortController();
@@ -36,7 +36,7 @@ export function SourceInferencePanel() {
     setStarting(true); setError('');
     try {
       await sourceAction(action);
-      setConfirmed(false);
+      setConfirmedKey(null);
       setStatus(previous => previous ? { ...previous, running: true } : previous);
     } catch (failure) { setError(failure instanceof Error ? failure.message : String(failure)); }
     finally { setStarting(false); setRefresh(value => value + 1); }
@@ -47,7 +47,10 @@ export function SourceInferencePanel() {
   const alternatives = Array.isArray(joint.candidates) ? joint.candidates.map(object) : [];
   const forecast = object(status?.forecast?.result?.forecast);
   const scored = object(status?.score?.result);
-  const hasForecast = typeof forecast.target_id === 'string';
+  const hasForecast = typeof forecast.target_id === 'string' && status?.forecast?.current === true && status.forecast.authoritativeStatus === 'committed' && forecast.status === 'available';
+  const pose = text(status?.forecast?.result?.pose, 'a');
+  const forecastKey = JSON.stringify([status?.sessionId,status?.runId,forecast.target_id,status?.forecast?.result?.sha256,forecast.sealed_at]);
+  const confirmed = hasForecast && confirmedKey === forecastKey;
   return <section className="source-inference-panel" aria-label="Optional source and tract inference" aria-busy={busy}>
     <h2>Optional source and tract inference</h2>
     <p>Test competing sound-source and vocal-tract explanations using original recordings. Source parameters are conditional simulator hypotheses; audio does not establish vocal-fold contact, complete closure or tissue mechanics.</p>
@@ -73,12 +76,13 @@ export function SourceInferencePanel() {
     <div className="source-inference-actions"><button disabled={!ready || alternatives.length === 0} onClick={() => void run('forecast')}>Freeze optional prediction</button></div>
     {status?.forecast && <p>Forecast: {status.forecast.status}. {status.forecast.reason}</p>}
     {hasForecast && <div className="source-inference-forecast"><h3>Prospective source experiment</h3>
-      <p>A prediction was saved for a comfortable sustained ah. Record a new attempt after the prediction, keeping the vowel, comfortable pitch and microphone placement consistent, then Pull iPhone.</p>
+      <p>A prediction was saved for a comfortable sustained {pose} vowel. Record a new attempt after the prediction, keeping the vowel, comfortable pitch and microphone placement consistent, then Pull iPhone.</p>
       <p>Declared simulator controls: {parameters(forecast.controls)}. These conditions are assumptions; do not force your voice to match a source parameter.</p>
       <p>Prediction status: {text(forecast.status)}. Saved: {text(forecast.sealed_at)}.</p>
-      <label><input type="checkbox" checked={confirmed} onChange={event => setConfirmed(event.target.checked)} disabled={busy}/> The latest pulled capture is a new comfortable ah attempt recorded after this prediction.</label>
+      <label><input type="checkbox" checked={confirmed} onChange={event => setConfirmedKey(event.target.checked ? forecastKey : null)} disabled={busy}/> The latest pulled capture is a new comfortable {pose} vowel attempt recorded after this prediction.</label>
       <button disabled={!ready || !confirmed} onClick={() => void run('score')}>Score later capture against source prediction</button>
     </div>}
+    {!hasForecast && typeof forecast.target_id === 'string' && <p>This saved forecast is historical or unavailable for a new recording. Freeze a current supported prediction before continuing.</p>}
     {status?.score && <p>Scoring: {status.score.status}. {status.score.reason}</p>}
     {Object.keys(scored).length > 0 && <div><p>Scientific result: {text(scored.status)}. {text(scored.reason, '')} Discrepancy: {number(scored.score)}.</p>
       <p>{scored.model_updated === true ? 'The optional model was updated.' : 'No model update was applied; the baseline is retained.'}</p></div>}

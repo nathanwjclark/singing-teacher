@@ -2,6 +2,8 @@ export type SourceAction = 'analyze' | 'forecast' | 'score';
 
 export interface SourceStage {
   status: string;
+  current?: boolean;
+  authoritativeStatus?: string;
   result?: Record<string, unknown> | null;
   reason?: string | null;
 }
