@@ -40,6 +40,7 @@ def ensure_fields(state):
     state.setdefault('source_model',None)
     state.setdefault('source_forecasts',{})
     state.setdefault('source_receipts',[])
+    state.setdefault('source_rankings',[])
     state.setdefault('source_status',{'status':'disabled','reason':'Optional source inference has not run','baseline_preserved':True})
 
 
@@ -49,6 +50,14 @@ def current_model(state):
         raise ValueError('Available source model for current baseline is required')
     if _hash(model['result'])!=model['result_sha256']:raise ValueError('Source model artifact integrity mismatch')
     return model
+
+
+def current_ranking(state,model):
+    ranking=next((row for row in reversed(state.get('source_rankings',[]))
+        if row['source_model_id']==model['model_id'] and row['baseline_model_id']==model['baseline_model_id']),None)
+    if ranking and ranking['ranking_id']!='source-ranking:'+_hash({k:v for k,v in ranking.items() if k!='ranking_id'}):
+        raise ValueError('Source ranking receipt integrity mismatch')
+    return ranking
 
 
 def invalidate_stale(state):
@@ -88,32 +97,43 @@ def prepare(state,action,command):
             ids.update([trial['id'],metadata['artifactId'],metadata['attemptId']]);hashes.update(metadata['sourceHashes'])
         return 'fit_phonation',{**params,'enabled':True},{'baseline_model_id':baseline,'calibration_ids':sorted(ids),'calibration_hashes':sorted(hashes)}
     model=current_model(state)
-    if action=='forecast_source':
+    if action in ('forecast_source','forecast_source_bank'):
         params=deepcopy(command['parameters'])
-        required={'family','candidate_id','reference_trial_id','pose','controls','target_id'}
-        if not isinstance(params,dict) or set(params)!=required:raise ValueError('Invalid source forecast parameters')
+        bank=action=='forecast_source_bank'
+        required={'reference_trial_id','pose','controls','target_id'}| (set() if bank else {'family','candidate_id'})
+        optional={'max_synthesis_calls','timeout_s'} if bank else set()
+        if not isinstance(params,dict) or not required<=set(params) or set(params)-required-optional:raise ValueError('Invalid source forecast parameters')
         target=_identity(params['target_id'])
         if target in state['source_forecasts'] or target in model['evidence_ids'] or target in state['snapshot']['evidence_ids']:
             raise ValueError('Source forecast requires unused target identity')
-        return 'forecast_phonation',{**params,'fit_result':model['result'],'enabled':True},{'baseline_model_id':baseline,'source_model_id':model['model_id'],'forecast_id':target}
-    if action!='score_source':raise ValueError('Unknown source action')
+        ranking=current_ranking(state,model)
+        return ('forecast_phonation_bank' if bank else 'forecast_phonation'),{**params,'fit_result':model['result'],'enabled':True},{'baseline_model_id':baseline,'source_model_id':model['model_id'],'forecast_id':target,
+            'ranking_parent_id':ranking['ranking_id'] if ranking else None,'ranking_parent_version':ranking['version'] if ranking else 0}
+    if action not in ('score_source','score_source_bank'):raise ValueError('Unknown source action')
     forecast=state['source_forecasts'].get(command['forecast_id'])
     if not forecast or forecast['status']!='committed' or forecast['source_model_id']!=model['model_id'] or forecast['baseline_model_id']!=baseline:
         raise ValueError('Source score requires current committed forecast')
     artifact=forecast['artifact']
     if _hash(artifact['forecast'])!=artifact['sha256']:raise ValueError('Source forecast integrity mismatch')
+    bank=artifact['forecast'].get('kind')=='frozen-phonation-bank-1'
+    if bank!=(action=='score_source_bank'):raise ValueError('Source scoring operation does not match committed artifact')
+    if bank:
+        ranking=current_ranking(state,model)
+        if forecast.get('ranking_parent_id')!=(ranking['ranking_id'] if ranking else None):
+            raise ValueError('Source bank ranking changed; commit a new bank before recording')
     metadata=command['metadata'];_metadata(metadata,state['session_id'],prospective=True)
     if metadata['observationId']!=command['forecast_id'] or _time(metadata['evidenceAt'])<=_time(forecast['committed_at']):
         raise ValueError('Source capture must match target and follow session commitment')
     if any(i in model['evidence_ids'] for i in (metadata['observationId'],metadata['artifactId'],metadata['attemptId'])) or set(metadata['sourceHashes']) & set(model['evidence_hashes']):
         raise ValueError('Source heldout evidence aliases calibration')
     for receipt in state['source_receipts']:
-        if receipt.get('operation')=='score_phonation' and set(metadata['sourceHashes']) & set(receipt.get('observation_hashes',[])):
+        if receipt.get('operation') in ('score_phonation','score_phonation_bank') and set(metadata['sourceHashes']) & set(receipt.get('observation_hashes',[])):
             raise ValueError('Source heldout artifact already scored')
     forecast['status']='score_pending'
-    return 'score_phonation',{'frozen':artifact,'pcm':deepcopy(command['pcm']),'metadata':deepcopy(metadata),'enabled':True},{
+    return ('score_phonation_bank' if bank else 'score_phonation'),{'frozen':artifact,'pcm':deepcopy(command['pcm']),'metadata':deepcopy(metadata),'enabled':True},{
         'baseline_model_id':baseline,'source_model_id':model['model_id'],'forecast_id':command['forecast_id'],
-        'observation_hashes':list(metadata['sourceHashes'])}
+        'observation_hashes':list(metadata['sourceHashes']),'bank_sha256':artifact['sha256'] if bank else None,
+        'ranking_parent_id':forecast.get('ranking_parent_id'),'ranking_parent_version':forecast.get('ranking_parent_version',0)}
 
 
 def complete_fit(result):
@@ -145,20 +165,47 @@ def collect(state,pending,job_status,result):
             if forecast['status']=='committed':forecast['status']='stale'
     elif operation=='fit_phonation' and status=='available':
         receipt.update(status='insufficient-quality',reason='Incomplete source comparison; prior enhancement retained')
-    elif operation=='forecast_phonation':
+    elif operation in ('forecast_phonation','forecast_phonation_bank'):
         frozen=result.get('forecast') if isinstance(result,dict) else None
-        if job_status=='succeeded' and frozen and frozen.get('status')=='available':
+        bank=operation=='forecast_phonation_bank'
+        if job_status=='succeeded' and frozen and frozen.get('status') in (('available','insufficient-quality') if bank else ('available',)):
             if _hash(frozen)!=result.get('sha256') or frozen.get('target_id')!=binding['forecast_id'] or frozen.get('fit_sha256')!=state['source_model']['result_sha256']:
                 raise ValueError('Source forecast result binding mismatch')
+            if bank:
+                expected=[f"{family}:{row['candidate_id']}" for family in ('joint','fixed_source','fixed_anatomy') for row in state['source_model']['result'][family]['candidates']]
+                actual=[row.get('alternative_id') for row in frozen.get('alternatives',[])]
+                if frozen.get('kind')!='frozen-phonation-bank-1' or actual!=expected:raise ValueError('Source bank must retain every fitted alternative')
             state['source_forecasts'][binding['forecast_id']]={'artifact':deepcopy(result),'status':'committed',
-                'committed_at':_now(),'baseline_model_id':binding['baseline_model_id'],'source_model_id':binding['source_model_id']}
-            receipt['status']='available'
+                'committed_at':_now(),'baseline_model_id':binding['baseline_model_id'],'source_model_id':binding['source_model_id'],
+                'ranking_parent_id':binding.get('ranking_parent_id'),'ranking_parent_version':binding.get('ranking_parent_version',0)}
+            receipt['status']=frozen['status']
         else:receipt['status']=frozen.get('status','failed') if frozen else status
-    elif operation=='score_phonation':
+    elif operation in ('score_phonation','score_phonation_bank'):
         forecast=state['source_forecasts'][binding['forecast_id']]
+        if operation=='score_phonation_bank' and job_status=='succeeded' and isinstance(result,dict):
+            expected=[row['alternative_id'] for row in forecast['artifact']['forecast']['alternatives']]
+            actual=[row.get('alternative_id') for row in result.get('alternatives',[])]
+            if actual!=expected or result.get('forecast_sha256')!=forecast['artifact']['sha256'] or result.get('model_updated') is not False:
+                raise ValueError('Source bank score must retain every committed alternative and bank binding')
         if job_status=='succeeded' and isinstance(result,dict) and result.get('status')=='available':
             if result.get('forecast_sha256')!=forecast['artifact']['sha256'] or result.get('model_updated') is not False:raise ValueError('Source score binding mismatch')
-            forecast['status']='scored';receipt['score']=result['score']
+            forecast['status']='scored'
+            if operation=='score_phonation':receipt['score']=result['score']
+            else:
+                ranks=result.get('ranking')
+                if not isinstance(ranks,list) or len(ranks)!=len(set(ranks)) or set(ranks)!={row['alternative_id'] for row in result['alternatives'] if row['status']=='scored'}:
+                    raise ValueError('Source bank ranking must include exactly scored alternatives')
+                ranking={'parent_ranking_id':binding.get('ranking_parent_id'),'version':binding.get('ranking_parent_version',0)+1,
+                    'baseline_model_id':binding['baseline_model_id'],'source_model_id':binding['source_model_id'],
+                    'forecast_id':binding['forecast_id'],'bank_sha256':binding['bank_sha256'],'score_result_sha256':_hash(result),
+                    'observation_hashes':binding['observation_hashes'],'ranking':deepcopy(result['ranking']),
+                    'coverage':deepcopy(result['coverage']),'rank_change_comparison_ids':deepcopy(result.get('rank_change_comparison_ids',[])),
+                    'ranking_interpretation':result.get('ranking_interpretation'),
+                    'created_at':_now(),'conditional_only':True,'baseline_preserved':True}
+                ranking['ranking_id']='source-ranking:'+_hash(ranking)
+                state['source_rankings'].append(ranking);receipt['ranking_id']=ranking['ranking_id']
+                for other in state['source_forecasts'].values():
+                    if other is not forecast and other['status']=='committed' and other['artifact']['forecast'].get('kind')=='frozen-phonation-bank-1':other['status']='stale'
         else:forecast['status']='unscorable'
         forecast['score_result']=deepcopy(result);forecast['scored_at']=_now()
     state['source_status']={k:receipt[k] for k in ('status','reason','baseline_preserved')}

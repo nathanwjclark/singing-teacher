@@ -105,26 +105,41 @@ def run(root,phase,output):
         if pointer.exists():
             active=load(pointer);data=active['forecast'];chosen=next((r['experiment'] for r in data['rankings'] if r['experiment']['experiment_id']==data['selected_experiment_id']),None)
             if active['modelId']==baseline and chosen:pose=chosen['pose']
-        command={'action':'forecast_source','parameters':{'family':'joint','candidate_id':best['candidate_id'],'reference_trial_id':reference['trial_id'],'pose':pose,'controls':{k:reference['controls'][k] for k in ('JA','F0','PR','gain')},'target_id':identity}}
-        binding={'sourceModelId':model['model_id'],'pose':pose,'instruction':f'Record a comfortable sustained {pose} vowel. Keep pitch and microphone position similar; stop for discomfort.','source_assumptions':'Conditional source simulation; execution controls are not measured physiology.'}
+        command={'action':'forecast_source_bank','parameters':{'reference_trial_id':reference['trial_id'],'pose':pose,'controls':{k:reference['controls'][k] for k in ('JA','F0','PR','gain')},'target_id':identity,'max_synthesis_calls':24,'timeout_s':90.}}
+        ranking=next((r for r in reversed(state.get('source_rankings',[])) if r['source_model_id']==model['model_id'] and r['baseline_model_id']==baseline),None)
+        binding={'sourceModelId':model['model_id'],'pose':pose,'rankingParentId':ranking['ranking_id'] if ranking else None,
+            'rankingParentVersion':ranking['version'] if ranking else 0,'instruction':f'Record a comfortable sustained {pose} vowel. Keep pitch and microphone position similar; stop for discomfort.','source_assumptions':'Every bounded source/tract and ablation alternative is frozen before this capture. Conditional simulator ranking is separate from baseline anatomy; execution controls are not measured physiology.'}
     elif phase=='score':
         forecasts=[(k,v) for k,v in state.get('source_forecasts',{}).items() if v['status']=='committed' and v['baseline_model_id']==baseline]
         if not forecasts:raise ValueError('Commit a current source forecast before recording')
         target,frozen=forecasts[-1];forecast=frozen['artifact']['forecast'];pose=forecast.get('pose')
         if pose not in ('a','e','i','o','u'):raise ValueError('Frozen source forecast lacks a supported vowel declaration')
-        rate=forecast['record']['window']['sampleRateHz'];trial,binding=capture(root,output,session_id,target,frozen['committed_at'],rate,summary['source'],pose)
-        command={'action':'score_source','forecast_id':target,'pcm':trial['pcm'],'metadata':trial['metadata']};binding['forecastId']=target
+        bank=forecast.get('kind')=='frozen-phonation-bank-1'
+        rate=forecast['profile']['sampleRateHz'] if bank else forecast['record']['window']['sampleRateHz']
+        trial,binding=capture(root,output,session_id,target,frozen['committed_at'],rate,summary['source'],pose)
+        command={'action':'score_source_bank' if bank else 'score_source','forecast_id':target,'pcm':trial['pcm'],'metadata':trial['metadata']};binding['forecastId']=target
+        if bank:binding['bankSha256']=frozen['artifact']['sha256']
     else:raise ValueError('Unknown source operation')
     if not existing:
         command.update(command_id=identity,expected_version=state['version']);save(intent_path,{'command':command,'binding':binding,'baselineModelId':baseline})
+    operation={'fit_source':'fit_phonation','forecast_source':'forecast_phonation','score_source':'score_phonation',
+        'forecast_source_bank':'forecast_phonation_bank','score_source_bank':'score_phonation_bank'}[command['action']]
+    def publish(result,state):
+        if result is None:raise ValueError('Optional source worker failed; baseline retained')
+        ranking=next((r for r in reversed(state.get('source_rankings',[])) if r['forecast_id']==binding.get('forecastId')),None)
+        lineage={'conditionalRanking':{'rankingId':ranking['ranking_id'],'parentRankingId':ranking['parent_ranking_id'],
+            'version':ranking['version'],'bankSha256':ranking['bank_sha256'],'sourceModelId':ranking['source_model_id'],
+            'baselineModelId':ranking['baseline_model_id']}} if ranking else {}
+        save(output/'result.json',{**result,**binding,**lineage,'baselineModelId':baseline,'sessionId':session_id,
+            'sourceModelId':state.get('source_model',{}).get('model_id'),'sessionVersion':state['version']})
     if not state.get('pending'):
-        done=next((j for j in state['jobs'] if j.get('request',{}).get('operation')=={'fit':'fit_phonation','forecast':'forecast_phonation','score':'score_phonation'}[phase] and j.get('key')== 'session:'+hashlib.sha256(json.dumps([session_id,identity],sort_keys=True,separators=(',',':')).encode()).hexdigest()),None)
+        done=next((j for j in state['jobs'] if j.get('request',{}).get('operation')==operation and j.get('key')== 'session:'+hashlib.sha256(json.dumps([session_id,identity],sort_keys=True,separators=(',',':')).encode()).hexdigest()),None)
         if done:
-            result=done.get('result');save(output/'result.json',{**result,**binding,'baselineModelId':baseline,'sessionId':session_id});return
+            publish(done.get('result'),state);return
         state=backend.execute(command)['state']
     pending=state['pending']
     expected_key='session:'+hashlib.sha256(json.dumps([session_id,identity],sort_keys=True,separators=(',',':')).encode()).hexdigest()
-    if pending['key']!=expected_key or pending['request']['operation']!={'fit':'fit_phonation','forecast':'forecast_phonation','score':'score_phonation'}[phase]:raise ValueError('Unrelated scientific job is running')
+    if pending['key']!=expected_key or pending['request']['operation']!=operation:raise ValueError('Unrelated scientific job is running')
     job=pending['job_id'];deadline=time.monotonic()+125
     while time.monotonic()<deadline:
         status=backend.status(job)
@@ -133,9 +148,7 @@ def run(root,phase,output):
     else:raise ValueError('Source job is still running; retry to recover')
     state=backend.execute({'action':'collect_job','command_id':identity+'-collect','expected_version':state['version'],'job_id':job})['state']
     completed=next(j for j in state['jobs'] if j['job_id']==job)
-    result=completed.get('result')
-    if result is None:raise ValueError('Optional source worker failed; baseline retained')
-    save(output/'result.json',{**result,**binding,'baselineModelId':baseline,'sessionId':session_id,'sourceModelId':state.get('source_model',{}).get('model_id'),'sessionVersion':state['version']})
+    publish(completed.get('result'),state)
 
 
 if __name__=='__main__':

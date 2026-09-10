@@ -37,7 +37,7 @@ const provider={getProviderStatus:()=>({available:true,provider:'test-only'}),ge
   const source=input.sourceInference;
   if(!source?.enabled||!source.sourceModelId||source.baselineModelId!==input.modelId||!source.baselinePreserved
     ||source.fit.status!=='succeeded'||!source.fit.alternatives?.joint?.length
-    ||source.score.status!=='succeeded'||typeof source.score.discrepancy!=='number'||source.score.modelUpdated!==false)
+    ||source.score.status!=='succeeded'||!source.score.conditionalRanking?.alternatives?.length||source.score.modelUpdated!==false)
     throw Error('Actual fitted and scored source context did not reach the provider');
   const selected=input.forecast.experiments.find(row=>row.experiment.pose==='a')||input.forecast.experiments[0];
   return {decision:{action:'record',experimentId:selected.experiment.experiment_id,
@@ -257,9 +257,11 @@ def test_optional_source_fit_forecast_later_capture_score_and_restart(tmp_path):
 
         later_root = data / 'later'
         later_root.mkdir()
-        controls = frozen['controls']
+        assert frozen['kind'] == 'frozen-phonation-bank-1'
+        alternative = next(row for row in frozen['alternatives'] if row['family'] == 'joint' and row['status'] == 'available')
+        controls = alternative['controls']
         later = generated_capture(later_root, '00000000-0000-4000-8000-000000000011',
-            anatomy=frozen['anatomy'], f0=controls['F0'], ps=controls['PS'],
+            anatomy=alternative['anatomy'], f0=controls['F0'], ps=controls['PS'],
             ja=controls['JA'], pressure=controls['PR'], gain=controls['gain'])
         publish_capture(data, later)
         call('/api/source/score', False, expected=202)
@@ -271,11 +273,41 @@ def test_optional_source_fit_forecast_later_capture_score_and_restart(tmp_path):
         assert recorded['status'] == 'scored', result
         assert recorded['score_result']['status'] == 'available'
         assert recorded['score_result']['model_updated'] is False
-        assert recorded['score_result']['score'] is not None
+        assert len(recorded['score_result']['alternatives']) == len(frozen['alternatives'])
+        assert recorded['score_result']['ranking']
+        assert result['conditionalRanking']['version'] == 1
+        first_ranking = scored['source_rankings'][-1]
         assert (run / 'summary.json').read_bytes() == summary_bytes
         restart()
         call('/api/source/score', False)
         assert call(session_path)['state']['version'] == scored['version']
+
+        # The next bank freezes all alternatives again, bound to the first conditional ranking.
+        call('/api/source/forecast', False, expected=202)
+        wait_source(call, 'forecast')
+        second_state = call(session_path)['state']
+        target2, bank2 = next((key, value) for key, value in second_state['source_forecasts'].items() if value['status'] == 'committed')
+        assert target2 != target and bank2['ranking_parent_id'] == first_ranking['ranking_id']
+        assert bank2['ranking_parent_version'] == 1
+        second_root = data / 'second-later'
+        second_root.mkdir()
+        later2 = generated_capture(second_root, '00000000-0000-4000-8000-000000000012',
+            anatomy=alternative['anatomy'], f0=controls['F0']+7, ps=controls['PS'],
+            ja=controls['JA'], pressure=controls['PR'], gain=controls['gain'])
+        publish_capture(data, later2)
+        restart()
+        call('/api/source/score', False, expected=202)
+        result2 = wait_source(call, 'score')
+        second_scored = call(session_path)['state']
+        assert second_scored['snapshot'] == baseline and second_scored['source_model'] == model
+        assert len(second_scored['source_rankings']) == 2
+        assert result2['conditionalRanking']['parentRankingId'] == first_ranking['ranking_id']
+        assert result2['conditionalRanking']['version'] == 2
+        recorded = second_scored['source_forecasts'][target2]
+        first_ranking = second_scored['source_rankings'][-1]
+        restart()
+        call('/api/source/score', False)
+        assert call(session_path)['state']['version'] == second_scored['version']
 
         decision = call('/api/astra/decide', {
             'requestId': 'source-context-integration', 'goal': 'Explore a comfortable vowel'})
@@ -286,7 +318,8 @@ def test_optional_source_fit_forecast_later_capture_score_and_restart(tmp_path):
         assert source_context['sourceModelId'] == model['model_id']
         assert source_context['baselineModelId'] == baseline['model_id']
         assert source_context['baselinePreserved'] is True
-        assert source_context['score']['discrepancy'] == recorded['score_result']['score']
+        assert source_context['score']['conditionalRanking']['ranking'] == recorded['score_result']['ranking']
+        assert source_context['score']['conditionalRanking']['conditionalRanking']['rankingId'] == first_ranking['ranking_id']
         assert source_context['score']['modelUpdated'] is False
         assert source_context['forecast']['current'] is False
         assert source_context['forecast']['descriptors'] is None
