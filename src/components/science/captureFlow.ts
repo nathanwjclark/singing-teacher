@@ -1,9 +1,9 @@
 import {useEffect,useState,useSyncExternalStore} from 'react';
 export interface NativeCaptureReceipt {name:string;bytes:number;receivedAt:string;reused:boolean;verification:string;message:string;sha256?:string;captureId?:string;frames?:number;audioChunks?:number}
-type Progress={stage:'preparing'|'fitting'|'scoring'|'geometry';label:string}|null;
+type Progress={stage:'preparing'|'fitting'|'scoring'|'geometry';label:string;startedAt?:number}|null;
 let progress:Progress=null;
 const listeners=new Set<()=>void>();
-export function setCaptureProgress(value:Progress){progress=value;for(const listener of listeners)listener()}
+export function setCaptureProgress(value:Progress){progress=value?{...value,startedAt:progress?.startedAt??Date.now()}:null;for(const listener of listeners)listener()}
 const subscribe=(listener:()=>void)=>{listeners.add(listener);return()=>{listeners.delete(listener)}};
 export const useCaptureProgress=()=>useSyncExternalStore(subscribe,()=>progress,()=>null);
 export function useLatestNativeCapture(){

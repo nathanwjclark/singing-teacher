@@ -36,7 +36,7 @@ export function AtlasCrossSection({ motion }: { motion: RefObject<AnatomyMotionS
     const camera = new THREE.OrthographicCamera(0, W, 0, -H, .1, 10);
     camera.position.z = 2;
     const plateSurface = createAtlasSurface('structure');
-    const airwaySurface = createAtlasSurface('structure');
+    const airwaySurface = createAtlasSurface('airway');
     const tongueSurface = createAtlasSurface('tongue');
     const material = new THREE.MeshBasicMaterial({ transparent: true, opacity: .2, side: THREE.DoubleSide, depthWrite: false });
     const mesh = new THREE.Mesh(plateSurface.geometry, material);
@@ -65,6 +65,10 @@ export function AtlasCrossSection({ motion }: { motion: RefObject<AnatomyMotionS
       context.drawImage(image, 0, 0);
       context.globalCompositeOperation = 'destination-in';
       context.fill(new Path2D(outline));
+      // Remove the plate's baked lips, teeth and tongue from the oral cavity.
+      // The independently articulated pieces replace them, avoiding double lips.
+      context.globalCompositeOperation = 'destination-out';
+      context.fill(new Path2D('M 88 799 C 142 791 176 782 211 770 C 298 744 406 750 480 785 C 552 818 610 876 613 949 C 614 1021 536 1060 444 1055 C 348 1054 275 1020 218 978 C 165 947 104 942 90 918 C 74 890 94 869 103 860 C 80 849 79 821 88 799 Z'));
       texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace;
       material.map = texture; material.needsUpdate = true;
       setStatus('ready');

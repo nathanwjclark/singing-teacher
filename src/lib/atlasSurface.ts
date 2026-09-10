@@ -1,10 +1,10 @@
 import * as THREE from 'three';
 import type { AnatomyMotionState } from './anatomyState';
-import { ATLAS_WIDTH as W, ATLAS_HEIGHT as H, deformAtlasPoint, referenceTongueRig, type AtlasTongueRig } from './atlasMotion';
+import { ATLAS_WIDTH as W, ATLAS_HEIGHT as H, deformAtlasPoint, referenceTongueRig, type AtlasLayer, type AtlasTongueRig } from './atlasMotion';
 
 /** Each anatomical piece owns its vertices. Sharing a pose must never mean
  * sharing the tongue's deformation with the skull or the airway cast. */
-export function createAtlasSurface(layer: 'tongue' | 'structure') {
+export function createAtlasSurface(layer: AtlasLayer) {
   const geometry = new THREE.PlaneGeometry(W, H, 96, 112);
   const positions = geometry.getAttribute('position');
   const rest = new Float32Array(positions.count * 2);
