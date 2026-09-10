@@ -168,3 +168,41 @@ def test_missing_certified_hash_and_tampered_library_rejected(tmp_path, monkeypa
         stream.write(b'changed binary')
     with pytest.raises(RuntimeError, match='library differs from the build manifest'):
         Engine()
+
+
+def test_native_lip_markers_match_operator_preserve_anatomy_and_clean_files(tmp_path, monkeypatch):
+    import singing_physics.engine as module
+    monkeypatch.setattr(module.tempfile, 'tempdir', str(tmp_path))
+    with Engine() as e:
+        e.set_anatomy({'hard_palate_length': 4.3})
+        anatomy = e.anatomy()
+        first = e.lip_markers('a', {'LD': .5})
+        changed = e.lip_markers('a', {'LD': 1.5})
+        repeat = e.lip_markers('a', {'LD': .5})
+        assert first == repeat
+        assert first['operator_id'] == 'vtl-upper4-lower5-vertex89-distance-v1'
+        points = first['positions_m']
+        assert first['distance_m'] == pytest.approx(np.linalg.norm(np.array(points['upper'])-points['lower']))
+        assert changed['distance_m'] > first['distance_m'] + .005
+        assert first['articulation']['LD']['applied'] == pytest.approx(.5)
+        assert e.anatomy() == anatomy
+        assert list(tmp_path.iterdir()) == []
+        with pytest.raises(ValueError):
+            e.lip_markers('a', {'LD': float('nan')})
+        assert list(tmp_path.iterdir()) == []
+    with pytest.raises(RuntimeError, match='closed'):
+        e.lip_markers('a')
+
+
+def test_failed_lip_export_cleans_temporary_files(tmp_path, monkeypatch):
+    import singing_physics.engine as module
+    monkeypatch.setattr(module.tempfile, 'tempdir', str(tmp_path))
+    with Engine() as e:
+        native = e.lib.vtlTractSequenceToEmaAndMesh
+        def fail_after_export(*args):
+            assert native(*args) == 0
+            return 9
+        monkeypatch.setattr(e.lib, 'vtlTractSequenceToEmaAndMesh', fail_after_export)
+        with pytest.raises(RuntimeError, match='lip marker export failed'):
+            e.lip_markers('a')
+        assert list(tmp_path.iterdir()) == []

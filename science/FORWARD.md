@@ -50,3 +50,23 @@ This interface unblocks observed-versus-synthesized audio extraction. It does no
 supply nasal-outlet occlusion, source-tissue inference, calibrated loudness or
 measured anatomy. Those capabilities require separate physical implementations
 and evidence.
+
+## Source-defined visible lip operator
+
+`Engine.lip_markers(pose, articulation=None)` uses the pinned native
+`vtlTractSequenceToEmaAndMesh` API for one static frame. Fixed surface indices 4/5
+and vertex 89 identify upper/lower **outer lip** points (not aperture edges).
+Native cm coordinates are converted to `positions_m.upper` / `positions_m.lower`
+in the VTL model frame. The Euclidean distance is returned as `distance_m` and
+`value_m`, with operator ID `vtl-upper4-lower5-vertex89-distance-v1`, source marker
+identities, EMA artifact hash and requested/applied controls. No camera-frame
+registration or human landmark correspondence is inferred.
+
+Only these fixed source-verified marker indices enter the native API. Its EMA
+and incidental mesh files are temporary and removed before return, including
+when the native call fails. Native text precision is eight significant digits;
+sequence offset zero means a static simulator frame, not a capture timestamp.
+Current anatomy is preserved. A measured constraint is valid only with an
+explicit corresponding outer-lip annotation protocol and model-discrepancy
+uncertainty. This is a visible-surface observation operator, not evidence that
+external lip distance determines internal anatomy.

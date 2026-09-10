@@ -13,6 +13,7 @@ from numbers import Real
 from pathlib import Path
 import sys
 import threading
+import tempfile
 import xml.etree.ElementTree as ET
 
 import numpy as np
@@ -96,6 +97,7 @@ class Engine:
                 "vtlGetTransferFunction": [DOUBLE, ct.c_int, ct.c_void_p, DOUBLE, DOUBLE],
                 "vtlExportTractSvg": [DOUBLE, ct.c_char_p],
                 "vtlTractToTube": [DOUBLE, DOUBLE, DOUBLE, ct.POINTER(ct.c_int), DOUBLE, DOUBLE, DOUBLE],
+                "vtlTractSequenceToEmaAndMesh": [DOUBLE, DOUBLE, ct.c_int, ct.c_int, ct.c_int, ct.c_int, ct.POINTER(ct.c_int), ct.POINTER(ct.c_int), ct.c_char_p, ct.c_char_p],
                 "vtlSynthesisReset": [],
                 "vtlSynthesisAddTract": [ct.c_int, DOUBLE, DOUBLE, DOUBLE],
             }
@@ -290,6 +292,42 @@ class Engine:
                 "incisor_position_cm": incisors.value, "tongue_side_elevation": tongue_side.value,
                 "tongue_side_elevation_parameter": "TS3", "anatomy": self.anatomy(),
                 "pose": pose, "articulation": pose_record}
+
+    def lip_markers(self, pose, articulation=None):
+        """Native outer-lip surface markers in model coordinates, not aperture edges.
+
+        Fixed surface/vertex identities are source-verified at the pinned revision.
+        The upstream exporter also writes a mesh; both temporary outputs are removed.
+        """
+        params, controls = self.pose(pose, articulation)
+        source = (ct.c_double * self.glottis_count)(*(p["default"] for p in self.source_info))
+        surfaces = (ct.c_int * 2)(4, 5)
+        vertices = (ct.c_int * 2)(89, 89)
+        with tempfile.TemporaryDirectory(prefix="singing-lip-markers-") as temporary:
+            self._check(self.lib.vtlTractSequenceToEmaAndMesh(
+                params, source, self.tract_count, self.glottis_count, 1, 2,
+                surfaces, vertices, temporary.encode(), b"lips"), "lip marker export")
+            raw = (Path(temporary) / "lips-ema.txt").read_bytes()
+        lines = raw.decode("utf-8").splitlines()
+        expected = "time(s) UPPER LIP_89-x[cm] UPPER LIP_89-y[cm] UPPER LIP_89-z[cm] LOWER LIP_89-x[cm] LOWER LIP_89-y[cm] LOWER LIP_89-z[cm]"
+        if len(lines) != 2 or " ".join(lines[0].split()) != expected:
+            raise RuntimeError("Unexpected native lip marker header or frame count")
+        try:
+            row = np.array([float(x) for x in lines[1].split()])
+        except ValueError as exc:
+            raise RuntimeError("Invalid native lip marker coordinates") from exc
+        if row.shape != (7,) or not np.isfinite(row).all() or row[0] != 0:
+            raise RuntimeError("Invalid native lip marker coordinates or sequence offset")
+        upper, lower = row[1:4] * .01, row[4:7] * .01
+        distance = float(np.linalg.norm(upper - lower))
+        return {"operator_id": "vtl-upper4-lower5-vertex89-distance-v1",
+                "distance_m": distance, "value_m": distance,
+                "positions_m": {"upper": upper.tolist(), "lower": lower.tolist()},
+                "coordinate_frame": "vtl_model", "native_coordinate_unit": "cm",
+                "upper_surface_vertex": [4, 89], "lower_surface_vertex": [5, 89],
+                "sequence_offset_seconds": 0., "frame_index": 0,
+                "artifact_sha256": hashlib.sha256(raw).hexdigest(),
+                "articulation": controls, "anatomy": self.anatomy(), "pose": pose}
 
     def export(self, output, pose="a", anatomy=None, articulation=None, f0_hz=160., duration_s=.4):
         """Export matching artifacts. Omitted anatomy preserves the current model.
