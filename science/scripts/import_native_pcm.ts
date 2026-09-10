@@ -153,8 +153,11 @@ export async function importNativePcm(directory:string,outputDirectory:string,op
  return result;
 }
 if(process.argv[1]&&import.meta.url===pathToFileURL(resolve(process.argv[1])).href){
- const [input,output,participant,session,pose,fixtureFlag]=process.argv.slice(2);
- if(fixtureFlag!==undefined&&fixtureFlag!=='--development-fixture')throw Error('Unsupported option');
+ const args=process.argv.slice(2);
+ const fixtureFlag=args.at(-1)==='--development-fixture';
+ if(fixtureFlag)args.pop();
+ if(args.length<4||args.length>5)throw Error('Expected input, output, participant, session and optional pose');
+ const [input,output,participant,session,pose]=args;
  if(!input||!output||!participant||!session)throw Error('Usage: import_native_pcm.ts INPUT NEW_OUTPUT PARTICIPANT SESSION [POSE] [--development-fixture]');
  const result=await importNativePcm(input,output,{participantId:participant,sessionId:session,pose,evidenceKind:fixtureFlag?'development-fixture':'human-observation'});
  console.log(`Wrote ${result.segments.length} segments and ${result.records.filter(r=>r.kind==='audio-measurement').length} canonical measurements; no fitting performed.`);

@@ -2,6 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtemp,writeFile,readFile,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
+import {execFile} from 'node:child_process';
+import {promisify} from 'node:util';
+import {fileURLToPath} from 'node:url';
 import {join} from 'node:path';
 import {createHash} from 'node:crypto';
 import {decodeLpcm,importNativePcm} from './import_native_pcm.ts';
@@ -140,5 +143,17 @@ test('a long chunk splits at five seconds with exact original sample offsets',as
   assert.equal(result.segments[1].source_artifacts[0].source_sample_offset,240000);
   assert.equal(result.segments[1].source_artifacts[0].sample_count,48000);
   assert.ok(result.fit_trial_options.every(t=>t.duration_s<=5));
+ }finally{await rm(f.directory,{recursive:true,force:true});await rm(output,{recursive:true,force:true})}
+});
+
+
+test('CLI fixture declaration works without an optional pose',async()=>{
+ const f=await fixture(),output=f.directory+'-cli';
+ try{
+  await promisify(execFile)(process.execPath,['--experimental-strip-types',fileURLToPath(new URL('./import_native_pcm.ts',import.meta.url)),
+   f.directory,output,'fixture-participant','fixture-session','--development-fixture']);
+  const result=JSON.parse(await readFile(join(output,'native-pcm.json'),'utf8'));
+  assert.equal(result.declared_evidence_kind,'development-fixture');assert.equal(result.fit_trial_options.length,0);
+  assert.equal(result.segments[0].fit_missing_reason,'pose-not-declared');
  }finally{await rm(f.directory,{recursive:true,force:true});await rm(output,{recursive:true,force:true})}
 });

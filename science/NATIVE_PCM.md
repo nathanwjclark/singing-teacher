@@ -76,7 +76,7 @@ validation has its own 512 MB cap. Outputs use fresh exclusive files with privat
 permissions; the final metadata is written last. A partial directory without
 `native-pcm.json` is incomplete and must not be consumed.
 
-Seven software tests pass: exact canonical tone values after contiguous decoding,
+Eight software tests pass, including fixture CLI parsing without a pose: exact canonical tone values after contiguous decoding,
 channel selection, hashes and unknown clocks, gaps/drops, unsupported formats,
 nonfinite values, declared timing mismatch, short-fit exclusion, PCM16 clipping,
 cumulative timing drift and five-second source offsets. These tests provide
