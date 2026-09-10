@@ -1,5 +1,24 @@
 # Current Lead A integration status
 
+## Callable session integration
+
+The local app now forwards scientific jobs and durable session commands to the
+isolated numerical worker. `npm run science:local` starts both services with an
+ephemeral transport secret; no paid model calls or account system are introduced.
+See [LOCAL_HARNESS.md](LOCAL_HARNESS.md) for the executable B handoff and
+[SESSION.md](SESSION.md) for versioned commands, scoring, stop/failure and replay.
+Original combined phone archives and ordinary voice recordings now have import
+adapters alongside the existing probe adapter. Imported evidence remains distinct
+from a successful physiological reconstruction.
+
+This continuation incorporates B main `da55bf3`. Twenty-two focused Python
+session/HTTP/archive tests pass with warnings treated as errors; five Node proxy
+and actual HTTP-to-native integration tests pass. Build, lint and all four browser
+tests pass. The one-command launcher was exercised against a real session route;
+shutdown closed both listener ports. These are new-path checks, separate from the
+prior full-suite checkpoint below. Actual phone capture and live Astra invocation
+still require B's device/runtime integration.
+
 ## Revision 8 continuation
 
 Final assembled verification: **286 Python tests passed with warnings treated as

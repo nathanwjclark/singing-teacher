@@ -11,6 +11,7 @@
     "test": "node --experimental-strip-types --test src/lib/coaching.test.ts",
     "test:e2e": "playwright test",
     "local": "node server/local.mjs",
+    "science:local": "node scripts/start-science-local.mjs",
     "https:prepare": "node scripts/prepare-local-https.mjs",
     "local:private": "node scripts/start-local-https.mjs"
   },
