@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { createModelHair } from '../lib/modelHair';
+import { createMuscleMotion } from '../lib/muscleMotion';
 import type { BodyRegion, TrackingFrame } from '../types';
 import './AnatomyPanel.css';
 
@@ -75,6 +76,7 @@ export function AnatomyPanel({ frame, activeRegion = 'jaw', activeMuscles, demo 
     const jaw = new THREE.Group();jaw.position.set(0,5,1);head.add(jaw);
     const rigPivots = { torso: new THREE.Vector3(0,130,0), head: new THREE.Vector3(0,151,-1), jaw: new THREE.Vector3(0,156,0) };
     const rigs = { torso, head, jaw };
+    const muscleMotion = createMuscleMotion(rigs);
     const meshes: AnatomyMesh[] = [];
     const decorative: THREE.Mesh[] = [];
     const eyes: THREE.Group[] = [];
@@ -106,8 +108,9 @@ export function AnatomyPanel({ frame, activeRegion = 'jaw', activeMuscles, demo 
         geometry.setIndex(new THREE.BufferAttribute(new Uint32Array(binary,part.indexOffset,part.indexCount),1));geometry.computeVertexNormals();geometry.computeBoundingSphere();
         const material = new THREE.MeshStandardMaterial({color:part.kind==='bone'?0xe8dbc0:0xa56556,roughness:part.kind==='bone'?.68:.57,metalness:0,side:THREE.DoubleSide});
         const mesh = new THREE.Mesh(geometry,material);mesh.name=part.name;mesh.userData=part;
-        if(part.muscleId==='orbicularis_oris') mesh.userData.restPositions = positions.slice();
-        rigs[part.rig].add(mesh);meshes.push(mesh);
+        rigs[part.rig].add(mesh);
+        if(part.kind === 'muscle') muscleMotion.bind(mesh, part.rig);
+        meshes.push(mesh);
       }
       setMeshCount(meshes.length);setStatus('ready');
     }).catch(error => { if(!disposed && error.name!=='AbortError') { console.error('Anatomical model could not load',error);setStatus('error'); } });
@@ -153,10 +156,7 @@ export function AnatomyPanel({ frame, activeRegion = 'jaw', activeMuscles, demo 
           mesh.material.depthWrite=!mesh.material.transparent;mesh.material.needsUpdate=true;
         }
       }
-      for(const mesh of meshes) if(mesh.userData.restPositions) {
-        const rest=mesh.userData.restPositions as Float32Array;const attr=mesh.geometry.getAttribute('position');
-        for(let i=0;i<attr.count;i++){const y=rest[i*3+1];attr.setY(i,y-mouth*2*Math.max(0,Math.min(1,(2.7-y)/3)));}attr.needsUpdate=true;
-      }
+      muscleMotion.update();
       const blink=props.frame?.blendshapes;
       eyes.forEach((eye,i)=>{const value=blink?.[i===0?'eyeBlinkRight':'eyeBlinkLeft']??0;eye.scale.y=1-bounded(value,0,.95)*.8;});
       controls.update();renderer.render(scene,camera);
