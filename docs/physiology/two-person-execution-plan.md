@@ -1,6 +1,6 @@
 # Parallel-agent execution plan
 
-Companion to revision 5 of the physiological acoustic moonshot specification. Two humans remain accountable, each coordinating as many bounded Astra tasks as the dependency graph supports. This is an implementation plan, not evidence that the application or anatomical recovery works. There are no fixed hackathon time estimates.
+Companion to revision 6 of the physiological acoustic moonshot specification. Two humans remain accountable, each coordinating as many bounded Astra tasks as the dependency graph supports. This is an implementation plan, not evidence that the application or anatomical recovery works. There are no fixed hackathon time estimates.
 
 Optimize for the earliest integrated, independently evaluated physiological inference experiment. Launch an agent only when its inputs, owned files and acceptance experiment are concrete. Additional capacity should remove a demonstrated bottleneck or challenge a scientific assumption. Unlimited agents do not imply unlimited simultaneous edits or benchmark compute.
 
@@ -58,6 +58,14 @@ A owns scientific dependency files and native-engine build configuration. B owns
 B's acquisition agent owns microphone, RGB and depth together, preserving a shared observation manifest, source timestamps, calibration and synchronization uncertainty. Audio and geometry agents may process independently, but every output references the same evidence IDs/timebase. A's inverse agent combines their constraints in one physiological fit. Never treat independent network arrival times as synchronization or derived face geometry as measured hidden anatomy.
 
 The available iPhone 13 Pro Max and iPhone 15 Pro remain the hardware targets. Start with one-phone synchronized capture; retain CAP-01/02, FUSE-01 and DEPTH-01/02 from the capture addendum. Sensor limitations remain measured outcomes, not reasons to silently remove depth from the work queue.
+
+### Embodied learning extensions (revision 6)
+
+The [embodied learning and motion plan](embodied-learning-and-motion-plan.md) is part of this execution plan. Add two independent agent lanes: B owns CUE-01 in experiment/cues/, apps/web/coach/ and tests/cues/; A owns MOT-01 in science/control/ and tests/science/control/. Narrow the existing experiment orchestration owner to workflow/tool execution outside experiment/cues/, and the visualization owner to web files outside apps/web/coach/. The existing capture, geometry and inverse owners implement MOT-02 within their modules; the evaluator owns LEARN-01 in evaluation/learning/. No shared file has two writers.
+
+CUE-01 library/contract design and MOT-01 synthetic control-model design can run with wave 1. Dynamic capture/fusion requires CAP-02, GEO-01 and INV-01; integrated teaching requires PRED-01 and ACT-01. KIT-01 includes CueDefinition, CueAttempt, SensationReport, MotionObservation, ControlProfile and TransferEvaluation. G6 verifies dynamic mapping; G7 verifies a measured cue-to-recall/phrase-transfer loop. See the addendum for exact acceptance evidence and review status of example cues.
+
+A reviews the separation of anatomy, articulation and learned control; B secures teacher review of cues and evaluates recall/transfer independently. Both keep observed movement, hidden-motion hypotheses and self-reported sensations distinct. These are initial implementation responsibilities, not an unowned production-roadmap extension.
 
 ## 4. Dependency-driven activation
 
@@ -143,7 +151,7 @@ Next consumer and dependency unblocked:
 
 Agent starter instruction:
 
-> Read revision 5, the lane assignment and shared contracts. You are not alone in this repository. Modify only your assigned files in your own worktree; do not revert others' changes or edit shared interfaces without their owner. Implement the bounded deliverable with real producers and explicit failure behavior. Separate research hypotheses, synthetic evidence and human observations. Run the acceptance experiment and report its actual result, including failure. Return a small commit, runnable commands, artifact provenance, contract version and remaining blockers. Do not expand scope, fabricate fitted anatomy or merge your own work.
+> Read revision 6, the lane assignment and shared contracts. You are not alone in this repository. Modify only your assigned files in your own worktree; do not revert others' changes or edit shared interfaces without their owner. Implement the bounded deliverable with real producers and explicit failure behavior. Separate research hypotheses, synthetic evidence and human observations. Run the acceptance experiment and report its actual result, including failure. Return a small commit, runnable commands, artifact provenance, contract version and remaining blockers. Do not expand scope, fabricate fitted anatomy or merge your own work.
 
 ## 8. Human checklists
 
@@ -157,6 +165,7 @@ Agent starter instruction:
 - [ ] Dispatch PRED-01 and identifiability/model-mismatch investigations.
 - [ ] Sign off numerical changes entering the integration queue.
 - [ ] Review DEPTH-01/02 and publish supported conclusions and unresolved failures.
+- [ ] Dispatch MOT-01 and integrate MOT-02; test control limits separately from anatomical limits.
 
 ### Person B: experimental system and integration lead
 
@@ -168,5 +177,6 @@ Agent starter instruction:
 - [ ] Integrate reviewed commits and maintain the runnable cross-service path.
 - [ ] Execute prospective and modality-comparison experiments with all attempts retained.
 - [ ] Verify both humans can reproduce results and explain the evidence levels.
+- [ ] Dispatch CUE-01 and LEARN-01; obtain cue review and demonstrate G6/G7 with actual evidence.
 
 Both humans resolve cross-lane decisions in a short repository decision record, with affected contracts/tasks and migration owner. Preserve physiological inference, real evidence and independent scoring when reducing scope; reduce conversation polish, accounts, large-scale scraping and elaborate visual effects first. Anatomical recovery remains a hypothesis to test, not a completion claim inferred from agent output.
