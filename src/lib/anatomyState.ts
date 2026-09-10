@@ -5,7 +5,7 @@ export const emptyAnatomyState=():AnatomyMotionState=>({torso:{x:0,y:0,z:0},head
 const bound=(n:number|undefined,lo:number,hi:number)=>Number.isFinite(n)?Math.max(lo,Math.min(hi,n!)):0;
 /** One smoothed pose feeds every anatomical view; renderers only project it. */
 export function createAnatomyMotion(){
- const state=emptyAnatomyState();let lastTime:number|undefined,lastSeen=-Infinity,lastTongue:TongueObservation|undefined;
+ const state=emptyAnatomyState();let lastTime:number|undefined,lastSeen=-Infinity,lastTongue:TongueObservation|undefined,lastFrameTimestamp:number|undefined,lastDemo:boolean|undefined;
  return {state,update(frame:TrackingFrame|null,demo:boolean,time:number){
   const dt=lastTime===undefined?1/60:bound((time-lastTime)/1000,0,.1);lastTime=time;
   const ease=(from:number,to:number,alpha:number)=>from+(to-from)*(1-Math.pow(1-alpha,dt*60));
@@ -22,14 +22,20 @@ export function createAnatomyMotion(){
   state.head.y=ease(state.head.y,bound(m?.headYaw,-55,55)*rad-state.torso.y,.14);
   state.head.z=ease(state.head.z,-bound(m?.headTilt,-30,30)*rad-state.torso.z,.14);
   state.jawOpen=ease(state.jawOpen,bound(m?.mouthOpen,0,1)*.5,.18);
+  if(lastDemo!==undefined && demo!==lastDemo){lastTongue=undefined;lastSeen=-Infinity;lastFrameTimestamp=undefined;}
+  lastDemo=demo;
   const observed=frame?.tongue?.trackingMode==='region'?undefined:frame?.tongue;
-  if(observed){lastTongue=observed;lastSeen=time;}
-  const visible=observed??(time-lastSeen<200?lastTongue:undefined);
+  // A cached frame must not refresh an old tip forever when the camera stalls.
+  if(observed && (demo || frame?.timestamp!==lastFrameTimestamp)){lastTongue=observed;lastSeen=time;}
+  lastFrameTimestamp=frame?.timestamp;
+  const visible=frame && time-lastSeen<200?lastTongue:undefined;
   const elevation=visible?bound(visible.elevation??(visible.lift-.5)*2,-1,1):0;
   const alpha=1-Math.exp(-dt/.085),t=state.tongue;
   t.lateral+=(bound(visible?.lateral,-1,1)*3-t.lateral)*alpha;
-  t.lift+=(elevation*3.8-t.lift)*alpha;t.curl+=(elevation*.85-t.curl)*alpha;
-  t.extension+=((visible ? .8+Math.max(0,bound(visible.extension??visible.visibleFraction*.5,-1,1))*5:0)-t.extension)*alpha;
+  t.lift+=(elevation*3.8-t.lift)*alpha;
+  // Height is observed independently of bend. No hidden curl is invented from a raised tip.
+  t.curl+=(bound(visible?.curl,-.85,.85)-t.curl)*alpha;
+  t.extension+=(bound(visible?.extension,-1,1)*4.5-t.extension)*alpha;
   t.visible=!!visible;state.frame=frame;state.demo=demo;return state;
  }};
 }

@@ -1,5 +1,6 @@
 import { BufferAttribute, Mesh, MeshStandardMaterial, SphereGeometry } from 'three';
 import type { TonguePose } from './anatomyState';
+import { tongueDisplacement } from './tongueKinematics';
 
 /** Original simplified tongue surface; an illustrative reference, not a scan. */
 export function createTongueModel() {
@@ -17,15 +18,12 @@ export function createTongueModel() {
   mesh.name='Tongue · illustrative surface';mesh.position.set(0,-3.9,4.7);
   return {
     mesh,
-    applyPose({lateral,lift,extension,curl}:TonguePose) {
+    applyPose(pose:TonguePose) {
       for(let i=0;i<positions.count;i++) {
         const x=rest[i*3],y=rest[i*3+1],z=rest[i*3+2];
         const tip=Math.max(0,Math.min(1,(z+3.1)/6.2));
-        // Raise/lower and curl the anterior surface while retaining the root.
-        // The curl is illustrative, driven by the exposed tip height only.
-        const bend=curl*tip*tip;
-        const forward=(z+3.1)*.45;
-        positions.setXYZ(i,x+lateral*tip*tip,y+lift*tip*tip+Math.sin(bend)*forward,z+extension*tip*tip+(Math.cos(bend)-1)*forward);
+        const displacement=tongueDisplacement(tip,pose);
+        positions.setXYZ(i,x+displacement.x,y+displacement.y,z+displacement.z);
       }
       positions.needsUpdate=true;geometry.computeVertexNormals();geometry.computeBoundingSphere();
     },

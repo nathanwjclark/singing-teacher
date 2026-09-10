@@ -1,0 +1,9 @@
+# Shared live tongue deformation
+
+The front tongue mesh and unified side anatomy now use the same bounded displacement function. Lateral, elevation, and protrusion are independent channels in reference-model units. Lateral is sensor-right before the front rig's single mirror; elevation is up; protrusion is anterior. The side sagittal projection discards lateral motion rather than presenting it as a false change in depth. Current camera extension is a 2D protrusion cue, not measured 3D tongue length.
+
+The foreground side tongue tip lies at native plate coordinates (175.8, 877.8). Previously its deformation mask began at x=180, so that actual tip had **zero** motion even when nearby tongue pixels moved. The mask now includes that endpoint and fades toward the root. Both front and side consume the same tip displacement; neither renderer estimates another pose.
+
+Raising the observed tip no longer also creates unobserved curl or a permanent extension offset. An optional `curl` observation is supported as an independent bounded channel, but existing tip tracking does not provide it, so it stays zero. No hidden tongue configuration is inferred. Old tip observations expire after 200 ms based on new frame timestamps, not repeated animation renders. Switching demo/live clears retained observations; disconnected cameras return to reference motion. Labels describe the visible 2D observation and illustrative surface.
+
+Validation was light: application build and a browser rendering check of rest, mirrored left/right, up/down and protrusion. The check exercised actual mesh vertices and the actual foreground side-tip location, verified stable root and independent axes, and checked stale-input expiry. The reference atlas and foreground rendered without browser errors. No new participant geometry was fitted or accepted by this change.
