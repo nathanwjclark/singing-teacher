@@ -44,3 +44,49 @@ def test_changed_archive_rejected_before_import(tmp_path):
     root,receipt=archive_fixture(tmp_path)
     file=root/'usb-imports'/receipt['name'];raw=bytearray(file.read_bytes());raw[-1]^=1;file.write_bytes(raw)
     with pytest.raises(ValueError,match='hash mismatch'):prepare(root,root/'probe-imports'/'bad')
+
+
+def test_original_probe_runs_joint_session_adoption(tmp_path, monkeypatch):
+    import os
+    import sys
+    from contextlib import contextmanager
+    from singing_physics.service import JobService
+    from singing_physics.session import SessionController
+    from singing_physics.engine import Engine
+    from singing_physics.pcm_inverse import fit_pcm
+    from science.scripts.live_capture_jobs import LocalBackend
+    from science.scripts import run_probe_fit
+    from test_session_probe import setup
+    descriptor=tmp_path/'fixture.json'
+    subprocess.run(['node','--experimental-strip-types','--input-type=module','-e',
+        "import {setupFixture} from './science/scripts/import_probe_science.test.ts'; import {writeFile} from 'node:fs/promises'; await writeFile(process.argv[1],JSON.stringify(await setupFixture()));",str(descriptor)],
+        cwd=ROOT,env={**os.environ,'PROBE_PYTHON':sys.executable},check=True,capture_output=True)
+    fixture=json.loads(descriptor.read_text());root=tmp_path/'data';root.mkdir()
+    config=fixture['config'];config['capture_binding']['manifest_sha256']=hashlib.sha256((Path(fixture['capture'])/'manifest.json').read_bytes()).hexdigest()
+    (root/'probe-science-config.json').write_text(json.dumps(config))
+    evidence=Path(fixture['root'])/'calibration-evidence.txt'
+    (root/evidence.name).write_bytes(evidence.read_bytes())
+    imported=root/'probe-imports'/'imported';imported.mkdir(parents=True)
+    # Importer verifies original capture bytes again inside runner, not review JSON.
+    import shutil
+    shutil.copytree(fixture['capture'],imported/'capture')
+    (imported/'summary.json').write_text(json.dumps({'eligible':True,'captureDirectory':'capture'}))
+    voice=root/'science-runs'/'voice';voice.mkdir(parents=True)
+    (root/'science-current.json').write_text(json.dumps({'status':'succeeded','runId':'voice'}))
+    (voice/'summary.json').write_text(json.dumps({'sessionId':'probe-runner'}))
+    with JobService(tmp_path/'jobs') as service:
+        controller=SessionController(service.root/'sessions',service,'probe-runner')
+        _,candidates,parent=setup(controller)
+        state=controller.execute({'action':'state'})['state']
+        with Engine() as engine:
+            fitted=fit_pcm(engine,state['calibration'],candidates=[{k:c[k] for k in ('candidate_id','anatomy','trials')} for c in candidates],max_synthesis_calls=4)
+        (voice/'fit.json').write_text(json.dumps(fitted))
+        (root/'probe-fit-profile.json').write_text(json.dumps({'JA':-3.,'gain':1.,'direct_gain':1.,'coupling_gain':1.,'delay_s':0.}))
+        @contextmanager
+        def backend(_output,session_id):yield LocalBackend(service,session_id)
+        monkeypatch.setattr(run_probe_fit,'backend_for',backend)
+        result=run_probe_fit.run(root,'imported',parent['model_id'],root/'probe-fits'/'fit')
+        assert result['includedInFit'] and result['nativeCalls']==12
+        assert result['modelId']!=parent['model_id']
+        assert result['score']['probe_discrepancy']>100
+        assert (root/'probe-fits/fit/session-ledger.json').exists()

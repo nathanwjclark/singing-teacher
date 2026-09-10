@@ -21,8 +21,13 @@ export function createProbeRoutes({repo,dataRoot,json}) {
  }
  return async(req,res,url)=>{
   if(!['/api/probe/status','/api/probe/import','/api/probe/fit'].includes(url.pathname))return false;
+  const remote=req.socket.remoteAddress?.replace(/^::ffff:/,'');
+  let local=false;
+  try{local=['127.0.0.1','::1'].includes(remote)&&['localhost','127.0.0.1','[::1]'].includes(new URL(`http://${req.headers.host}`).hostname)&&(!req.headers.origin||new URL(req.headers.origin).host===req.headers.host);}catch{}
+  if(!local){json(res,403,{error:'Use this Mac’s localhost page for private probe processing.'});return true;}
   try{
    const state=await read(stateFile)??{};
+   if(state.running&&!busy){state.running=false;state.error='Probe processing was interrupted. Review the scientific session, then retry with a new request. Original artifacts were retained.';await save(state);}
    if(req.method==='GET'&&url.pathname.endsWith('/status')){
     const imported=state.importId?await read(join(dataRoot,'probe-imports',state.importId,'summary.json')):null;
     const fit=state.fitId?await read(join(dataRoot,'probe-fits',state.fitId,'summary.json')):null;
@@ -38,10 +43,10 @@ export function createProbeRoutes({repo,dataRoot,json}) {
    if(!id.test(body.requestId??'')||Object.keys(body).some(k=>!(fitting?['requestId','importId','expectedModelId']:['requestId']).includes(k)))throw Error('Invalid probe request');
    if(fitting&&(!id.test(body.importId??'')||typeof body.expectedModelId!=='string'||body.expectedModelId.length>256))throw Error('Invalid probe fit identity');
    if(busy){json(res,409,{error:'A probe operation is already running'});return true;}
-   if(state.requestId===body.requestId){json(res,200,{accepted:true,reused:true});return true;}
+   if(state.requestId===body.requestId){json(res,state.error?409:200,state.error?{error:state.error}:{accepted:true,reused:true});return true;}
    if(fitting&&body.importId!==state.importId)throw Error('Import changed; refresh before fitting');
    const operationId=randomUUID();const folder=join(dataRoot,fitting?'probe-fits':'probe-imports',operationId);
-   const next={...state,requestId:body.requestId,error:null,...(fitting?{fitId:operationId}:{importId:operationId,fitId:null})};
+   const next={...state,requestId:body.requestId,error:null,running:true,...(fitting?{fitId:operationId}:{importId:operationId,fitId:null})};
    busy=true;
    try{await save(next);}catch(error){busy=false;throw error;}
    const python=process.env.SINGING_PYTHON||join(repo,'science/.venv/bin/python');
@@ -49,7 +54,7 @@ export function createProbeRoutes({repo,dataRoot,json}) {
    if(fitting)args.push('--import-id',body.importId,'--expected-model-id',body.expectedModelId);
    void execute(python,args,{cwd:repo,env:{...process.env,PYTHONPATH:[repo,join(repo,'science/src')].join(':')},timeout:240000,maxBuffer:65536})
     .catch(async error=>{const safe=(error.stderr??'').split('\n').filter(x=>/^(ValueError|FileNotFoundError):/.test(x)).at(-1);next.error=safe??'Probe processing failed; original bytes and available receipts were retained.';await save(next);})
-    .finally(()=>{busy=false;}).catch(()=>{});
+    .finally(async()=>{next.running=false;await save(next);busy=false;}).catch(()=>{busy=false;});
    json(res,202,{accepted:true});return true;
   }catch(error){json(res,400,{error:error instanceof SyntaxError?'Invalid JSON request':error.message});return true;}
  };

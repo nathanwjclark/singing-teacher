@@ -47,11 +47,24 @@ def run(data_root, import_id, expected_model_id, output):
         state=backend.execute({'action':'fit_probe','command_id':output.name+'-fit',
             'expected_version':state['version'],'parameters':parameters})['state']
         job=state['pending']['job_id']; terminal=wait(backend,job)
-        state=backend.execute({'action':'collect_job','command_id':output.name+'-collect',
-            'expected_version':state['version'],'job_id':job})['state']
+        # Another sensation can advance the session while the native job runs.
+        state=backend.execute({'action':'state'})['state']
+        collect={'action':'collect_job','command_id':output.name+'-collect',
+            'expected_version':state['version'],'job_id':job}
+        try: state=backend.execute(collect)['state']
+        except Exception:
+            # A lost HTTP reply may follow a committed collection. Read its ledger
+            # before considering another mutation; never submit a second fit.
+            state=backend.execute({'action':'state'})['state']
+            if not any(item.get('job_id')==job or item.get('id')==job for item in state['jobs']):
+                collect['expected_version']=state['version']
+                state=backend.execute(collect)['state']
         write(output/'session-ledger.json',backend.execute({'action':'replay'}))
         if terminal['status']!='succeeded': raise ValueError('Joint probe job failed; session ledger retained')
-        result=backend.result(job); write(output/'result.json',result)
+        # Adoption changes the worker's current model, so old-model job reads are
+        # intentionally stale. The session retains the authoritative result.
+        result=next(item['result'] for item in state['jobs'] if item.get('job_id')==job or item.get('id')==job)
+        write(output/'result.json',result)
         best=result['joint']['best']; baseline=result['fixed_anatomy_baseline']['best']
         adopted=state['snapshot']['model_id']!=expected_model_id
         answer={'importId':import_id,'parentModelId':expected_model_id,'modelId':state['snapshot']['model_id'],

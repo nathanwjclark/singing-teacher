@@ -29,10 +29,17 @@ Both POST routes start bounded background processes and return 202. GET
 `currentModelId`, `canFit`, and `fitBlockedReason`; browser refresh reads the same
 private artifacts. Transport request IDs suppress immediate duplicate submission.
 The worker's session commands additionally use durable idempotent command IDs.
+After server restart, unfinished processing is explicitly reported as interrupted;
+the same request is not falsely acknowledged as complete. A new request creates
+fresh output, preserving previous partial artifacts. Pending worker intents may
+need session reconciliation before a retry; automatic crash resume is not claimed.
 
 Verification: `PYTHONPATH=.:science/src python -m pytest
-science/tests/test_app_probe.py -q` runs the real B importer from original synthetic
-PCM, checks preserved archive hashes, explicit missing-calibration rejection and
-tamper rejection. Hardware calibration and human acoustic validity are distinct
-unverified evidence questions. Native joint/session tests belong to the session
-adoption integration and must also pass before claiming complete app fit wiring.
+science/tests/test_app_probe.py -q` passed three tests: real B importer from original
+synthetic PCM, preserved archive hashes and missing-calibration rejection; tamper
+rejection; original probe re-import through the actual native joint runner and
+durable session adoption. The latter performs 12 operator calls and retains a
+large negative model discrepancy, explicitly not successful anatomical recovery.
+`node --test server/probe.test.mjs` passed local-only, interrupted-request and
+invalid-ID handling. Hardware calibration, human acoustic validity and the browser
+flow are distinct verification tasks.
