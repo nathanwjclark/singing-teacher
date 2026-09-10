@@ -41,3 +41,14 @@ Source classification is the importer's declared human-observation or explicit
 `--development-fixture`. Package hashes establish consistency, not device or human
 origin. Native-generated fixtures test software wiring without claiming observed
 anatomy or human validation. Existing observations remain unmodified.
+
+CLI SIGTERM/SIGINT is handled as an interruption. The script cancels only its own
+current session-job intent, collects the terminal receipt to clear pending state,
+and cancels its direct forward-export job. An idempotent forward request recovers
+a lost submission reply. A job that completed before cancellation is retained,
+but the script does not launch the next stage. `interruption.json` records cleanup
+and `session-ledger.json` preserves the remaining state. HTTP cleanup uses bounded
+three-second request timeouts. Unreachable services produce an explicit
+`reconciliation_required` receipt instead of claiming cancellation succeeded.
+SIGKILL, host crashes and power loss cannot execute this cleanup; existing durable
+session/job state remains available for manual cancellation/collection on restart.
