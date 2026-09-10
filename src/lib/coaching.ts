@@ -6,14 +6,20 @@ const finite = (value: number | undefined): value is number => typeof value === 
 const visible = (point: Landmark | undefined) => point && finite(point.x) && finite(point.y) && (point.visibility ?? 1) >= 0.5;
 // A visual coaching heuristic, not a universal ideal for every vowel. The metric
 // is inner-lip gap / inner-mouth width; 0.12 admitted only a nearly closed slit.
-const CLOSED_MOUTH = 0.035;
+const CLOSED_MOUTH = 0.08;
+const OPEN_MOUTH = 0.10;
+/** The gap is aspect-corrected in vision.ts. Leave a deadband for lip-landmark
+ * jitter: require a clearly open gap to start, but close immediately below 8%. */
+export function isMouthOpen(amount: number | undefined, wasOpen = false): boolean {
+  return finite(amount) && amount > (wasOpen ? CLOSED_MOUTH : OPEN_MOUTH);
+}
 const VOWEL_ROOM = 0.24;
 const score = (base: number, amount: number, threshold: number, scale: number) => Math.min(95, base + (amount - threshold) * scale);
 
 /** Visual prompts only. Muscle IDs identify anatomical references, never measured activity.
  * Optional 3D metrics are omitted when unavailable; do not substitute zero for them.
  */
-export function getTips(frame: TrackingFrame | null, { limit = 3, uniqueRegions = true, singing = true }: {limit?:number; uniqueRegions?:boolean; singing?:boolean} = {}): Tip[] {
+export function getTips(frame: TrackingFrame | null, { limit = 3, uniqueRegions = true, singing = true, mouthWasOpen = false }: {limit?:number; uniqueRegions?:boolean; singing?:boolean; mouthWasOpen?:boolean} = {}): Tip[] {
   if (!frame) return [tip('start', 'Make room for your voice.', 'Start your camera, then bring your face and shoulders into view.', 'good', 'general', 0)];
   if (frame.face.length === 0) return [tip('find-face', 'Let’s find your face.', 'Face the camera in even light. Your cues will return when your face is visible.', 'adjust', 'general', 100)];
 
@@ -22,7 +28,7 @@ export function getTips(frame: TrackingFrame | null, { limit = 3, uniqueRegions 
   if (finite(m.brightness) && m.brightness < 45) return [tip('lighting', 'Bring a little light in.', 'Try a light in front of you so the camera can see your face clearly.', 'adjust', 'general', 100)];
   if (!finite(m.mouthOpen) || !finite(m.headTilt) || m.mouthOpen < 0) return [tip('measurement-unavailable', 'Find a clear view.', 'Face the camera and keep your face fully in frame while we look for reliable landmarks.', 'adjust', 'general', 100)];
 
-  if (!singing || m.mouthOpen <= CLOSED_MOUTH) return [tip('no-singing', 'No singing detected', 'Sing a comfortable vowel to see live adjustments.', 'good', 'general', 0)];
+  if (!singing || !isMouthOpen(m.mouthOpen, mouthWasOpen)) return [tip('no-singing', 'No singing detected', 'Sing a comfortable vowel to see live adjustments.', 'good', 'general', 0)];
 
   // Resolve framing before interpreting geometry near the edge of the image.
   const clipped = frame.face.some(point => point.x < 0.025 || point.x > 0.975 || point.y < 0.025 || point.y > 0.975);
