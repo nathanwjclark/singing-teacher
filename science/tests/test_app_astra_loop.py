@@ -1,7 +1,8 @@
 """Two real native update rounds with a deterministic, explicitly test-only brain.
 
-No API key or .env is read. This verifies application wiring, not human anatomy
-or the quality of a live model's choices. The capture audio is synthesized.
+By default no API key or .env is read. Explicit SINGING_TEST_LIVE_ASTRA_ENV opts
+into two live decisions using that server env file; there are no paid retries.
+This verifies application wiring, not human anatomy. Audio is synthesized.
 """
 import hashlib
 import json
@@ -30,10 +31,14 @@ import {resolve} from 'node:path';
 const repo=process.cwd(),dataRoot=process.env.LOCAL_DATA_DIR;
 const load=name=>import(pathToFileURL(resolve(repo,'server',name)));
 const json=(res,status,value)=>{res.writeHead(status,{'Content-Type':'application/json'});res.end(JSON.stringify(value))};
-const provider={getProviderStatus:()=>({available:true,provider:'test-only'}),generateDecision:async({input})=>({
+let provider={getProviderStatus:()=>({available:true,provider:'test-only'}),generateDecision:async({input})=>({
   decision:{action:'record',experimentId:input.forecast.experiments.at(-1).experiment.experiment_id,
     cue:'Comfortably sustain the selected vowel.',explanation:'Deterministic integration-test selection; not a live coaching recommendation.'},
   provider:'test-only',model:'deterministic-test-fixture',usage:{}})};
+if(process.env.SINGING_TEST_LIVE_ASTRA_ENV){
+  process.env.OPENAI_ENV_FILE=process.env.SINGING_TEST_LIVE_ASTRA_ENV;
+  await load('environment.mjs');provider=await load('astraProvider.mjs');
+}
 const routes=[(await load('astra.mjs')).createAstraRoutes({dataRoot,json,provider}),
   (await load('science.mjs')).scienceRoutes({repo,dataRoot,json}),
   (await load('voiceCapture.mjs')).createVoiceCaptureRoutes({repo,dataRoot,json})];
@@ -93,7 +98,7 @@ def test_astra_two_round_native_loop_survives_restart_without_duplicate_update(t
         env = {**os.environ, 'PORT': str(port), 'LOCAL_DATA_DIR': str(data),
             'SINGING_PYTHON': sys.executable,
             'SCIENCE_URL': f'http://127.0.0.1:{worker.server_port}', 'SCIENCE_TOKEN': 't' * 48}
-        # The bootstrap never imports local.mjs or the live provider/env loader.
+        # Only the explicit live opt-in imports the provider/env loader.
         env.pop('OPENAI_API_KEY', None)
         app = None
         log = (tmp_path / 'app.log').open('w')
@@ -139,17 +144,24 @@ def test_astra_two_round_native_loop_survives_restart_without_duplicate_update(t
             previous_model = fitted['modelId']
             evidence = set(call(session_path)['state']['snapshot']['evidence_ids'])
             prior_design = None
-            prior_observation = None
+            prior_receipt = None
 
             for round_index in range(2):
-                request = {'requestId': f'integration-round-{round_index}', 'goal': 'Explore comfortable vowels'}
+                request = {'requestId': f'integration-round-{round_index}',
+                    'goal': 'Explore comfortable vowels. This is an explicitly synthetic native audio integration test, not human or anatomical evidence. The simulated learner is rested and comfortable.'}
                 decision = call('/api/astra/decide', request)
                 assert decision['status'] == 'succeeded', decision
-                assert decision['provider'] == 'test-only'
+                if os.environ.get('SINGING_TEST_LIVE_ASTRA_ENV'):
+                    assert decision['model'] == 'gpt-6-astra'
+                else:
+                    assert decision['provider'] == 'test-only'
+                assert decision['decision']['action'] == 'record', (
+                    'The provider chose rest; the two-outcome live loop was not completed. '
+                    + decision['decision']['explanation'])
                 assert decision['input']['modelId'] == previous_model
                 assert set(decision['input']['evidenceIds']) == evidence
                 if prior_design:
-                    assert any(row['result']['observation_receipt']['observation_id'] == prior_observation
+                    assert any(row['observationReceiptSha256'] == prior_receipt
                         for row in decision['input']['outcomes'])
                 state = call(session_path)['state']
                 committed = state['designs'][decision['designId']]
@@ -204,7 +216,9 @@ def test_astra_two_round_native_loop_survives_restart_without_duplicate_update(t
                 previous_model = updated['snapshot']['model_id']
                 evidence = set(updated['snapshot']['evidence_ids'])
                 prior_design = decision['designId']
-                prior_observation = committed['data']['target_observation_id']
+                prior_receipt = next(job['result']['observation_receipt_sha256']
+                    for job in reversed(updated['jobs'])
+                    if job['request']['operation'] == 'update_pcm' and job.get('result'))
         finally:
             stop()
             log.close()
