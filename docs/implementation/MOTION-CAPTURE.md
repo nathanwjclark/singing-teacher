@@ -34,3 +34,9 @@ Lead A's integrated `science/MOTION.md` documents the executable transform/fitti
 - Chrome browser smoke using an explicitly synthetic canvas stream: start, acquire 39 tracker frames, mark onset/failure, stop, export real nonempty WebM + validated JSON, reopen JSON and scrub. No browser errors. This verifies acquisition UI mechanics, not live human tracking accuracy.
 
 Remaining physical evidence: capture three real comfortable repetitions, inspect replay/visibility and return timing, quantify synchronization/measurement uncertainty, and supply genuine native depth/head references for the calibrated inverse path. The lack of physical evidence must not be reported as completed G6.
+
+## Static surface fitting versus changing articulation
+
+The inside-mouth mapping path should acquire overlapping calibrated RGB-D views of a deliberately held pose, assess visible-surface coverage, then fit the anatomical model to measured geometry with uncertainty. Pixel labels can establish correspondences or audit coverage; they are not the geometry acquisition method. Multiple held poses may each expose different surfaces, but each retains its own pose/identity. Do not rigidly fuse a moving tongue, jaw or palate into one static surface.
+
+The repeated gesture/return capture here is the separate dynamic path: preserve changing articulation over time and register head movement separately. A held-pose scan constrains visible geometry; a motion sequence constrains observed trajectories/control. A fitted full mesh may fill unobserved regions from a prior, but those regions remain inferred. This browser capture does not provide raw measured depth; a real RGB-D acquisition adapter is required before static depth fitting can claim measured geometry.
