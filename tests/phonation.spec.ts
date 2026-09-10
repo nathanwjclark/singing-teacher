@@ -17,7 +17,8 @@ async function generatedMicrophone(page:Page){
    gain.gain.value=.25;gain.connect(destination);
    const oscillator=context.createOscillator();oscillator.frequency.value=180;
    const real=new Float32Array(9),imag=new Float32Array(9);for(let h=1;h<9;h++)imag[h]=1/h;
-   oscillator.setPeriodicWave(context.createPeriodicWave(real,imag));oscillator.connect(gain);oscillator.start();await context.resume();
+   oscillator.setPeriodicWave(context.createPeriodicWave(real,imag));oscillator.connect(gain);oscillator.start();void context.resume();
+   document.addEventListener('click',()=>{void context.resume()},{capture:true});
    owner.phonationQA={context,gain,stream:destination.stream,silence:()=>{gain.gain.value=0},tone:()=>{gain.gain.value=.25},failWorker:()=>{activeWorker?.dispatchEvent(new ErrorEvent('error',{message:'Generated worker failure for QA'}))}};
    return destination.stream;
   }});
@@ -27,7 +28,13 @@ async function generatedMicrophone(page:Page){
 }
 
 test('optional real-worker analysis suppresses silence and disabling leaves microphone usable',async({page})=>{
- await generatedMicrophone(page);await page.goto('/');await page.getByRole('button',{name:'Experiments',exact:true}).click();
+ await generatedMicrophone(page);await page.goto('/');
+ await expect.poll(()=>page.evaluate(()=>Boolean((window as Window & {phonationQA?:unknown}).phonationQA))).toBe(true);
+ await page.getByRole('button',{name:'Studio',exact:true}).click();
+ const audioResume=page.getByRole('button',{name:'Enable audio',exact:true});
+ if(await audioResume.isVisible())await audioResume.click();
+ await expect(page.getByRole('button',{name:'Stop microphone',exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'Experiments',exact:true}).click();
  const panel=page.getByRole('region',{name:'Optional phonation acoustics'});
  await expect(panel.getByLabel('Enable local acoustic feedback')).not.toBeChecked();
  await expect(panel).toContainText('Disabled — existing coaching and scientific modeling continue');
@@ -52,7 +59,13 @@ test('optional real-worker analysis suppresses silence and disabling leaves micr
 });
 
 test('optional worker failure removes current cues without stopping shared microphone',async({page})=>{
- await generatedMicrophone(page);await page.goto('/');await page.getByRole('button',{name:'Experiments',exact:true}).click();
+ await generatedMicrophone(page);await page.goto('/');
+ await expect.poll(()=>page.evaluate(()=>Boolean((window as Window & {phonationQA?:unknown}).phonationQA))).toBe(true);
+ await page.getByRole('button',{name:'Studio',exact:true}).click();
+ const audioResume=page.getByRole('button',{name:'Enable audio',exact:true});
+ if(await audioResume.isVisible())await audioResume.click();
+ await expect(page.getByRole('button',{name:'Stop microphone',exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'Experiments',exact:true}).click();
  
  const enableAudio=page.getByRole('button',{name:'Enable audio',exact:true});if(await enableAudio.isVisible())await enableAudio.click();
  const panel=page.getByRole('region',{name:'Optional phonation acoustics'});
