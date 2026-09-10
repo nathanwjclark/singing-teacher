@@ -27,12 +27,16 @@ export function createTeachingRoutes({repo,dataRoot,json,enabled=process.env.VIS
  async function status(){
   if(!enabled)return {enabled,audioEnabled,status:'disabled',current:false,reason:'Personalized teaching is disabled; general explanations remain available'};
   let saved;try{saved=await read(index);}catch{saved={status:'not-run'};}
-  let result=saved.result?assets(saved.result):undefined,c;try{c=await context();}catch{return {enabled,audioEnabled,...saved,result,status:running?'running':saved.status==='running'?'failed':saved.status,current:false,reason:'Scientific worker unavailable; retained predictions are historical'};}
+  let result=saved.result?assets(saved.result):undefined;
+  if(result&&!audioEnabled){for(const side of ['before','after'])if(result[side])delete result[side].audio;if(result.capabilities)result.capabilities.synthesis={available:false,reason:'Model synthesis playback is disabled'};}
+  let c;try{c=await context();}catch{return {enabled,audioEnabled,...saved,result,status:running?'running':saved.status==='running'?'failed':saved.status,current:false,reason:'Scientific worker unavailable; retained predictions are historical'};}
   if(result){
    const job=[...(c.state.jobs||[])].reverse().find(j=>j.request?.operation==='update_pcm'&&j.result?.observation_receipt?.observation_id===result.targetObservationId&&j.result.observation_receipt.design_sha256===result.forecastSha256);
    if(job){const outcome=job.result,receipt=outcome.observation_receipt;
     result.outcome={evidenceMode:'recorded-result',attemptId:job.job_id,observationId:receipt.observation_id,observedAt:receipt.observed_at,
-     sourceKind:job.request.parameters.source_kind,canonical:receipt.canonical,predictionErrors:outcome.scores||[],modelUpdated:!!outcome.updated_snapshot,
+     sourceKind:job.request.parameters.source_kind,canonical:receipt.canonical,predictionErrors:outcome.scores||[],
+     modelUpdated:job.status==='succeeded'&&typeof outcome.updated_snapshot?.model_id==='string'&&outcome.updated_snapshot.model_id!==result.modelId,
+     previousModelId:result.modelId,resultModelId:outcome.updated_snapshot?.model_id??null,
      originalAudio:{available:false,reason:'Original recording playback is not exposed by this teaching view'},
      interpretation:'Recorded acoustic differences do not confirm that the illustrated internal movement occurred.'};
    }

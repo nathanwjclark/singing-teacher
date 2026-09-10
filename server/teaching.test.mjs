@@ -28,14 +28,18 @@ test('retained teaching results become historical and only matching observed tar
  try{
   await mkdir(join(root,'science-runs/run-test'),{recursive:true});
   await put('science-current.json',{status:'succeeded',runId:'run-test'});await put('science-runs/run-test/summary.json',{sessionId:'s',modelId:'m',designId:'d'});
-  await put('teaching-current.json',{status:'succeeded',result:{runId:'run-test',sessionId:'s',modelId:'m',designId:'d',frozenForecast:frozen,forecastSha256:'boundhash',targetObservationId:'target',attemptId:'teaching-abcd'}});
+  await put('teaching-current.json',{status:'succeeded',result:{runId:'run-test',sessionId:'s',modelId:'m',designId:'d',frozenForecast:frozen,forecastSha256:'boundhash',targetObservationId:'target',attemptId:'teaching-abcd',before:{audio:{name:'before-audio.wav'}},capabilities:{synthesis:{available:true}}}});
   const route=createTeachingRoutes({repo:process.cwd(),dataRoot:root,json:(_,code,body)=>{reply={code,body}},enabled:true,fetchImpl:async()=>({ok:true,json:async()=>({state})})});
   const req={method:'GET',headers:{host:'localhost'},socket:{remoteAddress:'127.0.0.1'}};
-  await route(req,{},new URL('http://localhost/api/teaching/status'));assert.equal(reply.body.current,true);
+  await route(req,{},new URL('http://localhost/api/teaching/status'));assert.equal(reply.body.current,true);assert.equal(reply.body.result.before.audio,undefined);assert.equal(reply.body.result.capabilities.synthesis.available,false);
   state.snapshot.model_id='new';state.designs.d.status='completed';
-  state.jobs=[{job_id:'attempt',request:{operation:'update_pcm',parameters:{source_kind:'engine-generated'}},result:{updated_snapshot:{model_id:'new'},scores:[],observation_receipt:{observation_id:'other',design_sha256:'boundhash'}}}];
+  state.jobs=[{job_id:'attempt',status:'succeeded',request:{operation:'update_pcm',parameters:{source_kind:'engine-generated'}},result:{updated_snapshot:{model_id:'new'},scores:[],observation_receipt:{observation_id:'other',design_sha256:'boundhash'}}}];
   await route(req,{},new URL('http://localhost/api/teaching/status'));assert.equal(reply.body.current,false);assert.equal(reply.body.result.outcome,undefined);
   state.jobs[0].result.observation_receipt.observation_id='target';
   await route(req,{},new URL('http://localhost/api/teaching/status'));assert.equal(reply.body.result.outcome.sourceKind,'engine-generated');assert.equal(reply.body.result.outcome.modelUpdated,true);
+  state.jobs[0].result.updated_snapshot.model_id='m';
+  await route(req,{},new URL('http://localhost/api/teaching/status'));assert.equal(reply.body.result.outcome.modelUpdated,false);assert.equal(reply.body.result.outcome.resultModelId,'m');
+  state.jobs[0].result.updated_snapshot.model_id='new';state.jobs[0].status='failed';
+  await route(req,{},new URL('http://localhost/api/teaching/status'));assert.equal(reply.body.result.outcome.modelUpdated,false);
  }finally{if(previous.url===undefined)delete process.env.SCIENCE_URL;else process.env.SCIENCE_URL=previous.url;if(previous.token===undefined)delete process.env.SCIENCE_TOKEN;else process.env.SCIENCE_TOKEN=previous.token;await rm(root,{recursive:true,force:true});}
 });
