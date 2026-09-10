@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
 import * as THREE from 'three';
+import { createTractOverlay } from './tractOverlay';
 import type { AnatomyMotionState } from '../../lib/anatomyState';
 import { ATLAS_WIDTH as W, ATLAS_HEIGHT as H, deformAtlasPoint } from '../../lib/atlasMotion';
 
@@ -23,7 +24,7 @@ export function AtlasCrossSection({ motion }: { motion: RefObject<AnatomyMotionS
     let disposed = false;
     renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
     renderer.setClearColor(0x172720, 0);
-    renderer.domElement.setAttribute('aria-label', 'Animated anatomical head and neck illustration by Patrick J. Lynch');
+    renderer.domElement.setAttribute('aria-label', 'Unified vocal tract and faded head and neck illustration; shared jaw, tongue and head motion');
     renderer.domElement.setAttribute('role', 'img');
     host.appendChild(renderer.domElement);
     const scene = new THREE.Scene();
@@ -36,10 +37,15 @@ export function AtlasCrossSection({ motion }: { motion: RefObject<AnatomyMotionS
       rest[i * 2] = positions.getX(i) + W / 2;
       rest[i * 2 + 1] = H / 2 - positions.getY(i);
     }
-    const material = new THREE.MeshBasicMaterial({ transparent: true, side: THREE.DoubleSide, depthWrite: false });
+    const material = new THREE.MeshBasicMaterial({ transparent: true, opacity: .2, side: THREE.DoubleSide, depthWrite: false });
     const mesh = new THREE.Mesh(geometry, material);
     mesh.frustumCulled = false;
     scene.add(mesh);
+    const tractTexture = createTractOverlay();
+    const tractMaterial = new THREE.MeshBasicMaterial({ map: tractTexture, transparent: true, side: THREE.DoubleSide, depthWrite: false });
+    const tractMesh = new THREE.Mesh(geometry, tractMaterial);
+    tractMesh.frustumCulled = false; tractMesh.renderOrder = 1;
+    scene.add(tractMesh);
     let texture: THREE.CanvasTexture | undefined;
     const image = new Image();
     image.onload = () => {
@@ -74,7 +80,7 @@ export function AtlasCrossSection({ motion }: { motion: RefObject<AnatomyMotionS
       const state = motion.current;
       for (let i = 0; i < positions.count; i++) {
         const [x, y] = deformAtlasPoint(rest[i * 2], rest[i * 2 + 1], state);
-        // Mirror the left-facing plate to match the right-facing airway below.
+        // Both plate and cast share these exact vertices, projection and motion.
         positions.setXYZ(i, W - x, -y, 0);
       }
       positions.needsUpdate = true;
@@ -84,11 +90,11 @@ export function AtlasCrossSection({ motion }: { motion: RefObject<AnatomyMotionS
       disposed = true; image.onload = null; image.onerror = null;
       observer.disconnect(); renderer.setAnimationLoop(null);
       renderer.domElement.removeEventListener('webglcontextlost', lost);
-      geometry.dispose(); material.dispose(); texture?.dispose(); renderer.dispose();
+      geometry.dispose(); material.dispose(); tractMaterial.dispose(); tractTexture.dispose(); texture?.dispose(); renderer.dispose();
       renderer.domElement.remove();
     };
   }, [motion]);
-  return <div className="atlas-cross-section" ref={mount} data-atlas-status={status}>
+  return <div className="atlas-cross-section" ref={mount} data-atlas-status={status} data-atlas-opacity="0.2" data-unified-tract="true">
     {status === 'loading' && <span className="atlas-message">Loading anatomy plate…</span>}
     {status === 'error' && <div className="atlas-fallback"><img src="/anatomy/reference/lynch-head-sagittal.jpg" alt="Head and mouth anatomical reference by Patrick J. Lynch"/><span>Animation unavailable · reference image</span></div>}
   </div>;
