@@ -18,13 +18,12 @@ export function nativeTongueRig(points:[number,number][]):AtlasTongueRig {
   return {tipX,tipY:edge.reduce((s,p)=>s+p[1],0)/edge.length,rootX:Math.max(...native.map(p=>p[0])),taper:true};
 }
 
+export type AtlasLayer = 'tongue' | 'structure' | 'airway' | 'upper-oral' | 'lower-oral';
+
 // Rig coordinates refer to the unmodified Lynch plate, facing left, in pixels.
 // These weights animate a teaching illustration; they are not tissue measurements.
-export function deformAtlasPoint(x: number, y: number, state: AnatomyMotionState, rig:AtlasTongueRig=referenceTongueRig, layer: 'tongue' | 'structure' = 'tongue'): [number, number] {
-  const jawWeight = smooth(842, 925, y) * (1 - smooth(440, 660, x)) * (1 - smooth(1090, 1240, y));
-  const jawAngle = -state.jawOpen * jawWeight;
-  let px = 610 + (x - 610) * Math.cos(jawAngle) - (y - 735) * Math.sin(jawAngle);
-  let py = 735 + (x - 610) * Math.sin(jawAngle) + (y - 735) * Math.cos(jawAngle);
+export function deformAtlasPoint(x: number, y: number, state: AnatomyMotionState, rig:AtlasTongueRig=referenceTongueRig, layer: AtlasLayer = 'tongue'): [number, number] {
+  let px = x, py = y;
   // Tongue motion and its tip taper belong exclusively to the tongue surface.
   if (layer === 'tongue') {
     const progress = Math.max(0, Math.min(1, (rig.rootX-x)/Math.max(1,rig.rootX-rig.tipX)));
@@ -40,9 +39,19 @@ export function deformAtlasPoint(x: number, y: number, state: AnatomyMotionState
       py-=(y-rig.tipY)*.65*tipWeight;
     }
   }
-  // Lateral displacement is perpendicular to this sagittal view, not extension.
-  // Full skull rotation, blended continuously into a stationary lower neck.
-  const pitch = -state.head.x * (1 - smooth(960, 1355, y));
+  // Only the faded reference plate uses the image's spatially weighted jaw warp.
+  // Tongue and lower oral pieces rotate rigidly about the jaw joint after their
+  // own local shape change. Upper lips/palate and the cast keep their local shape.
+  const jawWeight = layer === 'structure'
+    ? smooth(842, 925, y) * (1 - smooth(440, 660, x)) * (1 - smooth(1090, 1240, y))
+    : layer === 'tongue' || layer === 'lower-oral' ? 1 : 0;
+  const jawAngle = -state.jawOpen * jawWeight;
+  const jx = px - 610, jy = py - 735;
+  px = 610 + jx * Math.cos(jawAngle) - jy * Math.sin(jawAngle);
+  py = 735 + jx * Math.sin(jawAngle) + jy * Math.cos(jawAngle);
+  // A single rigid head transform repositions every detached oral piece. Only
+  // the raster plate blends its neck into the torso; never smear a cast or lip.
+  const pitch = -state.head.x * (layer === 'structure' ? 1 - smooth(960, 1355, y) : 1);
   const hx = px - 720, hy = py - 1080;
   px = 720 + hx * Math.cos(pitch) - hy * Math.sin(pitch);
   py = 1080 + hx * Math.sin(pitch) + hy * Math.cos(pitch);
