@@ -7,6 +7,27 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {createLidarRoutes} from './lidar.mjs';
 
+test('fit reservation rejects concurrent preparation and releases after validation failure',async()=>{
+ const root=await mkdtemp(join(tmpdir(),'lidar-reserve-')),previous=globalThis.fetch;
+ const names=['LIDAR_FUSION_ENABLED','SCIENCE_URL','SCIENCE_TOKEN'],prior=Object.fromEntries(names.map(name=>[name,process.env[name]]));
+ let release,entered;const waiting=new Promise(resolve=>{entered=resolve;});
+ try{
+  Object.assign(process.env,{LIDAR_FUSION_ENABLED:'1',SCIENCE_URL:'http://127.0.0.1:8766',SCIENCE_TOKEN:'test-only'});
+  await mkdir(join(root,'science-runs/voice'),{recursive:true});
+  await writeFile(join(root,'science-current.json'),JSON.stringify({status:'succeeded',runId:'voice'}));
+  await writeFile(join(root,'science-runs/voice/summary.json'),JSON.stringify({sessionId:'session'}));
+  await writeFile(join(root,'lidar-current.json'),JSON.stringify({captureId:'scan'}));
+  globalThis.fetch=async()=>{entered();await new Promise(resolve=>{release=resolve;});return Response.json({state:{snapshot:{model_id:'changed-model'}}});};
+  const route=createLidarRoutes({repo:process.cwd(),dataRoot:root,json:(res,status,body)=>Object.assign(res,{status,body})});
+  const body={requestId:'same-retry',captureId:'scan',expectedModelId:'parent',annotation:{}};
+  async function call(value=body){const req=Readable.from([Buffer.from(JSON.stringify(value))]);Object.assign(req,{method:'POST',socket:{remoteAddress:'127.0.0.1'},headers:{host:'localhost:5173','content-type':'application/json'}});const res={};await route(req,res,new URL('http://localhost/api/lidar/fit'));return res;}
+  const first=call();await waiting;
+  const second=await call();assert.equal(second.status,409);assert.match(second.body.error,/already running/);
+  release();assert.equal((await first).status,400);
+  const third=await call({...body,captureId:'missing'});assert.equal(third.status,400);assert.match(third.body.error,/scan changed/);
+ }finally{release?.();globalThis.fetch=previous;for(const name of names){if(prior[name]===undefined)delete process.env[name];else process.env[name]=prior[name];}await rm(root,{recursive:true,force:true});}
+});
+
 test('LiDAR is off by default, retains baseline availability and rejects remote use',async()=>{
  const root=await mkdtemp(join(tmpdir(),'lidar-route-')),prior=process.env.LIDAR_FUSION_ENABLED;delete process.env.LIDAR_FUSION_ENABLED;
  try{
