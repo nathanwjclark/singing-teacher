@@ -18,6 +18,8 @@ An unsuccessful attempt may reflect an unfamiliar cue, coordination, occlusion o
 
 ## 2. Familiar actions as motor-learning cues
 
+The [illustrated physiology coaching addendum](visual-teaching-plan.md), VIS-TEACH-01–05, extends this teaching flow entirely under A. It adds linked before/after illustrations, scrub-able animations, intuitive mechanisms and supported predicted/recorded sound comparisons. Cricothyroid/pitch and soft-palate/resonance explanations are initial deliverables. Distinguish general education from the learner's model predictions and actual observations. A owns content, visuals, app wiring and independent verification; no new B task is required. Missing advanced visuals or operators preserve text coaching and the core flow.
+
 Use an explicit loop: goal -> supported physical hypothesis -> familiar cue -> synchronized observation plus sensation report -> comparison with prediction -> feedback -> repeat -> fade cue -> transfer into singing. Explain the purpose of the experiment; do not deceive the singer about what the model knows.
 
 | Candidate cue family | Intended experience or experiment | Interpretation and implementation rule |
