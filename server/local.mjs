@@ -20,7 +20,7 @@ const serverHandler=async(req,res)=>{try{
   if(!allowedHosts.has(new URL('http://'+req.headers.host).hostname.toLowerCase()))return json(res,403,{error:'Unrecognized local host. Configure PHONE_BASE_URL for this hostname.'});
   // Refuse cross-origin browser writes; pairing tokens authorize phone routes.
   if(req.method==='POST'&&req.headers.origin&&new URL(req.headers.origin).host!==req.headers.host)return json(res,403,{error:'Cross-origin write refused'});
-  if(url.pathname==='/api/status')return json(res,200,{local:true,https:!!process.env.HTTPS_CERT,phoneBaseUrl:process.env.PHONE_BASE_URL||null,engineAvailable:false});
+  if(url.pathname==='/api/status')return json(res,200,{local:true,https:!!process.env.HTTPS_CERT,phoneBaseUrl:process.env.PHONE_BASE_URL||null,engineAvailable:false,phoneSetupUrl:process.env.PHONE_SETUP_URL||null,certificateFingerprint:process.env.PHONE_CA_FINGERPRINT||null});
   if(url.pathname==='/api/pair'&&req.method==='POST'){
     const remote=req.socket.remoteAddress;
     if(!localAddresses.has(remote?.replace(/^::ffff:/,'')))return json(res,403,{error:'Create pairing from this computer'});
@@ -57,3 +57,16 @@ await mkdir(dataRoot,{recursive:true});
 const server=process.env.HTTPS_CERT&&process.env.HTTPS_KEY?https.createServer({cert:await readFile(process.env.HTTPS_CERT),key:await readFile(process.env.HTTPS_KEY)},serverHandler):http.createServer(serverHandler);
 server.listen(port,host,()=>console.log(`Local singing teacher: ${process.env.HTTPS_CERT?'https':'http'}://${host}:${port}`));
 setInterval(()=>{for(const [id,s] of sessions)if(s.expiresAt<Date.now())sessions.delete(id)},60_000).unref();
+
+if(process.env.DESKTOP_PORT)http.createServer(serverHandler).listen(Number(process.env.DESKTOP_PORT),'127.0.0.1',()=>console.log(`Desktop: http://127.0.0.1:${process.env.DESKTOP_PORT}`));
+if(process.env.PHONE_SETUP_PORT){
+  const profile=await readFile(process.env.PHONE_PROFILE);
+  const setupPath=`/setup/${process.env.PHONE_SETUP_TOKEN}`;
+  const page=`<!doctype html><html><meta name="viewport" content="width=device-width, initial-scale=1"><title>Singing Teacher private HTTPS</title><style>body{font:17px system-ui;line-height:1.55;max-width:600px;padding:24px;margin:auto;color:#e3efdc;background:#14221b}a{color:#c5ef9c}li{margin:18px 0}code{overflow-wrap:anywhere;font-size:11px}</style><h1>Set up your phone</h1><p>Stay on the same Wi-Fi as your computer. This installs only its local certificate, not device management.</p><ol><li><a href="${setupPath}/certificate.mobileconfig">Download the certificate profile</a> and allow the download.</li><li>Open Settings → General → VPN &amp; Device Management. Install <b>Singing Teacher Local HTTPS</b>.</li><li>Open Settings → General → About → Certificate Trust Settings. Enable full trust for <b>Singing Teacher Local CA</b>.</li><li>Return to the computer’s <b>Connect phone / QR</b> window and scan the pairing QR.</li></ol><p><a href="https://support.apple.com/102390">Apple’s certificate instructions</a></p><p>Certificate SHA-256:<br><code>${process.env.PHONE_CA_FINGERPRINT}</code></p><p>You can remove the profile in VPN &amp; Device Management when you stop using this local setup.</p></html>`;
+  http.createServer((req,res)=>{
+    if(req.method!=='GET'){res.writeHead(405);res.end();return}
+    if(req.url===setupPath+'/certificate.mobileconfig'){res.writeHead(200,{'Content-Type':'application/x-apple-aspen-config','Content-Disposition':'attachment; filename="singing-teacher.mobileconfig"','Cache-Control':'no-store'});res.end(profile)}
+    else if(req.url===setupPath){res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'});res.end(page)}
+    else{res.writeHead(404);res.end('Not found')}
+  }).listen(Number(process.env.PHONE_SETUP_PORT),host,()=>console.log(`Phone certificate setup: ${process.env.PHONE_SETUP_URL}`));
+}

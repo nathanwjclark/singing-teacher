@@ -8,6 +8,8 @@ type Props = { open: boolean; onClose: () => void; onMicrophoneStream: (stream: 
 export default function PhonePairing({ open, onClose, onMicrophoneStream }: Props) {
   const [session, setSession] = useState<PhoneSession | null>(null);
   const [baseUrl, setBaseUrl] = useState('');
+  const [setup,setSetup]=useState<{url:string;qr:string;fingerprint:string}|null>(null);
+  useEffect(()=>{if(!open)return;let cancelled=false;void fetch('/api/status').then(r=>r.json()).then(async data=>{if(data.phoneBaseUrl&&!cancelled)setBaseUrl(data.phoneBaseUrl);if(data.phoneSetupUrl){const qr=await QRCode.toDataURL(data.phoneSetupUrl,{width:220,margin:3});if(!cancelled)setSetup({url:data.phoneSetupUrl,qr,fingerprint:data.certificateFingerprint})}}).catch(()=>{});return()=>{cancelled=true}},[open]);
   const [qr, setQr] = useState('');
   const [status, setStatus] = useState('');
   const [count, setCount] = useState(0);
@@ -44,6 +46,8 @@ export default function PhonePairing({ open, onClose, onMicrophoneStream }: Prop
   return <div className="phone-modal-backdrop" onClick={onClose}><section className="phone-pair-dialog" role="dialog" aria-modal="true" aria-label="Connect your phone" onClick={event => event.stopPropagation()}>
     <div className="phone-title"><h2>Connect your phone</h2><button onClick={onClose} aria-label="Close phone pairing">×</button></div>
     <p>Capture a guided set of face and mouth views, or use your phone as a live microphone.</p>
+    {setup && <details open className="phone-certificate-setup"><summary>1. First-time iPhone setup</summary><p>Scan this QR to install your computer’s local certificate. Follow the Settings steps on that page, then return here for the pairing QR below.</p><img width="180" height="180" src={setup.qr} alt="Scan for private HTTPS certificate setup"/><p><a href={setup.url} target="_blank" rel="noreferrer">Open setup instructions</a></p><small>Certificate SHA-256: {setup.fingerprint}</small></details>}
+    {setup && <h3>2. Pair your phone</h3>}
     <label>Phone-accessible HTTPS address<input type="url" placeholder="https://your-local-host:5173" value={baseUrl} onChange={event => setBaseUrl(event.target.value)} /></label>
     <small>Leave empty to use the server’s configured address. A trusted HTTPS connection on your local network works; a public server is optional. Localhost on your phone points to the phone itself.</small>
     <button disabled={busy} onClick={() => void pair()}>{busy ? 'Preparing…' : session ? 'Create new pairing link' : 'Show pairing QR'}</button>

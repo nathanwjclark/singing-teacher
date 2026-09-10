@@ -1,0 +1,24 @@
+import {execFileSync} from 'node:child_process';
+import {mkdirSync,existsSync,writeFileSync,readFileSync,chmodSync} from 'node:fs';
+import {networkInterfaces,hostname} from 'node:os';
+import {resolve} from 'node:path';
+import {randomBytes,randomUUID,X509Certificate} from 'node:crypto';
+const directory=resolve(process.env.HTTPS_STATE_DIR||'.local-certs');mkdirSync(directory,{recursive:true,mode:0o700});chmodSync(directory,0o700);
+const interfaces=networkInterfaces(),privateIP=a=>/^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(a);
+const ip=process.env.LOCAL_IP||[...(interfaces.en0||[]),...Object.values(interfaces).flat()].find(n=>n&&n.family==='IPv4'&&!n.internal&&privateIP(n.address))?.address;
+if(!ip||!privateIP(ip))throw Error('Connect to private Wi-Fi or set LOCAL_IP to this computer’s private IPv4 address.');
+const run=args=>execFileSync('openssl',args,{stdio:'ignore'});
+const ca=resolve(directory,'ca.crt'),caKey=resolve(directory,'ca.key'),key=resolve(directory,'server.key'),cert=resolve(directory,'server.crt');
+if(!existsSync(ca)){run(['req','-x509','-newkey','rsa:2048','-nodes','-sha256','-days','365','-subj','/CN=Singing Teacher Local CA','-addext','basicConstraints=critical,CA:TRUE,pathlen:0','-addext','keyUsage=critical,keyCertSign,cRLSign','-keyout',caKey,'-out',ca]);chmodSync(caKey,0o600)}
+run(['x509','-in',ca,'-checkend','86400','-noout']);
+const csr=resolve(directory,'server.csr'),ext=resolve(directory,'server.ext');
+const name=hostname().replace(/[^a-zA-Z0-9.-]/g,'');
+writeFileSync(ext,`basicConstraints=critical,CA:FALSE\nkeyUsage=critical,digitalSignature,keyEncipherment\nextendedKeyUsage=serverAuth\nsubjectAltName=IP:${ip},IP:127.0.0.1,DNS:localhost,DNS:${name},DNS:${name.endsWith('.local')?name:name+'.local'}\n`);
+run(['req','-new','-newkey','rsa:2048','-nodes','-subj','/CN=Singing Teacher Local','-keyout',key,'-out',csr]);chmodSync(key,0o600);
+run(['x509','-req','-in',csr,'-CA',ca,'-CAkey',caKey,'-set_serial','0x'+randomBytes(16).toString('hex'),'-days','90','-sha256','-extfile',ext,'-out',cert]);
+const caObject=new X509Certificate(readFileSync(ca));const setupToken=randomBytes(18).toString('hex');
+const profile=`<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict><key>PayloadType</key><string>Configuration</string><key>PayloadVersion</key><integer>1</integer><key>PayloadIdentifier</key><string>local.singing-teacher.https</string><key>PayloadUUID</key><string>${randomUUID()}</string><key>PayloadDisplayName</key><string>Singing Teacher Local HTTPS</string><key>PayloadDescription</key><string>Trust your own computer’s private singing practice server. No device management or VPN.</string><key>PayloadContent</key><array><dict><key>PayloadType</key><string>com.apple.security.root</string><key>PayloadVersion</key><integer>1</integer><key>PayloadIdentifier</key><string>local.singing-teacher.https.ca</string><key>PayloadUUID</key><string>${randomUUID()}</string><key>PayloadDisplayName</key><string>Singing Teacher Local CA</string><key>PayloadCertificateFileName</key><string>singing-teacher-ca.cer</string><key>PayloadContent</key><data>${caObject.raw.toString('base64')}</data></dict></array></dict></plist>`;
+writeFileSync(resolve(directory,'certificate.mobileconfig'),profile);
+const config={ip,cert,key,ca,profile:resolve(directory,'certificate.mobileconfig'),setupToken,fingerprint:caObject.fingerprint256,phoneBaseUrl:`https://${ip}:5174`,setupUrl:`http://${ip}:5175/setup/${setupToken}`};
+writeFileSync(resolve(directory,'config.json'),JSON.stringify(config,null,2),{mode:0o600});
+console.log(`Private HTTPS prepared: ${config.phoneBaseUrl}\nCertificate setup: ${config.setupUrl}\nKeys remain in ignored ${directory}`);

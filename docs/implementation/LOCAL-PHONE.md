@@ -1,17 +1,16 @@
-# Local phone connection
+# Private same-Wi-Fi HTTPS
 
-No public server or CD is configured. `npm run build && npm run local` serves the desktop app and pairing API at http://127.0.0.1:5173. Captured bootstrap snapshots are stored in ignored `.local-data/captures/`; audio/video recordings stay in the browser until explicitly downloaded. Phone microphone audio uses a local WebRTC connection and is not saved by the server.
+Run `npm run https:prepare` once to create an application-specific local CA, server certificate and iPhone certificate profile in ignored `.local-certs/`. Keys are stored with owner-only permissions. Run it again if your Wi-Fi address changes; it reuses the CA so the phone does not need a new trust installation while that CA remains valid.
 
-A phone needs a reachable **trusted HTTPS** address to use its camera and microphone. Plain `http://<laptop-ip>` is insufficient. Options are a local certificate authority installed/trusted on both devices, or a separately approved HTTPS tunnel/host. We have not published a tunnel or exposed a public server.
+Run `npm run local:private` after `npm run build`. This starts the desktop app on loopback HTTP port 5173, the phone HTTPS endpoint bound only to the selected private Wi-Fi IPv4 on port 5174, and a certificate-setup page on that same private address on port 5175. The setup server serves only its tokenized instructions and public certificate profile, never private keys or session media. No public tunnel, cloud server, or router forwarding is created.
 
-To run privately on the same Wi-Fi after provisioning a trusted certificate whose subjectAltName includes your laptop's local hostname or IP:
+Open http://127.0.0.1:5173 and choose **Connect phone / QR**:
 
-```sh
-HOST=0.0.0.0 PORT=5173 HTTPS_CERT=/absolute/path/server.crt HTTPS_KEY=/absolute/path/server.key PHONE_BASE_URL=https://your-laptop.local:5173 npm run local
-```
+1. Scan the **first-time iPhone setup** QR. Download the certificate profile in Safari.
+2. On iPhone, install **Singing Teacher Local HTTPS** in Settings → General → VPN & Device Management.
+3. Enable **Singing Teacher Local CA** in Settings → General → About → Certificate Trust Settings. [Apple's instructions](https://support.apple.com/102390).
+4. Scan the pairing QR in the desktop dialog. Both devices must remain on the same Wi-Fi.
 
-Open that HTTPS address on the laptop, use **Connect phone**, then scan the QR. Creating a pairing must be done from the same computer; each link has a random token and expires after 12 hours or a server restart. Both devices must trust the certificate. iOS certificate profile installation and full root-certificate trust are manual device setup steps. Never share the CA's private key.
+The profile installs one root certificate, not MDM, a VPN, or a private key. The setup page and desktop dialog display its SHA-256 fingerprint. Remove the profile through VPN & Device Management when this local setup is no longer needed. A phone requires those manual trust steps before its camera/microphone can work securely. The desktop keeps using its existing localhost origin and browser data.
 
-If the laptop itself opens via its LAN address, the server still recognizes local interface addresses as the pairing creator. Camera and microphone permissions are explicit on the phone. Use front/profile/open-mouth/tongue instructions only as comfortable; skip any step. Browser photos are visible-surface evidence, not measured depth or reconstructed musculature. Raw TrueDepth/LiDAR remains a native-acquisition dependency.
-
-Some guest Wi-Fi networks isolate devices. If pairing loads but live microphone cannot connect, check whether both devices can reach each other. There is no cloud STUN/TURN relay in this local prototype.
+Captures and recordings retain their existing explicit controls. Some guest Wi-Fi networks block peer-to-peer connections; if setup is unreachable, move both devices onto a network allowing local device connections. There is no STUN/TURN cloud relay. Browser capture still does not expose raw measured TrueDepth/LiDAR.

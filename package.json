@@ -10,7 +10,9 @@
     "preview": "vite preview",
     "test": "node --experimental-strip-types --test src/lib/coaching.test.ts",
     "test:e2e": "playwright test",
-    "local": "node server/local.mjs"
+    "local": "node server/local.mjs",
+    "https:prepare": "node scripts/prepare-local-https.mjs",
+    "local:private": "node scripts/start-local-https.mjs"
   },
   "dependencies": {
     "@mediapipe/tasks-vision": "^1.0.1",
