@@ -7,7 +7,6 @@ const MISSING = 'Measurement unavailable';
 /** Fixed finite frame, no contact/closure estimator. Invoke outside capture/render path. */
 export async function measurePhonation(pcm: Float32Array, sampleRate: number, metadata: PhonationMetadata,
  options: { enabled?: boolean; deadlineMs?: number; signal?: AbortSignal } = {}): Promise<PhonationObservation> {
- pcm = pcm.slice(); // Snapshot caller buffer before the asynchronous hash operation.
  const beginning = performance.now(), deadline = options.deadlineMs ?? 200;
  if (!Number.isFinite(deadline) || deadline <= 0 || deadline > 2000) throw Error('Deadline must be within0..2000ms');
  for (const key of ['observationId','sessionId','attemptId','artifactId','clockId'] as const) if (typeof metadata[key] !== 'string' || !metadata[key].trim()) throw Error('Explicit phonation identity/clock required');
@@ -28,6 +27,7 @@ export async function measurePhonation(pcm: Float32Array, sampleRate: number, me
  const expired = () => options.signal?.aborted || performance.now()-beginning>deadline;
  if (options.enabled===false) return unavailable('disabled','Phonation measurement disabled');
  if (![44100,48000,96000].includes(sampleRate) || pcm.length!==audioFrameSize(sampleRate)) return unavailable('unsupported','Requires canonical44100/48000/96000Hz frame4096/4096/8192');
+ pcm = pcm.slice(); // Snapshot the bounded caller buffer before asynchronous hashing.
  if (!pcm.every(Number.isFinite)) return unavailable('failed','Nonfinite PCM input');
  try {
   const bytes=new Uint8Array(pcm.length*4),view=new DataView(bytes.buffer);pcm.forEach((v,i)=>view.setFloat32(i*4,v,true));

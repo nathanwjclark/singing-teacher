@@ -31,3 +31,8 @@ test('asynchronous frame hash and analysis share one immutable buffer snapshot',
  const pending=measurePhonation(pcm,48000,metadata);pcm.fill(0);const actual=await pending;
  assert.equal(actual.frameSha256,expected.frameSha256);assert.deepEqual(actual.descriptors,expected.descriptors);
 });
+
+test('strongly time-varying nonstationary signal is not a stable phonation reference',async()=>{
+ const chirp=Float32Array.from({length:4096},(_,i)=>{const t=i/48000;return .1*Math.sin(2*Math.PI*(100*t+6000*t*t))});
+ const result=await measurePhonation(chirp,48000,metadata);assert.equal(result.capabilities.measurement.status,'insufficient-quality');
+});
