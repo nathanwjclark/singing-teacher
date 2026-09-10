@@ -26,7 +26,7 @@ export function AnatomyPanel({ frame, activeRegion = 'jaw', activeMuscles, demo 
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [hovered, setHovered] = useState('');
   const [meshCount, setMeshCount] = useState(0);
-  latest.current = { frame, activeRegion, activeMuscles, demo, bones, muscles, xray };
+  useEffect(() => { latest.current = { frame, activeRegion, activeMuscles, demo, bones, muscles, xray }; }, [frame, activeRegion, activeMuscles, demo, bones, muscles, xray]);
   const focused = activeMuscles?.length ? activeMuscles : regionMuscles[activeRegion];
 
   useEffect(() => {
@@ -34,7 +34,7 @@ export function AnatomyPanel({ frame, activeRegion = 'jaw', activeMuscles, demo 
     if (!container) return;
     let renderer: THREE.WebGLRenderer;
     try { renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'low-power' }); }
-    catch { setStatus('error'); return; }
+    catch { queueMicrotask(() => setStatus('error')); return; }
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
     renderer.setClearColor(0x14231e, 0);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -109,11 +109,13 @@ export function AnatomyPanel({ frame, activeRegion = 'jaw', activeMuscles, demo 
     renderer.setAnimationLoop((time) => {
       const props=latest.current;const m=props.frame?.metrics;
       const simulation=props.demo&&!props.frame;
-      const shoulderRoll=bounded(m?.shoulderTilt,-20,20)*radians;
-      const torsoYaw=bounded(m?.shoulderDepth,-45,45)*radians;
+      const shoulderRoll=bounded(m?.torsoLean ?? m?.shoulderTilt,-20,20)*radians;
+      const world = props.frame?.worldPose;
+      const shoulderWidth = world?.[11] && world?.[12] ? Math.max(.15, Math.abs(world[11].x-world[12].x)) : .36;
+      const torsoYaw=THREE.MathUtils.clamp(Math.atan2(bounded(m?.shoulderDepth,-.5,.5),shoulderWidth),-.75,.75);
       torso.rotation.z=THREE.MathUtils.lerp(torso.rotation.z,-shoulderRoll,.1);
       torso.rotation.y=THREE.MathUtils.lerp(torso.rotation.y,-torsoYaw,.1);
-      torso.rotation.x=THREE.MathUtils.lerp(torso.rotation.x,bounded(m?.torsoLean,-20,20)*radians,.1);
+      torso.rotation.x=0;
       const yaw=bounded(m?.headYaw,-55,55)*radians+(simulation?Math.sin(time*.00032)*.075:0);
       head.rotation.y=THREE.MathUtils.lerp(head.rotation.y,-yaw-torso.rotation.y,.14);
       head.rotation.z=THREE.MathUtils.lerp(head.rotation.z,-bounded(m?.headTilt,-30,30)*radians-torso.rotation.z,.14);
