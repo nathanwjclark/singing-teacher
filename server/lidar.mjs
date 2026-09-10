@@ -9,8 +9,17 @@ async function read(path){try{return JSON.parse(await readFile(path,'utf8'));}ca
 export function createLidarRoutes({repo,dataRoot,json}){
  let busy=false;
  const currentFile=join(dataRoot,'lidar-fit-current.json');
+ const successFile=join(dataRoot,'lidar-last-success.json');
  const enabled=()=>process.env.LIDAR_FUSION_ENABLED==='1';
  async function save(state){await mkdir(dataRoot,{recursive:true,mode:0o700});const temp=currentFile+'.'+randomUUID();await writeFile(temp,JSON.stringify(state),{mode:0o600});await rename(temp,currentFile);}
+ async function rememberSuccess(state){
+  if(!id.test(state.fitId??''))return;
+  const result=await read(join(dataRoot,'lidar-fits',state.fitId,'summary.json'));
+  if(result?.adoption?.model_updated!==true||result.adoption.model_id!==result.modelId||result.fitId!==state.fitId)return;
+  const value={fitId:state.fitId,modelId:result.modelId,sessionId:result.sessionId};
+  const previous=await read(successFile);if(previous?.fitId===state.fitId)return;
+  const temporary=successFile+'.'+randomUUID();await writeFile(temporary,JSON.stringify(value),{mode:0o600});await rename(temporary,successFile);
+ }
  const python=()=>process.env.SINGING_PYTHON||join(repo,'science/.venv/bin/python');
  const args=(operation)=>[join(repo,'science/scripts/app_lidar.py'),'--operation',operation,'--data-root',dataRoot];
  const options=(timeout=90000)=>({cwd:repo,env:{...process.env,PYTHONPATH:[repo,join(repo,'science/src')].join(':')},timeout,maxBuffer:8*1024*1024});
@@ -28,7 +37,7 @@ export function createLidarRoutes({repo,dataRoot,json}){
   const folder=join(dataRoot,'lidar-fits',state.fitId);
   void execute(python(),[...args('fit'),'--request',join(folder,'app-request.json'),'--output',folder],options(240000))
    .catch(error=>{state.error=(error.stderr??'').split('\n').findLast(line=>/^(ValueError|RuntimeError|FileNotFoundError):/.test(line))||'LiDAR fit paused. Retry in the app to recover its recorded job; baseline and original evidence were preserved.';})
-   .finally(async()=>{state.running=false;await save(state);busy=false;}).catch(()=>{busy=false;});
+   .finally(async()=>{state.running=false;await rememberSuccess(state);await save(state);busy=false;}).catch(()=>{busy=false;});
  }
  return async(req,res,url)=>{
   if(!['/api/lidar/status','/api/lidar/import','/api/lidar/frame','/api/lidar/rgb','/api/lidar/fit','/api/lidar/artifact'].includes(url.pathname))return false;
@@ -41,9 +50,14 @@ export function createLidarRoutes({repo,dataRoot,json}){
     const capture=await read(join(dataRoot,'lidar-current.json'));
     const result=state.fitId?await read(join(dataRoot,'lidar-fits',state.fitId,'summary.json')):null;
     const currentModelId=await model().catch(()=>null);
+    await rememberSuccess(state);
+    const successful=await read(successFile);
+    const saved=successful&&id.test(successful.fitId??'')?await read(join(dataRoot,'lidar-fits',successful.fitId,'summary.json')):null;
+    const lastSuccessfulResult=saved?.fitId===successful?.fitId&&saved?.modelId===successful?.modelId&&saved?.sessionId===successful?.sessionId&&saved?.adoption?.model_updated===true&&saved?.adoption?.model_id===saved?.modelId?saved:null;
     const pull=await read(join(dataRoot,'native-pull-latest.json'));
     json(res,200,{enabled:enabled(),busy,capture,currentModelId,result,error:state.error??null,
-     resultCurrent:!!result&&result.modelId===currentModelId,availableArchive:pull?.name?.startsWith('rear-lidar-')?{name:pull.name,sha256:pull.sha256}:null});return true;
+     resultCurrent:!!result&&result.modelId===currentModelId,lastSuccessfulResult,lastSuccessfulResultCurrent:!!lastSuccessfulResult&&lastSuccessfulResult.modelId===currentModelId,
+     availableArchive:pull?.name?.startsWith('rear-lidar-')?{name:pull.name,sha256:pull.sha256}:null});return true;
    }
    if(!enabled()){json(res,503,{error:'Optional LiDAR fusion is disabled; baseline modeling remains available.'});return true;}
    if(url.pathname.endsWith('/artifact')&&req.method==='GET'){
