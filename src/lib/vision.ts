@@ -85,6 +85,11 @@ export async function createVisionEngine(): Promise<VisionEngine> {
   const trackTongue=createTongueTracker();
   let pendingTongueTip:{x:number;y:number}|undefined;
   let closed = false;
+  const profileRequest=new AbortController();
+  void fetch('/api/tongue-profile',{cache:'no-store',signal:profileRequest.signal}).then(async response=>{
+    if(!response.ok){if(!closed)trackTongue.profileUnavailable();return;}
+    const profile:unknown=await response.json();if(!closed)trackTongue.setProfile(profile);
+  }).catch(()=>{if(!closed)trackTongue.profileUnavailable();});
   return {
     process(video, timestamp) {
       if (closed) throw new Error('Vision engine is closed.');
@@ -155,7 +160,7 @@ export async function createVisionEngine(): Promise<VisionEngine> {
     selectTongueTip(x,y) { pendingTongueTip={x,y}; },
     calibrateTongue() { trackTongue.resetMotionReference(); },
     calibrate() { if (closed || recentDistance === undefined || depthHistory.length < 5) return false; baselineDistance = recentDistance; return true; },
-    close() { if (!closed) { closed = true; face.close(); pose.close(); previous.delete(); } },
+    close() { if (!closed) { closed = true; profileRequest.abort(); face.close(); pose.close(); previous.delete(); } },
   };
 }
 

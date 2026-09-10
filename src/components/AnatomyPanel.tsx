@@ -24,6 +24,7 @@ const bounded = (value: number | undefined, min: number, max: number) => THREE.M
 
 export function AnatomyPanel({ motion, frame, activeRegion = 'jaw', activeMuscles, demo }: Props) {
   const mount = useRef<HTMLDivElement>(null);
+  const tongueStatus = useRef<HTMLSpanElement>(null);
   const latest = useRef({ motion, frame, activeRegion, activeMuscles, demo, bones: true, muscles: true, xray: false, tongue: true });
   const reset = useRef<() => void>(() => {});
   const [bones, setBones] = useState(true);
@@ -158,6 +159,9 @@ export function AnatomyPanel({ motion, frame, activeRegion = 'jaw', activeMuscle
           mesh.material.depthWrite=!mesh.material.transparent;mesh.material.needsUpdate=true;
         }
       }
+      if(tongueStatus.current) tongueStatus.current.textContent=state.tongue.visible
+        ? state.demo ? 'DEMO TIP' : 'OBSERVED 2D TIP'
+        : state.frame?.tongue?.trackingMode==='region' ? 'TIP NOT LOCATED' : 'NOT VISIBLE · RESTING REFERENCE';
       tongueModel.mesh.visible=props.tongue;
       tongueModel.applyPose(state.tongue);
       boneMotion.update();
@@ -185,7 +189,7 @@ export function AnatomyPanel({ motion, frame, activeRegion = 'jaw', activeMuscle
       <button type="button" aria-pressed={tongue} onClick={()=>setTongue(!tongue)}>Tongue</button>
       <button type="button" className="anatomy-reset" onClick={()=>reset.current()} aria-label="Reset anatomy camera">↺</button>
     </div>
-    {tongue && <div className="tongue-status">TONGUE · {demo && frame?.tongue ? 'DEMO' : frame?.tongue?.trackingMode==='region' ? 'SELECT TIP IN CAMERA' : frame?.tongue ? 'TRACKED TIP' : 'NOT VISIBLE · RESTING REFERENCE'}<span>Experimental · exposed surface only</span></div>}
+    {tongue && <div className="tongue-status">TONGUE · <span ref={tongueStatus}>REFERENCE</span><span>Visible tip drives an illustrative surface</span></div>}
     <div className="anatomy-stage">
       <div className="anatomy-canvas" ref={mount}/>
       {status==='loading'&&<div className="anatomy-loading" role="status"><span/>Loading anatomical meshes…</div>}

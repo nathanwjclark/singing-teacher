@@ -1,8 +1,8 @@
-import {useEffect,useRef,useState} from 'react';
+import {useEffect,useRef,useMemo} from 'react';
 import {createAnatomyMotion} from '../lib/anatomyState';
 import type {TrackingFrame} from '../types';
-export function useAnatomyMotion(frame:TrackingFrame|null,demo:boolean){
- const [engine]=useState(createAnatomyMotion);
+export function useAnatomyMotion(frame:TrackingFrame|null,demo:boolean,resetEpoch=0){
+ const engine=useMemo(()=>{void resetEpoch;return createAnatomyMotion()},[resetEpoch]);
  const motion=useRef(engine.state);
  const input=useRef({frame,demo});
  useEffect(()=>{input.current={frame,demo}},[frame,demo]);

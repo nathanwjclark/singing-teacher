@@ -39,8 +39,9 @@ export function createTongueTipTracker() {
         if(score>best){best=score;bestPoint={x,y};bestPatch=values;}
       }
       for(const c of candidates)if(Math.hypot(c.x-bestPoint.x,c.y-bestPoint.y)>5)second=Math.max(second,c.score);
-      // Ambiguous or vanished texture is loss, not permission to jump elsewhere.
-      if(best<.72||best-second<.025||!bestPatch){diagnostic={state:'lost',reason:best<.72?'Patch appearance changed or moved outside the search window': 'Multiple similar patches; tip identity is ambiguous',score:best,margin:best-second};template=undefined;point=undefined;return;}
+      // Abstain on ambiguity, but retain the selected reference for reacquisition.
+      // A single missed frame must not permanently disable tracking.
+      if(best<.72||best-second<.025||!bestPatch){diagnostic={state:'lost',reason:best<.72?'Patch appearance changed or moved outside the search window': 'Multiple similar patches; tip identity is ambiguous',score:best,margin:best-second};return;}
       diagnostic={state:'tracking',reason:'Selected surface patch matched; anatomical identity is supplied by your selection',score:best,margin:best-second};
       point=bestPoint;
       // Keep the initial patch identity while allowing modest lighting/shape change.
