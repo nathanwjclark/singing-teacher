@@ -42,6 +42,8 @@ Separate static morphology scans from dynamic singing trials. A profile or open-
 
 ## Available sensors
 
+The [optional rear LiDAR addendum](optional-lidar-plan.md) assigns LIDAR-01–05 entirely to A, including native acquisition, UI and independent evaluation. It is a feature-specific exception to the general ownership above. The existing TrueDepth path stays intact; rear LiDAR capture, preview and fusion are independently gated and cannot block the app or release. Compare physical performance before preferring either sensor. No new B deliverable is required.
+
 Both available phones have a front TrueDepth camera system and rear LiDAR. Confirm usable capture formats at runtime; the hardware specification does not guarantee every desired combination or frame rate. [iPhone 13 Pro Max specifications](https://support.apple.com/en-us/111870), [iPhone 15 Pro specifications](https://support.apple.com/en-us/111829).
 
 Current MacBook Air/Pro camera specifications do not include LiDAR or TrueDepth. Use the Mac as compute/display and the phone as the depth instrument. [MacBook Air specifications](https://www.apple.com/macbook-air/specs/), [MacBook Pro specifications](https://www.apple.com/macbook-pro/specs/).
