@@ -1,3 +1,4 @@
+import {CaptureProcessingOverlay} from './components/science/CaptureProcessingOverlay';
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Activity, Camera, CircleHelp, MicVocal, Play, Square } from 'lucide-react'
 import CameraPanel from './components/CameraPanel'
@@ -152,6 +153,7 @@ function StudioApp() {
   function toggleCamera() { setDemo(false); setFrame(null); setSeconds(0); setStatus(active ? 'idle' : 'loading'); setMessage(''); setActive(!active) }
   return (
     <div className="app-shell">
+      <CaptureProcessingOverlay/>
       <header className="site-header">
         <a className="brand" href="./"><span className="brand-mark"><MicVocal size={19}/></span>singing<span className="brand-light">teacher</span></a>
         <div className="studio-label"><span className={`status-dot ${active || demo ? 'on' : ''}`}/>{demo ? 'DEMO' : active ? status === 'loading' ? 'CONNECTING' : 'LIVE' : 'CAMERA OFF'}<span className="session-time">{String(Math.floor(seconds / 60)).padStart(2, '0')}:{String(seconds % 60).padStart(2, '0')}</span></div>

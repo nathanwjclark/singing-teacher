@@ -6,9 +6,9 @@ export interface ScientificResult {
  forecast:{selected_experiment_id:string|null;target_observation_id:string;rankings:Array<{experiment:{pose:string;experiment_id:string};predictions:Array<{hypothesis_id:string;canonical?:{measurement:{measurements:Array<{name:string;value:number|null;unit:string}>}}}>}>};
  jobs:Array<{id:string;operation:string;status:string}>;
 }
-export interface ScienceStatus {status:string;runId?:string;error?:string;result?:ScientificResult}
+export interface ScienceStatus {status:string;startedAt?:string;runId?:string;error?:string;result?:ScientificResult}
 export interface OutcomeStatus {
- status:string;runId?:string;outcomeId?:string;error?:string;
+ status:string;startedAt?:string;runId?:string;outcomeId?:string;error?:string;
  result?:{sourceCaptureId?:string;sourceManifestSha256?:string;status:string;scientificStatus:string|null;modelUpdated:boolean;modelId?:string;sessionId?:string;jobId?:string;workerStatus?:string;scores?:Array<{hypothesis_id:string;standardized_rms:number}>;missingReason?:string|null;retainedHypotheses?:number|null;previousHypotheses?:number|null;reasons?:string[];error?:string;source?:string;anatomyValidated:false};
 }
 export async function scienceAction(path:string,body?:unknown){
