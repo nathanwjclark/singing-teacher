@@ -5,7 +5,7 @@ import {mkdtemp,readFile,writeFile,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {resolve} from 'node:path';
 import {validateRecord,verifyPredictionCommit} from '../../src/contracts/index.ts';
-import {candidateFromJointFit,candidateFromPcmFit,forecastFromPcm,importNativeForward,jobRecord,readJson,readLocalJob} from './kit_science.ts';
+import {candidateFromJointFit,candidateFromPcmFit,candidateFromPcmSearch,forecastFromPcm,importNativeForward,jobRecord,readJson,readLocalJob} from './kit_science.ts';
 import type {LocalJob,NativeHandoff} from './kit_science.ts';
 import {replayKitScience} from './replay_kit_science.ts';
 
@@ -95,8 +95,9 @@ test('replay output cannot be overwritten',async()=>{
 });
 
 
-test('actual PCM service selection exports varied anatomy as conditional inference',async()=>{
-  const destination=resolve(temporary,'pcm-job');
+for(const operation of ['fit_pcm','search_pcm'] as const){
+test(`actual ${operation} service selection exports varied anatomy as conditional inference`,async()=>{
+  const destination=resolve(temporary,operation+'-job');
   const code=`from pathlib import Path
 import json,sys
 from singing_physics.engine import Engine,write_json
@@ -110,10 +111,11 @@ with Engine() as engine:
  audio=engine.synthesize('a',{'JA':-2.},f0_hz=180.,duration_s=.25)
  measurement=extract_pcm(audio[4410:8506]*.8,44100,measurement_id='pcm-measurement',observation_id='pcm-calibration',artifact_id='pcm-source',start_ms=100.)['measurement']
  document={'schema_version':'0.1.0','kind':'canonical_pcm_observations','trials':[{'id':'calibration','pose':'a','measurement':measurement,'sample_rate_hz':44100,'frame_start_sample':4410,'frame_size':4096,'duration_s':.25}]}
- candidates=[{'candidate_id':'template','anatomy':{},'trials':{'calibration':control}},{'candidate_id':'physical-alternative','anatomy':anatomy,'trials':{'calibration':control}}]
+candidates=[{'candidate_id':'template','anatomy':{},'trials':{'calibration':control}},{'candidate_id':'physical-alternative','anatomy':anatomy,'trials':{'calibration':control}}]
+parameters={'observations':document,'candidates':candidates,'max_synthesis_calls':4} if '${operation}'=='fit_pcm' else {'observations':document,'anatomy_bounds':{'hard_palate_length':[4.1,4.7],'pharynx_length':[6.4,7.2]},'nuisance_profiles':[{'profile_id':'known','trials':{'calibration':control}}],'rounds':1,'seed':7,'max_synthesis_calls':10}
 with JobService(root/'jobs') as service:
  service.register_model('pcm-session','pcm-model')
- job=service.submit({'operation':'fit_pcm','session_id':'pcm-session','model_id':'pcm-model','parameters':{'observations':document,'candidates':candidates,'max_synthesis_calls':4}},idempotency_key='pcm-fixture')
+ job=service.submit({'operation':'${operation}','session_id':'pcm-session','model_id':'pcm-model','parameters':parameters},idempotency_key='pcm-fixture')
  state=service.wait(job,timeout_s=120)
  if state['status']!='succeeded': raise RuntimeError(state)
  result=service.result(job)
@@ -125,15 +127,21 @@ with Engine() as engine:
   execFileSync(python,['-c',code,destination],{cwd:root,env:{...process.env,PYTHONPATH:`${root}:${root}/science/src`},stdio:'pipe'});
   const pcmJob=await readLocalJob(python,resolve(destination,'jobs'),(await readJson(resolve(destination,'job-id.json'))).id);
   const handoff=await importNativeForward(root,resolve(destination,'selected-forward'),resolve(destination,'capabilities.json'),resolve(destination,'selected-kit'));
-  const candidate=candidateFromPcmFit(pcmJob,handoff,'pcm-model');
+  const adapt=operation==='fit_pcm'?candidateFromPcmFit:candidateFromPcmSearch;
+  const candidate=adapt(pcmJob,handoff,'pcm-model');
   assert.equal(validateRecord(candidate).valid,true);
   assert.deepEqual(candidate.parameters.filter(p=>p.status==='inferred').map(p=>p.name).sort(),['hard_palate_length','pharynx_length']);
   assert.equal(candidate.parameters.filter(p=>p.status==='fixed').length,11);
-  assert.match(candidate.uncertaintyMethod!,/source artifact bytes verified by fitter: no/);
+  assert.match(candidate.uncertaintyMethod!,operation==='fit_pcm'?/source artifact bytes verified by fitter: no/:/source artifact bytes not verified/);
   assert.ok(candidate.evidenceIds.includes('pcm-measurement'));
-  assert.throws(()=>candidateFromPcmFit({...pcmJob,currentModelId:'new-model'},handoff,'pcm-model'),/stale/);
+  assert.throws(()=>adapt({...pcmJob,currentModelId:'new-model'},handoff,'pcm-model'),/stale/);
   const unavailable=structuredClone(pcmJob);(unavailable.result!.joint as Record<string,unknown>).best=null;
-  assert.throws(()=>candidateFromPcmFit(unavailable,handoff,'pcm-model'),/No selected/);
+  assert.throws(()=>adapt(unavailable,handoff,'pcm-model'),/No .*hypothesis/);
+  if(operation==='search_pcm'){
+    const partial=structuredClone(pcmJob);partial.result!.unpaired_failure_synthesis_calls=1;
+    assert.throws(()=>adapt(partial,handoff,'pcm-model'),/No completed/);
+  }
   const forecast=forecastFromPcm(candidate,handoff,{id:'pcm-forecast',experimentId:'pcm-research',intervention:'specified native source',createdAt:new Date().toISOString(),solverCalls:1});
   assert.equal(forecast.modelId,'pcm-model');
 });
+}

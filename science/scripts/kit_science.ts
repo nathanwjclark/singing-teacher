@@ -132,6 +132,22 @@ export function candidateFromPcmFit(job:LocalJob,native:NativeHandoff,expectedMo
 }
 
 const PCM_UNITS:Record<string,string>={pitchHz:'Hz',centroidHz:'Hz',flatness:'ratio',dbfs:'dBFS'};
+/** A completed bounded search remains a conditional hypothesis, not a posterior. */
+export function candidateFromPcmSearch(job:LocalJob,native:NativeHandoff,expectedModelId:string):CandidateAnatomy {
+  const fit=job.result;
+  if(!fit||job.request.operation!=='search_pcm'||fit.kind!=='bounded_canonical_pcm_search'||
+    !object(fit.joint)||!object(fit.joint.best)||!object(fit.joint.best.anatomy)||
+    !Array.isArray(fit.joint.candidates)||!Array.isArray(fit.evidence_ids)||!object(fit.anatomy_bounds)||
+    fit.unpaired_failure_synthesis_calls!==0||fit.completed_comparison_calls_equal!==true||
+    !['round_limit','budget_exhausted'].includes(String(fit.status)))throw Error('No completed comparable PCM search hypothesis');
+  const best=fit.joint.best;
+  if(best.status!=='scored'||!fit.joint.candidates.some(row=>object(row)&&canonicalJson(row)===canonicalJson(best)))throw Error('Search selection is not a scored retained candidate');
+  return fittedCandidate(job,native,expectedModelId,{anatomy:best.anatomy as Record<string,unknown>,provenance:fit.native_provenance,
+    evidenceIds:fit.evidence_ids as string[],bounds:fit.anatomy_bounds,solver:'VocalTractLab bounded canonical PCM search',
+    interpretation:'Selected within a bounded adaptive search using coarse PCM descriptors; physiological uniqueness not established',
+    uncertainty:'Evaluated search support is not a posterior or confidence interval; explicit finite nuisance profiles; source artifact bytes not verified by measurement-only fitter; low residual does not validate anatomy'});
+}
+
 export function forecastFromPcm(candidate:CandidateAnatomy,native:NativeHandoff,options:{id:string;experimentId:string;intervention:string;createdAt:string;solverCalls:number}):Forecast{
   checked(candidate);
   const binding=nativeBinding(native);

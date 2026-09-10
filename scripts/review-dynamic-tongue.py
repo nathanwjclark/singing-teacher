@@ -10,6 +10,35 @@ import importlib.util
 def module(name):
  s=importlib.util.spec_from_file_location(name,Path(__file__).with_name(name+'.py'));m=importlib.util.module_from_spec(s);s.loader.exec_module(m);return m
 
+
+def validate_annotations(annotation, frames):
+ if not isinstance(annotation,dict):raise ValueError('Expected capture-specific annotations')
+ def rectangle(value,name):
+  if not isinstance(value,list) or len(value)!=4 or any(type(v) is not int for v in value):raise ValueError(f'{name}: expected integer depth rectangle')
+  x0,y0,x1,y1=value
+  if not (0<=x0<x1<=320 and 0<=y0<y1<=180):raise ValueError(f'{name}: rectangle outside native depth image')
+  return value
+ regions=annotation.get('face_regions_depth_xyxy')
+ if not isinstance(regions,list) or not regions:raise ValueError('At least one face region is required')
+ for region in regions:rectangle(region,'face region')
+ x0,y0,x1,y1=rectangle(annotation.get('mouth_exclusion_depth_xyxy'),'mouth exclusion')
+ polygon=np.asarray(annotation.get('tongue_seed_polygon_depth_xy'),float)
+ if polygon.ndim!=2 or polygon.shape[1]!=2 or len(polygon)<3 or not np.isfinite(polygon).all():raise ValueError('Invalid visible tongue polygon')
+ if not ((polygon[:,0]>=x0)&(polygon[:,0]<x1)&(polygon[:,1]>=y0)&(polygon[:,1]<y1)).all():raise ValueError('Tongue seed must lie entirely inside excluded mouth region')
+ if abs(np.dot(polygon[:,0],np.roll(polygon[:,1],1))-np.dot(polygon[:,1],np.roll(polygon[:,0],1)))<1e-9:raise ValueError('Tongue seed polygon has no area')
+ sequences={f['sequence'] for f in frames}
+ if type(annotation.get('seed_frame')) is not int or annotation['seed_frame'] not in sequences:raise ValueError('Seed must identify a paired frame')
+ review=annotation.get('visibility_review')
+ if not isinstance(review,dict):raise ValueError('Visibility review must be a frame-to-boolean mapping')
+ for key,value in review.items():
+  if not isinstance(key,str) or not key.isdecimal() or int(key) not in sequences or type(value) is not bool:raise ValueError('Visibility review requires known frame IDs and boolean labels')
+
+
+def reject_tracking_frame(row,reason):
+ row['head']={'valid':False,'reason':reason,'anchors':0,'independent_check_anchors':0}
+ row['tongue']={'candidate_visible':False,'reason':reason,'depth_samples':0,'tracking_kind':'unavailable optical-flow correspondence'}
+ return {'frame':row['frame'],'seconds':row['seconds'],'head':row['head'],'tongue':row['tongue'],'observed':[],'fitted':[],'faces':[]}
+
 def rigid(source,target):
  a=source.mean(0);b=target.mean(0);u,_,vt=np.linalg.svd((source-a).T@(target-b));r=vt.T@u.T
  if np.linalg.det(r)<0:vt[-1]*=-1;r=vt.T@u.T
@@ -45,6 +74,7 @@ def main():
  if manifest['capture_id']!=ann['capture_id'] or manifest['device']['output_mirrored']:raise ValueError('Annotation/capture mismatch')
  frames=[f for f in manifest['frames'] if f.get('rgb') and f.get('depth')]
  if any(f['depth_dimensions']!=[320,180] for f in frames):raise ValueError('Unsupported depth geometry')
+ validate_annotations(ann,frames)
  images=[];depths=[]
  for f in frames:
   image=cv2.imdecode(np.frombuffer(z.read(prefix+f['rgb']['path']),np.uint8),cv2.IMREAD_COLOR);images.append(cv2.resize(image,(640,360),interpolation=cv2.INTER_AREA));depths.append(np.frombuffer(z.read(prefix+f['depth']['path']),'<f4').reshape(180,320))
@@ -76,7 +106,11 @@ def main():
     row['head_rgb']={'valid':int(inliers_rgb.sum())>=12 and rgb_error<2,'kind':'2D similarity only; not 3D pose','independent_check_median_pixels_640':rgb_error,'inliers':int(inliers_rgb.sum()),'independent_check_anchors':len(rgb_test),'current_to_reference_affine':affine.tolist()}
   if not row['head_rgb']:row['head_rgb']={'valid':False,'reason':'insufficient independent RGB face correspondences'}
   nxt,ok,_=cv2.calcOpticalFlowPyrLK(refgray,gray,features,None,winSize=(21,21),maxLevel=3)
+  if nxt is None or ok is None:
+   sample=reject_tracking_frame(row,'forward head optical flow unavailable');sample['image']=uri(cv2.rotate(image[100:230,350:470],cv2.ROTATE_90_CLOCKWISE));samples.append(sample);rows.append(row);continue
   back,bok,_=cv2.calcOpticalFlowPyrLK(gray,refgray,nxt,None,winSize=(21,21),maxLevel=3)
+  if back is None or bok is None:
+   sample=reject_tracking_frame(row,'backward head optical flow unavailable');sample['image']=uri(cv2.rotate(image[100:230,350:470],cv2.ROTATE_90_CLOCKWISE));samples.append(sample);rows.append(row);continue
   xyz,valid=sampled_points(d,nxt[:,0],f['calibration'],preview);fb=np.linalg.norm(back[:,0]-reference_uv,axis=1)
   valid&=ok.ravel().astype(bool)&bok.ravel().astype(bool)&(fb<.8)
   ids=np.flatnonzero(valid);train=ids[ids%5!=0];test=ids[ids%5==0]

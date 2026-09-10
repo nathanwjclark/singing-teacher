@@ -17,6 +17,21 @@ Requests contain `operation` and `parameters`. Supported operations:
 - `fit_pcm`: canonical observation document, explicit finite `candidates`, and
   optional `max_synthesis_calls`. Uses B's exact extractor on native PCM with an
   equal-compute fixed-anatomy baseline. See [PCM_INVERSE.md](PCM_INVERSE.md).
+- `search_pcm`: canonical observation document, bounded anatomy search profile,
+  explicit nuisance profiles, total synthesis cap, rounds and seed. Keeps the
+  entire evaluated search history; see [PCM_SEARCH.md](PCM_SEARCH.md).
+- `design_pcm`: canonical frozen PCM hypothesis JSON, its expected digest,
+  prospective observation identity, declared simulator experiments and feature
+  scales. Writes `design.json` before any subsequent update.
+- `update_pcm`: original snapshot and design JSON with both expected digests,
+  selected experiment identity and newly supplied PCM frame. Writes a separate
+  update artifact with evidence lineage; see [PCM_DESIGN.md](PCM_DESIGN.md).
+- `fit_probe_pcm`: `observations` (canonical singing PCM), `probe_observations`
+  (external response document), joint `candidates`, and optional `max_native_calls`,
+  `pcm_weight`, `probe_weight`. See [PROBE_INVERSE.md](PROBE_INVERSE.md).
+- `predict_probe`: frozen hypothesis JSON and digest, target identity, calibrated
+  external-drive configuration and operator budget. Writes immutable `forecast.json`;
+  see [PROBE_PREDICTION.md](PROBE_PREDICTION.md).
 - `fit_joint`: observation document, anatomy/articulation bounds, starts, seed,
   and per-model budget. See JOINT_INFERENCE.md for its synthetic evidence profile.
 - `predict`: canonical frozen snapshot JSON, expected digest and predict arguments.
@@ -68,3 +83,15 @@ Node runtime; executable paths cannot be supplied as job parameters. PCM replay
 reproduces quantities, scores, frame hashes and lineage. B's unchanged serializer
 records each new extraction's actual `createdAt`, so new extraction receipts
 have different timestamps. Previously committed forecasts remain immutable.
+
+## Run a saved request
+
+```sh
+PYTHONPATH=.:science/src science/.venv/bin/python -m singing_physics.cli job /private/request.json --output /private/new-job-run
+```
+
+This creates a fresh private directory, runs the same validated process-isolated
+service, verifies the result manifest, and emits `job.json` with the result path.
+Existing output is never overwritten. A failed job keeps its error receipt and
+exits nonzero. Optional model registration applies only to this fresh local run,
+not B's shared session registry. No executable path can be supplied in job parameters.

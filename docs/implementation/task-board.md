@@ -78,3 +78,18 @@ Newly planned scope, not implementation claims. The [active probing plan](../phy
 | PROBE-06 evaluation | B evaluation; A review | planned | G8 real capture-to-fit and G9 prospective Astra loop; compare with/without probing, retain null results. |
 
 Existing lane owners coordinate edits; this board update does not assign running agents or change current acceptance statuses.
+
+## Revision 8: research-harness finish priorities
+
+The [three-hour finish plan](../physiology/research-harness-finish-plan.md) is authoritative for hackathon completion. Preserve all existing implementation/evidence statuses; no gate is marked passed by this planning change. Track implementation, evidence source and scientific result separately. Accuracy/identifiability/learning improvement are not release requirements.
+
+| Priority | Owner | Required handoff |
+|---|---|---|
+| Shared runnable commit | A publishes; B integrates | Existing fit/design/update, media and KIT paths execute together. |
+| Runtime Astra | B server/orchestration | Real API invocation chooses a supported action from actual model evidence and adapts after score. |
+| Recording-to-model | A adapter/inverse; B ingestion | Verified real media affects the physical hypotheses; no disconnected import-only completion. |
+| Session/UI | B | Instruction, recording, score, actual model display, sensation memory and replay work end to end. |
+| Probe connection | Existing PROBE owners | One-phone real drive/response reaches supported external-drive model; accuracy gain not required. |
+| Acceptance | B end-to-end reviewer; A numerical review | Two runs plus replay; quantity, provenance, chronology and failure checks. |
+
+Allocate agents to these connections before broad robustness studies, tuning or additional visual polish. At 90 minutes, repair broken main-loop edges first; use the final 45 minutes for defects, startup/recovery and rehearsal. Preserve negative research results and report any unfinished modality or operator explicitly.

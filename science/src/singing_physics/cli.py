@@ -28,10 +28,36 @@ def main():
     bench.add_argument("--seed", type=int, default=7)
     bench.add_argument("--noise-db", type=float, default=0.)
     bench.add_argument("--starts", type=int, default=6)
+    job = commands.add_parser("job", help="Run a validated local scientific job request in a fresh private directory")
+    job.add_argument("request", type=Path, help="JSON JobService request; media stays in its existing artifact store")
+    job.add_argument("--output", type=Path, required=True)
+    job.add_argument("--timeout", type=float, default=180., help="Worker deadline in seconds, 1–3600")
     args = parser.parse_args()
     try:
         if args.output.exists():
             raise ValueError(f"Refusing to overwrite {args.output}")
+        if args.command == "job":
+            from .service import JobService
+            if args.request.stat().st_size > 2_000_000:
+                raise ValueError("Job request exceeds 2 MB")
+            request = json.loads(args.request.read_text())
+            args.output.mkdir(parents=True, mode=0o700, exist_ok=False)
+            with JobService(args.output / "jobs", timeout_s=args.timeout) as service:
+                if isinstance(request, dict) and "session_id" in request and "model_id" in request:
+                    # Fresh, local one-shot registry; not authorization for a
+                    # shared remote session or replacement of B's model ledger.
+                    service.register_model(request["session_id"], request["model_id"])
+                job_id = service.submit(request, idempotency_key="requested-job")
+                state = service.wait(job_id, timeout_s=args.timeout + 5)
+                receipt = {"job_id": job_id, **state}
+                if state["status"] == "succeeded":
+                    service.result(job_id)  # Verify the published artifact manifest.
+                    receipt["result_path"] = str((args.output / "jobs" / "artifacts" / job_id / "result.json").resolve())
+                write_json(args.output / "job.json", receipt)
+                if state["status"] != "succeeded":
+                    raise RuntimeError(f"Job {job_id} {state['status']}: {state['error']}")
+                print(json.dumps(receipt, indent=2, allow_nan=False))
+            return
         if args.command == "benchmark":
             print(json.dumps(benchmark(args.output, seed=args.seed, noise_db=args.noise_db, starts=args.starts), indent=2, allow_nan=False))
             return
