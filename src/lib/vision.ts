@@ -90,7 +90,7 @@ export async function createVisionEngine(): Promise<VisionEngine> {
         } else trackTongue(new Uint8ClampedArray(0),0,0,[],timestamp);
       } else trackTongue(new Uint8ClampedArray(0),0,0,[],timestamp);
       const tongueDiagnostic=trackTongue.diagnostics();
-      if(tongueDiagnostic.state==='lost'&&tongueStatus==='Searching for visible tongue')tongueStatus='Tip lost · open Tongue lab for details';
+      if(tongueDiagnostic.state==='lost'&&tongueStatus==='Searching for visible tongue')tongueStatus=tongueDiagnostic.reason;
       return { tongue, tongueStatus, tongueSearch, tongueDiagnostic, face: landmarks, pose: cachedPose, worldPose: cachedWorldPose, faceTransform, blendshapes, timestamp, metrics: stabilizer.metrics({ mouthOpen, headTilt: tilt(landmarks[33], landmarks[263]), shoulderTilt: tilt(cachedPose[11], cachedPose[12]), brightness, motion, ...depth }, timestamp, landmarks.length > 0) };
     },
     calibrateTongue() { trackTongue.resetMotionReference(); },
