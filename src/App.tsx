@@ -4,7 +4,7 @@ import CameraPanel from './components/CameraPanel'
 import AnatomyPanel from './components/AnatomyPanel'
 import AudioPanel from './components/AudioPanel'
 import { CoachingPanel } from './components/CoachingPanel'
-import { getTips } from './lib/coaching'
+import { useRecentTips } from './hooks/useRecentTips'
 import type { Metrics, TrackingFrame, TrackingStatus } from './types'
 import './App.css'
 
@@ -35,7 +35,7 @@ function App() {
   useEffect(() => { if (!active) return; const timer = window.setInterval(() => setSeconds(s => s + 1), 1000); return () => window.clearInterval(timer) }, [active])
   const exampleFrame: TrackingFrame = { ...demoFrame, metrics: { ...demoFrame.metrics, distanceCm: 65, relativeDepth: 1, headYaw: 0, headPitch: 0, shoulderDepth: 0, torsoLean: 0, ...demoScenarios[scenario].metrics } }
   const shownFrame = demo ? exampleFrame : active && (status === 'tracking' || status === 'no-face') ? frame : null
-  const tips = getTips(shownFrame)
+  const { tips, now: cueNow } = useRecentTips(shownFrame, demo ? 'demo' : active ? 'live' : 'idle')
   const selectedTip = tips.find(tip => tip.id === selectedTipId) ?? tips[0]
   function toggleCamera() { setDemo(false); setFrame(null); setSeconds(0); setStatus(active ? 'idle' : 'loading'); setMessage(''); setActive(!active) }
   return (
@@ -54,7 +54,7 @@ function App() {
         <div className="studio-grid">
           <section className="studio-column"><div className="column-title"><span className="column-number">01</span><h2>Your view</h2><Camera size={16}/></div><div className="panel-body camera-wrap"><CameraPanel active={active} onFrame={setFrame} onStatus={onStatus}/>{demo && <div className="demo-cover"><div className="demo-avatar"><MicVocal size={48}/></div><span className="eyebrow">SAMPLE SESSION</span><h3>{demoScenarios[scenario].title}</h3><p>{demoScenarios[scenario].detail}</p><div className="demo-scenarios" aria-label="Demo scenario">{demoScenarios.map((item, index) => <button key={item.name} aria-pressed={scenario === index} onClick={() => { setScenario(index); setSelectedTipId(undefined) }}>{item.name}</button>)}</div><span className="demo-pill">Demo · camera is off</span></div>}</div></section>
           <section className="studio-column"><div className="column-title"><span className="column-number">02</span><h2>Movement map</h2><Activity size={16}/></div><div className="panel-body"><AnatomyPanel frame={shownFrame} activeRegion={selectedTip?.region} activeMuscles={selectedTip?.muscles} demo={demo}/></div></section>
-          <section className="studio-column coach-column"><div className="column-title"><span className="column-number">03</span><h2>Your next adjustment</h2><span className="live-tag">{demo ? 'DEMO' : active && status === 'tracking' ? 'LIVE' : 'COACH'}</span></div><div className="panel-body"><CoachingPanel tips={tips} demo={demo} tracking={!!shownFrame?.face.length} selectedTipId={selectedTip?.id} onSelectTip={tip => setSelectedTipId(tip.id)}/></div></section>
+          <section className="studio-column coach-column"><div className="column-title"><span className="column-number">03</span><h2>Your next adjustments</h2><span className="live-tag">{demo ? 'DEMO' : active && status === 'tracking' ? 'LIVE' : 'COACH'}</span></div><div className="panel-body"><CoachingPanel tips={tips} demo={demo} tracking={!!shownFrame?.face.length} selectedTipId={selectedTip?.id} now={cueNow} onSelectTip={tip => setSelectedTipId(tip.id)}/></div></section>
         </div>
         {message && status === 'error' && <p className={`session-message ${status === 'error' ? 'error' : ''}`} role="status">{message}</p>}
         <AudioPanel demo={demo} autoStart/>

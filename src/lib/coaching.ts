@@ -9,7 +9,7 @@ const score = (base: number, amount: number, threshold: number, scale: number) =
 /** Visual prompts only. Muscle IDs identify anatomical references, never measured activity.
  * Optional 3D metrics are omitted when unavailable; do not substitute zero for them.
  */
-export function getTips(frame: TrackingFrame | null): Tip[] {
+export function getTips(frame: TrackingFrame | null, { limit = 3, uniqueRegions = true }: {limit?:number; uniqueRegions?:boolean} = {}): Tip[] {
   if (!frame) return [tip('start', 'Make room for your voice.', 'Start your camera, then bring your face and shoulders into view.', 'good', 'general', 0)];
   if (frame.face.length === 0) return [tip('find-face', 'Let’s find your face.', 'Face the camera in even light. Your cues will return when your face is visible.', 'adjust', 'general', 100)];
 
@@ -78,9 +78,9 @@ export function getTips(frame: TrackingFrame | null): Tip[] {
   // Keep the strongest cue per region so three neck observations cannot crowd out the body.
   const regions = new Set<Tip['region']>();
   const ranked = tips.sort((a, b) => b.score - a.score).filter(item => {
-    if (regions.has(item.region)) return false;
+    if (uniqueRegions && regions.has(item.region)) return false;
     regions.add(item.region);
     return true;
-  }).slice(0, 3);
+  }).slice(0, limit);
   return ranked.map((item, index) => ({ ...item, severity: index === 0 && item.region !== 'general' ? 'focus' : item.severity }));
 }

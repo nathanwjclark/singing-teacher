@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { createModelHair } from '../lib/modelHair';
+import { createModelHair, disposeModelHairTextures } from '../lib/modelHair';
 import { createMuscleMotion } from '../lib/muscleMotion';
 import type { BodyRegion, TrackingFrame } from '../types';
 import './AnatomyPanel.css';
@@ -165,6 +165,7 @@ export function AnatomyPanel({ frame, activeRegion = 'jaw', activeMuscles, demo 
       disposed=true;abort.abort();observer.disconnect();renderer.setAnimationLoop(null);controls.dispose();
       renderer.domElement.removeEventListener('pointermove',inspect);renderer.domElement.removeEventListener('pointerleave',leave);renderer.domElement.removeEventListener('webglcontextlost',contextLost);
       for(const mesh of meshes){mesh.geometry.dispose();mesh.material.dispose();}
+      disposeModelHairTextures(hair);
       for(const mesh of decorative){mesh.geometry.dispose();const mat=mesh.material;if(Array.isArray(mat))mat.forEach(m=>m.dispose());else mat.dispose();}
       renderer.dispose();renderer.domElement.remove();reset.current=()=>{};
     };
