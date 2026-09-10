@@ -40,8 +40,9 @@ export async function importSingingSession(captureDirectory: string, outputDirec
     check(candidate.trials && Object.keys(candidate.trials).length === ids.size && [...ids].every(t => t in candidate.trials), 'Candidate must condition every selected trial')
     for (const control of Object.values(candidate.trials) as any[]) check(control && Object.keys(control).sort().join() === 'JA,f0_hz,gain' && finite(control.JA) && control.JA >= -5 && control.JA <= -1 && finite(control.f0_hz) && control.f0_hz >= 65 && control.f0_hz <= 1000 && finite(control.gain) && control.gain >= .001 && control.gain <= 100, 'Explicit bounded JA, source pitch and digital gain required')
   }
+  check(c.expected_session_version === undefined || (Number.isSafeInteger(c.expected_session_version) && c.expected_session_version >= 0 && id(c.command_id)), 'Expected session version requires explicit command_id')
   const neededCalls = 2 * c.candidates.length * c.selections.length
-  check(Number.isSafeInteger(c.max_synthesis_calls) && c.max_synthesis_calls >= neededCalls && c.max_synthesis_calls <= 4096, 'Insufficient or invalid equal-compute synthesis budget')
+  check(Number.isSafeInteger(c.max_synthesis_calls) && c.max_synthesis_calls >= neededCalls && c.max_synthesis_calls <= 640, 'Insufficient or invalid equal-compute synthesis budget')
   const manifestBytes = await read(root, 'manifest.json'), manifestHash = hash(manifestBytes), manifest = JSON.parse(manifestBytes.toString())
   check(c.source_manifest_sha256 === manifestHash, 'Configuration does not bind original source manifest')
   check(manifest.schema_version === 'singing-native-rgbd-1.0.0' && !manifest.drive && !manifest.protocol && manifest.containsProbe !== true && manifest.audio?.containsProbe !== true && manifest.contains_external_excitation !== true, 'External excitation/probe cannot enter ordinary singing importer')
@@ -90,8 +91,7 @@ export async function importSingingSession(captureDirectory: string, outputDirec
   // Partial evidence is retained; caller must explicitly reselect/redeclare a complete fit request.
   const eligible = trials.length === c.selections.length
   const observations = { schema_version: '0.1.0', kind: 'canonical_pcm_observations', trials }
-  check(c.expected_session_version === undefined || (Number.isSafeInteger(c.expected_session_version) && c.expected_session_version >= 0), 'Invalid expected session version')
-  const session_command = eligible && c.expected_session_version !== undefined ? { action: 'ingest_calibration', expected_version: c.expected_session_version, document: observations } : null
+  const session_command = eligible && c.expected_session_version !== undefined ? { action: 'ingest_calibration', command_id: c.command_id, expected_version: c.expected_session_version, document: observations } : null
   const fit_params = eligible ? { observations, candidates: c.candidates, max_synthesis_calls: c.max_synthesis_calls } : null
   const receipt = { kind: 'singing_session_import_receipt', schema_version: '0.1.0', source_manifest_sha256: manifestHash, configuration_sha256: hash(configBytes), evidence_kind: c.evidence_kind,
     eligible_for_fit: eligible, fit_executed: false, selections, cuts: imported.cuts, source_bindings: imported.segments,
