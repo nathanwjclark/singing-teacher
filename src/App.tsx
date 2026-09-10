@@ -32,6 +32,7 @@ import LearningMemoryPanel from './components/coach/LearningMemoryPanel'
 import PhonationPanel from './phonation/PhonationPanel'
 import { SourceInferencePanel } from './phonation/SourceInferencePanel'
 import { LidarFusionPanel } from './components/lidar/LidarFusionPanel'
+import TeachingPanel from './teaching/TeachingPanel'
 import SessionReplayPanel from './components/science/SessionReplayPanel'
 import { ScientificModelPanel } from './components/science/ScientificModelPanel'
 import { AstraCoachPanel } from './components/science/AstraCoachPanel'
@@ -200,6 +201,7 @@ function StudioApp() {
         <div data-learning-assistance style={learningRecall?{display:'none'}:undefined}>
         <ScientificModelPanel onPreview={()=>{setScientificPreview(true);setTab('studio')}}/>
         <AstraCoachPanel/>
+        <TeachingPanel/>
         <LearningMemoryPanel/>
         <PhonationPanel audioStream={audioStream}/>
         <SourceInferencePanel/>
