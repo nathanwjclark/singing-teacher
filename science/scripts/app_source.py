@@ -26,6 +26,15 @@ def save(path,value):
     temporary=path.with_suffix('.tmp');temporary.write_text(json.dumps(value,allow_nan=False));temporary.chmod(0o600);temporary.replace(path)
 
 
+def source_candidates(hypotheses,trial_id,pitch):
+    if not 1<=len(hypotheses)<=8:raise ValueError('Optional source candidate budget cannot cover current anatomy support')
+    skews=[-.2,0.,.2] if len(hypotheses)<=2 else [-.2,.2]
+    candidates=[{'candidate_id':f'source-{i}-{j}','anatomy':h['anatomy'],
+        'trials':{trial_id:{'JA':-3.,'F0':pitch,'PR':8000.,'PS':ps,'gain':4.}}}
+        for i,h in enumerate(hypotheses) for j,ps in enumerate(skews)]
+    return candidates,skews
+
+
 def frame(import_dir,session_id,identity=None,evidence_at=None,rate=None,declared_pose=None):
     imported=load(import_dir/'native-pcm.json')
     for segment in imported['segments']:
@@ -92,11 +101,9 @@ def run(root,phase,output):
         trial,record=frame(imported,session_id,evidence_at=manifest.get('created_at'));pitch=record['descriptors']['pitchHz']['value']
         if pitch is None or not 65<=pitch<=600:raise ValueError('Observed pitch outside supported conditional source range')
         hypotheses=state['snapshot']['hypotheses']
-        if not 1<=len(hypotheses)<=8:raise ValueError('Optional source candidate budget cannot cover current anatomy support')
-        skews=[-.2,0.,.2] if len(hypotheses)<=2 else [-.2,.2] if len(hypotheses)<=4 else [0.]
-        candidates=[{'candidate_id':f'source-{i}-{j}','anatomy':h['anatomy'],'trials':{trial['id']:{'JA':-3.,'F0':pitch,'PR':8000.,'PS':ps,'gain':4.}}} for i,h in enumerate(hypotheses) for j,ps in enumerate(skews)]
+        candidates,skews=source_candidates(hypotheses,trial['id'],pitch)
         command={'action':'fit_source','parameters':{'document':{'schema_version':'phonation-fit-1','trials':[trial]},'candidates':candidates,'max_synthesis_calls':3*len(candidates),'timeout_s':90.}}
-        binding={'source_import_sha256':summary['sourceImportSha256'],'source_skew_support':skews,'source_assumptions':'Measured acoustic pitch; prescribed JA=-3, PR=8000 and gain=4. '+('PS alternatives are simulator hypotheses, not observed execution or closure.' if len(skews)>1 else 'PS is fixed at zero to cover all retained anatomy within the compute budget; this fit cannot distinguish source-shape alternatives.')}
+        binding={'source_import_sha256':summary['sourceImportSha256'],'source_skew_support':skews,'source_assumptions':'Measured acoustic pitch; prescribed JA=-3, PR=8000 and gain=4. Every retained anatomy has the same PS alternatives; these are simulator hypotheses, not observed execution or closure.'}
     elif phase=='forecast':
         model=state.get('source_model')
         if not model or model['baseline_model_id']!=baseline:raise ValueError('Fit a source model for the current anatomy first')
@@ -105,7 +112,7 @@ def run(root,phase,output):
         if pointer.exists():
             active=load(pointer);data=active['forecast'];chosen=next((r['experiment'] for r in data['rankings'] if r['experiment']['experiment_id']==data['selected_experiment_id']),None)
             if active['modelId']==baseline and chosen:pose=chosen['pose']
-        command={'action':'forecast_source_bank','parameters':{'reference_trial_id':reference['trial_id'],'pose':pose,'controls':{k:reference['controls'][k] for k in ('JA','F0','PR','gain')},'target_id':identity,'max_synthesis_calls':24,'timeout_s':90.}}
+        command={'action':'forecast_source_bank','parameters':{'reference_trial_id':reference['trial_id'],'pose':pose,'controls':{k:reference['controls'][k] for k in ('JA','F0','PR','gain')},'target_id':identity,'max_synthesis_calls':48,'timeout_s':90.}}
         ranking=next((r for r in reversed(state.get('source_rankings',[])) if r['source_model_id']==model['model_id'] and r['baseline_model_id']==baseline),None)
         binding={'sourceModelId':model['model_id'],'pose':pose,'rankingParentId':ranking['ranking_id'] if ranking else None,
             'rankingParentVersion':ranking['version'] if ranking else 0,'instruction':f'Record a comfortable sustained {pose} vowel. Keep pitch and microphone position similar; stop for discomfort.','source_assumptions':'Every bounded source/tract and ablation alternative is frozen before this capture. Conditional simulator ranking is separate from baseline anatomy; execution controls are not measured physiology.'}

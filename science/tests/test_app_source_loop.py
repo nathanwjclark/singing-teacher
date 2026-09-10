@@ -227,6 +227,9 @@ def test_optional_source_fit_forecast_later_capture_score_and_restart(tmp_path):
         assert model['baseline_model_id'] == baseline['model_id']
         assert model['closure_contact_inference'] is False
         assert model['result']['status'] == 'available'
+        source_candidates=model['result']['joint']['candidates']
+        assert len(source_candidates)==len(baseline['hypotheses'])*(3 if len(baseline['hypotheses'])<=2 else 2)
+        assert model['result']['actual_synthesis_calls']==3*len(source_candidates)
         assert (run / 'summary.json').read_bytes() == summary_bytes
 
         # Both disabled and restarted apps preserve the independent valid model.
@@ -251,6 +254,8 @@ def test_optional_source_fit_forecast_later_capture_score_and_restart(tmp_path):
         frozen = committed['artifact']['forecast']
         assert frozen['target_id'] == target
         assert frozen['status'] == 'available'
+        assert len(frozen['alternatives'])==3*len(source_candidates)
+        assert frozen['actual_synthesis_calls']==3*len(source_candidates)
         restart()
         call('/api/source/forecast', False)
         assert call(session_path)['state']['version'] == predicted['version']
