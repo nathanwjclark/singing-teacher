@@ -86,3 +86,41 @@ def test_adoption_receipt_survives_subsequent_geometry_export_failure(tmp_path):
     receipt=json.loads((tmp_path/'adoption-summary.json').read_text())
     assert receipt['modelId']=='adopted' and receipt['includedInFit'] is True
     assert receipt['geometry'] is None and not (tmp_path/'summary.json').exists()
+
+
+def test_geometry_terminal_failure_gets_new_identity_without_repeating_success(tmp_path, monkeypatch):
+    from science.scripts import app_lidar
+    submitted = {}
+    calls = []
+    class Backend:
+        def submit(self, request, key):
+            calls.append(key)
+            return submitted.setdefault(key, 'job-' + str(len(submitted)))
+    def terminal(backend, job):
+        return {'status': 'failed' if job == 'job-0' else 'succeeded',
+                'error': 'scheduler_interrupted' if job == 'job-0' else None}
+    monkeypatch.setattr(app_lidar, 'wait', terminal)
+    backend=Backend();request={'operation':'forward'}
+    with pytest.raises(ValueError, match='new export attempt'):
+        app_lidar.geometry_export_job(backend,request,tmp_path)
+    failed=(tmp_path/'geometry-attempt-00.terminal.json').read_bytes()
+    assert app_lidar.geometry_export_job(backend,request,tmp_path)=='job-1'
+    assert app_lidar.geometry_export_job(backend,request,tmp_path)=='job-1'
+    assert len(submitted)==2 and calls[-1]==calls[-2]
+    assert (tmp_path/'geometry-attempt-00.terminal.json').read_bytes()==failed
+    assert json.loads((tmp_path/'geometry-attempt-01.terminal.json').read_text())['status']=='succeeded'
+
+
+def test_geometry_lost_submit_response_resumes_same_identity(tmp_path, monkeypatch):
+    from science.scripts import app_lidar
+    keys=[]
+    class Backend:
+        def submit(self, request, key):
+            keys.append(key)
+            if len(keys)==1:raise OSError('accepted response lost')
+            return 'accepted-job'
+    monkeypatch.setattr(app_lidar,'wait',lambda backend,job:{'status':'succeeded'})
+    backend=Backend()
+    with pytest.raises(OSError):app_lidar.geometry_export_job(backend,{},tmp_path)
+    assert app_lidar.geometry_export_job(backend,{},tmp_path)=='accepted-job'
+    assert keys[0]==keys[1]

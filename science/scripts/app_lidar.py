@@ -106,6 +106,30 @@ def annotation_for(declaration,snapshot,capture,output):
         'source_kind':declaration['sourceKind']}
 
 
+
+def geometry_export_job(backend, request, output):
+    """Resume an export identity; advance only past retained terminal failures."""
+    for attempt in range(32):
+        prefix = output / f'geometry-attempt-{attempt:02d}'
+        terminal_path = prefix.with_suffix('.terminal.json')
+        key = output.name + '-geometry' + (f'-retry-{attempt}' if attempt else '')
+        seal(prefix.with_suffix('.request.json'), {'request': request, 'idempotencyKey': key})
+        saved = _json(terminal_path.read_bytes()) if terminal_path.exists() else None
+        if saved and saved['status'] in ('failed', 'cancelled'):
+            continue
+        # Repeating submit recovers acceptance even if its response was lost.
+        job = backend.submit(request, key)
+        seal(prefix.with_suffix('.job.json'), {'jobId': job})
+        terminal = wait(backend, job)
+        if terminal['status'] not in ('succeeded', 'failed', 'cancelled'):
+            raise ValueError('Geometry export has no terminal result; retry to resume it')
+        seal(terminal_path, {'jobId': job, 'status': terminal['status'], 'error': terminal.get('error')})
+        if terminal['status'] != 'succeeded':
+            raise ValueError('Adopted model geometry export failed; retry starts a new export attempt')
+        return job
+    raise ValueError('Geometry export retry limit reached; adopted model and failed attempts remain retained')
+
+
 def finish(backend,intent,output):
     command=intent['command'];key='session:'+digest(canonical([intent['sessionId'],command['command_id']]).encode())
     def owned(state):return next((j for j in state['jobs'] if j.get('key')==key),None)
@@ -161,9 +185,7 @@ def finish(backend,intent,output):
         geometry_path=output/'geometry-receipt.json'
         if geometry_path.exists():geometry=_json(geometry_path.read_bytes())
         elif state['snapshot']['model_id']==target_model:
-            geometry_job=backend.submit(request,output.name+'-geometry')
-            terminal=wait(backend,geometry_job)
-            if terminal['status']!='succeeded':raise ValueError('Adopted model geometry export failed; retry to recover it')
+            geometry_job=geometry_export_job(backend,request,output)
             forward=backend.result(geometry_job);bundle=backend.exports(geometry_job)
             if bundle.get('job_id')!=geometry_job:raise ValueError('Geometry export job identity differs')
             folder=output/'geometry';folder.mkdir(mode=0o700,exist_ok=True);files={}
