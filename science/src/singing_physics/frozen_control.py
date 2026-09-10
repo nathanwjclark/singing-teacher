@@ -7,7 +7,7 @@ from scipy.optimize import minimize_scalar
 
 from .engine import ANATOMY, Engine, finite
 from .joint import ALIGNMENT_TOLERANCE_SECONDS, LIP_OPERATOR
-from .prediction import Artifact, _identity, _timestamp, freeze_candidates
+from .prediction import Artifact, _encode, _identity, _timestamp, freeze_candidates
 
 KIND = "frozen_anatomy_dynamic_transfer"
 
@@ -19,8 +19,10 @@ def _snapshot(engine, snapshot, expected_digest, candidate_id):
     if not isinstance(data, dict) or data.get("schema_version") != "0.1.0" or data.get("kind") != "frozen_anatomy_candidates":
         raise ValueError("Expected frozen anatomy candidates")
     # Reuse the existing artifact's complete identity/time/lineage validation.
-    freeze_candidates(**{key: data.get(key) for key in
+    canonical = freeze_candidates(**{key: data.get(key) for key in
         ("model_id", "evidence_ids", "provenance", "candidates", "frozen_at")})
+    if canonical.content != snapshot.content:
+        raise ValueError("Frozen snapshot is not its canonical validated representation")
     if data["provenance"] != engine.provenance:
         raise ValueError("Frozen snapshot native provenance mismatch")
     candidates = [c for c in data["candidates"] if c["candidate_id"] == candidate_id]
@@ -29,6 +31,13 @@ def _snapshot(engine, snapshot, expected_digest, candidate_id):
     anatomy = candidates[0]["anatomy"]
     if set(anatomy) != {a[0] for a in ANATOMY}:
         raise ValueError("Frozen control requires all native anatomy parameters explicitly")
+    for name, _, lower, upper in ANATOMY:
+        if not lower <= finite(anatomy[name], name) <= upper:
+            raise ValueError(f"Frozen anatomy {name} exceeds native bounds")
+    minimum_pharynx = sum(anatomy[k] for k in
+        ("palate_height", "upper_molars_height", "lower_molars_height", "mandible_height"))
+    if anatomy["pharynx_length"] < minimum_pharynx:
+        raise ValueError("Frozen anatomy violates mouth/jaw height constraint")
     return data, anatomy
 
 
@@ -103,13 +112,15 @@ def fit_frozen_control(engine: Engine, snapshot: Artifact, document, *, expected
         context = attempt.get("context")
         if not isinstance(context, dict) or not context:
             raise ValueError("Attempt context required")
-        from .prediction import _encode
         encoded_context = _encode(context)
         if metadata["context_id"] in contexts and contexts[metadata["context_id"]] != encoded_context:
             raise ValueError("Conflicting context identity")
         contexts[metadata["context_id"]] = encoded_context
         split = attempt.get("split")
-        execution = attempt.get("execution_status", "unknown")
+        capture_outcome = attempt.get("outcome", "unknown")
+        if capture_outcome not in ("completed", "unsuccessful", "unknown"):
+            raise ValueError("Invalid capture outcome")
+        execution = attempt.get("execution_status", "unsuccessful" if capture_outcome == "unsuccessful" else "unknown")
         mode = attempt.get("mode", "elicited")
         if split not in ("calibration", "held_out") or execution not in ("successful", "unsuccessful", "unknown") or mode not in ("elicited", "recalled", "transfer"):
             raise ValueError("Invalid attempt split, execution status or mode")
@@ -118,7 +129,7 @@ def fit_frozen_control(engine: Engine, snapshot: Artifact, document, *, expected
         if not isinstance(frames, list) or not frames:
             raise ValueError("Attempt frames required")
         output = {**metadata, "context": context, "observed_at": attempt["observed_at"],
-                  "split": split, "execution_status": execution, "mode": mode,
+                  "split": split, "execution_status": execution, "capture_outcome": capture_outcome, "mode": mode,
                   "cue_delivered_seconds": cue_time, "frames": []}
         previous, timebase, segment = None, None, 0
         for frame in frames:
@@ -128,6 +139,8 @@ def fit_frozen_control(engine: Engine, snapshot: Artifact, document, *, expected
             if frame_id in seen_frames:
                 raise ValueError("Duplicate frame id")
             seen_frames.add(frame_id)
+            if len(seen_frames) > 30:
+                raise ValueError("At most 30 frames are supported")
             for key, value in metadata.items():
                 if key in frame and frame[key] != value:
                     raise ValueError("Frame attempt/cue/context identity mismatch")
@@ -205,15 +218,22 @@ def fit_frozen_control(engine: Engine, snapshot: Artifact, document, *, expected
         output_attempts.append(output)
     if calibration_ids & held_ids:
         raise ValueError("Calibration and held-out capture evidence overlap")
-    if not fitted_frames or len(seen_frames) > 30 or budget < 5*len(fitted_frames):
-        raise ValueError("Require 1-30 frames and at least five evaluations per fitted frame")
+    costs = [1 + int(row["measured_visible_geometry"] is not None) for row, _ in fitted_frames]
+    if not fitted_frames or len(seen_frames) > 30 or budget < 5*sum(costs):
+        raise ValueError("Require 1-30 frames and budget for five spectrum/geometry evaluations per frame")
+    allocations = [budget//sum(costs)] * len(costs)
+    remaining = budget-sum(a*c for a, c in zip(allocations, costs))
+    for i, cost in enumerate(costs):
+        if remaining >= cost:
+            allocations[i] += 1
+            remaining -= cost
     operator_id = f"frozen-native-JA-v1:{snapshot.sha256}:{candidate_id}"
     calls, geometry_calls, pose_calls = 0, 0, 0
     saved = engine.anatomy()
     try:
         engine.set_anatomy(anatomy)
         for index, (row, target) in enumerate(fitted_frames):
-            allocation = budget//len(fitted_frames) + (index < budget % len(fitted_frames))
+            allocation = allocations[index]
             frame_calls, best = 0, None
             visited = []
 
@@ -250,9 +270,11 @@ def fit_frozen_control(engine: Engine, snapshot: Artifact, document, *, expected
                 return value
 
             grid = np.linspace(-5., -1., min(41, max(3, allocation//2)))
-            for point in grid:
+            # Seed controls grid tie order only; the same complete grid is searched.
+            rng = np.random.default_rng(seed + index)
+            for point in rng.permutation(grid):
                 objective(point)
-            best_index = int(np.argmin([item[1] for item in visited]))
+            best_index = int(np.argmin(np.abs(grid-best["requested_JA"])))
             lower, upper = grid[max(0, best_index-1)], grid[min(len(grid)-1, best_index+1)]
             try:
                 optimized = minimize_scalar(objective, bounds=(lower, upper), method="bounded",
@@ -264,7 +286,8 @@ def fit_frozen_control(engine: Engine, snapshot: Artifact, document, *, expected
                 "snapshot_sha256": snapshot.sha256, "candidate_id": candidate_id, "operator_id": operator_id,
                 "measurement_sigma_deg": None, "uncertainty_scope": "uncalibrated_conditional_on_frozen_anatomy_and_observations",
                 "reconstruction_only": True, "termination": termination, "forward_evaluations": frame_calls,
-                "sampled_near_optimal_JA_range_deg": [min(x for x, y in visited if y <= best["objective"]+1.),
+                "native_forward_calls": frame_calls*costs[index], "identifiability": "not_established",
+                "sampled_near_optimal_requested_JA_range_deg": [min(x for x, y in visited if y <= best["objective"]+1.),
                                                      max(x for x, y in visited if y <= best["objective"]+1.)],
                 "range_is_calibrated_posterior": False}
             if engine.anatomy() != anatomy:
@@ -273,9 +296,11 @@ def fit_frozen_control(engine: Engine, snapshot: Artifact, document, *, expected
         engine.set_anatomy(saved)
     return {"schema_version": "0.1.0", "kind": "frozen_anatomy_articulation_reconstruction",
         "model_id": frozen["model_id"], "snapshot_sha256": snapshot.sha256, "candidate_id": candidate_id,
-        "frozen_anatomy": deepcopy(anatomy), "provenance": deepcopy(engine.provenance), "attempts": output_attempts,
+        "frozen_anatomy": deepcopy(anatomy), "snapshot_frozen_at": frozen["frozen_at"],
+        "anatomy_training_evidence_ids": list(frozen["evidence_ids"]), "provenance": deepcopy(engine.provenance), "attempts": output_attempts,
         "calibration_evidence_ids": sorted(calibration_ids), "excluded_held_out_evidence_ids": sorted(held_ids),
-        "budget": budget, "forward_evaluations": calls, "geometry_calls": geometry_calls, "explicit_pose_calls": pose_calls,
+        "budget": budget, "forward_evaluations": calls, "geometry_calls": geometry_calls,
+        "native_forward_calls": calls+geometry_calls, "explicit_pose_calls": pose_calls,
         "seed": seed, "search": "deterministic_grid_then_bounded_scalar_refinement", "JA_bounds_deg": [-5., -1.],
         "temporal_model": "independent_frames_no_interpolation", "max_gap_seconds": gap_threshold,
         "anatomy_optimized": False, "physiological_limits_established": False, "prospective_prediction": False}
