@@ -48,6 +48,9 @@ export function createLidarRoutes({repo,dataRoot,json}){
    let state=await read(currentFile)??{};
    if(state.running&&!busy&&enabled())await launch(state);
    if(url.pathname.endsWith('/status')&&req.method==='GET'){
+    // Completion may happen while the worker/model lookup below is awaiting I/O.
+    // Keep this snapshot busy until the next poll can read its completed receipt.
+    const wasBusy=busy;
     const capture=await read(join(dataRoot,'lidar-current.json'));
     const result=state.fitId?await fitReceipt(state.fitId):null;
     const currentModelId=await model().catch(()=>null);
@@ -56,7 +59,7 @@ export function createLidarRoutes({repo,dataRoot,json}){
     const saved=successful&&id.test(successful.fitId??'')?await fitReceipt(successful.fitId):null;
     const lastSuccessfulResult=saved?.fitId===successful?.fitId&&saved?.modelId===successful?.modelId&&saved?.sessionId===successful?.sessionId&&saved?.adoption?.model_updated===true&&saved?.adoption?.model_id===saved?.modelId?saved:null;
     const pull=await read(join(dataRoot,'native-pull-latest.json'));
-    json(res,200,{enabled:enabled(),busy,capture,currentModelId,result,error:state.error??null,
+    json(res,200,{enabled:enabled(),busy:wasBusy||busy,capture,currentModelId,result,error:state.error??null,
      resultCurrent:!!result&&result.modelId===currentModelId,lastSuccessfulResult,lastSuccessfulResultCurrent:!!lastSuccessfulResult&&lastSuccessfulResult.modelId===currentModelId,
      availableArchive:pull?.name?.startsWith('rear-lidar-')?{name:pull.name,sha256:pull.sha256}:null});return true;
    }
