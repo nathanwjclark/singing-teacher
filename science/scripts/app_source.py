@@ -26,7 +26,7 @@ def save(path,value):
     temporary=path.with_suffix('.tmp');temporary.write_text(json.dumps(value,allow_nan=False));temporary.chmod(0o600);temporary.replace(path)
 
 
-def frame(import_dir,session_id,identity=None,evidence_at=None,rate=None):
+def frame(import_dir,session_id,identity=None,evidence_at=None,rate=None,declared_pose=None):
     imported=load(import_dir/'native-pcm.json')
     for segment in imported['segments']:
         sample_rate=segment['sample_rate_hz'];size=8192 if sample_rate==96000 else 4096;start=round(.1*sample_rate)
@@ -43,7 +43,10 @@ def frame(import_dir,session_id,identity=None,evidence_at=None,rate=None):
             'evidenceAt':evidence_at,'windowStartSample':start,'clockId':segment['source_clock_id'],'syncUncertaintyMs':segment['capture_sync_uncertainty_ms'],
             'sourceKind':imported['declared_evidence_kind'],'processing':{'automaticGainControl':None,'noiseSuppression':None,'echoCancellation':None}}
         values=values[start:start+size].tolist();record=measure_phonation(values,sample_rate,metadata)
-        if record['capabilities']['measurement']['status']=='available':return {'id':target,'pose':'a','pcm':values,'sample_rate_hz':sample_rate,'metadata':metadata},record
+        poses={trial['pose'] for trial in imported.get('fit_trial_options',[]) if trial.get('measurement',{}).get('observationId')==segment['segment_id']}
+        pose=declared_pose or (next(iter(poses)) if len(poses)==1 else None)
+        if not pose:raise ValueError('Source trial requires an existing explicit vowel declaration')
+        if record['capabilities']['measurement']['status']=='available':return {'id':target,'pose':pose,'pcm':values,'sample_rate_hz':sample_rate,'metadata':metadata},record
     raise ValueError('No eligible original phonation frame at the frozen sample rate')
 
 
@@ -66,7 +69,7 @@ def capture(root,output,session_id,target,committed_at,rate,kind,pose):
     imported=output/'import'
     if not imported.exists():subprocess.run(['node','--experimental-strip-types',str(ROOT/'science/scripts/import_native_pcm.ts'),str(original),str(imported),'source-participant',session_id,pose,*(['--development-fixture'] if kind=='development-fixture' else [])],check=True,capture_output=True,timeout=60)
     if load(imported/'native-pcm.json')['source_manifest_sha256']!=sha(files['manifest.json']):raise ValueError('Imported source archive differs')
-    trial,_=frame(imported,session_id,target,manifest['created_at'],rate)
+    trial,_=frame(imported,session_id,target,manifest['created_at'],rate,pose)
     return trial,{'source_archive_sha256':receipt['sha256'],'source_manifest_sha256':sha(files['manifest.json']),'timestamp_scope':'Native-declared capture start UTC; device clock authenticity and human execution unverified','declared_pose':pose}
 
 
@@ -86,7 +89,7 @@ def run(root,phase,output):
         if sha(read(imported/'native-pcm.json'))!=summary['sourceImportSha256']:raise ValueError('Original import digest mismatch')
         source=load(imported/'native-pcm.json');manifest_path=Path(source['source_directory'])/'manifest.json';manifest=load(manifest_path)
         if sha(read(manifest_path))!=source['source_manifest_sha256']:raise ValueError('Original manifest changed')
-        trial,record=frame(imported,session_id,evidence_at=manifest['created_at']);pitch=record['descriptors']['pitchHz']['value']
+        trial,record=frame(imported,session_id,evidence_at=manifest.get('created_at'));pitch=record['descriptors']['pitchHz']['value']
         if pitch is None or not 65<=pitch<=600:raise ValueError('Observed pitch outside supported conditional source range')
         hypotheses=state['snapshot']['hypotheses']
         if not 1<=len(hypotheses)<=8:raise ValueError('Optional source candidate budget cannot cover current anatomy support')
@@ -107,8 +110,8 @@ def run(root,phase,output):
     elif phase=='score':
         forecasts=[(k,v) for k,v in state.get('source_forecasts',{}).items() if v['status']=='committed' and v['baseline_model_id']==baseline]
         if not forecasts:raise ValueError('Commit a current source forecast before recording')
-        target,frozen=forecasts[-1];forecast=frozen['artifact']['forecast'];pose=forecast.get('pose') or forecast.get('native_state',{}).get('articulation',{}).get('pose','a')
-        phase_record=load(directory/'source-forecast.json');pose=phase_record.get('result',{}).get('pose',pose)
+        target,frozen=forecasts[-1];forecast=frozen['artifact']['forecast'];pose=forecast.get('pose')
+        if pose not in ('a','e','i','o','u'):raise ValueError('Frozen source forecast lacks a supported vowel declaration')
         rate=forecast['record']['window']['sampleRateHz'];trial,binding=capture(root,output,session_id,target,frozen['committed_at'],rate,summary['source'],pose)
         command={'action':'score_source','forecast_id':target,'pcm':trial['pcm'],'metadata':trial['metadata']};binding['forecastId']=target
     else:raise ValueError('Unknown source operation')
