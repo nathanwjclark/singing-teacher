@@ -141,3 +141,38 @@ context, joint fitting uses the worker-owned context, and allowed/required
 parameters and snapshot model binding are wired. The one-shot CLI registry is
 explicitly local and not authorization over a shared session. Root's prior real
 service tests need not be repeated by this review without a relevant change.
+
+## Final bridge disposition
+
+Both pending bridge findings are fixed in integrated `ab54dbb`/`afdf931`.
+The output parent is created 0700 before B writes any descendants; scientific
+JSON files are 0600, and nested B output directory/files are explicitly restricted
+to 0700/0600. The fixture regression verifies permissions and fresh-only output.
+
+`capture_binding` now binds the exact original manifest hash and declared pose,
+route and placement. Physical-source eligibility additionally checks the original
+Swift pose, placement ID and level-check route signature against that binding.
+Missing/mismatched declarations retain capture but produce no fit document.
+The known-route mismatch regression exercises exclusion. This guards consistent
+recorded declarations, not physical authenticity or placement measurement accuracy.
+B identity fix `d2bd6a5` also preserves derived IDs when native metadata is spread.
+
+Independently ran the complete integrated bridge suite with its documented
+scientific runtime configuration:
+
+```sh
+PROBE_PYTHON=/path/to/science/.venv/bin/python PYTHONPATH=science/src \
+node --experimental-strip-types --test science/scripts/import_probe_science.test.ts
+```
+
+**5 passed in 2.43 s.** Initial invocation without that documented Python/PYTHONPATH
+configuration passed four Node-only tests and failed the native test's import;
+using the existing scientific environment resolved it without code changes.
+The real original-PCM → B extractor → A joint fitter regression used **12 actual
+operator calls**, reported `joint_probe_evidence_used`, and retained large
+nonzero probe discrepancies **6126.29688549578** and **6126.287609975195**.
+This verifies a connected harness with a mismatched physical model; it does not
+turn that mismatch into an accuracy gate or anatomical recovery claim.
+
+No remaining blocking defect was found in the reviewed core/bridge revisions.
+Root owns final aggregate tests, strict TypeScript verification and publication.
