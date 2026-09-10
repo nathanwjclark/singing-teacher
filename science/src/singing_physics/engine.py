@@ -240,7 +240,7 @@ class Engine:
                 "articulation_parameters": self._param_info("vtlGetTractParamInfo", self.tract_count),
                 "source_parameters": self.source_info, "poses": sorted(self.poses),
                 "supports": ["forward_audio", "sagittal_svg", "tube_area_function", "shared_anatomy_synthetic_transfer_fit", "native_outer_lip_markers", "native_surface_mesh_obj"],
-                "unsupported": ["human_audio_inverse_fit", "depth_fusion", "nasal_outlet_occlusion", "tissue_mechanics_recovery", "calibrated_posterior"]}
+                "unsupported": ["human_audio_inverse_fit", "full_internal_anatomy_depth_reconstruction", "nasal_outlet_occlusion", "tissue_mechanics_recovery", "calibrated_posterior"]}
 
     def synthesize(self, pose, articulation=None, f0_hz=160., duration_s=.4):
         """Synthesize a stationary pose at the current anatomy; return float64 audio.
