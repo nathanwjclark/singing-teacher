@@ -41,4 +41,10 @@ The native test also uses `science/tests/test_probe_inverse.py::probe_fixture` f
 
 Executed **5 tests, all passed**: B's original known-filter fixture test; exact full-bin/source binding; private permissions/fresh output; stopped/unsupported-processing/phase paths; corrupt bytes/calibration grid/capture binding; and original B fixture -> actual joint native fitter. The end-to-end run used **12 actual operator calls** and reported `joint_probe_evidence_used`. Probe discrepancies were **6126.29688549578** and **6126.287609975195** for its two candidates. The known FIR filter does not represent the operator's vocal anatomy, so this is a connected harness with a negative model-match result, not recovery validation. Evidence source: software fixture. Human/hardware acquisition remains untested here.
 
-Strict TypeScript check of these files currently encounters the pre-existing imported B module `scripts/import-acoustic-probe.ts` duplicate `id` declaration (TS2783, line55); the integration owner has been notified to fix that owned source. No bridge-local diagnostic was emitted. Re-run the same strict check after integration.
+Strict TypeScript verification **passed** after integrating the owner's B importer identity fix `d2bd6a5` (local cherry-pick `e3aba64`):
+
+```sh
+node node_modules/typescript/bin/tsc --ignoreConfig --noEmit --strict \
+  --allowImportingTsExtensions --module nodenext --target es2023 --types node \
+  science/scripts/import_probe_science.ts science/scripts/import_probe_science.test.ts
+```
