@@ -10,7 +10,7 @@ test('source actions use server-retained media and configurations', async () => 
       globalThis.fetch = async (url, init) => {
         assert.equal(url, `/api/source/${action}`);
         assert.equal(init?.method, 'POST');
-        assert.deepEqual(JSON.parse(String(init?.body)), {});
+        assert.equal(init?.body, undefined);
         return Response.json({ accepted: true });
       };
       await sourceAction(action);

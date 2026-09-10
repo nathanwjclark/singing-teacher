@@ -34,5 +34,5 @@ export function getSourceStatus(signal?: AbortSignal): Promise<SourceInferenceSt
 }
 
 export function sourceAction(action: SourceAction): Promise<unknown> {
-  return request(action, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+  return request(action, { method: 'POST' });
 }
