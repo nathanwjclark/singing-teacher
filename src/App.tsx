@@ -29,6 +29,8 @@ import CoachLearningPanel from './components/coach/CoachLearningPanel'
 import { ScientificModelPanel } from './components/science/ScientificModelPanel'
 import { ScientificSideView } from './components/science/ScientificGeometry'
 import { NativePullButton } from './components/phone/NativePullButton'
+import {ModelAdjustmentControls} from './components/science/ModelAdjustmentControls'
+import {setModelAdjustments} from './components/science/modelAdjustments'
 import './App.css'
 
 const demoFrame: TrackingFrame = {
@@ -134,7 +136,7 @@ function StudioApp() {
   const anatomyMotion = useAnatomyMotion(shownFrame, demo, trackingEpoch)
   const { tips, now: cueNow } = useRecentTips(shownFrame, `${trackingEpoch}:${demo ? 'demo' : active ? 'live' : 'idle'}`)
   const selectedTip = tips.find(tip => tip.id === selectedTipId) ?? tips[0]
-  async function resetTracking(){await recorder.current?.stop().catch(()=>{});setFrame(null);setDemo(false);setScientificPreview(false);setSelectedTipId(undefined);setSeconds(0);setStatus('loading');setMessage('');setTrackingEpoch(n=>n+1);setActive(true)}
+  async function resetTracking(){await recorder.current?.stop().catch(()=>{});setModelAdjustments(null);setFrame(null);setDemo(false);setScientificPreview(false);setSelectedTipId(undefined);setSeconds(0);setStatus('loading');setMessage('');setTrackingEpoch(n=>n+1);setActive(true)}
   function toggleCamera() { setDemo(false); setFrame(null); setSeconds(0); setStatus(active ? 'idle' : 'loading'); setMessage(''); setActive(!active) }
   return (
     <div className="app-shell">
@@ -151,7 +153,7 @@ function StudioApp() {
       <div className="workspace-tools">
         <nav aria-label="Workspace"><button aria-pressed={tab==='studio'} onClick={()=>setTab('studio')}>Studio</button><button aria-pressed={tab==='experiments'} onClick={()=>setTab('experiments')}>Experiments</button></nav>
         <button onClick={()=>setPairOpen(true)}>Connect phone / QR</button>
-        <NativePullButton/>
+        <ModelAdjustmentControls/><NativePullButton/>
         {phoneMicrophone && <span>Phone microphone connected</span>}
         <RecordingControls controllerRef={recorder} videoStream={videoStream} audioStream={audioStream} onRecording={onRecording} transformRecording={transformRecording}/>
       </div>
