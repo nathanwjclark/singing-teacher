@@ -205,7 +205,7 @@ export function AnatomyPanel({ frame, activeRegion = 'jaw', activeMuscles, demo 
       <button type="button" aria-pressed={tongue} onClick={()=>setTongue(!tongue)}>Tongue</button>
       <button type="button" className="anatomy-reset" onClick={()=>reset.current()} aria-label="Reset anatomy camera">↺</button>
     </div>
-    {tongue && <div className="tongue-status">TONGUE · {demo && frame?.tongue ? 'DEMO' : frame?.tongue ? 'VISIBLE ESTIMATE' : 'NOT VISIBLE · RESTING REFERENCE'}<span>Experimental · exposed surface only</span></div>}
+    {tongue && <div className="tongue-status">TONGUE · {demo && frame?.tongue ? 'DEMO' : frame?.tongue?.trackingMode==='region' ? 'SELECT TIP IN CAMERA' : frame?.tongue ? 'TRACKED TIP' : 'NOT VISIBLE · RESTING REFERENCE'}<span>Experimental · exposed surface only</span></div>}
     <div className="anatomy-stage">
       <div className="anatomy-canvas" ref={mount}/>
       {status==='loading'&&<div className="anatomy-loading" role="status"><span/>Loading anatomical meshes…</div>}

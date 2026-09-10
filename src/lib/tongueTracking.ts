@@ -1,3 +1,4 @@
+import { createTongueTipTracker } from './tongueTip.ts';
 import type { Landmark, TongueObservation } from '../types';
 
 /** Experimental segmentation of exposed pink tissue inside the inner lip
@@ -70,15 +71,27 @@ export function detectVisibleTongue(pixels: Uint8ClampedArray, width: number, he
 }
 
 export function createTongueTracker() {
+  const tipTracker=createTongueTipTracker();
   let hits=0;
   let reference:{x:number;y:number}|undefined;
   let smooth:TongueObservation|undefined;
   const track = (pixels:Uint8ClampedArray,width:number,height:number,face:Landmark[]) => {
     const observed=detectVisibleTongue(pixels,width,height,face);
+    const tip=face.length?tipTracker.update(pixels,width,height):undefined;
+    if(!face.length)tipTracker.reset();
     if(!observed){hits=0;smooth=undefined;if(!face.length)reference=undefined;return undefined;}
     hits++;
-    // Track the region's center independently of its lowest edge. The lowest
-    // edge is useful for extension but biases all vertical motion downward.
+    observed.trackingMode=tip?'tip':'region';
+    observed.tip=tip;
+    if(tip){
+      const left=Math.min(face[78].x,face[308].x),right=Math.max(face[78].x,face[308].x);
+      const span=Math.max(.01,right-left);
+      observed.x=tip.x;observed.y=tip.y;
+      observed.lateral=(tip.x-(left+right)/2)/span;
+      observed.elevation=((face[13].y+face[14].y)/2-tip.y)*height/(span*width);
+      observed.extension=Math.max(0,Math.min(1,(tip.y-face[14].y)*height/(span*width*.45)));
+    } else {reference=undefined;observed.lateral=0;observed.elevation=0;}
+    // The selected tip supplies both axes; recentering defines its neutral pose.
     reference??={x:observed.lateral,y:observed.elevation??0};
     observed.lateral=Math.max(-1,Math.min(1,(observed.lateral-reference.x)*6));
     observed.elevation=Math.max(-1,Math.min(1,((observed.elevation??0)-reference.y)*6));
@@ -86,5 +99,5 @@ export function createTongueTracker() {
     smooth=observed;
     return hits>=2 ? observed : undefined;
   };
-  return Object.assign(track,{resetMotionReference(){reference=undefined;smooth=undefined;hits=0;}});
+  return Object.assign(track,{selectTip(x:number,y:number){tipTracker.select(x,y);reference=undefined;smooth=undefined;hits=0;},isTipSelected(){return tipTracker.selected},resetMotionReference(){reference=undefined;smooth=undefined;hits=0;}});
 }

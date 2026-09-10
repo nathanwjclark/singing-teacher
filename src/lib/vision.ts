@@ -46,7 +46,7 @@ function loadOpenCV(): Promise<{ cv: OpenCV }> {
   return cvPromise;
 }
 
-export interface VisionEngine { process(video: HTMLVideoElement, timestamp: number): TrackingFrame; calibrate(): boolean; calibrateTongue(): void; close(): void }
+export interface VisionEngine { process(video: HTMLVideoElement, timestamp: number): TrackingFrame; calibrate(): boolean; calibrateTongue(): void; selectTongueTip(x:number,y:number): void; close(): void }
 
 export async function createVisionEngine(): Promise<VisionEngine> {
   const { cv } = await loadOpenCV();
@@ -83,6 +83,7 @@ export async function createVisionEngine(): Promise<VisionEngine> {
   tongueCanvas.width=160; tongueCanvas.height=128;
   const tongueContext=tongueCanvas.getContext('2d', {willReadFrequently:true})!;
   const trackTongue=createTongueTracker();
+  let pendingTongueTip:{x:number;y:number}|undefined;
   let closed = false;
   return {
     process(video, timestamp) {
@@ -138,16 +139,18 @@ export async function createVisionEngine(): Promise<VisionEngine> {
           // Preserve the native mouth detail instead of downsampling the entire
           // video until the tongue is only a handful of pixels high.
           tongueContext.drawImage(video,x*video.videoWidth,y*video.videoHeight,width*video.videoWidth,height*video.videoHeight,0,0,160,128);
+          if(pendingTongueTip){trackTongue.selectTip((pendingTongueTip.x-x)/width,(pendingTongueTip.y-y)/height);pendingTongueTip=undefined;}
           const localFace=landmarks.map(p=>({...p,x:(p.x-x)/width,y:(p.y-y)/height}));
           const local=trackTongue(tongueContext.getImageData(0,0,160,128).data,160,128,localFace);
           if(local) {
             tongue={...local,x:x+local.x*width,y:y+local.y*height,tip:local.tip ? {x:x+local.tip.x*width,y:y+local.tip.y*height} : undefined,outline:local.outline?.map(p=>({x:x+p.x*width,y:y+p.y*height}))};
-            tongueStatus='Tongue detected · pink outline';
+            tongueStatus=local.trackingMode==='tip'?'Tongue tip tracked · crosshair':trackTongue.isTipSelected()?'Tip lost · select it again':'Tongue visible · select Track tip';
           }
         } else trackTongue(new Uint8ClampedArray(0),0,0,[]);
       } else trackTongue(new Uint8ClampedArray(0),0,0,[]);
       return { tongue, tongueStatus, tongueSearch, face: landmarks, pose: cachedPose, worldPose: cachedWorldPose, faceTransform, blendshapes, timestamp, metrics: stabilizer.metrics({ mouthOpen, headTilt: tilt(landmarks[33], landmarks[263]), shoulderTilt: tilt(cachedPose[11], cachedPose[12]), brightness, motion, ...depth }, timestamp, landmarks.length > 0) };
     },
+    selectTongueTip(x,y) { pendingTongueTip={x,y}; },
     calibrateTongue() { trackTongue.resetMotionReference(); },
     calibrate() { if (closed || recentDistance === undefined || depthHistory.length < 5) return false; baselineDistance = recentDistance; return true; },
     close() { if (!closed) { closed = true; face.close(); pose.close(); previous.delete(); } },
@@ -193,8 +196,10 @@ export function drawTracking(context: CanvasRenderingContext2D, frame: TrackingF
   if(frame.tongue) {
     context.fillStyle='#ff71aa';context.strokeStyle='#ffb3d0';context.lineWidth=2;
     for(const p of frame.tongue.outline??[]){context.beginPath();context.arc(p.x*width,p.y*height,1.6,0,Math.PI*2);context.fill();}
+    if(frame.tongue.trackingMode!=='region'){
     const x=frame.tongue.x*width,y=frame.tongue.y*height;
     context.beginPath();context.arc(x,y,6,0,Math.PI*2);context.moveTo(x-10,y);context.lineTo(x+10,y);context.moveTo(x,y-10);context.lineTo(x,y+10);context.stroke();
+    }
   }
   context.restore();
 }

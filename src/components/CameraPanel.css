@@ -4,3 +4,5 @@
 .camera-tongue-status{position:absolute;left:12px;top:12px;max-width:calc(100% - 24px);padding:6px 9px;border:1px solid #ff91b355;border-radius:6px;background:#18221de6;color:#ffb3d0;font-size:10px;pointer-events:none}.camera-tongue-status small{display:block;font-size:8px;color:#aab8ae;margin-top:3px}
 
 .camera-tongue-status button{pointer-events:auto;margin-top:4px;padding:3px 6px;border:1px solid #a47b8d;border-radius:4px;background:#26372d;color:#ffb3d0;font-size:9px}
+
+.selecting-tongue-tip{cursor:crosshair}.camera-tongue-status button+button{margin-left:5px}

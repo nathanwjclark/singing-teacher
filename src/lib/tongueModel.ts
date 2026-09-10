@@ -22,6 +22,7 @@ export function createTongueModel() {
   return {
     mesh,
     update(observation?:TongueObservation,now=performance.now()) {
+      if(observation?.trackingMode==='region')observation=undefined;
       const dt=lastTime===undefined?1/60:Math.max(0,Math.min(.1,(now-lastTime)/1000));lastTime=now;
       if(observation){lastObservation=observation;lastSeen=now;}
       // Bridge brief detector gaps without snapping the surface back behind
