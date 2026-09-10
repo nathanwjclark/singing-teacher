@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Mic, Square, AudioLines } from 'lucide-react';
-import { analyzeAudio } from '../lib/audio';
+import { analyzeAudio, pitchToNote } from '../lib/audio';
 import type { AudioMetrics } from '../lib/audio';
 import './AudioPanel.css';
 
@@ -9,7 +9,7 @@ type AudioStatus = 'idle' | 'requesting' | 'live' | 'suspended' | 'error';
 type Point = AudioMetrics & { time: number };
 type Resources = { stream: MediaStream; context: AudioContext; source: MediaStreamAudioSourceNode; analyser: AnalyserNode };
 const WINDOW_SECONDS = 25;
-const EMPTY: AudioMetrics = { dbfs: -100, centroidHz: null, flatness: null };
+const EMPTY: AudioMetrics = { dbfs: -100, centroidHz: null, flatness: null, pitchHz: null, periodicity: null };
 
 function surface(canvas: HTMLCanvasElement | null) {
   if (!canvas) return null;
@@ -36,8 +36,9 @@ function drawHistory(canvas: HTMLCanvasElement | null, history: Point[], now: nu
     const x = 1 + (width - 2) * line / 4;
     ctx.beginPath(); ctx.moveTo(x, 1); ctx.lineTo(x, height - 1); ctx.stroke();
   }
-  for (let line = 0; line <= 2; line++) {
-    const y = 1 + (height - 2) * line / 2;
+  const levels = field === 'pitchHz' ? [36, 48, 60, 72, 84].map(note => 1 - (note - min) / (max - min)) : [0, 0.5, 1];
+  for (const level of levels) {
+    const y = 1 + (height - 2) * level;
     ctx.beginPath(); ctx.moveTo(1, y); ctx.lineTo(width - 1, y); ctx.stroke();
   }
   ctx.strokeStyle = color;
@@ -48,7 +49,8 @@ function drawHistory(canvas: HTMLCanvasElement | null, history: Point[], now: nu
   let previousTime = 0;
   for (const point of history) {
     const x = (1 - (now - point.time) / WINDOW_SECONDS) * width;
-    const value = point[field];
+    const raw = point[field];
+    const value = raw !== null && field === 'pitchHz' ? 69 + 12 * Math.log2(raw / 440) : raw;
     if (x < 0 || value === null) { connected = false; continue; }
     const y = 2 + (1 - Math.max(0, Math.min(1, (value - min) / (max - min)))) * (height - 4);
     if (connected && point.time - previousTime < 0.4) ctx.lineTo(x, y);
@@ -85,16 +87,18 @@ export function AudioPanel({ demo = false, autoStart = false }: AudioPanelProps)
   const [status, setStatus] = useState<AudioStatus>('idle');
   const [error, setError] = useState('');
   const [metrics, setMetrics] = useState<AudioMetrics>(EMPTY);
-  const [windowMs, setWindowMs] = useState(43);
+  const [windowMs, setWindowMs] = useState(85);
   const resources = useRef<Resources | null>(null);
   const pendingContext = useRef<AudioContext | null>(null);
   const requestId = useRef(0);
   const history = useRef<Point[]>([]);
-  const waveform = useRef(new Float32Array(2048));
+  const waveform = useRef(new Float32Array(4096));
   const waveCanvas = useRef<HTMLCanvasElement>(null);
   const volumeCanvas = useRef<HTMLCanvasElement>(null);
   const brightnessCanvas = useRef<HTMLCanvasElement>(null);
   const textureCanvas = useRef<HTMLCanvasElement>(null);
+  const pitchCanvas = useRef<HTMLCanvasElement>(null);
+  const toneCanvas = useRef<HTMLCanvasElement>(null);
 
   const release = useCallback(() => {
     requestId.current++;
@@ -138,7 +142,7 @@ export function AudioPanel({ demo = false, autoStart = false }: AudioPanelProps)
         return;
       }
       const analyser = acquiredContext.createAnalyser();
-      analyser.fftSize = 2048;
+      analyser.fftSize = 4096;
       analyser.smoothingTimeConstant = 0.15;
       const source = acquiredContext.createMediaStreamSource(acquiredStream);
       source.connect(analyser); // Deliberately never connect to the audio destination.
@@ -188,7 +192,7 @@ export function AudioPanel({ demo = false, autoStart = false }: AudioPanelProps)
     waveform.current.fill(0);
     let resetDisplay = true;
     const resetRequestId = requestId.current;
-    const spectrum = new Float32Array(1024);
+    const spectrum = new Float32Array(2048);
     let animation = 0;
     let lastSample = 0;
     let lastDraw = 0;
@@ -203,7 +207,7 @@ export function AudioPanel({ demo = false, autoStart = false }: AudioPanelProps)
           setStatus('idle');
           setError('');
           setMetrics(EMPTY);
-          setWindowMs(43);
+          setWindowMs(85);
         }
         resetDisplay = false;
       }
@@ -214,16 +218,18 @@ export function AudioPanel({ demo = false, autoStart = false }: AudioPanelProps)
         if (demo) {
           const t = now - started;
           const envelope = Math.pow(Math.max(0, Math.sin(t * 0.85)), 0.5);
-          const fundamental = 185 + 20 * Math.sin(t * 0.7);
+          const melody = [48, 50, 52, 55, 57, 55, 52, 50];
+          const midi = melody[Math.floor(t / 1.4) % melody.length];
+          const fundamental = 440 * Math.pow(2, (midi - 69 + 0.06 * Math.sin(t * 5)) / 12);
           for (let i = 0; i < waveform.current.length; i++) {
             const phase = (t + i / 48000) * fundamental * Math.PI * 2;
             waveform.current[i] = envelope * (0.16 * Math.sin(phase) + 0.04 * Math.sin(phase * 2) + 0.015 * Math.sin(phase * 3));
           }
-          latest = { dbfs: envelope > 0.005 ? -22 + 20 * Math.log10(envelope) : -100, centroidHz: envelope > 0.05 ? 1800 + 900 * Math.sin(t * 0.45) : null, flatness: envelope > 0.05 ? 0.09 + 0.05 * Math.sin(t * 0.62) : null };
+          latest = { dbfs: envelope > 0.005 ? -22 + 20 * Math.log10(envelope) : -100, centroidHz: envelope > 0.05 ? 1800 + 900 * Math.sin(t * 0.45) : null, flatness: envelope > 0.05 ? 0.09 + 0.05 * Math.sin(t * 0.62) : null, pitchHz: envelope > 0.05 ? fundamental : null, periodicity: envelope > 0.05 ? 0.94 + 0.03 * Math.sin(t * 0.9) : null };
         } else if (live && live.context.state === 'running') {
           live.analyser.getFloatTimeDomainData(waveform.current);
           live.analyser.getFloatFrequencyData(spectrum);
-          latest = analyzeAudio(waveform.current, spectrum, live.context.sampleRate, live.analyser.fftSize);
+          if (now - lastSample >= 0.1) latest = analyzeAudio(waveform.current, spectrum, live.context.sampleRate, live.analyser.fftSize);
         } else {
           waveform.current.fill(0);
           latest = EMPTY;
@@ -237,6 +243,8 @@ export function AudioPanel({ demo = false, autoStart = false }: AudioPanelProps)
         drawHistory(volumeCanvas.current, history.current, now, 'dbfs', -70, 0, '#a3d8c3');
         drawHistory(brightnessCanvas.current, history.current, now, 'centroidHz', 0, 10000, '#eeb08f');
         drawHistory(textureCanvas.current, history.current, now, 'flatness', 0, 1, '#c7bbec');
+        drawHistory(pitchCanvas.current, history.current, now, 'pitchHz', 36, 85, '#ead98c');
+        drawHistory(toneCanvas.current, history.current, now, 'periodicity', 0, 1, '#91c7e7');
         if (now - lastDisplay > 0.2) { setMetrics(latest); lastDisplay = now; }
       }
       animation = requestAnimationFrame(render);
@@ -253,6 +261,7 @@ export function AudioPanel({ demo = false, autoStart = false }: AudioPanelProps)
   }, [autoStart, demo, start]);
 
   const active = demo || status === 'live';
+  const note = active && metrics.pitchHz !== null ? pitchToNote(metrics.pitchHz) : null;
   const signal = active && metrics.dbfs >= -60;
   const readout = (value: number | null, digits = 0) => active && value !== null ? value.toFixed(digits) : '—';
   return (
@@ -278,6 +287,16 @@ export function AudioPanel({ demo = false, autoStart = false }: AudioPanelProps)
           <p className="audio-chart-caption">{demo ? 'Illustrative wave and histories. No microphone access.' : 'The actual sound wave from your microphone.'}</p>
         </article>
         <div className="audio-histories">
+          <article className="audio-history-card audio-history-card--pitch">
+            <div className="audio-chart-title"><h3><i />Pitch <span>A4 = 440</span></h3><strong>{note ? `${note.name}${note.octave}` : '—'} <small>{note ? `${note.cents > 0 ? '+' : ''}${note.cents}¢ · ${Math.round(metrics.pitchHz!)} Hz` : 'note · Hz'}</small></strong></div>
+            <div className="audio-history-surface"><div className="audio-y-axis audio-note-axis"><span>C6</span><span>C4</span><span>C2</span></div><canvas ref={pitchCanvas} role="img" aria-label="Trailing 25 seconds of detected pitch on a musical note scale from C2 to C sharp 6. Notes and cents use A4 equals 440 Hz. Gaps mean no reliable pitch." /></div>
+            <div className="audio-axis audio-time-axis"><span>−25 s</span><span>now</span></div>
+          </article>
+          <article className="audio-history-card audio-history-card--tone">
+            <div className="audio-chart-title"><h3 title="Waveform periodicity: higher means a more regularly repeating signal, not better singing."><i />Periodicity</h3><strong>{readout(metrics.periodicity, 2)} <small>0–1</small></strong></div>
+            <div className="audio-history-surface"><div className="audio-y-axis"><span>1</span><span>0</span></div><canvas ref={toneCanvas} role="img" aria-label="Trailing 25 seconds of waveform periodicity. Higher values mean a more regularly repeating waveform, not better singing." /></div>
+            <div className="audio-axis audio-time-axis"><span>−25 s</span><span>now</span></div>
+          </article>
           <article className="audio-history-card audio-history-card--volume">
             <div className="audio-chart-title"><h3><i />Loudness <span>RMS</span></h3><strong>{active ? metrics.dbfs < -70 ? '< −70' : metrics.dbfs.toFixed(1) : '—'} <small>dBFS</small></strong></div>
             <div className="audio-history-surface"><div className="audio-y-axis"><span>0</span><span>−70</span></div><canvas ref={volumeCanvas} role="img" aria-label="Trailing 25 seconds of RMS loudness, from minus 70 to zero dBFS." /></div>
@@ -295,7 +314,7 @@ export function AudioPanel({ demo = false, autoStart = false }: AudioPanelProps)
           </article>
         </div>
       </div>
-      <footer className="audio-footer"><p><strong>{demo ? 'DEMO SIGNAL' : 'LOCAL AUDIO ONLY'}</strong>{demo ? 'Synthetic examples, not measurements of your voice.' : 'Processed in your browser. No recording, upload, or speaker playback.'}</p><p>dBFS is a digital level, not calibrated sound pressure. Centroid tracks spectral balance; flatness runs from tonal to noise-like. These describe the captured sound, not a voice type or vocal quality. Spectral traces pause below −60 dBFS.</p></footer>
+      <footer className="audio-footer"><p><strong>{demo ? 'DEMO SIGNAL' : 'LOCAL AUDIO ONLY'}</strong>{demo ? 'Synthetic examples, not measurements of your voice.' : 'Processed in your browser. No recording, upload, or speaker playback.'}</p><p>Pitch estimates one voice (65–1100 Hz); cents compare the nearest note at A4 = 440. Tone is waveform periodicity, not vocal quality. dBFS is digital level; centroid is spectral balance; flatness runs tonal to noise-like. Silence/noise gaps pitch; accompaniment can confuse it.</p></footer>
     </section>
   );
 }
