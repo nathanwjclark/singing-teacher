@@ -6,12 +6,17 @@ import CryptoKit
 
 final class DepthCapture: NSObject, ObservableObject, AVCaptureDataOutputSynchronizerDelegate, AVCaptureAudioDataOutputSampleBufferDelegate {
     let session = AVCaptureSession()
+    @Published private(set) var rawDepthPreview: UIImage?
+    @Published private(set) var depthPreviewStatus = "Waiting for depth"
+    private var lastPreviewTime = 0.0
     @Published private(set) var status = "Camera permission required."
     @Published private(set) var ready = false
     @Published private(set) var recording = false
     @Published private(set) var exporting = false
     @Published private(set) var archiveURL: URL?
     @Published private(set) var retryAvailable = false
+    var onSaved: ((URL, String, String) -> Void)?
+    private var sessionID: String?
     private var pendingExport: (folder: URL, manifest: [String: Any], count: Int)?
     private let queue = DispatchQueue(label: "singing.depth.capture")
     private let video = AVCaptureVideoDataOutput()
@@ -150,21 +155,22 @@ final class DepthCapture: NSObject, ObservableObject, AVCaptureDataOutputSynchro
             session.commitConfiguration()
             message("Camera setup failed: \(error.localizedDescription)") }
     }
-    func start(pose: String) {
+    func start(pose: String, sessionID: String? = nil, completion: @escaping (Bool) -> Void = { _ in }) {
         queue.async {
-            guard self.configured, self.session.isRunning, !self.session.isInterrupted, self.folder == nil, self.pendingExport == nil else { return }
+            guard self.configured, self.session.isRunning, !self.session.isInterrupted, self.folder == nil, self.pendingExport == nil else { DispatchQueue.main.async { completion(false) }; return }
             do {
                 self.captureID = UUID().uuidString
+                self.sessionID = sessionID
                 let root = try FileManager.default.url(for: .documentDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
                 let folder = root.appendingPathComponent("capture-\(self.captureID)", isDirectory: true)
                 try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
                 try (folder as NSURL).setResourceValue(true, forKey: .isExcludedFromBackupKey)
                 self.folder = folder; self.frames = []; self.audioSamples = []; self.previousAudioEnd = nil; self.origin = nil; self.frameCount = 0; self.task = pose
                 self.startedAt = ISO8601DateFormatter().string(from: Date())
-                DispatchQueue.main.async { self.recording = true; self.status = "Recording held pose. Stop at any time." }
+                DispatchQueue.main.async { self.recording = true; self.status = "Recording. Stop ends the whole capture."; completion(true) }
                 let timeout = DispatchWorkItem { self.finish(reason: "ten-second-limit") }; self.timeout = timeout
                 self.queue.asyncAfter(deadline: .now() + 10, execute: timeout)
-            } catch { self.message("Could not start: \(error.localizedDescription)") }
+            } catch { self.message("Could not start: \(error.localizedDescription)"); DispatchQueue.main.async { completion(false) } }
         }
     }
     func setProbeMode(_ enabled: Bool, completion: @escaping () -> Void) {
@@ -188,10 +194,39 @@ final class DepthCapture: NSObject, ObservableObject, AVCaptureDataOutputSynchro
         try data.write(to: folder.appendingPathComponent(name), options: [.atomic, .completeFileProtection])
         return ["path": name, "bytes": data.count, "sha256": SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()]
     }
+    private func updateDepthPreview(_ measured: AVCaptureSynchronizedDepthData?) {
+        let now = Date.timeIntervalSinceReferenceDate
+        guard now - lastPreviewTime >= 0.1 else { return }
+        lastPreviewTime = now
+        guard let measured, !measured.depthDataWasDropped else {
+            DispatchQueue.main.async { self.rawDepthPreview = nil; self.depthPreviewStatus = "Depth unavailable" }; return
+        }
+        let buffer = measured.depthData.converting(toDepthDataType: kCVPixelFormatType_DepthFloat32).depthDataMap
+        CVPixelBufferLockBaseAddress(buffer, .readOnly)
+        defer { CVPixelBufferUnlockBaseAddress(buffer, .readOnly) }
+        guard let base = CVPixelBufferGetBaseAddress(buffer) else { return }
+        let width = CVPixelBufferGetWidth(buffer), height = CVPixelBufferGetHeight(buffer), stride = CVPixelBufferGetBytesPerRow(buffer)
+        var pixels = [UInt8](repeating: 0, count: width * height)
+        for y in 0..<height {
+            let row = base.advanced(by: y * stride).assumingMemoryBound(to: Float32.self)
+            for x in 0..<width {
+                let z = row[x]
+                // A fixed display window, not a confidence estimate. Every valid return stays nonblack.
+                if z.isFinite && z > 0 { pixels[y * width + x] = UInt8(64 + 191 * (1 - min(1, max(0, (z - 0.12) / 0.33)))) }
+            }
+        }
+        guard let provider = CGDataProvider(data: Data(pixels) as CFData),
+              let cg = CGImage(width: width, height: height, bitsPerComponent: 8, bitsPerPixel: 8, bytesPerRow: width,
+                space: CGColorSpaceCreateDeviceGray(), bitmapInfo: CGBitmapInfo(rawValue: 0), provider: provider,
+                decode: nil, shouldInterpolate: false, intent: .defaultIntent) else { return }
+        let image = UIImage(cgImage: cg, scale: 1, orientation: .right)
+        DispatchQueue.main.async { self.rawDepthPreview = image; self.depthPreviewStatus = "Raw depth · unmirrored" }
+    }
     func dataOutputSynchronizer(_ synchronizer: AVCaptureDataOutputSynchronizer, didOutput collection: AVCaptureSynchronizedDataCollection) {
+        let measured = collection.synchronizedData(for: depth) as? AVCaptureSynchronizedDepthData
+        updateDepthPreview(measured)
         guard let folder else { return }
         let rgb = collection.synchronizedData(for: video) as? AVCaptureSynchronizedSampleBufferData
-        let measured = collection.synchronizedData(for: depth) as? AVCaptureSynchronizedDepthData
         guard let stamp = rgb?.timestamp ?? measured?.timestamp else { return }
         if origin == nil, stamp.isNumeric { origin = stamp }
         let id = "\(captureID)-frame-\(frameCount)"
@@ -270,7 +305,7 @@ final class DepthCapture: NSObject, ObservableObject, AVCaptureDataOutputSynchro
         guard let current = folder else { return }
         folder = nil; timeout?.cancel(); timeout = nil
         DispatchQueue.main.async { self.recording = false; self.exporting = true; self.status = "Saving private capture…" }
-        let manifest: [String: Any] = ["schema_version": "singing-native-rgbd-1.0.0", "capture_id": captureID, "created_at": startedAt, "ended_at": ISO8601DateFormatter().string(from: Date()), "stop_reason": reason, "task": task, "capture_mode": "one-held-pose", "device": deviceDescription, "timebase": ["source": "AVCaptureDataOutputSynchronizer capture clock", "origin": origin.map { time($0) } as Any? ?? NSNull(), "host_clock_alignment": "not-measured", "absolute_sync_uncertainty_seconds": NSNull()], "filtering_requested": false, "audio": ["status": audioSamples.contains(where: { $0["artifact"] != nil }) ? "captured" : "missing", "reason": audioMissingReason.isEmpty ? (audioSamples.isEmpty ? "no-samples-delivered" : "see-per-sample-status") : audioMissingReason, "clock_relation": "AVCaptureSession presentation timestamps; physical synchronization error not measured", "sync_uncertainty_seconds": NSNull(), "samples": audioSamples], "geometry": ["interpretation": "visible-depth-samples-only", "hidden_surface": "not-measured", "world_pose": "not-measured", "head_pose": "not-measured", "measurement_noise": "not-calibrated"], "frames": frames]
+        let manifest: [String: Any] = ["schema_version": "singing-native-rgbd-1.0.0", "capture_id": captureID, "collection_session_id": sessionID as Any? ?? NSNull(), "created_at": startedAt, "ended_at": ISO8601DateFormatter().string(from: Date()), "stop_reason": reason, "task": task, "capture_mode": "one-held-pose", "device": deviceDescription, "timebase": ["source": "AVCaptureDataOutputSynchronizer capture clock", "origin": origin.map { time($0) } as Any? ?? NSNull(), "host_clock_alignment": "not-measured", "absolute_sync_uncertainty_seconds": NSNull()], "filtering_requested": false, "audio": ["status": audioSamples.contains(where: { $0["artifact"] != nil }) ? "captured" : "missing", "reason": audioMissingReason.isEmpty ? (audioSamples.isEmpty ? "no-samples-delivered" : "see-per-sample-status") : audioMissingReason, "clock_relation": "AVCaptureSession presentation timestamps; physical synchronization error not measured", "sync_uncertainty_seconds": NSNull(), "samples": audioSamples], "geometry": ["interpretation": "visible-depth-samples-only", "hidden_surface": "not-measured", "world_pose": "not-measured", "head_pose": "not-measured", "measurement_noise": "not-calibrated"], "frames": frames]
         pendingExport = (current, manifest, frames.count)
         savePendingExport()
     }
@@ -293,7 +328,7 @@ final class DepthCapture: NSObject, ObservableObject, AVCaptureDataOutputSynchro
             try CaptureZip.create(folder: current, destination: archive)
             try (archive as NSURL).setResourceValue(true, forKey: .isExcludedFromBackupKey)
             pendingExport = nil
-            DispatchQueue.main.async { self.exporting = false; self.retryAvailable = false; self.archiveURL = archive; self.status = "Saved \(pending.count) callbacks. Share when ready. Depth validity still needs review." }
+            DispatchQueue.main.async { self.exporting = false; self.retryAvailable = false; self.archiveURL = archive; self.status = "Saved \(pending.count) callbacks. Depth validity still needs review."; self.onSaved?(archive, pending.manifest["stop_reason"] as? String ?? "unknown", pending.manifest["capture_id"] as? String ?? "") }
         } catch { DispatchQueue.main.async { self.exporting = false; self.retryAvailable = true; self.status = "Capture files retained locally. Free storage or unlock the phone, then retry saving. Export failed: \(error.localizedDescription)" } }
     }
 }
