@@ -46,7 +46,8 @@ def test_changed_archive_rejected_before_import(tmp_path):
     with pytest.raises(ValueError,match='hash mismatch'):prepare(root,root/'probe-imports'/'bad')
 
 
-def test_original_probe_runs_joint_session_adoption(tmp_path, monkeypatch):
+@pytest.mark.parametrize('crash_after',[None,'fit_probe','collect_job','cancelled_submit'])
+def test_original_probe_runs_joint_session_adoption(tmp_path, monkeypatch,crash_after):
     import os
     import sys
     from contextlib import contextmanager
@@ -83,10 +84,40 @@ def test_original_probe_runs_joint_session_adoption(tmp_path, monkeypatch):
         (voice/'fit.json').write_text(json.dumps(fitted))
         (root/'probe-fit-profile.json').write_text(json.dumps({'JA':-3.,'gain':1.,'direct_gain':1.,'coupling_gain':1.,'delay_s':0.}))
         @contextmanager
-        def backend(_output,session_id):yield LocalBackend(service,session_id)
+        def backend(_output,session_id):
+            value=LocalBackend(service,session_id)
+            original=value.execute
+            def execute(command):
+                nonlocal crash_after
+                result=original(command)
+                if command['action']==crash_after or crash_after=='cancelled_submit' and command['action']=='fit_probe':
+                    if crash_after=='cancelled_submit':service.cancel(result['state']['pending']['job_id'])
+                    crash_after=None
+                    raise SystemExit('simulated process death after durable side effect')
+                return result
+            value.execute=execute
+            yield value
         monkeypatch.setattr(run_probe_fit,'backend_for',backend)
+        cancelled=crash_after=='cancelled_submit'
+        if crash_after:
+            with pytest.raises(SystemExit):run_probe_fit.run(root,'imported',parent['model_id'],root/'probe-fits'/'fit')
+        if cancelled:
+            with pytest.raises(ValueError,match='retry the fit in the app'):
+                run_probe_fit.run(root,'imported',parent['model_id'],root/'probe-fits'/'fit')
+            assert controller.execute({'action':'state'})['state']['pending'] is None
+            assert (root/'probe-fits/fit/failure.json').exists()
+            # The app allocates a fresh intent after a terminal failed attempt.
+            result=run_probe_fit.run(root,'imported',parent['model_id'],root/'probe-fits'/'retry')
+            assert result['includedInFit']
+            return
         result=run_probe_fit.run(root,'imported',parent['model_id'],root/'probe-fits'/'fit')
         assert result['includedInFit'] and result['nativeCalls']==12
         assert result['modelId']!=parent['model_id']
         assert result['score']['probe_discrepancy']>100
         assert (root/'probe-fits/fit/session-ledger.json').exists()
+        state=controller.execute({'action':'state'})['state']
+        assert state['pending'] is None
+        version=state['version']
+        assert run_probe_fit.run(root,'imported',parent['model_id'],root/'probe-fits'/'fit')==result
+        assert controller.execute({'action':'state'})['state']['version']==version
+        assert len([j for j in state['jobs'] if j['request']['operation']=='fit_probe_pcm'])==1
