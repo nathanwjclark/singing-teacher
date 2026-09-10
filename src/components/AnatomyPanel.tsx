@@ -4,6 +4,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { createModelHair, disposeModelHairTextures } from '../lib/modelHair';
 import { createMuscleMotion } from '../lib/muscleMotion';
 import { createShoulderMotion } from '../lib/shoulderMotion';
+import { createBoneMotion } from '../lib/boneMotion';
 import type { BodyRegion, TrackingFrame } from '../types';
 import './AnatomyPanel.css';
 
@@ -81,6 +82,7 @@ export function AnatomyPanel({ frame, activeRegion = 'jaw', activeMuscles, demo 
     const shoulderPose = createShoulderMotion();
     const rigs = { torso, head, jaw, leftShoulder, rightShoulder };
     const muscleMotion = createMuscleMotion(rigs);
+    const boneMotion = createBoneMotion(rigs);
     const meshes: AnatomyMesh[] = [];
     const decorative: THREE.Mesh[] = [];
     const eyes: THREE.Group[] = [];
@@ -112,11 +114,7 @@ export function AnatomyPanel({ frame, activeRegion = 'jaw', activeMuscles, demo 
         const material = new THREE.MeshStandardMaterial({color:part.kind==='bone'?0xe8dbc0:0xa56556,roughness:part.kind==='bone'?.68:.57,metalness:0,side:THREE.DoubleSide});
         const mesh = new THREE.Mesh(geometry,material);mesh.name=part.name;mesh.userData=part;
         rigs[part.rig].add(mesh);
-        if (part.kind === 'bone' && /^(Clavicle|Scapula|Humerus)[lr]$/.test(part.name)) {
-          const shoulder = part.name.endsWith('l') ? leftShoulder : rightShoulder;
-          mesh.geometry.translate(part.name.endsWith('l') ? -1 : 1, -10, -5);
-          shoulder.add(mesh);
-        }
+        if (part.kind === 'bone') boneMotion.bind(mesh);
         if(part.kind === 'muscle') muscleMotion.bind(mesh, part.rig);
         meshes.push(mesh);
       }
@@ -139,14 +137,19 @@ export function AnatomyPanel({ frame, activeRegion = 'jaw', activeMuscles, demo 
       const props=latest.current;const m=props.frame?.metrics;
       hair.visible=props.muscles;
       const simulation=props.demo&&!props.frame;
-      // Shoulder tilt belongs to the independent shoulder joints. Torso roll
-      // comes from the hip/shoulder midline; do not apply shoulder tilt twice.
-      const shoulderRoll=bounded(m?.torsoLean,-20,20)*radians;
+      // In a webcam crop the hips are often missing. Use a conservative share
+      // of shoulder tilt for chest lean; shoulderPose removes this parent motion
+      // before calculating the remaining independent shoulder articulation.
+      const shouldersVisible = [11,12].every(i => {
+        const p = props.frame?.pose[i];
+        return p && (p.visibility ?? 1) >= .65;
+      });
+      const shoulderRoll=bounded(m?.torsoLean ?? (shouldersVisible ? (m?.shoulderTilt ?? 0) * .45 : 0),-20,20)*radians;
       const world = props.frame?.worldPose;
       const shoulderWidth = world?.[11] && world?.[12] ? Math.max(.15, Math.abs(world[11].x-world[12].x)) : .36;
-      const hipsVisible=world?.[23]&&world?.[24]&&(world[23].visibility??1)>.65&&(world[24].visibility??1)>.65;
+      const hipsVisible=shouldersVisible&&world?.[23]&&world?.[24]&&(world[23].visibility??1)>.65&&(world[24].visibility??1)>.65;
       const hipWidth=hipsVisible?Math.max(.12,Math.abs(world[23].x-world[24].x)):shoulderWidth;
-      const torsoDepth=hipsVisible?(world[23].z??0)-(world[24].z??0):bounded(m?.shoulderDepth,-.5,.5);
+      const torsoDepth=hipsVisible?(world[23].z??0)-(world[24].z??0):(shouldersVisible ? bounded(m?.shoulderDepth,-.5,.5) : 0);
       const torsoYaw=THREE.MathUtils.clamp(Math.atan2(torsoDepth,hipWidth),-.75,.75);
       torso.rotation.z=THREE.MathUtils.lerp(torso.rotation.z,-shoulderRoll,.1);
       torso.rotation.y=THREE.MathUtils.lerp(torso.rotation.y,-torsoYaw,.1);
@@ -176,6 +179,7 @@ export function AnatomyPanel({ frame, activeRegion = 'jaw', activeMuscles, demo 
           mesh.material.depthWrite=!mesh.material.transparent;mesh.material.needsUpdate=true;
         }
       }
+      boneMotion.update();
       muscleMotion.update(props.frame?.blendshapes);
       const blink=props.frame?.blendshapes;
       eyes.forEach((eye,i)=>{const value=blink?.[i===0?'eyeBlinkRight':'eyeBlinkLeft']??0;eye.scale.y=1-bounded(value,0,.95)*.8;});
