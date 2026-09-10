@@ -4,15 +4,19 @@ import type { TrackingFrame } from '../types';
 import './TongueLab.css';
 
 type Point={x:number;y:number};
-type Sample={image:string;time:number;motion:string;status:string;diagnostic:TrackingFrame['tongueDiagnostic'];prediction?:Point;label?:Point|null;crop:{x:number;y:number;width:number;height:number}};
+type Sample={image:string;time:number;motion:string;status:string;diagnostic:TrackingFrame['tongueDiagnostic'];prediction?:Point;label?:Point|null;surface?:Point[]|null;crop:{x:number;y:number;width:number;height:number}};
 type Props={video:RefObject<HTMLVideoElement|null>;frame:RefObject<TrackingFrame|undefined>;close:()=>void};
 const W=480,H=384;
 export default function TongueLab({video,frame,close}:Props){
   const canvas=useRef<HTMLCanvasElement>(null);
   const [samples,setSamples]=useState<Sample[]>([]);
+  const [sessionId]=useState(()=>crypto.randomUUID());
+  const [labelMode,setLabelMode]=useState<'tip'|'surface'>('tip');
+  const [vertices,setVertices]=useState<Point[]>([]);
   const [recording,setRecording]=useState(false);
   const [canFreeze,setCanFreeze]=useState(false);
-  const [index,setIndex]=useState<number|null>(null);
+  const [index,setIndexState]=useState<number|null>(null);
+  const setIndex=(value:number|null)=>{setIndexState(value);setVertices([])};
   const [motion,setMotion]=useState('up');
   const [status,setStatus]=useState('Waiting for a mouth crop');
   const [tip3D,setTip3D]=useState<TrackingFrame['tongue']>();
@@ -45,7 +49,7 @@ export default function TongueLab({video,frame,close}:Props){
       raf=requestAnimationFrame(tick);
     };raf=requestAnimationFrame(tick);return()=>cancelAnimationFrame(raf);
   },[index,video,frame]);
-  useEffect(()=>{if(!chosen)return;let cancelled=false;const img=new Image();img.onload=()=>{if(cancelled)return;const ctx=canvas.current?.getContext('2d');if(!ctx)return;ctx.drawImage(img,0,0,W,H);if(chosen.prediction)cross(ctx,chosen.prediction,'#ff71aa');if(chosen.label)cross(ctx,chosen.label,'#7effb0')};img.src=chosen.image;return()=>{cancelled=true}},[chosen]);
+  useEffect(()=>{if(!chosen)return;let cancelled=false;const img=new Image();img.onload=()=>{if(cancelled)return;const ctx=canvas.current?.getContext('2d');if(!ctx)return;ctx.drawImage(img,0,0,W,H);if(chosen.prediction)cross(ctx,chosen.prediction,'#ff71aa');if(chosen.label)cross(ctx,chosen.label,'#7effb0');const points=vertices.length?vertices:chosen.surface;if(points?.length){ctx.beginPath();points.forEach((p,i)=>i?ctx.lineTo(p.x*W,p.y*H):ctx.moveTo(p.x*W,p.y*H));ctx.closePath();ctx.fillStyle='#65dff433';ctx.fill();ctx.strokeStyle='#65dff4';ctx.lineWidth=2;ctx.stroke();}};img.src=chosen.image;return()=>{cancelled=true}},[chosen,vertices]);
   const freeze=()=>{
     const v=video.current,f=frame.current,crop=f?.tongueSearch;
     if(!v||v.readyState<2||!crop||crop.width<=0||crop.height<=0||samples.length>=80)return;
@@ -57,14 +61,16 @@ export default function TongueLab({video,frame,close}:Props){
     setSamples(old=>[...old,sample]);setIndex(samples.length);
   };
   const label=(value:Point|null)=>{if(index===null)return;setSamples(old=>old.map((s,i)=>i===index?{...s,label:value}:s))};
-  const click=(e:React.MouseEvent<HTMLCanvasElement>)=>{const r=e.currentTarget.getBoundingClientRect();const p={x:1-(e.clientX-r.left)/r.width,y:(e.clientY-r.top)/r.height};if(index!==null)label(p);};
+  const click=(e:React.MouseEvent<HTMLCanvasElement>)=>{const r=e.currentTarget.getBoundingClientRect();const p={x:1-(e.clientX-r.left)/r.width,y:(e.clientY-r.top)/r.height};if(index!==null){if(labelMode==='surface')setVertices(old=>[...old,p]);else label(p);}};
+  const saveSurface=(surface:Point[]|null)=>{if(index===null)return;setSamples(old=>old.map((s,i)=>i===index?{...s,surface}:s));setVertices([])};
   const labeled=samples.filter(s=>s.label!==undefined),visible=labeled.filter(s=>s.label!==null),matched=visible.filter(s=>s.prediction);
   const errors=matched.map(s=>Math.hypot((s.prediction!.x-s.label!.x)*W,(s.prediction!.y-s.label!.y)*H));
-  const exportData=()=>{const blob=new Blob([JSON.stringify({schema:'tongue-tip-review/v1',createdAt:new Date().toISOString(),coordinates:'unmirrored normalized mouth crop',cropPixels:{width:W,height:H},method:'personal neural heatmap and separately supervised depth estimate',samples},null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='tongue-tip-review.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)};
+  const exportData=()=>{const blob=new Blob([JSON.stringify({schema:'tongue-tip-review/v1',sessionId,createdAt:new Date().toISOString(),coordinates:'unmirrored normalized mouth crop',cropPixels:{width:W,height:H},method:'personal neural heatmap and separately supervised depth estimate',surfaceAnnotationVersion:1,samples},null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='tongue-tip-review.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)};
   const d=chosen?chosen.diagnostic:diagnostic;
   return <div className="tongue-lab-backdrop"><section role="dialog" aria-modal="true" aria-labelledby="tongue-lab-title" className="tongue-lab" onKeyDown={e=>{if(e.key==='Escape')close()}}>
     <header><h2 id="tongue-lab-title">Tongue observation lab</h2><button autoFocus onClick={close}>Close</button></header>
     <p>Pink shows the neural tip detector. Depth is estimated from your depth-capture examples. Green appears only when you click the actual tip on a frozen frame—it is your manual label, not an automatic detection.</p>
+    {index!==null&&<fieldset><legend>Independent visible-surface labels</legend><label>Label mode <select value={labelMode} onChange={e=>{setLabelMode(e.target.value as 'tip'|'surface');setVertices([])}}><option value="tip">Tongue tip</option><option value="surface">Visible tongue outline</option></select></label>{labelMode==='surface'&&<><p>Click around only the visible tongue, excluding teeth, lips and hidden tissue. Blue is a manual reference label, not model output. The surface may be visible even when the tip is hidden.</p><button disabled={vertices.length<3} onClick={()=>saveSurface(vertices)}>Save visible outline</button><button disabled={!vertices.length} onClick={()=>setVertices(old=>old.slice(0,-1))}>Undo vertex</button><button onClick={()=>saveSurface(null)}>No visible tongue surface</button><span>{chosen?.surface===null?'Surface marked absent':chosen?.surface?'Surface outline saved':'Surface not reviewed'}</span></>}</fieldset>}
     <div className="tongue-lab-grid"><div><canvas ref={canvas} width={W} height={H} onClick={click} aria-label={index===null?'Mirrored live mouth crop. Neural tongue tip tracking.':'Captured mouth crop. Click the actual tip to label it.'}/><p>{index===null?'LIVE · Automatic neural tip. Freeze a frame to add a manual comparison label.':`FRAME ${index+1} · ${chosen?.motion} · Click the actual tip to place a green label.`}</p></div>
     <div className="tongue-lab-controls"><strong role="status">{chosen?.status??status}</strong><span>Tracker: {d?.state??'unavailable'}</span><span>{d?.reason??'No tracker observation yet'}</span><span>Visibility score: {d?.score===undefined?'—':d.score.toFixed(2)} (uncalibrated)</span><span>Tip heatmap peak: {d?.margin===undefined?'—':d.margin.toFixed(3)}</span>
     {index===null&&<output aria-label="Tongue tip XYZ">{tip3D?.tip3D?`X ${tip3D.tip3D.x.toFixed(3)} · Y ${tip3D.tip3D.y.toFixed(3)} · Z ${tip3D.tip3D.z.toFixed(3)} (depth estimated; mouth-width units)`:'XYZ unavailable · tip not detected'}</output>}
