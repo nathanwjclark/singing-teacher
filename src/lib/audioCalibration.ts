@@ -1,4 +1,4 @@
-import type { AudioMetrics } from './audio';
+import type { AudioMetrics } from './audio.ts';
 
 export type AudioCalibration = {
   id: string; state: 'collecting' | 'ready'; noiseFloorDbfs: number | null;

@@ -56,6 +56,8 @@ def _worker(root, job_id, parent_pid, timeout_s):
     try:
         destination.mkdir(parents=True, exist_ok=False)
         params = request['parameters']
+        if request['operation'] == 'evaluate_probe' and 'model_id' in request and json.loads(request['parameters']['forecast_json']).get('model_id') != request['model_id']:
+            raise ValueError('Forecast model does not match job model')
         if request['operation'] == 'fit_control':
             from .control import fit_control_profile
             result = fit_control_profile(**params)
@@ -80,6 +82,12 @@ def _worker(root, job_id, parent_pid, timeout_s):
             else:
                 artifact = update_pcm(Artifact(params['design_json'].encode()), snapshot, **options)
             artifact.write(destination / ('design.json' if request['operation'] == 'design_pcm' else 'update.json'))
+            result = artifact.data
+        elif request['operation'] == 'evaluate_probe':
+            from .prediction import Artifact
+            from .probe_evaluation import evaluate_probe
+            artifact = evaluate_probe(Artifact(params['forecast_json'].encode()), **{k:v for k,v in params.items() if k != 'forecast_json'})
+            artifact.write(destination / 'evaluation.json')
             result = artifact.data
         elif request['operation'] == 'predict_probe':
             from .prediction import Artifact
@@ -213,13 +221,14 @@ class JobService:
         self._identity(idempotency_key, 'idempotency_key')
         if not isinstance(request, dict) or set(request) - {'operation', 'parameters', 'session_id', 'model_id'}:
             raise ValueError('Invalid local job request fields')
-        if request.get('operation') not in {'forward', 'fit_transfer', 'fit_joint', 'predict', 'fit_dynamic', 'fit_control', 'control_predict', 'condition_prediction', 'fit_frozen_control', 'rank_interventions', 'fit_pcm', 'search_pcm', 'design_pcm', 'update_pcm', 'fit_probe_pcm', 'predict_probe'} or not isinstance(request.get('parameters'), dict):
+        if request.get('operation') not in {'forward', 'fit_transfer', 'fit_joint', 'predict', 'fit_dynamic', 'fit_control', 'control_predict', 'condition_prediction', 'fit_frozen_control', 'rank_interventions', 'fit_pcm', 'search_pcm', 'design_pcm', 'update_pcm', 'fit_probe_pcm', 'predict_probe', 'evaluate_probe'} or not isinstance(request.get('parameters'), dict):
             raise ValueError('Unsupported operation or missing parameters')
         allowed = {
+            'evaluate_probe': {'forecast_json', 'expected_digest', 'document', 'receipt', 'configuration_json', 'original_artifacts', 'supplemental_artifacts', 'capture_started_at'},
             'predict_probe': {'snapshot_json', 'expected_digest', 'prediction_id', 'target_evidence_id', 'generated_at', 'pose', 'frequency_hz', 'placement', 'calibration', 'calibration_evidence_ids', 'calibration_frozen_at', 'articulation', 'channel', 'comparison', 'timing', 'termination', 'termination_resistance_pa_s_m3', 'attenuation_np_per_m', 'max_operator_calls'},
             'fit_probe_pcm': {'observations', 'probe_observations', 'candidates', 'max_native_calls', 'pcm_weight', 'probe_weight'},
             'search_pcm': {'observations', 'anatomy_bounds', 'nuisance_profiles', 'max_synthesis_calls', 'rounds', 'seed'},
-            'design_pcm': {'snapshot_json', 'expected_digest', 'design_id', 'target_observation_id', 'generated_at', 'experiments', 'feature_scales', 'minimum_separation', 'max_synthesis_calls', 'retention_margin', 'maximum_discrepancy'},
+            'design_pcm': {'snapshot_json', 'expected_digest', 'design_id', 'target_observation_id', 'generated_at', 'experiments', 'feature_scales', 'minimum_separation', 'max_synthesis_calls', 'retention_margin', 'maximum_discrepancy', 'profile'},
             'update_pcm': {'snapshot_json', 'design_json', 'expected_design_digest', 'expected_snapshot_digest', 'experiment_id', 'observation_id', 'artifact_id', 'observed_at', 'pcm', 'sample_rate_hz', 'frame_start_sample', 'frame_size', 'source_kind'},
             'fit_pcm': {'observations', 'candidates', 'max_synthesis_calls'},
             'fit_frozen_control': {'snapshot_json', 'observations', 'expected_digest', 'candidate_id', 'budget', 'seed'},
@@ -240,6 +249,7 @@ class JobService:
         if request['operation'] == 'predict' and not {'snapshot_json', 'expected_digest', 'prediction_id', 'target_evidence_id', 'generated_at', 'intervention'} <= set(request['parameters']):
             raise ValueError('Missing prediction parameters')
         required = {
+            'evaluate_probe': {'forecast_json', 'expected_digest', 'document', 'receipt', 'configuration_json', 'original_artifacts', 'supplemental_artifacts', 'capture_started_at'},
             'predict_probe': {'snapshot_json', 'expected_digest', 'prediction_id', 'target_evidence_id', 'generated_at', 'pose', 'frequency_hz', 'placement', 'calibration', 'calibration_evidence_ids', 'calibration_frozen_at'},
             'fit_probe_pcm': {'observations', 'probe_observations', 'candidates'},
             'search_pcm': {'observations', 'anatomy_bounds', 'nuisance_profiles'},
@@ -263,6 +273,8 @@ class JobService:
             snapshot = json.loads(request['parameters']['snapshot_json'])
             if not isinstance(snapshot, dict) or snapshot.get('model_id') != request['model_id']:
                 raise ValueError('Prediction or inference model does not match job model')
+        if request['operation'] == 'evaluate_probe' and 'model_id' in request and json.loads(request['parameters']['forecast_json']).get('model_id') != request['model_id']:
+            raise ValueError('Forecast model does not match job model')
         if request['operation'] == 'fit_control' and 'model_id' in request and request['parameters']['anatomy_model_id'] != request['model_id']:
             raise ValueError('Control profile anatomy model does not match job model')
         encoded = canonical(request)

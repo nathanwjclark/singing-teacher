@@ -1,5 +1,23 @@
 import { test, expect } from '@playwright/test';
 
+test('scientific result with unavailable baseline remains readable', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await page.route('**/api/science/status', route => route.fulfill({json:{
+    status:'succeeded',runId:'browser-regression',result:{
+      runId:'browser-regression',nativeCalls:6,calibrationWindows:2,sourceCaptureId:null,
+      fitDiscrepancy:3,baselineDiscrepancy:null,anatomy:{},referenceAnatomy:{},jobs:[],
+      forecast:{rankings:[],selected_experiment_id:null},forecastRole:'Software UI regression only',
+      interpretation:'No anatomical validation',files:{}
+    }
+  }}));
+  await page.goto('/');
+  await page.getByRole('button',{name:'Experiments',exact:true}).click();
+  await expect(page.locator('.scientific-model')).toContainText('fixed-anatomy comparison Unavailable');
+  await expect(page.locator('.scientific-model')).toContainText('No separating next experiment found');
+  expect(errors).toEqual([]);
+});
+
 test('demo stops capture and shows ranked physical cues', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
