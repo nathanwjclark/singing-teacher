@@ -154,6 +154,9 @@ def execute_experiment(data_root,request_path,output):
             if state['pending']:raise ValueError('Another scientific job is running; retry after it completes')
             if state['snapshot']['model_id']!=intent['baselineModelId']:raise ValueError('Baseline changed before visual submission')
             for attempt in range(3):
+                if state['snapshot']['model_id']!=intent['baselineModelId']:
+                    seal(output/'failure.json',{'reason':'Baseline changed before visual submission; refresh and create a new declaration'})
+                    raise ValueError('Baseline changed before visual submission')
                 try:state=backend.execute({**command,'expected_version':state['version']})['state'];break
                 except Exception:
                     state=backend.execute({'action':'state'})['state']
@@ -176,6 +179,9 @@ def execute_experiment(data_root,request_path,output):
                     if attempt==2:raise
         if record is None:raise ValueError('Visual result is not yet available; retry to recover')
         if record['status']!='succeeded':seal(output/'failure.json',{'reason':'Visual job did not complete; session released'});raise ValueError('Visual job failed; retry with a new request')
+        forecast=state.get('visual_forecasts',{}).get(request['forecastId'])
+        if not forecast or forecast.get('baseline_model_id')!=intent['baselineModelId']:
+            raise ValueError('Authoritative visual forecast does not match the intended baseline')
         if original(root,request['captureId'])[1]!=intent['sourceHashes']:raise ValueError('Original evidence changed before visual publication')
         result={'operation':request['operation'],'forecastId':request['forecastId'],'sessionId':intent['sessionId'],
             'baselineModelId':intent['baselineModelId'],'sourceHashes':intent['sourceHashes'],'captureId':request['captureId'],
