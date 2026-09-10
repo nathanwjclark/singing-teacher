@@ -40,7 +40,21 @@ export function createAstraRoutes({dataRoot,json,provider,fetchImpl=fetch,callBu
     if(!url.pathname.startsWith('/api/astra/'))return false;
     if(!local(req)){json(res,403,{error:'Astra decisions are available only from the local app'});return true;}
     try{
-      if(url.pathname==='/api/astra/status'&&req.method==='GET'){const p=await access();let context;try{context=await current();}catch(e){json(res,200,{provider:await p.getProviderStatus(),runId:null,sessionId:null,remainingCalls:callBudget,callBudget,running,latest:null,error:e.message});return true;}const history=await records(context.sessionId);json(res,200,{provider:await p.getProviderStatus(),runId:context.runId,sessionId:context.sessionId,remainingCalls:Math.max(0,callBudget-history.length),callBudget,running,latest:history.at(-1)||null});return true;}
+      if(url.pathname==='/api/astra/status'&&req.method==='GET'){
+        const p=await access();let context;
+        const empty={latest:null,latestAttempt:null,latestCurrent:false,latestDesignStatus:null,currentModelId:null};
+        try{context=await current();}catch(e){json(res,200,{provider:await p.getProviderStatus(),runId:null,sessionId:null,remainingCalls:callBudget,callBudget,running,...empty,error:e.message});return true;}
+        const history=await records(context.sessionId);
+        const latest=history.findLast(r=>r.status==='succeeded'&&r.runId===context.runId&&r.sessionId===context.sessionId&&['record','rest'].includes(r.decision?.action)&&typeof r.decision.cue==='string'&&typeof r.decision.explanation==='string')||null;
+        const attempted=history.at(-1);
+        const latestAttempt=attempted?{requestId:attempted.requestId,status:attempted.status,...(attempted.status==='failed'?{error:attempted.error||'Decision did not complete'}:{})}:null;
+        let state=null,stateError;
+        if(latest){try{state=await stateFor(context.sessionId);}catch{stateError='Scientific session is unavailable; the previous decision is not confirmed current.';}}
+        const design=latest?.designId?state?.designs?.[latest.designId]:null;
+        const sameModel=!!latest&&!!state?.snapshot&&latest.modelId===state.snapshot.model_id;
+        const latestCurrent=!!(sameModel&&(latest.decision.action==='rest'?latest.sessionVersion===state.version:design?.status==='committed'&&design.data?.model_id===state.snapshot.model_id&&design.data?.selected_experiment_id===latest.decision.experimentId));
+        json(res,200,{provider:await p.getProviderStatus(),runId:context.runId,sessionId:context.sessionId,remainingCalls:Math.max(0,callBudget-history.length),callBudget,running,latest,latestAttempt,latestCurrent,latestDesignStatus:design?.status||null,currentModelId:state?.snapshot?.model_id||null,...(stateError?{error:stateError}:{})});return true;
+      }
       if(url.pathname!=='/api/astra/decide'||req.method!=='POST'){json(res,405,{error:'Method not allowed'});return true;}
       if(running)throw failure('An Astra decision is already running');
       running=true;

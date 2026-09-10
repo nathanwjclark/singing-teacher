@@ -27,3 +27,30 @@ test('rest and concurrent state changes never publish a new capture design',asyn
 test('stale session and foreign origin reject writes',async t=>{const s=await setup(t,{decide:(_args,state)=>{state.version++;return {action:'record',experimentId:'a',cue:'ah',explanation:'test'};}});assert.equal((await s.request({requestId:'stale'})).status,409);assert.equal(s.commands.length,0);assert.equal((await s.request({requestId:'evil'},'/api/astra/decide',{origin:'https://evil.example'})).status,403);});
 test('restart after scientific selection restores publication without a second provider call',async t=>{const s=await setup(t);assert.equal((await s.request({requestId:'recover'})).status,200);const path=join(s.root,'astra-decisions','session-one','recover.json'),receipt=JSON.parse(await readFile(path,'utf8'));receipt.status='running';await writeFile(path,JSON.stringify(receipt));await rm(join(s.directory,'astra-current.json'));assert.equal((await s.request({requestId:'recover'})).status,200);assert.equal(s.calls(),1);assert.equal(JSON.parse(await readFile(join(s.directory,'astra-current.json'),'utf8')).decisionId,'recover');});
 test('unfinished Astra forecast resumes under a new browser request, unrelated jobs are not collected',async t=>{const s=await setup(t);s.state.snapshot.model_id='model-two';s.state.designs.initial.status='completed';const parameters={design_id:'astra-forecast-resume',target_observation_id:'astra-target-resume'};s.commands.push({action:'propose_design',parameters});s.state.pending={job_id:'job-new',request:{operation:'design_pcm',parameters}};assert.equal((await s.request({requestId:'after-reload'})).status,200);assert.deepEqual(s.commands.map(c=>c.action),['propose_design','collect_job','select_experiment']);assert.equal(s.commands[1].command_id,'astra-resume-collect_job');assert.equal(s.commands[2].source_design_id,'astra-forecast-resume');s.state.pending={job_id:'other',request:{operation:'update_pcm',parameters:{}}};assert.equal((await s.request({requestId:'another'})).status,409);s.state.pending={job_id:'other',request:{operation:'design_pcm',parameters:{design_id:'astra-forecast-foreign',target_observation_id:'unrelated'}}};assert.equal((await s.request({requestId:'again'})).status,409);assert.equal(s.calls(),1);});
+
+test('status separates unfinished and failed attempts from the latest successful decision',async t=>{
+ const s=await setup(t),dir=join(s.root,'astra-decisions','session-one');await mkdir(dir,{recursive:true});
+ const runningReceipt={requestId:'pending',status:'running',createdAt:'2099-01-01T00:00:00.000Z'};
+ await writeFile(join(dir,'pending.json'),JSON.stringify(runningReceipt));
+ let status=(await s.request(undefined,'/api/astra/status')).data;
+ assert.equal(status.latest,null);assert.equal(status.latestCurrent,false);assert.deepEqual(status.latestAttempt,{requestId:'pending',status:'running'});
+ await writeFile(join(dir,'pending.json'),JSON.stringify({...runningReceipt,status:'failed',error:'Decision did not complete'}));
+ assert.equal((await s.request({requestId:'good'})).status,200);
+ status=(await s.request(undefined,'/api/astra/status')).data;
+ assert.equal(status.latest.requestId,'good');assert.equal(status.latest.decision.action,'record');assert.equal(status.latestCurrent,true);
+ assert.equal(status.latestAttempt.status,'failed');assert.equal(status.latestAttempt.requestId,'pending');assert.equal(status.remainingCalls,4);
+});
+
+test('status stops advertising a committed recording after outcome, probe model update, stop or worker loss',async t=>{
+ const s=await setup(t);await s.request({requestId:'selected'});
+ const get=async()=>(await s.request(undefined,'/api/astra/status')).data;
+ assert.equal((await get()).latestCurrent,true);
+ for(const status of ['outcome_pending','completed','stale','stopped','failed']){
+  s.state.designs['astra-design-selected'].status=status;
+  const report=await get();assert.equal(report.latestCurrent,false);assert.equal(report.latestDesignStatus,status);assert.equal(report.latest.requestId,'selected');
+ }
+ s.state.designs['astra-design-selected'].status='committed';s.state.snapshot.model_id='probe-updated-model';
+ assert.equal((await get()).latestCurrent,false);assert.equal((await get()).currentModelId,'probe-updated-model');
+ s.state.snapshot.model_id='model-one';delete process.env.SCIENCE_URL;
+ const unavailable=await get();assert.equal(unavailable.latestCurrent,false);assert.match(unavailable.error,/unavailable/);
+});
