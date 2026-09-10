@@ -19,7 +19,7 @@ The freeze records caller time and an actual server seal timestamp.
 `design_pcm(snapshot, *, expected_digest, design_id, target_observation_id,
 generated_at, experiments, feature_scales, minimum_separation=1,
 retention_margin=1, maximum_discrepancy=2, max_synthesis_calls=64,
-node_binary=None)` returns a sealed `frozen_pcm_experiment_design` artifact.
+node_binary=None, profile=None)` returns a sealed `frozen_pcm_experiment_design` artifact.
 
 Each experiment declares exactly `experiment_id`, native `pose`, `JA`, `f0_hz` and
 positive scalar `gain`. Bounds are JA −5 to −1 degrees, F0 65–1000 Hz and gain
@@ -27,9 +27,22 @@ positive scalar `gain`. Bounds are JA −5 to −1 degrees, F0 65–1000 Hz and 
 with a hard ceiling of 512 synthesis calls. All geometry starts from its explicit
 complete anatomy. Requested/applied native controls are retained.
 
-Every prospective waveform uses 44.1 kHz, duration 0.25 seconds, and samples
-4410:8506 (4096 samples, starting at 100 ms). These dimensions are part of the frozen
-artifact. No observation resampling or automatic window substitution occurs.
+The default profile uses 44.1 kHz, duration 0.25 seconds, and samples 4410:8506
+(4096 samples, starting at 100 ms), preserving existing callers. For native phone
+recordings, explicitly pass `profile={"sample_rate_hz":48000,
+"frame_start_sample":4800,"frame_size":4096,"duration_s":0.25}`. A 96 kHz
+profile uses 8192 samples (for example, starting at sample 9600). The profile must
+contain exactly these four fields; supported rates are 44100, 48000 and 96000 Hz.
+The frame must fit within the declared 0.1–5 second synthesis duration, and its
+size must match the canonical extractor for that rate. These dimensions are frozen
+before receipt, and updates must explicitly match rate, offset and size.
+
+Only generated forecasts are resampled, using the same `resample_native_pcm`
+polyphase conversion as PCM inverse fitting. Conversion settings and SciPy version
+are retained per prediction. Actual observations retain their original sample rate
+and samples; no automatic observation resampling or window substitution occurs.
+The chosen offset is relative to the declared source recording; this API does not
+recover capture time or align an independently executed gesture automatically.
 
 `feature_scales` declares 3–5 canonical feature names, each with `{unit, scale,
 assumption}`. Supported names and units are `dbfs`/dBFS, `centroidHz`/Hz,
@@ -96,4 +109,8 @@ Run `PYTHONPATH=.:science/src science/.venv/bin/python -m pytest
 science/tests/test_pcm_design.py -q`. Native tests cover real synthesis/extraction,
 receipt/update lineage, missing-feature abstention, indistinguishable support,
 source-frame replay rejection, budgets, state release, canonical tamper detection,
-model mismatch and distinct model identity across different designs.
+model mismatch and distinct model identity across different designs. Native 48/96
+kHz regressions synthesize a later waveform after sealing the design, use the
+canonical rate conversion, verify exact descriptor agreement and original frame
+hashes, and reject mismatched or altered profiles. These are synthetic physics
+integration checks, not human recording validation.

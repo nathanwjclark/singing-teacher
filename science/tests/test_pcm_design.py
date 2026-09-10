@@ -7,6 +7,7 @@ import pytest
 
 from singing_physics.engine import Engine
 from singing_physics.pcm_design import design_pcm, freeze_pcm_hypotheses, update_pcm
+from singing_physics.pcm_inverse import resample_native_pcm
 from singing_physics.prediction import Artifact, _encode
 
 
@@ -157,3 +158,42 @@ def test_mismatch_abstains_and_distinct_designs_cannot_alias_model_identity():
     mismatch = update(mismatch_design, snapshot, frame*.9).data
     assert mismatch['status'] == 'model_mismatch'
     assert len(mismatch['updated_snapshot']['hypotheses']) == 2
+
+
+@pytest.mark.parametrize('rate,size', [(48000, 4096), (96000, 8192)])
+def test_native_phone_profile_forecast_and_later_pcm_update(rate, size):
+    snapshot = freeze()
+    profile = {'sample_rate_hz': rate, 'frame_start_sample': rate//10,
+               'frame_size': size, 'duration_s': .25}
+    ranking = design(snapshot, profile=profile)
+    assert ranking.data['profile'] == profile
+    with Engine() as engine:
+        engine.set_anatomy(snapshot.data['hypotheses'][0]['anatomy'])
+        generated = engine.synthesize('a', {'JA': -3.}, f0_hz=180., duration_s=.25)
+        recording, resampling = resample_native_pcm(generated, engine.sample_rate, rate)
+    start = profile['frame_start_sample']
+    frame = np.asarray(recording[start:start+size]*.8, dtype='<f4')
+    params = {key: profile[key] for key in ('sample_rate_hz', 'frame_start_sample', 'frame_size')}
+    result = update(ranking, snapshot, frame, **params).data
+    assert result['status'] == 'conditional_support_updated'
+    assert result['scores'][0]['standardized_rms'] == pytest.approx(0, abs=1e-8)
+    assert result['observation_receipt']['profile'] == profile
+    assert result['observation_receipt']['frame_sha256'] == hashlib.sha256(frame.tobytes()).hexdigest()
+    assert ranking.data['rankings'][0]['predictions'][0]['resampling'] == resampling
+    assert resampling['observations_resampled'] is False
+    for mismatch in ({'sample_rate_hz': 44100}, {'frame_start_sample': start+1}, {'frame_size': size//2}):
+        with pytest.raises(ValueError, match='profile'):
+            update(ranking, snapshot, frame, **{**params, **mismatch})
+    modified = ranking.data
+    modified['profile']['frame_start_sample'] += 1
+    with pytest.raises(ValueError, match='profile binding'):
+        update(Artifact(_encode(modified)), snapshot, frame, **{**params, 'frame_start_sample': start+1})
+
+
+@pytest.mark.parametrize('changes', [
+    {'sample_rate_hz': 32000}, {'frame_size': 8192}, {'frame_start_sample': -1},
+    {'duration_s': .1}, {'duration_s': 6}, {'frame_start_sample': True}, {'extra': 1}])
+def test_invalid_design_profile_rejected(changes):
+    profile = {'sample_rate_hz': 48000, 'frame_start_sample': 4800, 'frame_size': 4096, 'duration_s': .25}
+    with pytest.raises(ValueError):
+        design(freeze(), profile={**profile, **changes})
