@@ -1,0 +1,19 @@
+# PHON-01 canonical acoustic descriptors
+
+`measurePhonation(pcm, sampleRate, metadata, options?)` returns a versioned observation. See `types.ts` for exact provenance/capability fields. The same function processes microphone and synthesized frames. It snapshots the frame before asynchronous SHA256 calculation; hashes are explicit little-endian float32 frame bytes. Original media hashes and clocks are separate caller evidence. Unknown capture synchronization stays null.
+
+Supported fixed profiles: 4096 samples at44100/48000Hz,8192 at96000Hz. Work is bounded to one frame and at most12 harmonics. A browser consumer must call `worker.ts` in a dedicated worker, terminate it on a hard timeout and reject stale responses. Post-hoc deadline checks inside extraction are not preemptive cancellation. Worker request `{id,pcm:Float32Array,sampleRate,metadata}` returns `{id,observation}` or `{id,error}`. The Node bridge `science/scripts/phonation_bridge.ts` accepts the same input excluding id (pcm JSON array), with a2MB input bound. Parent processes enforce wall-time limits.
+
+Measurements:
+
+- Pitch and periodicity reuse the existing canonical YIN implementation in `audio.ts`. YIN periodicity is waveform similarity, not harmonic energy fraction; it is **not converted to HNR**.
+- Spectral flatness reuses canonical Blackman/power-spectrum flatness. It is a noise-like spectral-shape proxy, not a calibrated harmonic-to-noise ratio or breathiness/closure diagnosis.
+- Harmonic spectral slope uses mean-removed Blackman-windowed complex projections at h×F0, h1..min(12,floor(4000/F0)). Retain amplitudes within40dB of the strongest and require4 harmonics. Ordinary least squares fits amplitude dB against log2(frequency), yielding dB/octave. This is **raw recorded harmonic slope**, with vocal-tract, radiation, microphone and room filtering. It is not inverse-filtered glottal tilt, corrected H1–H2, CPP or contact quotient.
+
+The [Praat harmonicity definition](https://www.fon.hum.uva.nl/praat/manual/Harmonicity.html) concerns periodic energy versus noise; its [autocorrelation HNR algorithm](https://fon.hum.uva.nl/praat/manual/Sound__To_Harmonicity__ac____.html) is distinct from this YIN/flatness implementation. [Praat's pitch method discussion](https://fon.hum.uva.nl/praat/manual/how_to_choose_a_pitch_analysis_method.html) explains why vocal-tract resonances can influence pitch estimates. None supplies a diagnostic threshold for these custom descriptors. The harmonic slope formula above is an explicitly defined engineering descriptor, tested on known harmonic amplitudes, not a validated clinical measurement.
+
+Silence below-60dBFS, clipping at|sample|>=.995, insufficient periodicity(.85), pitch above800Hz and unresolved noise/irregularity suppress all descriptors with reasons. Harmonic insufficiency can leave slope null while pitch/flatness are available. These are declared analysis gates, not health thresholds. Processing unknown/present adds a quality flag. Comparisons require compatible processing, pitch/vowel/level and within-session reference variability. Source inference remains unsupported and coaching disabled in the extractor; consumers may separately enable reviewed measurement-only coaching.
+
+Capability states are disabled, unsupported, insufficient-quality, timed-out, failed and available. Missing data is null plus reason. The original live microphone permission/stream is reused by consumers; the extractor opens none. No anatomical closure, tissue collision, disease or muscle-state inference is made.
+
+Tests: `node --experimental-strip-types --test src/phonation/measure.test.ts`. Analytic harmonic slopes, source-kind invariance, caller-buffer mutation, silence/noise/clipping/highpitch, invalid input, cancellation and harmonic insufficiency are covered.
