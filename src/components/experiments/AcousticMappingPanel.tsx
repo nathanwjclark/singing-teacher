@@ -4,6 +4,8 @@ import type { AcousticProbeMeasurement } from '../../contracts/probes.ts'
 import { deleteProbeReview, readProbeReviews, saveProbeReview } from '../../experiment/probes/reviewStore.ts'
 import type { SavedProbeReview } from '../../experiment/probes/reviewStore.ts'
 import { ProbeCaptureGuide } from './ProbeCaptureGuide'
+import { fitLatestProbe, getProbeStatus, importLatestProbe } from './probeClient'
+import type { ProbeStatus } from './probeClient'
 import './AcousticMappingPanel.css'
 
 function measurement(saved?: SavedProbeReview): AcousticProbeMeasurement | undefined {
@@ -32,6 +34,57 @@ function download(saved: SavedProbeReview) {
   const link = document.createElement('a'); link.href = url; link.download = 'probe-measurement.json'; link.click()
   setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
+function ConnectedProbe() {
+  const [state, setState] = useState<ProbeStatus | null>(null)
+  const [error, setError] = useState(''), [starting, setStarting] = useState(false), [refresh, setRefresh] = useState(0)
+  useEffect(() => {
+    const controller = new AbortController()
+    let timer: ReturnType<typeof setTimeout>
+    async function poll() {
+      try { const next = await getProbeStatus(controller.signal); if (!controller.signal.aborted) setState(next) }
+      catch (failure) { if (!controller.signal.aborted) { setState(null); setError(failure instanceof Error ? failure.message : String(failure)) } }
+      finally { if (!controller.signal.aborted) timer = setTimeout(() => void poll(), 3000) }
+    }
+    void poll()
+    return () => { controller.abort(); clearTimeout(timer) }
+  }, [refresh])
+  async function run(action: 'import' | 'fit') {
+    setStarting(true); setError('')
+    try {
+      if (action === 'import') await importLatestProbe(crypto.randomUUID())
+      else {
+        if (!state?.import || !state.currentModelId) throw new Error('Analyze a probe and fit a voice model first.')
+        await fitLatestProbe(crypto.randomUUID(), state.import.importId, state.currentModelId)
+      }
+      setState(previous => previous ? { ...previous, busy: true } : previous)
+    } catch (failure) { setError(failure instanceof Error ? failure.message : String(failure)) }
+    finally { setStarting(false); setRefresh(value => value + 1) }
+  }
+  const busy = starting || Boolean(state?.busy)
+  const report = state?.measurement && validateProbeMeasurement(state.measurement).valid ? state.measurement : null
+  const fit = state?.fit
+  return <section className="probe-connected" aria-label="Native probe analysis and fitting" aria-busy={busy}>
+    <h4>Analyze the latest iPhone probe</h4>
+    <p>Use <strong>Pull iPhone</strong> after the sound capture. The app verifies the original drive and microphone recording, extracts their response, and checks whether its calibration supports fitting.</p>
+    <div className="probe-review-actions"><button disabled={busy || !state} onClick={() => void run('import')}>Analyze latest probe</button>
+      <button disabled={busy || !state?.canFit} onClick={() => void run('fit')}>Fit probe with voice model</button>
+      <button onClick={() => { setError(''); setRefresh(value => value + 1) }}>Refresh probe status</button></div>
+    <p role="status">{busy ? 'Processing original probe evidence…' : state ? 'Local probe service connected.' : 'Probe service unavailable.'}</p>
+    {(error || state?.error) && <p role="alert" className="probe-error">{error || state?.error}</p>}
+    {state?.import && <><p>Probe import: <strong>{state.import.eligible ? 'Eligible for scientific fitting' : 'Review available; fitting prerequisite not met'}</strong>.</p>
+      {state.import.reasons.length > 0 && <ul>{state.import.reasons.map((reason, i) => <li key={i}>{reason}</li>)}</ul>}</>}
+    {state?.fitBlockedReason && <p>Before fitting: {state.fitBlockedReason}</p>}
+    {report && <><ResponseChart current={report}/><p>Evidence source: {report.provenance}. {report.responseUsable.reason}</p></>}
+    {fit && <div className="probe-fit-result"><h4>Joint fit result</h4>
+      <p>Processing: {fit.status}. Probe contribution: <strong>{fit.includedInFit ? 'Included in this fit' : 'Not included'}</strong>. Model adoption: {fit.adoptionStatus}.</p>
+      <p>{fit.probeRecords.length} probe records · {fit.nativeCalls} native model calls.
+        {' '}Candidate discrepancy: {fit.score == null ? 'Unavailable' : fit.score.joint_discrepancy.toFixed(3)}.
+        {' '}Baseline discrepancy: {fit.baselineScore == null ? 'Unavailable' : fit.baselineScore.joint_discrepancy.toFixed(3)}.</p>
+      <ul>{fit.probeRecords.map(record => <li key={record.id}>{record.id}: {record.included_in_fit ? 'Included' : 'Rejected'} · {record.reason}</li>)}</ul>
+      <p>These scores describe the fit under its declared calibration and placement. They do not establish correct internal anatomy.</p>
+      <details><summary>Probe contribution and model lineage</summary><p>Import: {fit.importId}<br />Parent model: {fit.parentModelId || 'Unavailable'}<br />Result model: {fit.modelId || 'No new model'}</p></details></div>}
+  </section>
+}
 export function AcousticMappingPanel() {
   const [reviews, setReviews] = useState<SavedProbeReview[]>([]), [selected, setSelected] = useState(''), [comparison, setComparison] = useState('')
   const [notice, setNotice] = useState(''), [busy, setBusy] = useState(false)
@@ -57,8 +110,10 @@ export function AcousticMappingPanel() {
   }
   return <section className="acoustic-mapping" aria-label="Acoustic mapping">
     <div className="probe-header"><div><h3>Acoustic mapping</h3><p>Measure how a short external sound changes across comfortable mouth poses. One native iPhone captures; this Mac reviews.</p></div><span className="probe-status">Private · explicit capture</span></div>
-    <div className="probe-steps"><div><strong>1 · Capture</strong><span>Native route, output-level check, placement and repeats.</span></div><div><strong>2 · Review response</strong><span>Verified drive/recording lineage, valid bands and repeat quality.</span></div><div><strong>3 · Model handoff</strong><span>External-drive operator and joint-fit service still required.</span></div></div>
+    <div className="probe-steps"><div><strong>1 · Capture</strong><span>Native route, output-level check, placement and repeats.</span></div><div><strong>2 · Analyze response</strong><span>Verified drive/recording lineage, valid bands and repeat quality.</span></div><div><strong>3 · Fit supported evidence</strong><span>Check calibration, run the external-drive joint fit and review its contribution.</span></div></div>
     <ProbeCaptureGuide/>
+    <ConnectedProbe/>
+    <h4>Separate saved-response review</h4><p>Importing a review below only changes this browser’s comparison view. Use the original-capture analysis above to submit evidence for fitting.</p>
     <label className="probe-import">Import local probe-measurement.json<input type="file" accept=".json,application/json" disabled={busy} onChange={e => { void importFile(e.target.files?.[0]); e.target.value = '' }}/></label>
     <p role="status" className={notice.startsWith('Import failed') ? 'probe-error' : undefined}>{busy ? 'Validating and retaining review…' : notice}</p>
     {!current && <p>No probe responses imported. Ordinary singing audio and phone depth captures do not contain the known external excitation required for this measurement.</p>}
@@ -74,6 +129,6 @@ export function AcousticMappingPanel() {
       <details><summary>Immutable lineage and model handoff</summary><dl className="probe-metadata"><dt>Capture / measurement</dt><dd>{current.captureId} / {current.id}</dd><dt>Extractor</dt><dd>{current.extractor?.version}</dd><dt>Source hashes</dt><dd><pre>{JSON.stringify(current.sourceHashes, null, 2)}</pre></dd><dt>Private derived artifacts</dt><dd><pre>{JSON.stringify(current.artifacts, null, 2)}</pre></dd><dt>Imported file SHA-256</dt><dd>{saved.hash}</dd></dl><p>Keep original drive, microphone PCM and manifest beside derived artifacts. An imported summary alone cannot certify raw bytes or add evidence to a fit. Repetitions and changed calibrations remain separate records.</p></details>
       <div className="probe-review-actions"><button onClick={() => download(saved)}>Export review JSON</button><button onClick={() => void remove()}>Delete this review copy</button></div>
     </>}
-    <details><summary>Fit and adaptive teaching availability</summary><p>The current producer does not include probe evidence in fitting. A versioned external-loudspeaker observation operator, bounded placement/calibration model, joint-fit job and independently scored forecast are required. The existing glottis-to-mouth transfer function is a different quantity.</p><p>No runtime Astra tool service is configured in this app. Next-pose steps above are a fixed acquisition protocol; they are not an adaptive model decision. G8 (evidence reaches the fit) and G9 (runtime selection and adaptation) remain unfulfilled. No anatomy update is made from this panel.</p></details>
+    <details><summary>What this experiment establishes</summary><p>The external-drive fit uses supported original probe evidence and declared placement/calibration. The response of a loudspeaker near the mouth differs from the vocal-fold source used in ordinary singing. Missing calibration can permit response review while preventing an anatomical fit.</p><p>The capture checklist is a fixed acquisition protocol. A live Astra instruction is displayed separately in the Astra experiment coach. Imported review JSON alone never changes a model.</p></details>
   </section>
 }
