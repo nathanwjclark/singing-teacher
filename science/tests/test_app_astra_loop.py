@@ -13,6 +13,7 @@ import subprocess
 import sys
 import threading
 import time
+import urllib.error
 import urllib.request
 import zipfile
 
@@ -68,10 +69,13 @@ def test_astra_two_round_native_loop_survives_restart_without_duplicate_update(t
     def call(path, body=None):
         request = urllib.request.Request(f'http://127.0.0.1:{port}' + path,
             method='GET' if body is None else 'POST',
-            data=None if body is None else json.dumps(body).encode(),
+            data=None if body is None or body is False else json.dumps(body).encode(),
             headers={'Content-Type': 'application/json'})
-        with urllib.request.urlopen(request, timeout=120) as response:
-            return json.load(response)
+        try:
+            with urllib.request.urlopen(request, timeout=120) as response:
+                return json.load(response)
+        except urllib.error.HTTPError as error:
+            raise AssertionError(f'{path}: HTTP {error.code}: {error.read().decode()}') from error
 
     def wait_completed(path):
         deadline = time.monotonic() + 120
@@ -127,7 +131,7 @@ def test_astra_two_round_native_loop_survives_restart_without_duplicate_update(t
             publish(initial)
             assert call('/api/science/use-latest-capture', {
                 'purpose': 'calibration', 'pose': 'a', 'contains_external_excitation': False})['prepared']
-            started = call('/api/science/run', {})
+            started = call('/api/science/run', False)
             fitted = wait_completed('/api/science/status')['result']
             session_path = '/api/science/sessions/' + fitted['sessionId'] + '/state'
             summary_path = data / 'science-runs' / started['runId'] / 'summary.json'
@@ -135,6 +139,7 @@ def test_astra_two_round_native_loop_survives_restart_without_duplicate_update(t
             previous_model = fitted['modelId']
             evidence = set(call(session_path)['state']['snapshot']['evidence_ids'])
             prior_design = None
+            prior_observation = None
 
             for round_index in range(2):
                 request = {'requestId': f'integration-round-{round_index}', 'goal': 'Explore comfortable vowels'}
@@ -144,7 +149,8 @@ def test_astra_two_round_native_loop_survives_restart_without_duplicate_update(t
                 assert decision['input']['modelId'] == previous_model
                 assert set(decision['input']['evidenceIds']) == evidence
                 if prior_design:
-                    assert any(row['designId'] == prior_design for row in decision['input']['outcomes'])
+                    assert any(row['result']['observation_receipt']['observation_id'] == prior_observation
+                        for row in decision['input']['outcomes'])
                 state = call(session_path)['state']
                 committed = state['designs'][decision['designId']]
                 assert committed['status'] == 'committed'
@@ -186,18 +192,19 @@ def test_astra_two_round_native_loop_survives_restart_without_duplicate_update(t
                 assert call('/api/science/use-latest-capture', {
                     'purpose': 'outcome', 'pose': experiment['pose'],
                     'contains_external_excitation': False})['prepared']
-                outcome = call('/api/science/outcome', {})
+                outcome = call('/api/science/outcome', False)
                 scored = wait_completed('/api/science/outcome')
                 updated = call(session_path)['state']
                 assert updated['snapshot']['model_id'] != previous_model
                 assert committed['data']['target_observation_id'] in updated['snapshot']['evidence_ids']
                 assert scored['result']['modelId'] == updated['snapshot']['model_id']
-                assert call('/api/science/outcome', {})['outcomeId'] == outcome['outcomeId']
+                assert call('/api/science/outcome', False)['outcomeId'] == outcome['outcomeId']
                 assert call(session_path)['state']['version'] == updated['version']
                 assert summary_path.read_bytes() == initial_summary
                 previous_model = updated['snapshot']['model_id']
                 evidence = set(updated['snapshot']['evidence_ids'])
                 prior_design = decision['designId']
+                prior_observation = committed['data']['target_observation_id']
         finally:
             stop()
             log.close()
