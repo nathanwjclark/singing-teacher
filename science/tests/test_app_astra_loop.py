@@ -5,6 +5,7 @@ or the quality of a live model's choices. The capture audio is synthesized.
 """
 import hashlib
 import json
+from datetime import datetime, timezone
 import os
 from pathlib import Path
 import socket
@@ -177,6 +178,7 @@ def test_astra_two_round_native_loop_survives_restart_without_duplicate_update(t
                 (later / 'audio.pcm.raw').write_bytes(raw)
                 manifest = json.loads((later / 'manifest.json').read_text())
                 manifest['capture_id'] = f'00000000-0000-4000-8000-{round_index + 2:012d}'
+                manifest['created_at'] = datetime.now(timezone.utc).isoformat()
                 manifest['audio']['samples'][0]['artifact'].update(
                     bytes=len(raw), sha256=hashlib.sha256(raw).hexdigest())
                 (later / 'manifest.json').write_text(json.dumps(manifest))
