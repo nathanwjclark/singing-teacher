@@ -33,7 +33,19 @@ import {resolve} from 'node:path';
 const repo=process.cwd(),dataRoot=process.env.LOCAL_DATA_DIR;
 const load=name=>import(pathToFileURL(resolve(repo,'server',name)));
 const json=(res,status,value)=>{res.writeHead(status,{'Content-Type':'application/json'});res.end(JSON.stringify(value))};
-const routes=[(await load('sourceInference.mjs')).createSourceInferenceRoutes({repo:process.env.SOURCE_TEST_RUNNER_REPO||repo,dataRoot,json,enabled:process.env.PHONATION_SOURCE_ENABLED==='1'}),
+const provider={getProviderStatus:()=>({available:true,provider:'test-only'}),generateDecision:async({input})=>{
+  const source=input.sourceInference;
+  if(!source?.enabled||!source.sourceModelId||source.baselineModelId!==input.modelId||!source.baselinePreserved
+    ||source.fit.status!=='succeeded'||!source.fit.alternatives?.joint?.length
+    ||source.score.status!=='succeeded'||typeof source.score.discrepancy!=='number'||source.score.modelUpdated!==false)
+    throw Error('Actual fitted and scored source context did not reach the provider');
+  const selected=input.forecast.experiments.find(row=>row.experiment.pose==='a')||input.forecast.experiments[0];
+  return {decision:{action:'record',experimentId:selected.experiment.experiment_id,
+    cue:'Comfortably sustain the selected vowel.',explanation:'Test-only decision after reading actual source alternatives and held-out discrepancy.'},
+    provider:'test-only',model:'deterministic-test-fixture',usage:{}};
+}};
+const routes=[(await load('astra.mjs')).createAstraRoutes({dataRoot,json,provider}),
+  (await load('sourceInference.mjs')).createSourceInferenceRoutes({repo:process.env.SOURCE_TEST_RUNNER_REPO||repo,dataRoot,json,enabled:process.env.PHONATION_SOURCE_ENABLED==='1'}),
   (await load('science.mjs')).scienceRoutes({repo,dataRoot,json}),
   (await load('voiceCapture.mjs')).createVoiceCaptureRoutes({repo,dataRoot,json})];
 const proxy=(await load('science-proxy.mjs')).createScienceProxy({url:process.env.SCIENCE_URL,token:process.env.SCIENCE_TOKEN});
@@ -265,6 +277,28 @@ def test_optional_source_fit_forecast_later_capture_score_and_restart(tmp_path):
         call('/api/source/score', False)
         assert call(session_path)['state']['version'] == scored['version']
 
+        decision = call('/api/astra/decide', {
+            'requestId': 'source-context-integration', 'goal': 'Explore a comfortable vowel'})
+        assert decision['status'] == 'succeeded'
+        assert decision['provider'] == 'test-only'
+        source_context = decision['input']['sourceInference']
+        assert source_context['enabled'] is True
+        assert source_context['sourceModelId'] == model['model_id']
+        assert source_context['baselineModelId'] == baseline['model_id']
+        assert source_context['baselinePreserved'] is True
+        assert source_context['score']['discrepancy'] == recorded['score_result']['score']
+        assert source_context['score']['modelUpdated'] is False
+        assert source_context['forecast']['current'] is False
+        assert source_context['forecast']['descriptors'] is None
+        expected_candidates = model['result']['joint']['candidates']
+        actual_candidates = source_context['fit']['alternatives']['joint']
+        assert [row['candidateId'] for row in actual_candidates] == [row['candidate_id'] for row in expected_candidates]
+        assert [row['discrepancy'] for row in actual_candidates] == [row['score'] for row in expected_candidates]
+        after_decision = call(session_path)['state']
+        assert after_decision['snapshot'] == baseline
+        assert after_decision['source_model'] == model
+        assert after_decision['designs'][decision['designId']]['status'] == 'committed'
+
         # Simulate an optional runner omitted from an installation, while the
         # ordinary scientific routes still use the actual complete repository.
         absent = tmp_path / 'without-optional-source-runner'
@@ -275,7 +309,7 @@ def test_optional_source_fit_forecast_later_capture_score_and_restart(tmp_path):
         preserved = call(session_path)['state']
         assert preserved['snapshot'] == baseline
         assert preserved['source_model'] == model
-        assert preserved['version'] == scored['version']
+        assert preserved['version'] == after_decision['version']
         restart()
         call('/api/source/forecast', False, expected=202)
         wait_source(call, 'forecast')
