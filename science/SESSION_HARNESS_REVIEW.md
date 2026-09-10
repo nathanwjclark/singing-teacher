@@ -99,3 +99,29 @@ covering actual native operations and session transport. No further transport
 changes are requested by this review. The proxy keeps `engineAvailable=false`
 while separately advertising configured transport and an authenticated health
 route, so configuration alone is not mislabeled engine readiness.
+
+## Final functional fixes and acceptance
+
+Both singing/session interface findings are fixed:
+
+- `2da71d4` requires/emits the actual session command ID and caps the emitted
+  direct-fitter synthesis budget at 640, matching `fit_pcm`.
+- `c8cbc46` accepts the existing canonical 44.1/48/96 kHz calibration profiles,
+  bounded durations and exact windows, preserving original samples. It validates
+  canonical frame sizes, duplicate measurement/source intervals and sufficient
+  observed descriptors. Later experiment-design frame restrictions remain
+  separately explicit; ingestion does not manufacture those profiles.
+
+Independently ran the four singing-import tests with the existing scientific
+runtime and the updated controller module: **4 passed in 2.42 seconds**. The actual
+raw 48 kHz, 0.3-second software recording passed native import, actual fitting
+(**4 synthesis calls; both candidates scored**), then SessionController ingestion
+and idempotent replay with its exact emitted command. No fixture factory replaced
+the imported recording in that path. The controller owner additionally reports
+four session tests passing with warnings treated as errors, including actual
+48 kHz calibration through native search; root owns aggregate retesting.
+
+No remaining blocking defect was found in this bounded harness review. The result
+is a connected research prototype, not calibrated anatomical recovery. No expanded
+authentication or production security scope is requested. Root's real proxy,
+launcher, UI and aggregate verification remains the publication evidence.
