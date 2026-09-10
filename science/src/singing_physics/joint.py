@@ -4,6 +4,7 @@ from __future__ import annotations
 from copy import deepcopy
 import hashlib
 import json
+import math
 
 import numpy as np
 from scipy.optimize import differential_evolution, least_squares
@@ -13,6 +14,8 @@ from .engine import Engine, finite
 KIND = "synthetic_transfer_unknown_articulation"
 ANATOMY_BOUNDS = {"hard_palate_length": (3.8, 5.1), "pharynx_length": (5.7, 7.4)}
 ARTICULATION_BOUNDS = {"JA": (-5., -1.)}
+LIP_OPERATOR = "vtl-upper4-lower5-vertex89-distance-v1"
+ALIGNMENT_TOLERANCE_SECONDS = .020
 
 
 def _bounds(values, allowed, label):
@@ -88,6 +91,8 @@ def fit_joint(engine: Engine, document, *, anatomy_bounds=None, articulation_bou
     if sigma_db <= 0:
         raise ValueError("spectral_sigma_db must be positive")
     geometry = []
+    visible_geometry = []
+    by_id = {row["id"]: row for row in rows}
     geometry_input = doc.get("geometry_observations", [])
     if not isinstance(geometry_input, list):
         raise ValueError("geometry_observations must be a list")
@@ -96,6 +101,36 @@ def fit_joint(engine: Engine, document, *, anatomy_bounds=None, articulation_bou
             raise ValueError("Geometry requires an explicit split")
         if g["split"] == "held_out":
             continue
+        if g.get("kind") == "visible_lip_distance":
+            if g.get("operator_id") != LIP_OPERATOR:
+                raise ValueError("Unsupported visible geometry operator")
+            for field in ("trial_id", "evidence_id", "timebase_id", "correspondence_id", "uncertainty_scope"):
+                if not isinstance(g.get(field), str) or not g[field].strip():
+                    raise ValueError(f"Visible geometry requires {field}")
+            if g["trial_id"] not in by_id:
+                raise ValueError("Visible geometry must reference a calibration trial")
+            row = by_id[g["trial_id"]]
+            if row.get("timebase_id") != g["timebase_id"]:
+                raise ValueError("Visible geometry timebase does not match trial")
+            measured_t = finite(g.get("timestamp_seconds"), "geometry timestamp")
+            trial_t = finite(row.get("timestamp_seconds"), "trial timestamp")
+            measured_sync = finite(g.get("sync_uncertainty_seconds"), "geometry sync bound")
+            trial_sync = finite(row.get("sync_uncertainty_seconds"), "trial sync bound")
+            if min(measured_sync, trial_sync) < 0 or abs(measured_t-trial_t)+measured_sync+trial_sync > ALIGNMENT_TOLERANCE_SECONDS:
+                raise ValueError("Visible geometry exceeds experimental 20ms alignment tolerance")
+            for field in ("value_m", "sigma_m", "model_sigma_m"):
+                if finite(g.get(field), field) <= 0:
+                    raise ValueError(f"{field} must be positive")
+            if not np.isfinite(math.hypot(g["sigma_m"], g["model_sigma_m"])):
+                raise ValueError("Combined visible geometry uncertainty is nonfinite")
+            try:
+                pixels = np.asarray(g.get("pixels_uv"), float)
+            except (ValueError, TypeError) as exc:
+                raise ValueError("Invalid visible geometry pixels") from exc
+            if pixels.shape != (2, 2) or not np.isfinite(pixels).all() or np.any(pixels < 0) or np.array_equal(pixels[0], pixels[1]):
+                raise ValueError("Invalid visible geometry pixels")
+            visible_geometry.append(g)
+            continue
         if g.get("kind") != "synthetic_direct_anatomy" or g.get("parameter") not in ab or g.get("unit") != "cm":
             raise ValueError("Only synthetic direct anatomy measurements in cm are supported")
         value, sigma = finite(g.get("value"), "geometry value"), finite(g.get("sigma"), "geometry sigma")
@@ -103,9 +138,9 @@ def fit_joint(engine: Engine, document, *, anatomy_bounds=None, articulation_bou
             raise ValueError("Invalid geometry observation")
         geometry.append((g["parameter"], value, sigma))
     calibration_hash = hashlib.sha256(json.dumps({"rows": rows, "geometry": geometry,
-        "sigma_db": sigma_db}, sort_keys=True, allow_nan=False).encode()).hexdigest()
+        "sigma_db": sigma_db, "visible_geometry": visible_geometry}, sort_keys=True, allow_nan=False).encode()).hexdigest()
     saved = engine.anatomy()
-    totals = {"residual_calls": 0, "spectrum_calls": 0, "explicit_pose_calls": 0}
+    totals = {"residual_calls": 0, "spectrum_calls": 0, "explicit_pose_calls": 0, "geometry_calls": 0}
 
     def solve(free_anatomy):
         names = list(ab) if free_anatomy else []
@@ -142,11 +177,29 @@ def fit_joint(engine: Engine, document, *, anatomy_bounds=None, articulation_bou
                 predicted.append(engine.spectrum(row["pose"], overrides=trial[row["id"]], bins=512)[1][mask])
             raw = np.concatenate(predicted) - target
             penalties = [(anatomy.get(k, engine.base_anatomy[k])-v)/s for k, v, s in geometry]
+            geometry_predictions = []
+            native_lips = {}
+            for measurement in visible_geometry:
+                trial_id = measurement["trial_id"]
+                if trial_id not in native_lips:
+                    totals["geometry_calls"] += 1
+                    native_lips[trial_id] = engine.lip_markers(
+                        by_id[trial_id]["pose"], articulation=trial[trial_id])
+                native = native_lips[trial_id]
+                if native.get("operator_id") != LIP_OPERATOR:
+                    raise RuntimeError("Native visible geometry operator mismatch")
+                prediction = finite(native.get("distance_m"), "native lip distance")
+                sigma = math.hypot(measurement["sigma_m"], measurement["model_sigma_m"])
+                penalties.append((prediction-measurement["value_m"])/sigma)
+                geometry_predictions.append({"trial_id": trial_id, "evidence_id": measurement["evidence_id"],
+                    "operator_id": LIP_OPERATOR, "correspondence_id": measurement["correspondence_id"],
+                    "predicted_distance_m": prediction, "observed_distance_m": measurement["value_m"],
+                    "combined_sigma_m": sigma, "positions_m": native["positions_m"]})
             result = np.concatenate((raw/sigma_db, penalties))
             if not np.isfinite(result).all():
                 raise RuntimeError("Nonfinite physical residual")
             candidate = {"anatomy": {**engine.base_anatomy, **anatomy}, "trial_articulation": trial,
-                         "trial_controls": applied_controls, "objective": float(np.dot(result, result)), "rmse_db": float(np.sqrt(np.mean(raw**2)))}
+                         "trial_controls": applied_controls, "geometry_predictions": geometry_predictions, "objective": float(np.dot(result, result)), "rmse_db": float(np.sqrt(np.mean(raw**2)))}
             if first_objective is None:
                 first_objective = candidate["objective"]
             if best is None or candidate["objective"] < best["objective"]:
@@ -192,6 +245,7 @@ def fit_joint(engine: Engine, document, *, anatomy_bounds=None, articulation_bou
         return {"best": candidates[0], "candidates": candidates, "residual_calls": calls,
                 "spectrum_calls": calls * len(rows), "explicit_pose_calls": calls * len(rows),
                 "global_residual_calls": global_calls,
+                "geometry_calls": calls * len({g["trial_id"] for g in visible_geometry}),
                 "near_optimal_articulation_spread": articulation_spread,
                 "diversity_assessment": "insufficient_multistart_evidence" if starts < 2 else "bounded_multistart_only",
                 "near_optimal_anatomy_spread_cm": spread, "near_optimal_candidates": len(near),
@@ -208,4 +262,6 @@ def fit_joint(engine: Engine, document, *, anatomy_bounds=None, articulation_bou
             "excluded_held_out_ids": [r["id"] for r in observations if r["split"] == "held_out"],
             "calibration_sha256": calibration_hash, "provenance": deepcopy(engine.provenance),
             "budget_per_model": budget_per_model, "seed": seed, **totals,
-            "geometry_measurement_count": len(geometry), "evidence": "same-simulator direct transfer only"}
+            "geometry_measurement_count": len(geometry)+len(visible_geometry),
+            "visible_geometry_measurement_count": len(visible_geometry),
+            "alignment_tolerance_seconds": ALIGNMENT_TOLERANCE_SECONDS, "evidence": "same-simulator direct transfer only"}

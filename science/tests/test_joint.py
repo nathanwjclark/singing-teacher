@@ -118,3 +118,79 @@ def test_noisy_geometry_value_outside_latent_bounds_is_a_residual():
         assert result["joint"]["best"]["objective"] > 0
         assert 3.8 <= result["joint"]["best"]["anatomy"]["hard_palate_length"] <= 5.1
         assert result["explicit_pose_calls"] == result["spectrum_calls"]
+
+
+def visible_document(engine):
+    from observations.geometry import DepthFrame, reconstruct, joint_lip_measurement
+    doc = observations(engine)
+    saved = engine.anatomy()
+    try:
+        engine.set_anatomy({"hard_palate_length": 4.50, "pharynx_length": 6.60})
+        distance = engine.lip_markers("a", articulation={"JA": -2.9})["distance_m"]
+    finally:
+        engine.set_anatomy(saved)
+    focal = .5/distance
+    frame = DepthFrame(evidence_id="synthetic-visible-lips", timebase_id="session-clock",
+        timestamp_seconds=2., depth=np.full((1, 2), .5),
+        intrinsics=np.diag([focal, focal, 1.]), world_from_camera=np.eye(4), units="m",
+        rectified=True, depth_sigma_m=.0001, pixel_sigma=.01, sync_uncertainty_seconds=.001)
+    measurement = joint_lip_measurement(reconstruct(frame), [0, 0], [1, 0],
+        trial_id="a", split="calibration", correspondence_id="synthetic-visible-lip-protocol-v1",
+        model_sigma_m=.002)
+    doc["geometry_observations"].append(measurement)
+    doc["observations"][0].update(timebase_id="session-clock", timestamp_seconds=2.010, sync_uncertainty_seconds=.001)
+    return doc
+
+
+def test_measured_visible_lip_geometry_enters_native_joint_objective():
+    with Engine() as engine:
+        doc = visible_document(engine)
+        original = deepcopy(doc)
+        result = fit_joint(engine, doc, budget_per_model=20, starts=1)
+        assert doc == original
+        assert result["visible_geometry_measurement_count"] == 1
+        assert result["geometry_calls"] == result["residual_calls"]
+        measurement = doc["geometry_observations"][-1]
+        for name in ("joint", "fixed_anatomy_baseline"):
+            model = result[name]
+            assert model["geometry_calls"] == model["residual_calls"]
+            best = model["best"]
+            engine.set_anatomy(best["anatomy"])
+            prediction = engine.lip_markers("a", articulation=best["trial_articulation"]["a"])
+            reported = best["geometry_predictions"][0]
+            assert prediction["distance_m"] == reported["predicted_distance_m"]
+            assert reported["evidence_id"] == measurement["evidence_id"]
+            errors = []
+            for row in doc["observations"]:
+                hz, db, _ = engine.spectrum(row["pose"], overrides=best["trial_articulation"][row["id"]], bins=512)
+                errors.extend(db[(hz >= 100) & (hz <= 6000)] - row["magnitude_db"])
+            direct = doc["geometry_observations"][0]
+            penalty = ((best["anatomy"][direct["parameter"]]-direct["value"])/direct["sigma"])**2
+            penalty += ((prediction["distance_m"]-measurement["value_m"])/np.hypot(measurement["sigma_m"], measurement["model_sigma_m"]))**2
+            assert best["objective"] == pytest.approx(np.dot(errors, errors)+penalty)
+
+
+def test_visible_geometry_requires_trial_correspondence_and_bounded_alignment(monkeypatch):
+    with Engine() as engine:
+        doc = visible_document(engine)
+        for mutate in (
+            lambda d: d["geometry_observations"][-1].update(trial_id="missing"),
+            lambda d: d["geometry_observations"][-1].update(timebase_id="different-clock"),
+            lambda d: d["geometry_observations"][-1].update(timestamp_seconds=2.031),
+            lambda d: d["geometry_observations"][-1].update(operator_id="guessed-internal-anatomy"),
+            lambda d: d["geometry_observations"][-1].update(correspondence_id=""),
+            lambda d: d["geometry_observations"][-1].update(pixels_uv=[[0, 0], [0, 0]]),
+            lambda d: d["geometry_observations"][-1].update(sigma_m=1.7e308, model_sigma_m=1.7e308),
+            lambda d: d["observations"][0].update(sync_uncertainty_seconds=-.001),
+            lambda d: d["observations"][0].pop("timestamp_seconds"),
+        ):
+            bad = deepcopy(doc); mutate(bad)
+            with pytest.raises(ValueError):
+                fit_joint(engine, bad, budget_per_model=10, starts=1)
+        saved = engine.anatomy()
+        def fail(*args, **kwargs):
+            raise RuntimeError("native geometry failure")
+        monkeypatch.setattr(engine, "lip_markers", fail)
+        with pytest.raises(RuntimeError, match="native geometry failure"):
+            fit_joint(engine, doc, budget_per_model=10, starts=1)
+        assert engine.anatomy() == saved
