@@ -4,18 +4,23 @@ import { createVisionEngine, drawTracking } from '../lib/vision';
 import type { VisionEngine } from '../lib/vision';
 import type { TrackingFrame, TrackingStatus } from '../types';
 import './CameraPanel.css';
+import TongueLab from './TongueLab';
 
-type Props = { active: boolean; onFrame: (frame: TrackingFrame) => void; onStatus: (status: TrackingStatus, message?: string) => void };
+type Props = { active: boolean; onFrame: (frame: TrackingFrame) => void; onStatus: (status: TrackingStatus, message?: string) => void; onStream?: (stream: MediaStream | null) => void };
 
-export default function CameraPanel({ active, onFrame, onStatus }: Props) {
+export default function CameraPanel({ active, onFrame, onStatus, onStream }: Props) {
+  const [labOpen,setLabOpen]=useState(false);
+  const latestFrame=useRef<TrackingFrame|undefined>(undefined);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<VisionEngine | undefined>(undefined);
-  const callbacks = useRef({ onFrame, onStatus });
-  useEffect(() => { callbacks.current = { onFrame, onStatus }; }, [onFrame, onStatus]);
+  const callbacks = useRef({ onFrame, onStatus, onStream });
+  useEffect(() => { callbacks.current = { onFrame, onStatus, onStream }; }, [onFrame, onStatus, onStream]);
   const [status, setStatus] = useState<TrackingStatus>('idle');
   const [message, setMessage] = useState('');
   const [depth, setDepth] = useState<{ distance?: number; relative?: number; points: number }>({ points: 0 });
+  const [selectingTip,setSelectingTip]=useState(false);
+  const [tongueStatus, setTongueStatus] = useState('Searching for visible tongue');
   const [calibration, setCalibration] = useState('');
 
   useEffect(() => {
@@ -36,9 +41,11 @@ export default function CameraPanel({ active, onFrame, onStatus }: Props) {
       callbacks.current.onStatus(next, detail);
     };
     const release = () => {
+      latestFrame.current=undefined;
       cancelAnimationFrame(animation);
       clearTimeout(modelTimeout);
       stream?.getTracks().forEach(track => track.stop());
+      callbacks.current.onStream?.(null);
       if (video.srcObject === stream) video.srcObject = null;
       if (engineRef.current === engine) engineRef.current = undefined;
       engine?.close(); engine = undefined;
@@ -57,6 +64,7 @@ export default function CameraPanel({ active, onFrame, onStatus }: Props) {
         if (cancelled) { release(); return; }
         setDepth({ points: 0 }); setCalibration('');
         video.srcObject = stream;
+        callbacks.current.onStream?.(stream);
         await video.play();
         if (cancelled) { release(); return; }
         update('loading', 'Loading face, posture, and OpenCV models. First start may take a moment.');
@@ -75,6 +83,8 @@ export default function CameraPanel({ active, onFrame, onStatus }: Props) {
             if (video.readyState >= 2 && video.currentTime !== lastTime && time - lastTick >= 90) {
               lastTime = video.currentTime; lastTick = time;
               const frame = engine.process(video, time);
+              latestFrame.current=frame;
+              setTongueStatus(frame.tongueStatus ?? 'Searching for visible tongue');
               setDepth({ distance: frame.metrics.distanceCm, relative: frame.metrics.relativeDepth, points: frame.face.length + frame.pose.filter(point => (point.visibility ?? 0) >= .5).length });
               const canvas = canvasRef.current;
               if (canvas) {
@@ -105,12 +115,23 @@ export default function CameraPanel({ active, onFrame, onStatus }: Props) {
     return () => { cancelled = true; release(); };
   }, [active]);
 
+  const selectTip=(event:React.MouseEvent<HTMLDivElement>)=>{
+    const video=videoRef.current;if(!selectingTip||!video)return;
+    const rect=video.getBoundingClientRect();
+    const scale=Math.max(rect.width/video.videoWidth,rect.height/video.videoHeight);
+    const cropX=(video.videoWidth*scale-rect.width)/2,cropY=(video.videoHeight*scale-rect.height)/2;
+    // object-fit:cover and CSS scaleX(-1) both affect pointer coordinates.
+    const x=(rect.width-(event.clientX-rect.left)+cropX)/(video.videoWidth*scale);
+    const y=(event.clientY-rect.top+cropY)/(video.videoHeight*scale);
+    if(x>=0&&x<=1&&y>=0&&y<=1){engineRef.current?.selectTongueTip(x,y);setSelectingTip(false);}
+  };
   const calibrate = () => {
     setCalibration(engineRef.current?.calibrate() ? 'Baseline set. Relative depth follows movement from this position.' : 'Face forward with both eyes visible and hold still briefly, then try again.');
   };
 
   return <div className="camera-panel">
-    <div className="camera-stage">
+    {labOpen&&<TongueLab video={videoRef} frame={latestFrame} select={(x,y)=>engineRef.current?.selectTongueTip(x,y)} close={()=>setLabOpen(false)}/>}
+    <div className={`camera-stage ${selectingTip?'selecting-tongue-tip':''}`} onClick={selectTip}>
       <video ref={videoRef} autoPlay muted playsInline aria-label="Your mirrored live webcam" className={active && status !== 'error' ? 'camera-video visible' : 'camera-video'} />
       <canvas ref={canvasRef} className="camera-landmarks" aria-hidden="true" />
       <div className="camera-corner top-left" /><div className="camera-corner top-right" /><div className="camera-corner bottom-left" /><div className="camera-corner bottom-right" />
@@ -121,9 +142,11 @@ export default function CameraPanel({ active, onFrame, onStatus }: Props) {
         {status === 'idle' && <span className="camera-private"><ShieldCheck size={14} /> Video stays on your device</span>}
       </div>}
       {status === 'no-face' && <div className="camera-no-face"><ScanFace size={18} /> Bring your face into the frame</div>}
+      {status === 'tracking' && <div className="camera-tongue-status">{tongueStatus}<small>{selectingTip?'Tap the visible tongue tip near its edge':'Experimental visible-tissue estimate'}</small><button type="button" onClick={event=>{event.stopPropagation();setSelectingTip(!selectingTip)}}>{selectingTip?'Cancel selection':'Track tip'}</button><button type="button" onClick={event=>{event.stopPropagation();engineRef.current?.calibrateTongue()}} title="Hold your tongue centered, then set this as its neutral position">Recenter tongue</button></div>}
       <div className="camera-stage-label"><span className={status === 'tracking' ? 'camera-light live' : 'camera-light'} /> {status === 'tracking' ? 'LIVE CAMERA' : 'CAMERA VIEW'}<span>MIRRORED</span></div>
     </div>
     <div className="camera-depth">
+      <button type="button" onClick={()=>setLabOpen(true)}>Tongue lab · inspect & capture</button>
       <div className="camera-depth-values"><span><small>CAMERA DISTANCE</small><strong>{status === 'tracking' && depth.distance !== undefined ? `~${Math.round(depth.distance / 5) * 5} cm` : '—'}</strong></span><span><small>FROM BASELINE</small><strong>{status === 'tracking' && depth.relative !== undefined ? `${Math.abs(Math.round((depth.relative - 1) * 100))}% ${depth.relative >= 1 ? 'farther' : 'closer'}` : 'Not calibrated'}</strong></span></div>
       <div className="camera-depth-action"><span>{status === 'tracking' ? `${depth.points} visible landmarks` : '478 face + 33 body landmarks'}</span><button type="button" onClick={calibrate} disabled={status !== 'tracking' || depth.distance === undefined}>{status !== 'tracking' || depth.relative === undefined ? 'Set depth baseline' : 'Reset baseline'}</button></div>
       {active && calibration && <p className="camera-calibration-message" role="status">{calibration}</p>}

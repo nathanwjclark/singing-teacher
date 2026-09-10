@@ -1,6 +1,8 @@
 import { FaceLandmarker, FilesetResolver, PoseLandmarker } from '@mediapipe/tasks-vision';
 import type { Landmark, TrackingFrame } from '../types';
+import { createTongueTracker } from './tongueTracking';
 import { depthMetrics } from './depth';
+import { createTrackingStabilizer } from './trackingStability';
 
 interface Mat { delete(): void; copyTo(destination: Mat): void }
 interface OpenCV {
@@ -44,7 +46,7 @@ function loadOpenCV(): Promise<{ cv: OpenCV }> {
   return cvPromise;
 }
 
-export interface VisionEngine { process(video: HTMLVideoElement, timestamp: number): TrackingFrame; calibrate(): boolean; close(): void }
+export interface VisionEngine { process(video: HTMLVideoElement, timestamp: number): TrackingFrame; calibrate(): boolean; calibrateTongue(): void; selectTongueTip(x:number,y:number): void; close(): void }
 
 export async function createVisionEngine(): Promise<VisionEngine> {
   const { cv } = await loadOpenCV();
@@ -76,7 +78,12 @@ export async function createVisionEngine(): Promise<VisionEngine> {
   let depthHistory: number[] = [];
   let baselineDistance: number | undefined;
   let recentDistance: number | undefined;
-  let frameCount = 0;
+  const stabilizer = createTrackingStabilizer();
+  const tongueCanvas = document.createElement('canvas');
+  tongueCanvas.width=160; tongueCanvas.height=128;
+  const tongueContext=tongueCanvas.getContext('2d', {willReadFrequently:true})!;
+  const trackTongue=createTongueTracker();
+  let pendingTongueTip:{x:number;y:number}|undefined;
   let closed = false;
   return {
     process(video, timestamp) {
@@ -85,11 +92,9 @@ export async function createVisionEngine(): Promise<VisionEngine> {
       const landmarks = faceResult.faceLandmarks[0] ?? [];
       const faceTransform = faceResult.facialTransformationMatrixes[0]?.data;
       const blendshapes = Object.fromEntries((faceResult.faceBlendshapes[0]?.categories ?? []).map(category => [category.categoryName, category.score]));
-      if (frameCount++ % 2 === 0) {
-        const poseResult = pose.detectForVideo(video, timestamp);
-        cachedPose = poseResult.landmarks[0] ?? [];
-        cachedWorldPose = poseResult.worldLandmarks[0] ?? [];
-      }
+      const poseResult = pose.detectForVideo(video, timestamp);
+      cachedPose = stabilizer.pose(poseResult.landmarks[0] ?? [], timestamp);
+      cachedWorldPose = stabilizer.worldPose(poseResult.worldLandmarks[0] ?? [], timestamp);
       context.drawImage(video, 0, 0, canvas.width, canvas.height);
       const rgba = cv.imread(canvas);
       const gray = new cv.Mat();
@@ -119,8 +124,36 @@ export async function createVisionEngine(): Promise<VisionEngine> {
         depth.distanceCm = recentDistance;
         if (baselineDistance !== undefined) depth.relativeDepth = recentDistance / baselineDistance;
       } else { recentDistance = undefined; depthHistory = []; }
-      return { face: landmarks, pose: cachedPose, worldPose: cachedWorldPose, faceTransform, blendshapes, timestamp, metrics: { mouthOpen, headTilt: tilt(landmarks[33], landmarks[263]), shoulderTilt: tilt(cachedPose[11], cachedPose[12]), brightness, motion, ...depth } };
+      let tongue: TrackingFrame['tongue'];
+      let tongueSearch: TrackingFrame['tongueSearch'];
+      let tongueStatus='Show your face';
+      if(landmarks.length>308) {
+        const mouthLeft=Math.min(landmarks[78].x,landmarks[308].x);
+        const mouthWidth=Math.abs(landmarks[78].x-landmarks[308].x);
+        const x=Math.max(0,mouthLeft-mouthWidth*.15),y=Math.max(0,landmarks[13].y-mouthWidth*.15);
+        const width=Math.min(1-x,mouthWidth*1.3);
+        const height=Math.min(1-y,Math.max(landmarks[14].y-y+mouthWidth*.65,mouthWidth*.8));
+        tongueSearch={x,y,width,height};
+        tongueStatus=Math.abs(depth.headYaw??0)>40 ? 'Face forward' : mouthOpen<.06 ? 'Open your mouth / show your tongue' : mouthWidth*video.videoWidth<16 ? 'Move closer for tongue tracking' : 'Searching for visible tongue';
+        if(tongueStatus==='Searching for visible tongue') {
+          // Preserve the native mouth detail instead of downsampling the entire
+          // video until the tongue is only a handful of pixels high.
+          tongueContext.drawImage(video,x*video.videoWidth,y*video.videoHeight,width*video.videoWidth,height*video.videoHeight,0,0,160,128);
+          if(pendingTongueTip){trackTongue.selectTip((pendingTongueTip.x-x)/width,(pendingTongueTip.y-y)/height);pendingTongueTip=undefined;}
+          const localFace=landmarks.map(p=>({...p,x:(p.x-x)/width,y:(p.y-y)/height}));
+          const local=trackTongue(tongueContext.getImageData(0,0,160,128).data,160,128,localFace);
+          if(local) {
+            tongue={...local,x:x+local.x*width,y:y+local.y*height,tip:local.tip ? {x:x+local.tip.x*width,y:y+local.tip.y*height} : undefined,outline:local.outline?.map(p=>({x:x+p.x*width,y:y+p.y*height}))};
+            tongueStatus=local.trackingMode==='tip'?'Tongue tip tracked · crosshair':trackTongue.isTipSelected()?'Tip lost · select it again':'Tongue visible · select Track tip';
+          }
+        } else trackTongue(new Uint8ClampedArray(0),0,0,[]);
+      } else trackTongue(new Uint8ClampedArray(0),0,0,[]);
+      const tongueDiagnostic=trackTongue.diagnostics();
+      if(tongueDiagnostic.state==='lost'&&tongueStatus==='Searching for visible tongue')tongueStatus='Tip lost · open Tongue lab for details';
+      return { tongue, tongueStatus, tongueSearch, tongueDiagnostic, face: landmarks, pose: cachedPose, worldPose: cachedWorldPose, faceTransform, blendshapes, timestamp, metrics: stabilizer.metrics({ mouthOpen, headTilt: tilt(landmarks[33], landmarks[263]), shoulderTilt: tilt(cachedPose[11], cachedPose[12]), brightness, motion, ...depth }, timestamp, landmarks.length > 0) };
     },
+    selectTongueTip(x,y) { pendingTongueTip={x,y}; },
+    calibrateTongue() { trackTongue.resetMotionReference(); },
     calibrate() { if (closed || recentDistance === undefined || depthHistory.length < 5) return false; baselineDistance = recentDistance; return true; },
     close() { if (!closed) { closed = true; face.close(); pose.close(); previous.delete(); } },
   };
@@ -146,13 +179,29 @@ export function drawTracking(context: CanvasRenderingContext2D, frame: TrackingF
   lines(frame.face, FaceLandmarker.FACE_LANDMARKS_LIPS, '#d2ff96');
   lines(frame.face, [...FaceLandmarker.FACE_LANDMARKS_LEFT_EYE, ...FaceLandmarker.FACE_LANDMARKS_RIGHT_EYE, ...FaceLandmarker.FACE_LANDMARKS_LEFT_EYEBROW, ...FaceLandmarker.FACE_LANDMARKS_RIGHT_EYEBROW], '#b3e4ceaa');
   lines(frame.face, [...FaceLandmarker.FACE_LANDMARKS_LEFT_IRIS, ...FaceLandmarker.FACE_LANDMARKS_RIGHT_IRIS], '#9de4ff');
-  lines(frame.pose, PoseLandmarker.POSE_CONNECTIONS, '#c5fc9399');
+  // The face model already supplies stable eyes, nose and mouth. Body-model
+  // facial points are a coarser estimate and should not compete with that mesh.
+  lines(frame.pose, PoseLandmarker.POSE_CONNECTIONS.filter(edge => edge.start >= 11 && edge.end >= 11), '#c5fc9399');
   context.fillStyle = '#d2ff96';
   for (const point of frame.face) {
     context.beginPath(); context.arc(point.x * width, point.y * height, .8, 0, Math.PI * 2); context.fill();
   }
-  for (const point of frame.pose) {
+  for (const point of frame.pose.slice(11)) {
     if ((point.visibility ?? 0) < .5) continue;
     context.beginPath(); context.arc(point.x * width, point.y * height, 2.5, 0, Math.PI * 2); context.fill();
   }
+  context.save();
+  if(frame.tongueSearch && !frame.tongue) {
+    const box=frame.tongueSearch;context.strokeStyle='#ff91b388';context.lineWidth=1;context.setLineDash([4,4]);
+    context.strokeRect(box.x*width,box.y*height,box.width*width,box.height*height);context.setLineDash([]);
+  }
+  if(frame.tongue) {
+    context.fillStyle='#ff71aa';context.strokeStyle='#ffb3d0';context.lineWidth=2;
+    for(const p of frame.tongue.outline??[]){context.beginPath();context.arc(p.x*width,p.y*height,1.6,0,Math.PI*2);context.fill();}
+    if(frame.tongue.trackingMode!=='region'){
+    const x=frame.tongue.x*width,y=frame.tongue.y*height;
+    context.beginPath();context.arc(x,y,6,0,Math.PI*2);context.moveTo(x-10,y);context.lineTo(x+10,y);context.moveTo(x,y-10);context.lineTo(x,y+10);context.stroke();
+    }
+  }
+  context.restore();
 }

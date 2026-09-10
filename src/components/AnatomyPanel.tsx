@@ -1,13 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
+import type { RefObject } from 'react';
+import type { AnatomyMotionState } from '../lib/anatomyState';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { createModelHair, disposeModelHairTextures } from '../lib/modelHair';
 import { createMuscleMotion } from '../lib/muscleMotion';
 import { createShoulderMotion } from '../lib/shoulderMotion';
+import { createTongueModel } from '../lib/tongueModel';
+import { createBoneMotion } from '../lib/boneMotion';
 import type { BodyRegion, TrackingFrame } from '../types';
 import './AnatomyPanel.css';
 
-type Props = { frame: TrackingFrame | null; activeRegion?: BodyRegion; activeMuscles?: string[]; demo: boolean };
+type Props = { motion: RefObject<AnatomyMotionState>; frame: TrackingFrame | null; activeRegion?: BodyRegion; activeMuscles?: string[]; demo: boolean };
 type Part = { name: string; kind: 'bone' | 'muscle'; muscleId: string; region: BodyRegion; rig: 'head' | 'jaw' | 'torso'; positionOffset: number; positionCount: number; indexOffset: number; indexCount: number; min: number[]; size: number[] };
 type AnatomyMesh = THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>;
 const normalize = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, '_');
@@ -19,17 +22,18 @@ const regionMuscles: Record<BodyRegion, string[]> = {
 const displayName = (name: string) => name.replace(/([a-z])[lr]$/, '$1').replace(/_/g, ' ').replace(/^./, c => c.toUpperCase());
 const bounded = (value: number | undefined, min: number, max: number) => THREE.MathUtils.clamp(Number.isFinite(value) ? value! : 0, min, max);
 
-export function AnatomyPanel({ frame, activeRegion = 'jaw', activeMuscles, demo }: Props) {
+export function AnatomyPanel({ motion, frame, activeRegion = 'jaw', activeMuscles, demo }: Props) {
   const mount = useRef<HTMLDivElement>(null);
-  const latest = useRef({ frame, activeRegion, activeMuscles, demo, bones: true, muscles: true, xray: false });
+  const latest = useRef({ motion, frame, activeRegion, activeMuscles, demo, bones: true, muscles: true, xray: false, tongue: true });
   const reset = useRef<() => void>(() => {});
   const [bones, setBones] = useState(true);
   const [muscles, setMuscles] = useState(true);
+  const [tongue, setTongue] = useState(true);
   const [xray, setXray] = useState(false);
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [hovered, setHovered] = useState('');
   const [meshCount, setMeshCount] = useState(0);
-  useEffect(() => { latest.current = { frame, activeRegion, activeMuscles, demo, bones, muscles, xray }; }, [frame, activeRegion, activeMuscles, demo, bones, muscles, xray]);
+  useEffect(() => { latest.current = { motion, frame, activeRegion, activeMuscles, demo, bones, muscles, xray, tongue }; }, [motion, frame, activeRegion, activeMuscles, demo, bones, muscles, xray, tongue]);
   const focused = activeMuscles?.length ? activeMuscles : regionMuscles[activeRegion];
 
   useEffect(() => {
@@ -52,7 +56,7 @@ export function AnatomyPanel({ frame, activeRegion = 'jaw', activeMuscles, demo 
     controls.enableDamping = true; controls.dampingFactor = .08;
     controls.enablePan = false; controls.minDistance = 35; controls.maxDistance = 185;
     controls.minPolarAngle = .3; controls.maxPolarAngle = Math.PI - .3;
-    // Front-facing head and shoulders crop, with room above the skull for hair.
+    // Front-facing head and shoulders crop.
     const restore = () => {
       const damping = controls.enableDamping;
       controls.enableDamping = false;
@@ -81,12 +85,11 @@ export function AnatomyPanel({ frame, activeRegion = 'jaw', activeMuscles, demo 
     const shoulderPose = createShoulderMotion();
     const rigs = { torso, head, jaw, leftShoulder, rightShoulder };
     const muscleMotion = createMuscleMotion(rigs);
+    const boneMotion = createBoneMotion(rigs);
+    const tongueModel = createTongueModel();jaw.add(tongueModel.mesh);
     const meshes: AnatomyMesh[] = [];
     const decorative: THREE.Mesh[] = [];
     const eyes: THREE.Group[] = [];
-    const hair = createModelHair();
-    head.add(hair);
-    hair.traverse(object => { if (object instanceof THREE.Mesh) decorative.push(object); });
     // Deliberately cartoon eyes; the surrounding anatomical surfaces come from the dataset.
     for (const side of [-1, 1]) {
       const eye = new THREE.Group();eye.position.set(side * 3.15,8,8.1);head.add(eye);eyes.push(eye);
@@ -113,11 +116,7 @@ export function AnatomyPanel({ frame, activeRegion = 'jaw', activeMuscles, demo 
         const material = new THREE.MeshStandardMaterial({color:part.kind==='bone'?0xe8dbc0:0xa56556,roughness:part.kind==='bone'?.68:.57,metalness:0,side:THREE.DoubleSide});
         const mesh = new THREE.Mesh(geometry,material);mesh.name=part.name;mesh.userData=part;
         rigs[part.rig].add(mesh);
-        if (part.kind === 'bone' && /^(Clavicle|Scapula|Humerus)[lr]$/.test(part.name)) {
-          const shoulder = part.name.endsWith('l') ? leftShoulder : rightShoulder;
-          mesh.geometry.translate(part.name.endsWith('l') ? -1 : 1, -10, -5);
-          shoulder.add(mesh);
-        }
+        if (part.kind === 'bone') boneMotion.bind(mesh);
         if(part.kind === 'muscle') muscleMotion.bind(mesh, part.rig);
         meshes.push(mesh);
       }
@@ -134,37 +133,19 @@ export function AnatomyPanel({ frame, activeRegion = 'jaw', activeMuscles, demo 
     const leave = () => setHovered('');
     renderer.domElement.addEventListener('pointermove',inspect);renderer.domElement.addEventListener('pointerleave',leave);
     const contextLost = (event: Event) => {event.preventDefault();setStatus('error');};renderer.domElement.addEventListener('webglcontextlost',contextLost);
-    const radians = Math.PI/180;
     let lastAppearance = '';
-    renderer.setAnimationLoop((time) => {
-      const props=latest.current;const m=props.frame?.metrics;
-      hair.visible=props.muscles;
-      const simulation=props.demo&&!props.frame;
-      // Shoulder tilt belongs to the independent shoulder joints. Torso roll
-      // comes from the hip/shoulder midline; do not apply shoulder tilt twice.
-      const shoulderRoll=bounded(m?.torsoLean,-20,20)*radians;
-      const world = props.frame?.worldPose;
-      const shoulderWidth = world?.[11] && world?.[12] ? Math.max(.15, Math.abs(world[11].x-world[12].x)) : .36;
-      const hipsVisible=world?.[23]&&world?.[24]&&(world[23].visibility??1)>.65&&(world[24].visibility??1)>.65;
-      const hipWidth=hipsVisible?Math.max(.12,Math.abs(world[23].x-world[24].x)):shoulderWidth;
-      const torsoDepth=hipsVisible?(world[23].z??0)-(world[24].z??0):bounded(m?.shoulderDepth,-.5,.5);
-      const torsoYaw=THREE.MathUtils.clamp(Math.atan2(torsoDepth,hipWidth),-.75,.75);
-      torso.rotation.z=THREE.MathUtils.lerp(torso.rotation.z,-shoulderRoll,.1);
-      torso.rotation.y=THREE.MathUtils.lerp(torso.rotation.y,-torsoYaw,.1);
-      torso.rotation.x=0;
-      const shoulderTargets=shoulderPose.update(props.frame,torso.rotation);
+    renderer.setAnimationLoop(() => {
+      const props=latest.current;const state=props.motion.current;
+      torso.rotation.set(state.torso.x,state.torso.y,state.torso.z);
+      head.rotation.set(state.head.x,state.head.y,state.head.z);
+      jaw.rotation.x=state.jawOpen;
+      const shoulderTargets=shoulderPose.update(state.frame,torso.rotation);
       [leftShoulder,rightShoulder].forEach((shoulder,i)=>{
         const side=i===0?1:-1;const target=shoulderTargets[i];
         shoulder.rotation.z=THREE.MathUtils.lerp(shoulder.rotation.z,side*Math.atan2(target.lift,17),.18);
         shoulder.rotation.y=THREE.MathUtils.lerp(shoulder.rotation.y,-side*Math.atan2(target.depth,17),.18);
         shoulder.position.x=THREE.MathUtils.lerp(shoulder.position.x,side+target.spread*.35,.18);
       });
-      const yaw=bounded(m?.headYaw,-55,55)*radians+(simulation?Math.sin(time*.00032)*.075:0);
-      head.rotation.y=THREE.MathUtils.lerp(head.rotation.y,-yaw-torso.rotation.y,.14);
-      head.rotation.z=THREE.MathUtils.lerp(head.rotation.z,-bounded(m?.headTilt,-30,30)*radians-torso.rotation.z,.14);
-      head.rotation.x=THREE.MathUtils.lerp(head.rotation.x,bounded(m?.headPitch,-35,35)*radians-torso.rotation.x,.14);
-      const mouth=bounded(m?.mouthOpen,0,1)||(simulation?.17+Math.sin(time*.0018)*.08:0);
-      jaw.rotation.x=THREE.MathUtils.lerp(jaw.rotation.x,mouth*.5,.18);
       const appearance=JSON.stringify([props.activeMuscles,props.activeRegion,props.bones,props.muscles,props.xray]);
       if(appearance!==lastAppearance) {
         lastAppearance=appearance;const selected=(props.activeMuscles?.length?props.activeMuscles:regionMuscles[props.activeRegion]).map(normalize);
@@ -177,8 +158,11 @@ export function AnatomyPanel({ frame, activeRegion = 'jaw', activeMuscles, demo 
           mesh.material.depthWrite=!mesh.material.transparent;mesh.material.needsUpdate=true;
         }
       }
-      muscleMotion.update(props.frame?.blendshapes);
-      const blink=props.frame?.blendshapes;
+      tongueModel.mesh.visible=props.tongue;
+      tongueModel.applyPose(state.tongue);
+      boneMotion.update();
+      muscleMotion.update(state.frame?.blendshapes);
+      const blink=state.frame?.blendshapes;
       eyes.forEach((eye,i)=>{const value=blink?.[i===0?'eyeBlinkRight':'eyeBlinkLeft']??0;eye.scale.y=1-bounded(value,0,.95)*.8;});
       controls.update();renderer.render(scene,camera);
     });
@@ -186,7 +170,7 @@ export function AnatomyPanel({ frame, activeRegion = 'jaw', activeMuscles, demo 
       disposed=true;abort.abort();observer.disconnect();renderer.setAnimationLoop(null);controls.dispose();
       renderer.domElement.removeEventListener('pointermove',inspect);renderer.domElement.removeEventListener('pointerleave',leave);renderer.domElement.removeEventListener('webglcontextlost',contextLost);
       for(const mesh of meshes){mesh.geometry.dispose();mesh.material.dispose();}
-      disposeModelHairTextures(hair);
+      tongueModel.dispose();
       for(const mesh of decorative){mesh.geometry.dispose();const mat=mesh.material;if(Array.isArray(mat))mat.forEach(m=>m.dispose());else mat.dispose();}
       renderer.dispose();renderer.domElement.remove();reset.current=()=>{};
     };
@@ -198,8 +182,10 @@ export function AnatomyPanel({ frame, activeRegion = 'jaw', activeMuscles, demo 
       <button type="button" aria-pressed={bones} onClick={()=>setBones(!bones)}>Bones</button>
       <button type="button" aria-pressed={muscles} onClick={()=>setMuscles(!muscles)}>Muscles</button>
       <button type="button" aria-pressed={xray} onClick={()=>{setXray(!xray);setMuscles(true);}}>See through</button>
+      <button type="button" aria-pressed={tongue} onClick={()=>setTongue(!tongue)}>Tongue</button>
       <button type="button" className="anatomy-reset" onClick={()=>reset.current()} aria-label="Reset anatomy camera">↺</button>
     </div>
+    {tongue && <div className="tongue-status">TONGUE · {demo && frame?.tongue ? 'DEMO' : frame?.tongue?.trackingMode==='region' ? 'SELECT TIP IN CAMERA' : frame?.tongue ? 'TRACKED TIP' : 'NOT VISIBLE · RESTING REFERENCE'}<span>Experimental · exposed surface only</span></div>}
     <div className="anatomy-stage">
       <div className="anatomy-canvas" ref={mount}/>
       {status==='loading'&&<div className="anatomy-loading" role="status"><span/>Loading anatomical meshes…</div>}
@@ -210,7 +196,7 @@ export function AnatomyPanel({ frame, activeRegion = 'jaw', activeMuscles, demo 
     </div>
     <div className="anatomy-focus"><span className="anatomy-focus-dot"/><div><span>RELATED MUSCLES</span><strong>{focused.length?focused.join(' · '):'Full movement reference'}</strong></div></div>
     <p className="anatomy-disclaimer">Reference anatomy follows estimated visible movement.<br/>Muscle highlights are teaching cues, not measured tension.</p>
-    <a className="anatomy-attribution" href={`${import.meta.env.BASE_URL}models/ATTRIBUTION.md`} target="_blank" rel="noreferrer">Z-Anatomy · CC BY-SA 4.0 / BodyParts3D · CC BY-SA 2.1 JP ↗</a>
+    <div className="anatomy-credits"><a className="anatomy-attribution" href={`${import.meta.env.BASE_URL}models/ATTRIBUTION.md`} target="_blank" rel="noreferrer">Anatomy · Z-Anatomy / BodyParts3D ↗</a></div>
   </section>;
 }
 export default AnatomyPanel;

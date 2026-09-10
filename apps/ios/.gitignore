@@ -1,0 +1,6 @@
+DerivedData/
+**/xcuserdata/
+*.xcuserstate
+
+# Xcode generates this single-project workspace on first open.
+**/*.xcodeproj/project.xcworkspace/

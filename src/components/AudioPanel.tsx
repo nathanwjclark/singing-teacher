@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Mic, Square, AudioLines } from 'lucide-react';
-import { analyzeAudio, pitchToNote } from '../lib/audio';
+import { analyzeAudioFrame, serializeAudioMeasurement, pitchToNote, audioFrameSize, pitchStatus } from '../lib/audio';
 import type { AudioMetrics } from '../lib/audio';
+import { AmbientCalibrator } from '../lib/audioCalibration';
+import type { AudioCalibration } from '../lib/audioCalibration';
+import type { AudioMeasurement } from '../contracts';
 import './AudioPanel.css';
 
-type AudioPanelProps = { demo?: boolean; autoStart?: boolean };
+export type AudioPanelProps = { demo?: boolean; autoStart?: boolean; externalStream?: MediaStream | null; onStream?: (stream: MediaStream | null) => void; onMeasurement?: (measurement: AudioMeasurement) => void };
 type AudioStatus = 'idle' | 'requesting' | 'live' | 'suspended' | 'error';
 type Point = AudioMetrics & { time: number };
-type Resources = { stream: MediaStream; context: AudioContext; source: MediaStreamAudioSourceNode; analyser: AnalyserNode };
+type Resources = { owned: boolean; clockId: string; startedMs: number; deviceKey: string; stream: MediaStream; context: AudioContext; source: MediaStreamAudioSourceNode; analyser: AnalyserNode };
 const WINDOW_SECONDS = 25;
 const EMPTY: AudioMetrics = { dbfs: -100, centroidHz: null, flatness: null, pitchHz: null, periodicity: null };
 
@@ -54,7 +57,7 @@ function drawHistory(canvas: HTMLCanvasElement | null, history: Point[], now: nu
     if (x < 0 || value === null) { connected = false; continue; }
     const y = 2 + (1 - Math.max(0, Math.min(1, (value - min) / (max - min)))) * (height - 4);
     if (connected && point.time - previousTime < 0.4) ctx.lineTo(x, y);
-    else ctx.moveTo(x, y);
+    else { ctx.moveTo(x - 0.7, y); ctx.lineTo(x, y); }
     connected = true;
     previousTime = point.time;
   }
@@ -83,10 +86,15 @@ function drawWave(canvas: HTMLCanvasElement | null, wave: Float32Array, active: 
   ctx.stroke();
 }
 
-export function AudioPanel({ demo = false, autoStart = false }: AudioPanelProps) {
+export function AudioPanel({ demo = false, autoStart = false, externalStream = null, onStream, onMeasurement }: AudioPanelProps) {
   const [status, setStatus] = useState<AudioStatus>('idle');
   const [error, setError] = useState('');
+  const [inputDescription, setInputDescription] = useState('');
   const [metrics, setMetrics] = useState<AudioMetrics>(EMPTY);
+  const [calibration, setCalibration] = useState<AudioCalibration | null>(null);
+  const calibrator = useRef(new AmbientCalibrator());
+  const callbacks = useRef({ onStream, onMeasurement });
+  useEffect(() => { callbacks.current = { onStream, onMeasurement }; }, [onStream, onMeasurement]);
   const [windowMs, setWindowMs] = useState(85);
   const resources = useRef<Resources | null>(null);
   const pendingContext = useRef<AudioContext | null>(null);
@@ -108,7 +116,8 @@ export function AudioPanel({ demo = false, autoStart = false }: AudioPanelProps)
     const current = resources.current;
     resources.current = null;
     if (current) {
-      current.stream.getTracks().forEach(track => track.stop());
+      callbacks.current.onStream?.(null);
+      if (current.owned) current.stream.getTracks().forEach(track => track.stop());
       current.source.disconnect();
       current.analyser.disconnect();
       void current.context.close().catch(() => {});
@@ -120,6 +129,7 @@ export function AudioPanel({ demo = false, autoStart = false }: AudioPanelProps)
     waveform.current.fill(0);
     setStatus('idle');
     setMetrics(EMPTY);
+    setCalibration(null);
   }, [release]);
 
   const start = useCallback(async () => {
@@ -130,23 +140,28 @@ export function AudioPanel({ demo = false, autoStart = false }: AudioPanelProps)
     let acquiredStream: MediaStream | null = null;
     let acquiredContext: AudioContext | null = null;
     try {
-      if (!navigator.mediaDevices?.getUserMedia) throw new Error('Microphone access needs HTTPS or localhost in a supported browser.');
+      if (!externalStream && !navigator.mediaDevices?.getUserMedia) throw new Error('Microphone access needs HTTPS or localhost in a supported browser.');
       // Never await resume: autoplay policy can leave its promise pending until a gesture.
       acquiredContext = new AudioContext();
       pendingContext.current = acquiredContext;
       void acquiredContext.resume().catch(() => {});
-      acquiredStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
+      acquiredStream = externalStream ?? await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
       if (id !== requestId.current) {
-        acquiredStream.getTracks().forEach(track => track.stop());
+        if (!externalStream) acquiredStream.getTracks().forEach(track => track.stop());
         void acquiredContext.close().catch(() => {});
         return;
       }
       const analyser = acquiredContext.createAnalyser();
-      analyser.fftSize = 4096;
-      analyser.smoothingTimeConstant = 0.15;
+      analyser.fftSize = audioFrameSize(acquiredContext.sampleRate);
+      waveform.current = new Float32Array(analyser.fftSize);
+      analyser.smoothingTimeConstant = 0;
       const source = acquiredContext.createMediaStreamSource(acquiredStream);
       source.connect(analyser); // Deliberately never connect to the audio destination.
-      resources.current = { stream: acquiredStream, context: acquiredContext, source, analyser };
+      resources.current = { owned: !externalStream, clockId: `audio-${crypto.randomUUID()}`, startedMs: performance.now(), deviceKey: JSON.stringify(acquiredStream.getAudioTracks().map(track => [track.id, track.getSettings()])), stream: acquiredStream, context: acquiredContext, source, analyser };
+      setInputDescription(`${acquiredStream.getAudioTracks()[0]?.label || (externalStream ? 'Phone microphone' : 'Microphone')} · ${acquiredContext.sampleRate / 1000} kHz`);
+      calibrator.current = new AmbientCalibrator();
+      setCalibration(null);
+      callbacks.current.onStream?.(acquiredStream);
       pendingContext.current = null;
       acquiredStream.getAudioTracks().forEach(track => track.addEventListener('ended', () => {
         if (id === requestId.current) {
@@ -166,7 +181,7 @@ export function AudioPanel({ demo = false, autoStart = false }: AudioPanelProps)
       // Granting microphone permission may unlock the context without a separate gesture.
       void context.resume().catch(() => {});
     } catch (cause) {
-      acquiredStream?.getTracks().forEach(track => track.stop());
+      if (!externalStream) acquiredStream?.getTracks().forEach(track => track.stop());
       if (acquiredContext && acquiredContext.state !== 'closed') void acquiredContext.close().catch(() => {});
       if (pendingContext.current === acquiredContext) pendingContext.current = null;
       if (id !== requestId.current) return;
@@ -174,7 +189,7 @@ export function AudioPanel({ demo = false, autoStart = false }: AudioPanelProps)
       setError(name === 'NotAllowedError' ? 'Microphone permission was denied. Allow microphone access in your browser and try again.' : name === 'NotFoundError' ? 'No microphone was found. Connect one and try again.' : name === 'NotReadableError' ? 'Your microphone is unavailable or in use. Check your device and try again.' : cause instanceof Error ? cause.message : 'Could not start your microphone. Please try again.');
       setStatus('error');
     }
-  }, [demo, stop]);
+  }, [demo, externalStream, stop]);
 
   const enableAudio = () => {
     const current = resources.current;
@@ -192,7 +207,7 @@ export function AudioPanel({ demo = false, autoStart = false }: AudioPanelProps)
     waveform.current.fill(0);
     let resetDisplay = true;
     const resetRequestId = requestId.current;
-    const spectrum = new Float32Array(2048);
+    let sequence = 0;
     let animation = 0;
     let lastSample = 0;
     let lastDraw = 0;
@@ -228,8 +243,25 @@ export function AudioPanel({ demo = false, autoStart = false }: AudioPanelProps)
           latest = { dbfs: envelope > 0.005 ? -22 + 20 * Math.log10(envelope) : -100, centroidHz: envelope > 0.05 ? 1800 + 900 * Math.sin(t * 0.45) : null, flatness: envelope > 0.05 ? 0.09 + 0.05 * Math.sin(t * 0.62) : null, pitchHz: envelope > 0.05 ? fundamental : null, periodicity: envelope > 0.05 ? 0.94 + 0.03 * Math.sin(t * 0.9) : null };
         } else if (live && live.context.state === 'running') {
           live.analyser.getFloatTimeDomainData(waveform.current);
-          live.analyser.getFloatFrequencyData(spectrum);
-          if (now - lastSample >= 0.1) latest = analyzeAudio(waveform.current, spectrum, live.context.sampleRate, live.analyser.fftSize);
+          if (now - lastSample >= 0.1) {
+            try {
+              latest = analyzeAudioFrame(waveform.current, live.context.sampleRate);
+              const deviceKey = JSON.stringify(live.stream.getAudioTracks().map(track => [track.id, track.getSettings()]));
+              if (deviceKey !== live.deviceKey) { calibrator.current = new AmbientCalibrator(); live.deviceKey = deviceKey; }
+              const ambient = calibrator.current.update(latest, waveform.current, ms);
+              setCalibration(ambient);
+              const settings = live.stream.getAudioTracks()[0]?.getSettings();
+              callbacks.current.onMeasurement?.(serializeAudioMeasurement(latest, waveform.current.length, live.context.sampleRate, {
+                id: `${live.clockId}-${sequence++}`, observationId: live.clockId, artifactId: `${live.clockId}-unrecorded-pcm`,
+                startMs: Math.max(0, ms - live.startedMs - waveform.current.length / live.context.sampleRate * 1000),
+                timebase: { clockId: live.clockId, origin: 'session-start', unit: 'ms', syncUncertaintyMs: null, referenceClockId: null, offsetToReferenceMs: null },
+                calibration: ambient, qualityFlags: ['live-preview-not-recorded', 'analysis-poll-timestamp', ...(externalStream ? ['remote-input-latency-unknown'] : []), ...(settings?.autoGainControl || settings?.noiseSuppression || settings?.echoCancellation ? ['device-audio-processing-enabled'] : [])],
+              }));
+            } catch (cause) {
+              latest = EMPTY;
+              setError(`Audio analysis failed: ${cause instanceof Error ? cause.message : String(cause)}`);
+            }
+          }
         } else {
           waveform.current.fill(0);
           latest = EMPTY;
@@ -251,14 +283,14 @@ export function AudioPanel({ demo = false, autoStart = false }: AudioPanelProps)
     };
     animation = requestAnimationFrame(render);
     return () => { cancelAnimationFrame(animation); release(); };
-  }, [demo, release]);
+  }, [demo, externalStream, release]);
 
   useEffect(() => {
-    if (!autoStart || demo) return;
+    if ((!autoStart && !externalStream) || demo) return;
     // A cancelable task prevents StrictMode's rehearsal mount from opening a second stream.
     const task = window.setTimeout(() => { void start(); }, 0);
     return () => window.clearTimeout(task);
-  }, [autoStart, demo, start]);
+  }, [autoStart, demo, externalStream, start]);
 
   const active = demo || status === 'live';
   const note = active && metrics.pitchHz !== null ? pitchToNote(metrics.pitchHz) : null;
@@ -273,7 +305,11 @@ export function AudioPanel({ demo = false, autoStart = false }: AudioPanelProps)
         </div>
         <div className="audio-actions">
           <span className={`audio-status ${active ? 'audio-status--active' : ''}`}><i />{demo ? 'SYNTHETIC DEMO' : status === 'requesting' ? 'AWAITING PERMISSION' : status === 'suspended' ? 'AUDIO NEEDS A CLICK' : status === 'live' ? signal ? 'MICROPHONE LIVE' : 'LISTENING · QUIET' : 'MICROPHONE OFF'}</span>
-          {!demo && status === 'suspended' && <button className="audio-control" type="button" onClick={enableAudio}><AudioLines size={14} />Enable audio</button>}
+          {!demo && status === 'live' && <div className={`audio-calibration ${calibration?.clipping ? 'audio-calibration--clip' : ''}`} title="Automatically estimates ambient noise from quiet, unvoiced windows. Relative levels only; microphone EQ and room reverberation are not identifiable from ambient sound.">
+        <span>{externalStream ? 'PHONE MIC' : 'MIC'} · {calibration?.state === 'ready' ? `Ambient ${calibration.noiseFloorDbfs!.toFixed(0)} dBFS` : 'Auto-calibrating · pause singing briefly'}</span>
+        <span>{calibration?.clipping ? 'CLIPPING · reduce input gain' : calibration?.snrDb != null ? `Estimated SNR ${calibration.snrDb.toFixed(0)} dB` : calibration?.state === 'ready' ? 'Near ambient level' : 'Finding quiet windows'}</span>
+      </div>}
+      {!demo && status === 'suspended' && <button className="audio-control" type="button" onClick={enableAudio}><AudioLines size={14} />Enable audio</button>}
           {!demo && (status === 'live' || status === 'requesting' || status === 'suspended' ? <button className="audio-control" type="button" onClick={stop}><Square size={13} />{status === 'requesting' ? 'Cancel' : 'Stop microphone'}</button> : <button className="audio-control" type="button" onClick={() => void start()}><Mic size={14} />Start microphone</button>)}
         </div>
       </header>
@@ -284,11 +320,11 @@ export function AudioPanel({ demo = false, autoStart = false }: AudioPanelProps)
           <div className="audio-chart-title"><h3>Waveform</h3><span>{active ? 'LIVE SNAPSHOT' : 'READY WHEN YOU ARE'}</span></div>
           <div className="audio-wave-surface"><canvas ref={waveCanvas} role="img" aria-label="Current microphone waveform. Display amplitude is automatically scaled." />{!active && <span className="audio-wave-placeholder">A little space to hear yourself.</span>}</div>
           <div className="audio-axis"><span>0 ms</span><span>{windowMs} ms · auto-scale</span></div>
-          <p className="audio-chart-caption">{demo ? 'Illustrative wave and histories. No microphone access.' : 'The actual sound wave from your microphone.'}</p>
+          <p className="audio-chart-caption">{demo ? 'Illustrative wave and histories. No microphone access.' : active && inputDescription ? inputDescription : 'The actual sound wave from your microphone.'}</p>
         </article>
         <div className="audio-histories">
           <article className="audio-history-card audio-history-card--pitch">
-            <div className="audio-chart-title"><h3><i />Pitch <span>A4 = 440</span></h3><strong>{note ? `${note.name}${note.octave}` : '—'} <small>{note ? `${note.cents > 0 ? '+' : ''}${note.cents}¢ · ${Math.round(metrics.pitchHz!)} Hz` : 'note · Hz'}</small></strong></div>
+            <div className="audio-chart-title"><h3><i />Pitch <span>A4 = 440</span></h3><strong>{note ? `${note.name}${note.octave}` : '—'} <small>{note ? `${note.cents > 0 ? '+' : ''}${note.cents}¢ · ${Math.round(metrics.pitchHz!)} Hz` : active ? pitchStatus(metrics) : 'note · Hz'}</small></strong></div>
             <div className="audio-history-surface"><div className="audio-y-axis audio-note-axis"><span>C6</span><span>C4</span><span>C2</span></div><canvas ref={pitchCanvas} role="img" aria-label="Trailing 25 seconds of detected pitch on a musical note scale from C2 to C sharp 6. Notes and cents use A4 equals 440 Hz. Gaps mean no reliable pitch." /></div>
             <div className="audio-axis audio-time-axis"><span>−25 s</span><span>now</span></div>
           </article>
@@ -314,7 +350,7 @@ export function AudioPanel({ demo = false, autoStart = false }: AudioPanelProps)
           </article>
         </div>
       </div>
-      <footer className="audio-footer"><p><strong>{demo ? 'DEMO SIGNAL' : 'LOCAL AUDIO ONLY'}</strong>{demo ? 'Synthetic examples, not measurements of your voice.' : 'Processed in your browser. No recording, upload, or speaker playback.'}</p><p>Pitch estimates one voice (65–1100 Hz); cents compare the nearest note at A4 = 440. Tone is waveform periodicity, not vocal quality. dBFS is digital level; centroid is spectral balance; flatness runs tonal to noise-like. Silence/noise gaps pitch; accompaniment can confuse it.</p></footer>
+      <footer className="audio-footer"><p><strong>{demo ? 'DEMO SIGNAL' : 'LOCAL AUDIO ONLY'}</strong>{demo ? 'Synthetic examples, not measurements of your voice.' : 'Processed in your browser. Recording starts only with the recording control; no speaker playback.'}</p><p>Pitch estimates one voice (65–1100 Hz); cents compare the nearest note at A4 = 440. Tone is waveform periodicity, not vocal quality. dBFS is digital level; centroid is spectral balance; flatness runs tonal to noise-like. Silence/noise gaps pitch; accompaniment can confuse it.</p></footer>
     </section>
   );
 }

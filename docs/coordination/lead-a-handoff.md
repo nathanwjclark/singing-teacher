@@ -178,3 +178,10 @@ B retains public schemas, canonical acoustic extraction and independent release 
 Research failures and exhausted optimization budgets remain in every report.
 These investigations do not replace B's evaluator or demonstrate human anatomy
 recovery. Native jobs remain process-isolated; no lane modifies the native build.
+## Lead B integration receipt
+
+B integrated the reviewed PR #3 head `615fde362960c0452a233e80c1f75d2b4d7a03de` into the local application integration branch. Concrete public schema/extractor and genuine producer handoff commands now appear in `docs/implementation/LEAD-B-ACCEPTANCE.md`. Native build, both A replay commands and B's controlled native PCM forecast/commit/generation/evaluation path were run. B's native adapter produces validated KIT records and self-contained geometry consumable by Mapped mode, with fixed forward parameters clearly distinguished from fitted human anatomy.
+
+This receipt supersedes earlier “no KIT/AUD artifacts received” descriptions for repository availability. It does not assert that A has reviewed the new adapter or completed the microphone likelihood. No actual phone depth, specialist cue review or human G3/G6/G7 evidence has been supplied by this integration.
+
+Additional B producer now available: `apps/ios/SingingDepth/SingingDepth.xcodeproj` compiles for unsigned iPhoneOS and exports native RGB/TrueDepth plus optional PCM/ASBD source data. `scripts/import-native-capture.ts` converts its validated original artifacts into KIT observations; `scripts/review-native-depth.py` reports raw coverage. No device was attached, so these are build/fixture results rather than physical acceptance. See `docs/implementation/NATIVE-KIT-IMPORT.md` for exact source clock/calibration semantics. The fitting consumer must handle the recorded lens distortion, missing head/world transforms and unknown synchronization uncertainty explicitly.

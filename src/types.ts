@@ -6,7 +6,13 @@ export type Metrics = {
   lipWidth?: number; jawAsymmetry?: number; shoulderElevation?: number;
   distanceCm?: number; relativeDepth?: number; faceDepthSpan?: number;
 };
+export type TongueObservation = { trackingMode?: 'region' | 'tip'; x: number; y: number; lateral: number; lift: number; visibleFraction: number; extension?: number; elevation?: number; tip?: Landmark; outline?: Landmark[] };
+export type TongueDiagnostic = {state:'unselected'|'selected'|'tracking'|'lost';reason:string;score?:number;margin?:number};
 export type TrackingFrame = {
+  tongueDiagnostic?: TongueDiagnostic;
+  tongue?: TongueObservation;
+  tongueStatus?: string;
+  tongueSearch?: { x: number; y: number; width: number; height: number };
   face: Landmark[]; pose: Landmark[]; metrics: Metrics; timestamp: number;
   worldPose?: Landmark[];
   blendshapes?: Record<string, number>;

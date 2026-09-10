@@ -1,11 +1,30 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Activity, Camera, CircleHelp, MicVocal, Play, Square } from 'lucide-react'
 import CameraPanel from './components/CameraPanel'
 import AnatomyPanel from './components/AnatomyPanel'
+import { SideAnatomyPanel } from './components/anatomy/SideAnatomyPanel'
+import { useAnatomyMotion } from './hooks/useAnatomyMotion'
 import AudioPanel from './components/AudioPanel'
 import { CoachingPanel } from './components/CoachingPanel'
 import { useRecentTips } from './hooks/useRecentTips'
 import type { Metrics, TrackingFrame, TrackingStatus } from './types'
+import PhonePairing from './components/phone/PhonePairing'
+import PhoneCapturePage from './components/phone/PhoneCapturePage'
+import { RecordingControls } from './components/recording/RecordingControls'
+import type { RecordingController } from './components/recording/RecordingControls'
+import type { FinishedRecording } from './lib/recording'
+import type { AudioMeasurement, ObservationBundle, CandidateAnatomy, ContractRecord } from './contracts'
+import { measureRecording } from './lib/recordingMeasurements'
+import ExperimentDashboard from './components/experiments/ExperimentDashboard'
+import { ExperimentRunner } from './components/experiments/ExperimentRunner'
+import { AnatomyModes } from './components/anatomy/AnatomyModes'
+import { ReproducibilityPanel } from './components/experiments/ReproducibilityPanel'
+import { DepthProtocolPanel } from './components/experiments/DepthProtocolPanel'
+import { readExperimentLedger, subscribeExperimentLedger } from './experiment/ledger'
+import { evaluatePrediction } from './evaluation'
+import type { PredictionCommit } from './contracts'
+import { MotionCapturePanel } from './components/motion/MotionCapturePanel'
+import CoachLearningPanel from './components/coach/CoachLearningPanel'
 import './App.css'
 
 const demoFrame: TrackingFrame = {
@@ -19,10 +38,60 @@ const demoScenarios: { name: string; title: string; detail: string; metrics: Par
   { name: 'Head & neck', title: 'Find an easy center.', detail: 'See how turning and lifting the head relates to the neck muscles.', metrics: { mouthOpen: .25, headTilt: 3, shoulderTilt: 2, headYaw: 24, headPitch: 18 } },
   { name: 'Body balance', title: 'Give the phrase a steady base.', detail: 'Explore torso alignment and shoulders rotating in depth.', metrics: { mouthOpen: .25, headTilt: 2, shoulderTilt: 11, shoulderDepth: .18, torsoLean: 15 } },
   { name: 'Expression', title: 'Let your face join in.', detail: 'Watch brows, cheeks, and each shoulder move independently.', metrics: { mouthOpen: .24, headTilt: 0, shoulderTilt: 0 } },
+  { name: 'Tongue', title: 'Explore the visible tongue.', detail: 'A sample tongue moving side to side. Live estimates need an open mouth, visible tongue, and good light.', metrics: {mouthOpen:.8} },
   { name: 'Lip shape', title: 'Let the vowel take shape.', detail: 'Explore visible lip shape without forcing a smile or a pucker.', metrics: { mouthOpen: .25, headTilt: 2, shoulderTilt: 2, lipWidth: 1.02, jawAsymmetry: .2 } },
 ]
 
-function App() {
+function StudioApp() {
+  const [pairOpen,setPairOpen]=useState(false)
+  const [tab,setTab]=useState<'studio'|'experiments'>('studio')
+  const [videoStream,setVideoStream]=useState<MediaStream|null>(null)
+  const [audioStream,setAudioStream]=useState<MediaStream|null>(null)
+  const [phoneMicrophone,setPhoneMicrophone]=useState<MediaStream|null>(null)
+  const [observations,setObservations]=useState<ObservationBundle[]>([])
+  const [measurements,setMeasurements]=useState<AudioMeasurement[]>([])
+  const [candidates,setCandidates]=useState<CandidateAnatomy[]>([])
+  const [importedRecords,setImportedRecords]=useState<ContractRecord[]>([])
+  const [solverCalls,setSolverCalls]=useState('')
+  const [articulationCount,setArticulationCount]=useState('')
+  const [heldOut,setHeldOut]=useState(false)
+  const [scoreWindow,setScoreWindow]=useState('0')
+  const [ledger,setLedger]=useState(readExperimentLedger)
+  useEffect(()=>subscribeExperimentLedger(()=>setLedger(readExperimentLedger())),[])
+  const latestTrial=ledger.at(-1)
+  const [recordingNotice,setRecordingNotice]=useState('Recording is off until you start it.')
+  const recorder=useRef<RecordingController|null>(null)
+  const captureContext=useRef<{predictionId:string;trialId:string;task:string}|null>(null)
+  const transformRecording=useCallback((recording:FinishedRecording)=>{
+    const context=captureContext.current
+    if(!context)return recording
+    const observationBundle={...recording.observationBundle,predictionId:context.predictionId,trialId:context.trialId,task:context.task}
+    return {...recording,observationBundle,manifest:{...recording.manifest,observation:observationBundle}}
+  },[])
+  const onRecording=useCallback((recording:FinishedRecording)=>{
+    setObservations(old=>[recording.observationBundle,...old.filter(o=>o.id!==recording.observationBundle.id)].slice(0,20))
+    setRecordingNotice('Recording saved in this tab. Extracting acoustic measurements…')
+    void measureRecording(recording).then(rows=>{
+      setMeasurements(old=>[...rows,...old.filter(m=>m.observationId!==recording.observationBundle.id)].slice(0,12000))
+      setRecordingNotice(rows.length?`Saved recording; ${rows.length} acoustic windows measured.`:'Saved recording; no decodable audio windows.')
+    }).catch(()=>setRecordingNotice('Saved recording. This browser could not decode its audio for measurement; download it for offline analysis.'))
+  },[])
+  const startExperiment=useCallback(async(context:{predictionId:string;trialId:string;task:string})=>{
+    if(!recorder.current)throw new Error('Recorder is unavailable')
+    captureContext.current=context
+    try{recorder.current.start()}catch(error){captureContext.current=null;throw error}
+  },[])
+  const stopExperiment=useCallback(async()=>{
+    if(!recorder.current)throw new Error('Recorder is unavailable')
+    try{const recording=await recorder.current.stop();return {observationBundle:recording.observationBundle}}finally{captureContext.current=null}
+  },[])
+  const scoreExperiment=useCallback(async({commit,observation,captureStartedAt}:{commit:PredictionCommit;observation:ObservationBundle;captureStartedAt:string})=>{
+    if(!heldOut)throw new Error('Confirm held-out evidence before scoring.')
+    if(solverCalls===''||articulationCount==='')throw new Error('Enter the actual solver-call and articulation-parameter counts from the engine run.')
+    const audio=measurements.filter(m=>m.observationId===observation.id)[Number(scoreWindow)]
+    if(!audio)throw new Error('Wait for recording measurements, then select an available scoring window.')
+    return evaluatePrediction({commit,observation,audio,captureStartedAt,heldOut:{observationIds:[observation.id]},solverCallsUsed:Number(solverCalls),articulationParameterCount:Number(articulationCount)})
+  },[heldOut,solverCalls,articulationCount,measurements,scoreWindow])
   const [active, setActive] = useState(true)
   const [demo, setDemo] = useState(false)
   const [scenario, setScenario] = useState(0)
@@ -54,8 +123,9 @@ function App() {
   exampleWorld[12] = {x:-.18,y:-.52,z:scenario === 2 ? -.09 : 0,visibility:1};
   exampleWorld[23] = {x:.14,y:0,z:0,visibility:1};
   exampleWorld[24] = {x:-.14,y:0,z:0,visibility:1};
-  const exampleFrame: TrackingFrame = { ...demoFrame, pose: examplePose, worldPose: exampleWorld, blendshapes: {browInnerUp:brow,browOuterUpLeft:brow,browOuterUpRight:brow*.6,cheekSquintLeft:brow*.5,cheekSquintRight:brow*.5,mouthSmileLeft:brow*.7,mouthSmileRight:brow*.7}, metrics: { ...demoFrame.metrics, distanceCm: 65, relativeDepth: 1, headYaw: 0, headPitch: 0, shoulderDepth: 0, torsoLean: 0, ...demoScenarios[scenario].metrics } }
+  const exampleFrame: TrackingFrame = { ...demoFrame, tongue: demoScenarios[scenario].name === 'Tongue' ? {x:.5,y:.5,lateral:Math.sin(demoTime*1.5)*.8,lift:.5+Math.sin(demoTime)*.3,visibleFraction:.45,extension:(1+Math.sin(demoTime*1.2))*.35,elevation:Math.sin(demoTime*1.8)*.8} : undefined, pose: examplePose, worldPose: exampleWorld, blendshapes: {browInnerUp:brow,browOuterUpLeft:brow,browOuterUpRight:brow*.6,cheekSquintLeft:brow*.5,cheekSquintRight:brow*.5,mouthSmileLeft:brow*.7,mouthSmileRight:brow*.7}, metrics: { ...demoFrame.metrics, distanceCm: 65, relativeDepth: 1, headYaw: 0, headPitch: 0, shoulderDepth: 0, torsoLean: 0, ...demoScenarios[scenario].metrics } }
   const shownFrame = demo ? exampleFrame : active && (status === 'tracking' || status === 'no-face') ? frame : null
+  const anatomyMotion = useAnatomyMotion(shownFrame, demo)
   const { tips, now: cueNow } = useRecentTips(shownFrame, demo ? 'demo' : active ? 'live' : 'idle')
   const selectedTip = tips.find(tip => tip.id === selectedTipId) ?? tips[0]
   function toggleCamera() { setDemo(false); setFrame(null); setSeconds(0); setStatus(active ? 'idle' : 'loading'); setMessage(''); setActive(!active) }
@@ -70,18 +140,43 @@ function App() {
           <button className="icon-button" aria-label="How it works" onClick={() => setHelp(!help)}><CircleHelp size={17}/></button>
         </div>
       </header>
-      <main>
-        {help && <aside className="help-box"><strong>Your practice, in three views.</strong> Allow camera access, frame your head and shoulders, and try a comfortable sustained vowel. The 3D movement guide follows facial landmarks and estimated body depth. Drag to orbit the model and select a cue to highlight related muscles. Camera distance is an approximation; use the depth reference to compare your position. Tips are experimental visual prompts, not an assessment of your voice or internal anatomy. Video and audio stay in your browser. Camera and microphone start automatically when browser permissions allow. If your browser pauses audio, use Enable audio in the audio pane. You can stop either device at any time. <button onClick={() => setHelp(false)}>Got it</button></aside>}
+      <div className="workspace-tools">
+        <nav aria-label="Workspace"><button aria-pressed={tab==='studio'} onClick={()=>setTab('studio')}>Studio</button><button aria-pressed={tab==='experiments'} onClick={()=>setTab('experiments')}>Experiments</button></nav>
+        <button onClick={()=>setPairOpen(true)}>Connect phone / QR</button>
+        {phoneMicrophone && <span>Phone microphone connected</span>}
+        <RecordingControls controllerRef={recorder} videoStream={videoStream} audioStream={audioStream} onRecording={onRecording} transformRecording={transformRecording}/>
+      </div>
+      <main style={tab==='studio'?undefined:{display:'none'}}>
+        {help && <aside className="help-box"><strong>Your practice, in three views.</strong> Allow camera access, frame your head and shoulders, and try a comfortable sustained vowel. The 3D movement guide follows facial landmarks and estimated body depth. Drag to orbit the model and select a cue to highlight related muscles. Camera distance is an approximation; use the depth reference to compare your position. Tips are experimental visual prompts, not an assessment of your voice or internal anatomy. Live analysis stays in your browser. Explicit phone snapshots go to your local capture server; recordings are saved only when you press Start recording. Camera and microphone start automatically when browser permissions allow. If your browser pauses audio, use Enable audio in the audio pane. You can stop either device at any time. <button onClick={() => setHelp(false)}>Got it</button></aside>}
         <div className="studio-grid">
-          <section className="studio-column"><div className="column-title"><span className="column-number">01</span><h2>Your view</h2><Camera size={16}/></div><div className="panel-body camera-wrap"><CameraPanel active={active} onFrame={setFrame} onStatus={onStatus}/>{demo && <div className="demo-cover"><div className="demo-avatar"><MicVocal size={48}/></div><span className="eyebrow">SAMPLE SESSION</span><h3>{demoScenarios[scenario].title}</h3><p>{demoScenarios[scenario].detail}</p><div className="demo-scenarios" aria-label="Demo scenario">{demoScenarios.map((item, index) => <button key={item.name} aria-pressed={scenario === index} onClick={() => { setScenario(index); setDemoTime(0); setSelectedTipId(undefined) }}>{item.name}</button>)}</div><span className="demo-pill">Demo · camera is off</span></div>}</div></section>
-          <section className="studio-column"><div className="column-title"><span className="column-number">02</span><h2>Movement map</h2><Activity size={16}/></div><div className="panel-body"><AnatomyPanel frame={shownFrame} activeRegion={selectedTip?.region} activeMuscles={selectedTip?.muscles} demo={demo}/></div></section>
-          <section className="studio-column coach-column"><div className="column-title"><span className="column-number">03</span><h2>Your next adjustments</h2><span className="live-tag">{demo ? 'DEMO' : active && status === 'tracking' ? 'LIVE' : 'COACH'}</span></div><div className="panel-body"><CoachingPanel tips={tips} demo={demo} tracking={!!shownFrame?.face.length} selectedTipId={selectedTip?.id} now={cueNow} onSelectTip={tip => setSelectedTipId(tip.id)}/></div></section>
+          <section className="studio-column"><div className="column-title"><span className="column-number">01</span><h2>Your view</h2><Camera size={16}/></div><div className="panel-body camera-wrap"><CameraPanel active={active} onFrame={setFrame} onStatus={onStatus} onStream={setVideoStream}/>{demo && <div className="demo-cover"><div className="demo-avatar"><MicVocal size={48}/></div><span className="eyebrow">SAMPLE SESSION</span><h3>{demoScenarios[scenario].title}</h3><p>{demoScenarios[scenario].detail}</p><div className="demo-scenarios" aria-label="Demo scenario">{demoScenarios.map((item, index) => <button key={item.name} aria-pressed={scenario === index} onClick={() => { setScenario(index); setDemoTime(0); setSelectedTipId(undefined) }}>{item.name}</button>)}</div><span className="demo-pill">Demo · camera is off</span></div>}</div></section>
+          <section className="studio-column"><div className="column-title"><span className="column-number">02</span><h2>Movement map</h2><Activity size={16}/></div><div className="panel-body"><AnatomyModes candidates={candidates}><AnatomyPanel motion={anatomyMotion} frame={shownFrame} activeRegion={selectedTip?.region} activeMuscles={selectedTip?.muscles} demo={demo}/></AnatomyModes></div></section>
+          <section className="studio-column"><div className="column-title"><span className="column-number">03</span><h2>Inside view</h2><Activity size={16}/></div><div className="panel-body"><SideAnatomyPanel motion={anatomyMotion}/></div></section>
+          <section className="studio-column coach-column"><div className="column-title"><span className="column-number">04</span><h2>Your next adjustments</h2><span className="live-tag">{demo ? 'DEMO' : active && status === 'tracking' ? 'LIVE' : 'COACH'}</span></div><div className="panel-body"><CoachingPanel tips={tips} demo={demo} tracking={!!shownFrame?.face.length} selectedTipId={selectedTip?.id} now={cueNow} onSelectTip={tip => setSelectedTipId(tip.id)}/></div></section>
         </div>
         {message && status === 'error' && <p className={`session-message ${status === 'error' ? 'error' : ''}`} role="status">{message}</p>}
-        <AudioPanel demo={demo} autoStart/>
+        <AudioPanel demo={demo} autoStart externalStream={phoneMicrophone} onStream={setAudioStream}/>
       </main>
-
+      <main className="research-workspace" style={tab==='experiments'?undefined:{display:'none'}}>
+        <h2>Experiments and evidence</h2><p>{recordingNotice}</p>
+        <MotionCapturePanel frame={!demo&&active?frame:null} videoStream={videoStream} audioStream={audioStream}/>
+        <CoachLearningPanel videoStream={videoStream} audioStream={audioStream}/>
+        <p>{observations.length} recorded observations · {measurements.length} measured audio windows</p>
+        <p>The native scientific engine is available locally. Import validated engine artifacts to inspect them; human-audio fitting and measured phone depth remain separate acceptance steps.</p>
+        <ExperimentDashboard observations={observations} measurements={measurements} onCandidates={setCandidates} onRecords={setImportedRecords}>
+        <ExperimentRunner onStartCapture={startExperiment} onStopCapture={stopExperiment} onEvaluate={scoreExperiment}/>
+        <section className="scoring-setup"><h3>Independent scoring setup</h3><p>Use the actual engine-run counts. These declarations are recorded by the evaluator; they do not generate a forecast.</p>
+          <label>Solver calls used <input type="number" min="0" value={solverCalls} onChange={e=>setSolverCalls(e.target.value)}/></label>
+          <label>Articulation parameters <input type="number" min="0" value={articulationCount} onChange={e=>setArticulationCount(e.target.value)}/></label>
+          <label>Recorded audio window <input type="number" min="0" value={scoreWindow} onChange={e=>setScoreWindow(e.target.value)}/></label>
+          <label><input type="checkbox" checked={heldOut} onChange={e=>setHeldOut(e.target.checked)}/> This observation was held out from fitting</label>
+        </section>
+        <ReproducibilityPanel records={[...observations,...measurements,...importedRecords]} trials={ledger}/>
+        <DepthProtocolPanel observation={latestTrial?.observation??observations[0]} commit={latestTrial?.commit??undefined} captureStartedAt={latestTrial?.captureStartedAt??undefined}/>
+        </ExperimentDashboard>
+      </main>
+      <PhonePairing open={pairOpen} onClose={()=>setPairOpen(false)} onMicrophoneStream={setPhoneMicrophone}/>
     </div>
   )
 }
-export default App
+export default function App(){return window.location.pathname==='/phone'?<PhoneCapturePage/>:<StudioApp/>}
