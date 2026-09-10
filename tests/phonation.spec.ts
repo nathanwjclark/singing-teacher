@@ -6,9 +6,9 @@ async function generatedMicrophone(page:Page){
   type QAWindow=Window & {phonationWorkerCount:number;phonationQA?:{context:AudioContext;gain:GainNode;stream:MediaStream;silence:()=>void;tone:()=>void;failWorker:()=>void}};
   const owner=window as QAWindow;owner.phonationWorkerCount=0;
   const ActualWorker=window.Worker;
-  let activeWorker:Worker|null=null;
+  let injectWorkerFailure:(()=>void)|null=null;
   window.Worker=class extends ActualWorker{
-   constructor(url:string|URL,options?:WorkerOptions){super(url,options);activeWorker=this;owner.phonationWorkerCount++;}
+   constructor(url:string|URL,options?:WorkerOptions){super(url,options);injectWorkerFailure=()=>this.dispatchEvent(new ErrorEvent('error',{message:'Generated worker failure for QA'}));owner.phonationWorkerCount++;}
   };
   Object.defineProperty(navigator.mediaDevices,'getUserMedia',{value:async(constraints:MediaStreamConstraints)=>{
    if(!constraints.audio)throw new DOMException('Camera excluded from generated-audio QA','NotAllowedError');
@@ -19,7 +19,7 @@ async function generatedMicrophone(page:Page){
    const real=new Float32Array(9),imag=new Float32Array(9);for(let h=1;h<9;h++)imag[h]=1/h;
    oscillator.setPeriodicWave(context.createPeriodicWave(real,imag));oscillator.connect(gain);oscillator.start();void context.resume();
    document.addEventListener('click',()=>{void context.resume()},{capture:true});
-   owner.phonationQA={context,gain,stream:destination.stream,silence:()=>{gain.gain.value=0},tone:()=>{gain.gain.value=.25},failWorker:()=>{activeWorker?.dispatchEvent(new ErrorEvent('error',{message:'Generated worker failure for QA'}))}};
+   owner.phonationQA={context,gain,stream:destination.stream,silence:()=>{gain.gain.value=0},tone:()=>{gain.gain.value=.25},failWorker:()=>{injectWorkerFailure?.()}};
    return destination.stream;
   }});
  });
