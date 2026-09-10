@@ -6,7 +6,7 @@ export type Metrics = {
   lipWidth?: number; jawAsymmetry?: number; shoulderElevation?: number;
   distanceCm?: number; relativeDepth?: number; faceDepthSpan?: number;
 };
-export type TongueObservation = { trackingMode?: 'region' | 'tip'; x: number; y: number; lateral: number; lift: number; visibleFraction: number; extension?: number; elevation?: number; curl?: number; tip?: Landmark; outline?: Landmark[] };
+export type TongueObservation = { observedAt?: number; confidence?: number; tip3D?: {x:number;y:number;z:number;depthSource:'learned'|'sensor'}; trackingMode?: 'region' | 'tip'; x: number; y: number; lateral: number; lift: number; visibleFraction: number; extension?: number; elevation?: number; curl?: number; tip?: Landmark; outline?: Landmark[] };
 export type TongueDiagnostic = {state:'unselected'|'selected'|'tracking'|'lost';reason:string;score?:number;margin?:number};
 export type TrackingFrame = {
   tongueDiagnostic?: TongueDiagnostic;

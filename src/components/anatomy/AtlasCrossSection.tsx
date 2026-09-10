@@ -46,6 +46,7 @@ export function AtlasCrossSection({ motion }: { motion: RefObject<AnatomyMotionS
     const tractMesh = new THREE.Mesh(geometry, tractMaterial);
     tractMesh.frustumCulled = false; tractMesh.renderOrder = 1;
     scene.add(tractMesh);
+    const tipMarker=new THREE.Mesh(new THREE.CircleGeometry(11,20),new THREE.MeshBasicMaterial({color:0x75ffc1,depthTest:false}));tipMarker.renderOrder=5;scene.add(tipMarker);
     let texture: THREE.CanvasTexture | undefined;
     const image = new Image();
     image.onload = () => {
@@ -83,6 +84,8 @@ export function AtlasCrossSection({ motion }: { motion: RefObject<AnatomyMotionS
         // Both plate and cast share these exact vertices, projection and motion.
         positions.setXYZ(i, W - x, -y, 0);
       }
+      const tip=deformAtlasPoint(175.8,877.8,state);tipMarker.position.set(W-tip[0],-tip[1],.1);tipMarker.visible=state.tongue.visible;
+      host.dataset.tipPosition=JSON.stringify([W-tip[0],-tip[1]]);
       positions.needsUpdate = true;
       renderer.render(scene, camera);
     });
@@ -90,6 +93,7 @@ export function AtlasCrossSection({ motion }: { motion: RefObject<AnatomyMotionS
       disposed = true; image.onload = null; image.onerror = null;
       observer.disconnect(); renderer.setAnimationLoop(null);
       renderer.domElement.removeEventListener('webglcontextlost', lost);
+      tipMarker.geometry.dispose();tipMarker.material.dispose();
       geometry.dispose(); material.dispose(); tractMaterial.dispose(); tractTexture.dispose(); texture?.dispose(); renderer.dispose();
       renderer.domElement.remove();
     };

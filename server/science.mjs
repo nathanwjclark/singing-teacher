@@ -14,8 +14,13 @@ export function scienceRoutes({repo,dataRoot,json}) {
   process.once('exit',terminate);
   for(const signal of ['SIGTERM','SIGINT'])process.once(signal,()=>{terminate();process.exit(0)});
   return async(req,res,url)=>{
-    if(url.pathname!=='/api/tongue-profile'&&!url.pathname.startsWith('/api/science'))return false;
+    if(url.pathname!=='/api/tongue-profile'&&!url.pathname.startsWith('/api/tongue-neural/')&&!url.pathname.startsWith('/api/science'))return false;
     if(!['127.0.0.1','::1'].includes(req.socket.remoteAddress?.replace(/^::ffff:/,''))){json(res,403,{error:'Private model data is available only on this Mac'});return true}
+    if(url.pathname.startsWith('/api/tongue-neural/')&&req.method==='GET'){
+      const name={'/api/tongue-neural/model':'tongue.onnx','/api/tongue-neural/manifest':'manifest.json'}[url.pathname];
+      if(!name){json(res,404,{error:'Unknown tongue model artifact'});return true;}
+      try{const data=await readFile(resolve(dataRoot,'tongue-neural/current',name));res.writeHead(200,{'Content-Type':name.endsWith('.json')?'application/json':'application/octet-stream','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});res.end(data)}catch{json(res,404,{error:'Personal tongue model unavailable'})}return true;
+    }
     if(url.pathname==='/api/tongue-profile'&&req.method==='GET'){
       try{const profile=JSON.parse(await readFile(resolve(dataRoot,'tongue-review/live-tip-profile.json'),'utf8'));json(res,200,profile)}catch{json(res,404,{error:'No private tongue profile installed'})}return true;
     }

@@ -160,10 +160,11 @@ export function AnatomyPanel({ motion, frame, activeRegion = 'jaw', activeMuscle
         }
       }
       if(tongueStatus.current) tongueStatus.current.textContent=state.tongue.visible
-        ? state.demo ? 'DEMO TIP' : 'OBSERVED 2D TIP'
+        ? state.demo ? 'DEMO TIP' : 'NEURAL TIP · DEPTH ESTIMATED'
         : state.frame?.tongue?.trackingMode==='region' ? 'TIP NOT LOCATED' : 'NOT VISIBLE · RESTING REFERENCE';
       tongueModel.mesh.visible=props.tongue;
       tongueModel.applyPose(state.tongue);
+      renderer.domElement.dataset.tongueTip=JSON.stringify(tongueModel.tipPosition().toArray());
       boneMotion.update();
       muscleMotion.update(state.frame?.blendshapes);
       const blink=state.frame?.blendshapes;
