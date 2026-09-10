@@ -14,12 +14,13 @@ export function createLidarRoutes({repo,dataRoot,json}){
  async function save(state){await mkdir(dataRoot,{recursive:true,mode:0o700});const temp=currentFile+'.'+randomUUID();await writeFile(temp,JSON.stringify(state),{mode:0o600});await rename(temp,currentFile);}
  async function rememberSuccess(state){
   if(!id.test(state.fitId??''))return;
-  const result=await read(join(dataRoot,'lidar-fits',state.fitId,'summary.json'));
+  const result=await fitReceipt(state.fitId);
   if(result?.adoption?.model_updated!==true||result.adoption.model_id!==result.modelId||result.fitId!==state.fitId)return;
   const value={fitId:state.fitId,modelId:result.modelId,sessionId:result.sessionId};
   const previous=await read(successFile);if(previous?.fitId===state.fitId)return;
   const temporary=successFile+'.'+randomUUID();await writeFile(temporary,JSON.stringify(value),{mode:0o600});await rename(temporary,successFile);
  }
+ async function fitReceipt(fitId){return await read(join(dataRoot,'lidar-fits',fitId,'summary.json'))??await read(join(dataRoot,'lidar-fits',fitId,'adoption-summary.json'));}
  const python=()=>process.env.SINGING_PYTHON||join(repo,'science/.venv/bin/python');
  const args=(operation)=>[join(repo,'science/scripts/app_lidar.py'),'--operation',operation,'--data-root',dataRoot];
  const options=(timeout=90000)=>({cwd:repo,env:{...process.env,PYTHONPATH:[repo,join(repo,'science/src')].join(':')},timeout,maxBuffer:8*1024*1024});
@@ -36,7 +37,7 @@ export function createLidarRoutes({repo,dataRoot,json}){
   try{await save(state);}catch(error){busy=false;throw error;}
   const folder=join(dataRoot,'lidar-fits',state.fitId);
   void execute(python(),[...args('fit'),'--request',join(folder,'app-request.json'),'--output',folder],options(240000))
-   .catch(error=>{state.error=(error.stderr??'').split('\n').findLast(line=>/^(ValueError|RuntimeError|FileNotFoundError):/.test(line))||'LiDAR fit paused. Retry in the app to recover its recorded job; baseline and original evidence were preserved.';})
+   .catch(error=>{state.error=(error.stderr??'').split('\n').findLast(line=>/^(ValueError|RuntimeError|FileNotFoundError):/.test(line))||'LiDAR processing paused. Original evidence is retained; the session may already contain an adopted model. Retry resumes its recorded work.';})
    .finally(async()=>{state.running=false;await rememberSuccess(state);await save(state);busy=false;}).catch(()=>{busy=false;});
  }
  return async(req,res,url)=>{
@@ -48,11 +49,11 @@ export function createLidarRoutes({repo,dataRoot,json}){
    if(state.running&&!busy&&enabled())await launch(state);
    if(url.pathname.endsWith('/status')&&req.method==='GET'){
     const capture=await read(join(dataRoot,'lidar-current.json'));
-    const result=state.fitId?await read(join(dataRoot,'lidar-fits',state.fitId,'summary.json')):null;
+    const result=state.fitId?await fitReceipt(state.fitId):null;
     const currentModelId=await model().catch(()=>null);
     await rememberSuccess(state);
     const successful=await read(successFile);
-    const saved=successful&&id.test(successful.fitId??'')?await read(join(dataRoot,'lidar-fits',successful.fitId,'summary.json')):null;
+    const saved=successful&&id.test(successful.fitId??'')?await fitReceipt(successful.fitId):null;
     const lastSuccessfulResult=saved?.fitId===successful?.fitId&&saved?.modelId===successful?.modelId&&saved?.sessionId===successful?.sessionId&&saved?.adoption?.model_updated===true&&saved?.adoption?.model_id===saved?.modelId?saved:null;
     const pull=await read(join(dataRoot,'native-pull-latest.json'));
     json(res,200,{enabled:enabled(),busy,capture,currentModelId,result,error:state.error??null,

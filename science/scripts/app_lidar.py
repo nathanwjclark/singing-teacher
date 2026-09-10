@@ -142,6 +142,14 @@ def finish(backend,intent,output):
     if not (output/'session-ledger.json').exists():seal(output/'session-ledger.json',backend.execute({'action':'replay'}))
     adoption=next((r for r in state.get('lidar_fusions',[]) if r.get('job_id')==record['job_id']),None)
     if adoption is None:raise ValueError('LiDAR collection did not retain its authoritative adoption receipt')
+    accepted=result['status']=='ranked' and adoption.get('model_updated') is True
+    answer={'captureId':intent['captureId'],'importId':intent['importId'],'archiveSha256':intent['archiveSha256'],
+        'sessionId':intent['sessionId'],'parentModelId':intent['parentModelId'],'modelId':adoption.get('model_id',intent['parentModelId']),
+        'jobId':record['job_id'],'fitId':output.name,'status':'ranked' if accepted else adoption.get('status',result['status']),
+        'reason':adoption.get('reason') or result.get('reason'),'result':result,'includedInFit':accepted,'adoption':adoption,'geometry':None}
+    # Native geometry is a subsequent export. Preserve the authoritative adoption
+    # first so a failed export cannot conceal a model update that already occurred.
+    seal(output/'adoption-summary.json',answer)
     geometry=None
     if adoption.get('model_updated'):
         target_model=adoption['model_id'];hypothesis_id=result['with_depth_order'][0]
@@ -177,10 +185,7 @@ def finish(backend,intent,output):
             geometry={'modelId':target_model,'hypothesisId':hypothesis_id,'pose':annotation['pose'],'JA':annotation['JA_values'][0],
                 'role':'Native adopted hypothesis at the first declared jaw pose; not observed internal geometry','files':files}
             seal(geometry_path,geometry)
-    answer={'captureId':intent['captureId'],'importId':intent['importId'],'archiveSha256':intent['archiveSha256'],
-        'sessionId':intent['sessionId'],'parentModelId':intent['parentModelId'],'modelId':adoption.get('model_id',intent['parentModelId']),
-        'jobId':record['job_id'],'fitId':output.name,'status':result['status'],'result':result,
-        'includedInFit':result['status']=='ranked','adoption':adoption,'geometry':geometry}
+    answer['geometry']=geometry
     seal(output/'summary.json',answer);return answer
 
 
