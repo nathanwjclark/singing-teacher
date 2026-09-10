@@ -1,0 +1,25 @@
+.coaching-panel { min-width: 0; display: flex; flex-direction: column; color: #f3f0e9; }
+.coaching-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.coaching-eyebrow { color: #93978f; font-size: 10px; font-weight: 600; letter-spacing: .16em; margin: 0 0 18px; }
+.coaching-heading h2 { font-size: clamp(24px, 2.35vw, 36px); line-height: 1.12; letter-spacing: -.045em; font-weight: 500; margin: 0; }
+.coaching-state { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; font-size: 8px; letter-spacing: .07em; color: #8d948c; margin-top: 1px; }
+.coaching-state > span { height: 5px; width: 5px; border-radius: 50%; background: #657066; }
+.coaching-state.is-active > span { background: #add9b6; box-shadow: 0 0 8px #add9b633; }
+.coaching-intro { color: #93988f; font-size: 12px; line-height: 1.6; margin: 14px 0 25px; }
+.coaching-tips { list-style: none; padding: 0; margin: 0; display: grid; gap: 13px; }
+.coaching-tip { --cue: #ecb48c; padding: 18px 19px 19px; border: 1px solid #ffffff0b; border-radius: 13px; background: #ffffff03; border-left: 2px solid var(--cue); }
+.coaching-tip--focus { --cue: #f5a68b; background: linear-gradient(110deg, #f5a68b0b, #ffffff02); }
+.coaching-tip--adjust { --cue: #ddc18b; }
+.coaching-tip--good { --cue: #98cdbd; }
+.coaching-tip-topline { display: flex; gap: 8px; align-items: center; color: var(--cue); }
+.coaching-tip-number { font-size: 11px; font-variant-numeric: tabular-nums; }
+.coaching-tip-region { font-size: 8px; letter-spacing: .15em; opacity: .8; }
+.coaching-tip-priority { margin-left: auto; font-size: 7px; letter-spacing: .08em; opacity: .75; }
+.coaching-tip h3 { margin: 14px 0 9px; font-size: clamp(22px, 2vw, 30px); letter-spacing: -.04em; line-height: 1.1; font-weight: 500; max-width: 260px; }
+.coaching-tip p { color: #9da198; font-size: 11px; line-height: 1.7; margin: 0; }
+.coaching-note { display: flex; gap: 10px; align-items: flex-start; margin-top: auto; padding-top: 24px; color: #7e877d; }
+.coaching-note-icon { border: 1px solid #475047; border-radius: 50%; height: 18px; width: 18px; flex-shrink: 0; font-size: 12px; display: grid; place-items: center; margin-top: 2px; }
+.coaching-note p { margin: 0; font-size: 10px; line-height: 1.65; }
+.coaching-note strong { display: block; color: #a1aa9f; font-weight: 500; margin-bottom: 2px; }
+@media (max-width: 1100px) { .coaching-tip { padding: 16px 13px; } .coaching-state { font-size: 7px; } }
+@media (max-width: 760px) { .coaching-heading h2 { font-size: 32px; } .coaching-tip h3 { max-width: none; font-size: 28px; } .coaching-tips { gap: 12px; } .coaching-tip p { font-size: 13px; } .coaching-tip { padding: 20px; } }
