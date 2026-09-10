@@ -106,9 +106,17 @@ def fit_dynamic(engine: Engine, document, *, budget_per_model=120, starts=3, see
             if audio_identity in seen_audio:
                 raise ValueError("Duplicate physical audio frame")
             seen_audio.add(audio_identity)
+            top_evidence = frame.get("evidence_id")
+            nested_geometry = frame.get("geometry_observation")
+            nested_evidence = nested_geometry.get("evidence_id") if isinstance(nested_geometry, dict) else None
+            if top_evidence is not None:
+                top_evidence = _identifier(top_evidence, "frame depth evidence id")
+            if nested_evidence is not None:
+                nested_evidence = _identifier(nested_evidence, "geometry depth evidence id")
+            if top_evidence is not None and nested_evidence is not None and top_evidence != nested_evidence:
+                raise ValueError("Conflicting top-level and nested depth evidence IDs")
             if split == "held_out":
-                if frame.get("evidence_id") is not None:
-                    held_out_geometry_ids.add(_identifier(frame["evidence_id"], "held-out depth evidence id"))
+                held_out_geometry_ids.update(x for x in (top_evidence, nested_evidence) if x is not None)
                 rows.append({"id": frame_id, "split": "held_out"})
                 metadata.append({**state, "audio_evidence_id": audio_id,
                                  "geometry_status": "held_out", "geometry_reason": "held_out_not_read"})

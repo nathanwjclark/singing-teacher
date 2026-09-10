@@ -130,3 +130,27 @@ def test_metadata_validation_and_held_out_target_exclusion():
         inconsistent["attempts"][1]["context"]["pitch_hz"] = 200.
         with pytest.raises(ValueError, match="inconsistent context"):
             fit_dynamic(engine, inconsistent, budget_per_model=10, starts=1)
+
+
+def test_held_out_nested_depth_alias_and_conflicting_identity_are_rejected():
+    with Engine() as engine:
+        doc = dynamic_document(engine)
+        held = deepcopy(doc["attempts"][0])
+        held.update(attempt_id="held-alias", split="held_out")
+        held["frames"] = [held["frames"][0]]
+        held["actual_onset_seconds"] = None
+        frame = held["frames"][0]
+        frame.update(id="held-frame", audio_evidence_id="held-audio")
+        frame.pop("evidence_id")
+        frame["geometry_observation"].update(split="held_out", value_m="unread", sigma_m="unread")
+        doc["attempts"].append(held)
+        with pytest.raises(ValueError, match="reuses held-out depth"):
+            fit_dynamic(engine, doc, budget_per_model=10, starts=1)
+        frame["evidence_id"] = "different-depth"
+        with pytest.raises(ValueError, match="Conflicting top-level and nested"):
+            fit_dynamic(engine, doc, budget_per_model=10, starts=1)
+        frame["geometry_observation"]["evidence_id"] = "different-depth"
+        first = fit_dynamic(engine, doc, budget_per_model=10, starts=1)
+        frame["geometry_observation"].update(value_m=float("nan"), sigma_m=-1)
+        repeat = fit_dynamic(engine, doc, budget_per_model=10, starts=1)
+        assert first["joint_fit"] == repeat["joint_fit"]
