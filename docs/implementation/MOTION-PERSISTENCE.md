@@ -46,3 +46,33 @@ unknown timing/missing landmarks/failed marker preservation, altered media and
 malformed schema rejection, upload bound, private permissions and origin checks.
 Test media is explicitly synthetic opaque data; this verifies byte persistence,
 not video codec decoding. Real browser MediaRecorder testing remains separate.
+
+## Optional conditional audio analysis
+
+POST `/api/motion/analyze` takes `{requestId,captureId,pose,
+containsExternalExcitation:false}`; pose is an explicitly declared vowel
+`a/e/i/o/u`. The capture ID binds the exact original JSON and companion bytes.
+The server pins the current scientific model before launching the bounded
+`science/scripts/app_motion.py` runner; a changed entry model is rejected.
+This operation does not update the baseline anatomy or session state.
+
+GET `/api/motion/analysis?captureId=ID` returns `status`, `analysisId`, `error`,
+`result`, `resultCurrent`, `currentModelId`, and decoder `availability`.
+Statuses are `not-run`, `running`, `succeeded`, `failed`, or `interrupted`.
+After a baseline change, a retained result has `resultCurrent:false` and remains
+historical evidence. It must not be presented as a current-model estimate.
+
+FFmpeg/ffprobe are optional existing executables (`SINGING_FFMPEG` and
+`SINGING_FFPROBE` can select paths). Missing decoding capability reports an
+unavailable analysis while saving and replay remain usable. No install is
+performed automatically. The runner reads at most 30 seconds and analyzes three
+declared audio windows under a finite maximum of 108 native synthesis calls.
+The outer process group is terminated after four minutes; interrupted native
+computation can be retried in the app because it has no model mutation.
+
+Candidate articulation is conditional on a declared vowel, source assumptions
+and at most three selected retained anatomy hypotheses; excluded support and
+invalid windows remain explicit. The original 2D points never enter the physical
+objective. Audio offsets and inferred states are not synchronized measured video
+motion: audiovisual uncertainty remains unknown. The output cannot establish
+actual JA, unique physiology or learned motor control.
