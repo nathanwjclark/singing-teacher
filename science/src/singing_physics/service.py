@@ -219,7 +219,7 @@ class JobService:
             'predict_probe': {'snapshot_json', 'expected_digest', 'prediction_id', 'target_evidence_id', 'generated_at', 'pose', 'frequency_hz', 'placement', 'calibration', 'calibration_evidence_ids', 'calibration_frozen_at', 'articulation', 'channel', 'comparison', 'timing', 'termination', 'termination_resistance_pa_s_m3', 'attenuation_np_per_m', 'max_operator_calls'},
             'fit_probe_pcm': {'observations', 'probe_observations', 'candidates', 'max_native_calls', 'pcm_weight', 'probe_weight'},
             'search_pcm': {'observations', 'anatomy_bounds', 'nuisance_profiles', 'max_synthesis_calls', 'rounds', 'seed'},
-            'design_pcm': {'snapshot_json', 'expected_digest', 'design_id', 'target_observation_id', 'generated_at', 'experiments', 'feature_scales', 'minimum_separation', 'max_synthesis_calls', 'retention_margin', 'maximum_discrepancy'},
+            'design_pcm': {'snapshot_json', 'expected_digest', 'design_id', 'target_observation_id', 'generated_at', 'experiments', 'feature_scales', 'minimum_separation', 'max_synthesis_calls', 'retention_margin', 'maximum_discrepancy', 'profile'},
             'update_pcm': {'snapshot_json', 'design_json', 'expected_design_digest', 'expected_snapshot_digest', 'experiment_id', 'observation_id', 'artifact_id', 'observed_at', 'pcm', 'sample_rate_hz', 'frame_start_sample', 'frame_size', 'source_kind'},
             'fit_pcm': {'observations', 'candidates', 'max_synthesis_calls'},
             'fit_frozen_control': {'snapshot_json', 'observations', 'expected_digest', 'candidate_id', 'budget', 'seed'},
