@@ -81,7 +81,7 @@ export default function PhoneCapturePage() {
     } catch (error) { setStatus(error instanceof Error ? error.message : 'Upload failed. Keep this page open and retry.'); }
     finally { setSaving(false); }
   };
-  return <main className="phone-page"><header><span>SINGING TEACHER</span><h1>Your phone, connected</h1></header>
+  return <main className="phone-page"><header><span>TRACT STAR</span><h1>Your phone, connected</h1></header>
     {!valid ? <p role="alert">Open the private link from the desktop app’s QR code to pair this phone.</p> : !secure ? <p role="alert">Your phone needs a trusted HTTPS address for camera and microphone access. Open the secure pairing link configured on your desktop.</p> : <>
       <nav aria-label="Phone mode"><button aria-pressed={mode === 'capture'} onClick={() => { stopMic(); setMode('capture'); setStatus('Ready for guided snapshots.'); }}>Bootstrap captures</button><button aria-pressed={mode === 'mic'} onClick={() => { setActive(false); setMode('mic'); setStatus('Use your phone as the live microphone for the desktop.'); }}>Phone microphone</button></nav>
       {mode === 'capture' ? <>
