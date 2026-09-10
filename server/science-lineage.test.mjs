@@ -4,6 +4,7 @@ import {mkdtemp,mkdir,writeFile,readFile,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {scienceRoutes} from './science.mjs';
+import {createVoiceCaptureRoutes} from './voiceCapture.mjs';
 
 test('active decisions retain geometry provenance and reject stale prepared captures',async()=>{
   const dataRoot=await mkdtemp(join(tmpdir(),'science-lineage-'));
@@ -53,6 +54,11 @@ test('active decisions retain geometry provenance and reject stale prepared capt
     assert.equal(unavailable.body.result.recordingAllowed,false);
     assert.equal(unavailable.body.result.geometry.native,true);
     assert.match(unavailable.body.result.recordingMessage,/worker is unavailable/);
+    const prepareRoute=createVoiceCaptureRoutes({repo:process.cwd(),dataRoot,json:(_,status,body)=>{result={status,body}}});
+    const declaration=Buffer.from(JSON.stringify({purpose:'outcome',pose:'a',contains_external_excitation:false}));
+    await prepareRoute({method:'POST',socket:{remoteAddress:'127.0.0.1'},headers:{host:'localhost','content-type':'application/json','content-length':String(declaration.length)},async *[Symbol.asyncIterator](){yield declaration}},{},new URL('http://localhost/api/science/use-latest-capture'));
+    assert.equal(result.status,409);
+    assert.match(result.body.error,/worker is unavailable/);
     workerUnavailable=false;workerState=stateFor(3);
     assert.equal(await readFile(join(dataRoot,'science-runs/run-test/summary.json'),'utf8'),original);
     await put('science-runs/run-test/astra-rest.json',{sessionId:'s',decisionId:'rest-1',createdAt:new Date().toISOString()});
