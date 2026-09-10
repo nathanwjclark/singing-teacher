@@ -64,3 +64,9 @@ The bundled upper-body mesh subset comes from Z-Anatomy. Source revisions, credi
 
 - [MediaPipe Tasks Vision](https://github.com/google-ai-edge/mediapipe/blob/master/mediapipe/tasks/web/vision/README.md)
 - [OpenCV browser video processing](https://docs.opencv.org/4.13.0/js_video_display.html)
+
+### Tongue reference and visible tracking
+
+The Tongue layer is an original, simplified 3D surface attached to the jaw. Its exposed tip follows an experimental local color-segmentation estimate inside the inner lip contour; a pink ring marks the detected region on the camera view. Three consecutive detections are required, and tracking clears when the region is lost. The model returns to its resting reference when the tongue is not visible. The Tongue demo uses synthetic motion.
+
+This is not a trained tongue detector: lighting, lipstick, gums, and food can cause errors. It cannot determine hidden tongue shape, muscle activity, depth, or contact with the palate. No tongue-based coaching judgments are generated. The existing [MediaPipe facial blendshape output](https://ai.google.dev/edge/api/mediapipe/python/mp/tasks/vision/drawing_styles/face_landmarker/Blendshapes) is separate from this experimental visible-tissue estimate. Processing stays in the browser.

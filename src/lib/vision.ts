@@ -1,5 +1,6 @@
 import { FaceLandmarker, FilesetResolver, PoseLandmarker } from '@mediapipe/tasks-vision';
 import type { Landmark, TrackingFrame } from '../types';
+import { createTongueTracker } from './tongueTracking';
 import { depthMetrics } from './depth';
 import { createTrackingStabilizer } from './trackingStability';
 
@@ -78,6 +79,10 @@ export async function createVisionEngine(): Promise<VisionEngine> {
   let baselineDistance: number | undefined;
   let recentDistance: number | undefined;
   const stabilizer = createTrackingStabilizer();
+  const tongueCanvas = document.createElement('canvas');
+  tongueCanvas.width=320; tongueCanvas.height=240;
+  const tongueContext=tongueCanvas.getContext('2d', {willReadFrequently:true})!;
+  const trackTongue=createTongueTracker();
   let closed = false;
   return {
     process(video, timestamp) {
@@ -118,7 +123,10 @@ export async function createVisionEngine(): Promise<VisionEngine> {
         depth.distanceCm = recentDistance;
         if (baselineDistance !== undefined) depth.relativeDepth = recentDistance / baselineDistance;
       } else { recentDistance = undefined; depthHistory = []; }
-      return { face: landmarks, pose: cachedPose, worldPose: cachedWorldPose, faceTransform, blendshapes, timestamp, metrics: stabilizer.metrics({ mouthOpen, headTilt: tilt(landmarks[33], landmarks[263]), shoulderTilt: tilt(cachedPose[11], cachedPose[12]), brightness, motion, ...depth }, timestamp, landmarks.length > 0) };
+      tongueContext.drawImage(video,0,0,320,240);
+      const tongue = trackTongue(tongueContext.getImageData(0,0,320,240).data,320,240,
+        mouthOpen>.15 && Math.abs(depth.headYaw ?? 0)<35 ? landmarks : []);
+      return { tongue, face: landmarks, pose: cachedPose, worldPose: cachedWorldPose, faceTransform, blendshapes, timestamp, metrics: stabilizer.metrics({ mouthOpen, headTilt: tilt(landmarks[33], landmarks[263]), shoulderTilt: tilt(cachedPose[11], cachedPose[12]), brightness, motion, ...depth }, timestamp, landmarks.length > 0) };
     },
     calibrate() { if (closed || recentDistance === undefined || depthHistory.length < 5) return false; baselineDistance = recentDistance; return true; },
     close() { if (!closed) { closed = true; face.close(); pose.close(); previous.delete(); } },
@@ -148,6 +156,7 @@ export function drawTracking(context: CanvasRenderingContext2D, frame: TrackingF
   // The face model already supplies stable eyes, nose and mouth. Body-model
   // facial points are a coarser estimate and should not compete with that mesh.
   lines(frame.pose, PoseLandmarker.POSE_CONNECTIONS.filter(edge => edge.start >= 11 && edge.end >= 11), '#c5fc9399');
+  if(frame.tongue){context.strokeStyle='#ff91b3';context.lineWidth=2;context.beginPath();context.arc(frame.tongue.x*width,frame.tongue.y*height,5,0,Math.PI*2);context.stroke();}
   context.fillStyle = '#d2ff96';
   for (const point of frame.face) {
     context.beginPath(); context.arc(point.x * width, point.y * height, .8, 0, Math.PI * 2); context.fill();

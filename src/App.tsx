@@ -19,6 +19,7 @@ const demoScenarios: { name: string; title: string; detail: string; metrics: Par
   { name: 'Head & neck', title: 'Find an easy center.', detail: 'See how turning and lifting the head relates to the neck muscles.', metrics: { mouthOpen: .25, headTilt: 3, shoulderTilt: 2, headYaw: 24, headPitch: 18 } },
   { name: 'Body balance', title: 'Give the phrase a steady base.', detail: 'Explore torso alignment and shoulders rotating in depth.', metrics: { mouthOpen: .25, headTilt: 2, shoulderTilt: 11, shoulderDepth: .18, torsoLean: 15 } },
   { name: 'Expression', title: 'Let your face join in.', detail: 'Watch brows, cheeks, and each shoulder move independently.', metrics: { mouthOpen: .24, headTilt: 0, shoulderTilt: 0 } },
+  { name: 'Tongue', title: 'Explore the visible tongue.', detail: 'A sample tongue moving side to side. Live estimates need an open mouth, visible tongue, and good light.', metrics: {mouthOpen:.8} },
   { name: 'Lip shape', title: 'Let the vowel take shape.', detail: 'Explore visible lip shape without forcing a smile or a pucker.', metrics: { mouthOpen: .25, headTilt: 2, shoulderTilt: 2, lipWidth: 1.02, jawAsymmetry: .2 } },
 ]
 
@@ -54,7 +55,7 @@ function App() {
   exampleWorld[12] = {x:-.18,y:-.52,z:scenario === 2 ? -.09 : 0,visibility:1};
   exampleWorld[23] = {x:.14,y:0,z:0,visibility:1};
   exampleWorld[24] = {x:-.14,y:0,z:0,visibility:1};
-  const exampleFrame: TrackingFrame = { ...demoFrame, pose: examplePose, worldPose: exampleWorld, blendshapes: {browInnerUp:brow,browOuterUpLeft:brow,browOuterUpRight:brow*.6,cheekSquintLeft:brow*.5,cheekSquintRight:brow*.5,mouthSmileLeft:brow*.7,mouthSmileRight:brow*.7}, metrics: { ...demoFrame.metrics, distanceCm: 65, relativeDepth: 1, headYaw: 0, headPitch: 0, shoulderDepth: 0, torsoLean: 0, ...demoScenarios[scenario].metrics } }
+  const exampleFrame: TrackingFrame = { ...demoFrame, tongue: demoScenarios[scenario].name === 'Tongue' ? {x:.5,y:.5,lateral:Math.sin(demoTime*1.5)*.8,lift:.5+Math.sin(demoTime)*.3,visibleFraction:.45} : undefined, pose: examplePose, worldPose: exampleWorld, blendshapes: {browInnerUp:brow,browOuterUpLeft:brow,browOuterUpRight:brow*.6,cheekSquintLeft:brow*.5,cheekSquintRight:brow*.5,mouthSmileLeft:brow*.7,mouthSmileRight:brow*.7}, metrics: { ...demoFrame.metrics, distanceCm: 65, relativeDepth: 1, headYaw: 0, headPitch: 0, shoulderDepth: 0, torsoLean: 0, ...demoScenarios[scenario].metrics } }
   const shownFrame = demo ? exampleFrame : active && (status === 'tracking' || status === 'no-face') ? frame : null
   const { tips, now: cueNow } = useRecentTips(shownFrame, demo ? 'demo' : active ? 'live' : 'idle')
   const selectedTip = tips.find(tip => tip.id === selectedTipId) ?? tips[0]

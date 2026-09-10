@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { createMuscleMotion } from '../lib/muscleMotion';
 import { createShoulderMotion } from '../lib/shoulderMotion';
+import { createTongueModel } from '../lib/tongueModel';
 import { createBoneMotion } from '../lib/boneMotion';
 import type { BodyRegion, TrackingFrame } from '../types';
 import './AnatomyPanel.css';
@@ -21,15 +22,16 @@ const bounded = (value: number | undefined, min: number, max: number) => THREE.M
 
 export function AnatomyPanel({ frame, activeRegion = 'jaw', activeMuscles, demo }: Props) {
   const mount = useRef<HTMLDivElement>(null);
-  const latest = useRef({ frame, activeRegion, activeMuscles, demo, bones: true, muscles: true, xray: false });
+  const latest = useRef({ frame, activeRegion, activeMuscles, demo, bones: true, muscles: true, xray: false, tongue: true });
   const reset = useRef<() => void>(() => {});
   const [bones, setBones] = useState(true);
   const [muscles, setMuscles] = useState(true);
+  const [tongue, setTongue] = useState(true);
   const [xray, setXray] = useState(false);
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [hovered, setHovered] = useState('');
   const [meshCount, setMeshCount] = useState(0);
-  useEffect(() => { latest.current = { frame, activeRegion, activeMuscles, demo, bones, muscles, xray }; }, [frame, activeRegion, activeMuscles, demo, bones, muscles, xray]);
+  useEffect(() => { latest.current = { frame, activeRegion, activeMuscles, demo, bones, muscles, xray, tongue }; }, [frame, activeRegion, activeMuscles, demo, bones, muscles, xray, tongue]);
   const focused = activeMuscles?.length ? activeMuscles : regionMuscles[activeRegion];
 
   useEffect(() => {
@@ -82,6 +84,7 @@ export function AnatomyPanel({ frame, activeRegion = 'jaw', activeMuscles, demo 
     const rigs = { torso, head, jaw, leftShoulder, rightShoulder };
     const muscleMotion = createMuscleMotion(rigs);
     const boneMotion = createBoneMotion(rigs);
+    const tongueModel = createTongueModel();jaw.add(tongueModel.mesh);
     const meshes: AnatomyMesh[] = [];
     const decorative: THREE.Mesh[] = [];
     const eyes: THREE.Group[] = [];
@@ -175,6 +178,8 @@ export function AnatomyPanel({ frame, activeRegion = 'jaw', activeMuscles, demo 
           mesh.material.depthWrite=!mesh.material.transparent;mesh.material.needsUpdate=true;
         }
       }
+      tongueModel.mesh.visible=props.tongue;
+      tongueModel.update(props.frame?.tongue);
       boneMotion.update();
       muscleMotion.update(props.frame?.blendshapes);
       const blink=props.frame?.blendshapes;
@@ -185,6 +190,7 @@ export function AnatomyPanel({ frame, activeRegion = 'jaw', activeMuscles, demo 
       disposed=true;abort.abort();observer.disconnect();renderer.setAnimationLoop(null);controls.dispose();
       renderer.domElement.removeEventListener('pointermove',inspect);renderer.domElement.removeEventListener('pointerleave',leave);renderer.domElement.removeEventListener('webglcontextlost',contextLost);
       for(const mesh of meshes){mesh.geometry.dispose();mesh.material.dispose();}
+      tongueModel.dispose();
       for(const mesh of decorative){mesh.geometry.dispose();const mat=mesh.material;if(Array.isArray(mat))mat.forEach(m=>m.dispose());else mat.dispose();}
       renderer.dispose();renderer.domElement.remove();reset.current=()=>{};
     };
@@ -196,8 +202,10 @@ export function AnatomyPanel({ frame, activeRegion = 'jaw', activeMuscles, demo 
       <button type="button" aria-pressed={bones} onClick={()=>setBones(!bones)}>Bones</button>
       <button type="button" aria-pressed={muscles} onClick={()=>setMuscles(!muscles)}>Muscles</button>
       <button type="button" aria-pressed={xray} onClick={()=>{setXray(!xray);setMuscles(true);}}>See through</button>
+      <button type="button" aria-pressed={tongue} onClick={()=>setTongue(!tongue)}>Tongue</button>
       <button type="button" className="anatomy-reset" onClick={()=>reset.current()} aria-label="Reset anatomy camera">↺</button>
     </div>
+    {tongue && <div className="tongue-status">TONGUE · {demo && frame?.tongue ? 'DEMO' : frame?.tongue ? 'VISIBLE ESTIMATE' : 'NOT VISIBLE · RESTING REFERENCE'}<span>Experimental · exposed surface only</span></div>}
     <div className="anatomy-stage">
       <div className="anatomy-canvas" ref={mount}/>
       {status==='loading'&&<div className="anatomy-loading" role="status"><span/>Loading anatomical meshes…</div>}
