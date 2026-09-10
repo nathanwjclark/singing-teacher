@@ -1,3 +1,4 @@
+import type { TongueDiagnostic } from '../types';
 /** Small, selected image-patch tracker. Selection supplies the anatomical
  * meaning; correlation follows texture, not the centroid of pink pixels. */
 export function createTongueTipTracker() {
@@ -6,6 +7,7 @@ export function createTongueTipTracker() {
   let point:{x:number;y:number}|undefined;
   let pending:{x:number;y:number}|undefined;
   let selected=false;
+  let diagnostic:TongueDiagnostic={state:'unselected',reason:'Select the visible tip in the enlarged mouth view'};
   function patch(pixels:Uint8ClampedArray,w:number,h:number,x:number,y:number) {
     if(x<radius||y<radius||x>=w-radius||y>=h-radius)return;
     const values=new Float32Array(side*side);let sum=0,square=0;
@@ -21,11 +23,12 @@ export function createTongueTipTracker() {
     return values;
   }
   return {
-    select(x:number,y:number){pending={x,y};template=undefined;point=undefined;selected=true},
-    reset(){template=undefined;point=undefined;pending=undefined;selected=false},
+    select(x:number,y:number){pending={x,y};template=undefined;point=undefined;selected=true;diagnostic={state:'selected',reason:'Waiting for the next mouth image'}},
+    reset(){template=undefined;point=undefined;pending=undefined;selected=false;diagnostic={state:'unselected',reason:'Select the visible tip in the enlarged mouth view'}},
+    get diagnostic(){return {...diagnostic}},
     get selected(){return selected},
     update(pixels:Uint8ClampedArray,w:number,h:number) {
-      if(pending){point={x:Math.round(pending.x*w),y:Math.round(pending.y*h)};pending=undefined;template=patch(pixels,w,h,point.x,point.y);return template?{x:point.x/w,y:point.y/h}:undefined;}
+      if(pending){point={x:Math.round(pending.x*w),y:Math.round(pending.y*h)};pending=undefined;template=patch(pixels,w,h,point.x,point.y);diagnostic=template?{state:'tracking',reason:'Selected patch initialized',score:1}:{state:'lost',reason:'Selected patch is too flat or too close to the crop edge; select a clearer edge'};return template?{x:point.x/w,y:point.y/h}:undefined;}
       if(!template||!point)return;
       let best=-1,second=-1,bestPoint=point,bestPatch:Float32Array|undefined;
       const candidates:{score:number;x:number;y:number;values:Float32Array}[]=[];
@@ -37,7 +40,8 @@ export function createTongueTipTracker() {
       }
       for(const c of candidates)if(Math.hypot(c.x-bestPoint.x,c.y-bestPoint.y)>5)second=Math.max(second,c.score);
       // Ambiguous or vanished texture is loss, not permission to jump elsewhere.
-      if(best<.72||best-second<.025||!bestPatch){template=undefined;point=undefined;return;}
+      if(best<.72||best-second<.025||!bestPatch){diagnostic={state:'lost',reason:best<.72?'Patch appearance changed or moved outside the search window': 'Multiple similar patches; tip identity is ambiguous',score:best,margin:best-second};template=undefined;point=undefined;return;}
+      diagnostic={state:'tracking',reason:'Selected surface patch matched; anatomical identity is supplied by your selection',score:best,margin:best-second};
       point=bestPoint;
       // Keep the initial patch identity while allowing modest lighting/shape change.
       let norm=0;for(let i=0;i<template.length;i++){template[i]=template[i]*.95+bestPatch[i]*.05;norm+=template[i]*template[i];}

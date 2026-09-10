@@ -4,10 +4,13 @@ import { createVisionEngine, drawTracking } from '../lib/vision';
 import type { VisionEngine } from '../lib/vision';
 import type { TrackingFrame, TrackingStatus } from '../types';
 import './CameraPanel.css';
+import TongueLab from './TongueLab';
 
 type Props = { active: boolean; onFrame: (frame: TrackingFrame) => void; onStatus: (status: TrackingStatus, message?: string) => void; onStream?: (stream: MediaStream | null) => void };
 
 export default function CameraPanel({ active, onFrame, onStatus, onStream }: Props) {
+  const [labOpen,setLabOpen]=useState(false);
+  const latestFrame=useRef<TrackingFrame|undefined>(undefined);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<VisionEngine | undefined>(undefined);
@@ -38,6 +41,7 @@ export default function CameraPanel({ active, onFrame, onStatus, onStream }: Pro
       callbacks.current.onStatus(next, detail);
     };
     const release = () => {
+      latestFrame.current=undefined;
       cancelAnimationFrame(animation);
       clearTimeout(modelTimeout);
       stream?.getTracks().forEach(track => track.stop());
@@ -79,6 +83,7 @@ export default function CameraPanel({ active, onFrame, onStatus, onStream }: Pro
             if (video.readyState >= 2 && video.currentTime !== lastTime && time - lastTick >= 90) {
               lastTime = video.currentTime; lastTick = time;
               const frame = engine.process(video, time);
+              latestFrame.current=frame;
               setTongueStatus(frame.tongueStatus ?? 'Searching for visible tongue');
               setDepth({ distance: frame.metrics.distanceCm, relative: frame.metrics.relativeDepth, points: frame.face.length + frame.pose.filter(point => (point.visibility ?? 0) >= .5).length });
               const canvas = canvasRef.current;
@@ -125,6 +130,7 @@ export default function CameraPanel({ active, onFrame, onStatus, onStream }: Pro
   };
 
   return <div className="camera-panel">
+    {labOpen&&<TongueLab video={videoRef} frame={latestFrame} select={(x,y)=>engineRef.current?.selectTongueTip(x,y)} close={()=>setLabOpen(false)}/>}
     <div className={`camera-stage ${selectingTip?'selecting-tongue-tip':''}`} onClick={selectTip}>
       <video ref={videoRef} autoPlay muted playsInline aria-label="Your mirrored live webcam" className={active && status !== 'error' ? 'camera-video visible' : 'camera-video'} />
       <canvas ref={canvasRef} className="camera-landmarks" aria-hidden="true" />
@@ -140,6 +146,7 @@ export default function CameraPanel({ active, onFrame, onStatus, onStream }: Pro
       <div className="camera-stage-label"><span className={status === 'tracking' ? 'camera-light live' : 'camera-light'} /> {status === 'tracking' ? 'LIVE CAMERA' : 'CAMERA VIEW'}<span>MIRRORED</span></div>
     </div>
     <div className="camera-depth">
+      <button type="button" onClick={()=>setLabOpen(true)}>Tongue lab · inspect & capture</button>
       <div className="camera-depth-values"><span><small>CAMERA DISTANCE</small><strong>{status === 'tracking' && depth.distance !== undefined ? `~${Math.round(depth.distance / 5) * 5} cm` : '—'}</strong></span><span><small>FROM BASELINE</small><strong>{status === 'tracking' && depth.relative !== undefined ? `${Math.abs(Math.round((depth.relative - 1) * 100))}% ${depth.relative >= 1 ? 'farther' : 'closer'}` : 'Not calibrated'}</strong></span></div>
       <div className="camera-depth-action"><span>{status === 'tracking' ? `${depth.points} visible landmarks` : '478 face + 33 body landmarks'}</span><button type="button" onClick={calibrate} disabled={status !== 'tracking' || depth.distance === undefined}>{status !== 'tracking' || depth.relative === undefined ? 'Set depth baseline' : 'Reset baseline'}</button></div>
       {active && calibration && <p className="camera-calibration-message" role="status">{calibration}</p>}

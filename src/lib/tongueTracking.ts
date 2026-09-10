@@ -76,9 +76,11 @@ export function createTongueTracker() {
   let reference:{x:number;y:number}|undefined;
   let smooth:TongueObservation|undefined;
   const track = (pixels:Uint8ClampedArray,width:number,height:number,face:Landmark[]) => {
-    const observed=detectVisibleTongue(pixels,width,height,face);
+    let observed=detectVisibleTongue(pixels,width,height,face);
     const tip=face.length?tipTracker.update(pixels,width,height):undefined;
     if(!face.length)tipTracker.reset();
+    // A tissue-color gate is not evidence that a selected image point was lost.
+    if(!observed&&tip)observed={x:tip.x,y:tip.y,lateral:0,lift:.5,visibleFraction:0};
     if(!observed){hits=0;smooth=undefined;if(!face.length)reference=undefined;return undefined;}
     hits++;
     observed.trackingMode=tip?'tip':'region';
@@ -99,5 +101,5 @@ export function createTongueTracker() {
     smooth=observed;
     return hits>=2 ? observed : undefined;
   };
-  return Object.assign(track,{selectTip(x:number,y:number){tipTracker.select(x,y);reference=undefined;smooth=undefined;hits=0;},isTipSelected(){return tipTracker.selected},resetMotionReference(){reference=undefined;smooth=undefined;hits=0;}});
+  return Object.assign(track,{diagnostics(){return tipTracker.diagnostic},selectTip(x:number,y:number){tipTracker.select(x,y);reference=undefined;smooth=undefined;hits=0;},isTipSelected(){return tipTracker.selected},resetMotionReference(){reference=undefined;smooth=undefined;hits=0;}});
 }
