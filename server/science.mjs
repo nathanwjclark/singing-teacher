@@ -3,7 +3,7 @@ import {resolve} from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {spawn} from 'node:child_process';
 
-const files=new Set(['tract0.obj','tract0.mtl','tract.svg','geometry.json','manifest.json','fit.json','forecast.json','summary.json']);
+const files=new Set(['space-diff.json','tract0.obj','tract0.mtl','tract.svg','geometry.json','manifest.json','fit.json','forecast.json','summary.json']);
 const types={obj:'text/plain',mtl:'text/plain',svg:'image/svg+xml',json:'application/json'};
 export function scienceRoutes({repo,dataRoot,json}) {
   let running=null,starting=false;

@@ -10,6 +10,7 @@ from singing_physics.engine import Engine, digest, write_json
 from singing_physics.pcm_inverse import FEATURES
 from singing_physics.pcm_design import freeze_pcm_hypotheses
 from singing_physics.service import JobService
+from model_space_diff import pair
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -37,10 +38,11 @@ def run(source, output):
     nuisance=[{'profile_id':f'gain-{gain:g}','trials':{t['id']:{'JA':-3.,'f0_hz':next(x['value'] for x in t['measurement']['measurements'] if x['name']=='pitchHz'),'gain':gain} for t in trials}} for gain in protocol['gains']]
     jobs=[]
     with JobService(output/'jobs',timeout_s=180) as service:
-        def job(operation,parameters):
+        def job(operation,parameters,key=None):
+            key=key or operation
             request={'operation':operation,'parameters':parameters}
-            write_json(output/f'{operation}-request.json',request)
-            ident=service.submit(request,idempotency_key=operation)
+            write_json(output/f'{key}-request.json',request)
+            ident=service.submit(request,idempotency_key=key)
             state=service.wait(ident,timeout_s=185)
             jobs.append({'id':ident,'operation':operation,'status':state['status']})
             if state['status']!='succeeded': raise RuntimeError(f'{operation}: {state["error"]}')
@@ -62,11 +64,14 @@ def run(source, output):
         write_json(output/'forecast.json',forecast)
         forward_id,forward=job('forward',{'pose':'a','anatomy':best['anatomy'],'articulation':{'JA':-3.},'f0_hz':180.,'duration_s':.25})
         directory=output/'jobs/artifacts'/forward_id/'forward'
-        files={}
+        reference_id,_=job('forward',{'pose':'a','anatomy':reference,'articulation':{'JA':-3.},'f0_hz':180.,'duration_s':.25},key='reference-forward')
+        reference_directory=output/'jobs/artifacts'/reference_id/'forward'
+        write_json(output/'space-diff.json',pair(directory,reference_directory))
+        files={'space-diff.json':{'sha256':digest(output/'space-diff.json'),'byteLength':(output/'space-diff.json').stat().st_size}}
         for name in ['tract0.obj','tract0.mtl','tract.svg','geometry.json','manifest.json']:
             raw=(directory/name).read_bytes();(output/name).write_bytes(raw)
             files[name]={'sha256':digest(output/name),'byteLength':len(raw)}
-        summary={'schemaVersion':'local-science-result-1','runId':output.name,'createdAt':now(),'status':'succeeded','source':'verified-human-recording','sourceCaptureId':json.loads((source/'manifest.json').read_text())['capture_id'],'sourceImportSha256':digest(output/'import/native-pcm.json'),'calibrationWindows':len(trials),'eligibleWindows':len(eligible),'jobs':jobs,'nativeCalls':fit['actual_synthesis_calls']+forecast['actual_synthesis_calls']+1,'candidateId':best['candidate_id'],'anatomy':best['anatomy'],'referenceAnatomy':reference,'fitDiscrepancy':best['weighted_mean_square_discrepancy'],'baselineDiscrepancy':fit['fixed_anatomy_baseline']['best']['weighted_mean_square_discrepancy'],'forecast':forecast,'files':files,'anatomyValidated':False,'liveTongueSource':'camera tracking, not scientific-model inference','interpretation':protocol['claim'],'geometryRole':'Native model prediction for a declared a/JA=-3 reference pose; not a measured patient mesh','forecastRole':'Prospective simulator predictions; no later human target scored yet'}
+        summary={'schemaVersion':'local-science-result-1','runId':output.name,'createdAt':now(),'status':'succeeded','source':'verified-human-recording','sourceCaptureId':json.loads((source/'manifest.json').read_text())['capture_id'],'sourceImportSha256':digest(output/'import/native-pcm.json'),'calibrationWindows':len(trials),'eligibleWindows':len(eligible),'jobs':jobs,'nativeCalls':fit['actual_synthesis_calls']+forecast['actual_synthesis_calls']+2,'candidateId':best['candidate_id'],'anatomy':best['anatomy'],'referenceAnatomy':reference,'fitDiscrepancy':best['weighted_mean_square_discrepancy'],'baselineDiscrepancy':fit['fixed_anatomy_baseline']['best']['weighted_mean_square_discrepancy'],'forecast':forecast,'files':files,'anatomyValidated':False,'liveTongueSource':'camera tracking, not scientific-model inference','interpretation':protocol['claim'],'geometryRole':'Native model prediction for a declared a/JA=-3 reference pose; not a measured patient mesh','forecastRole':'Prospective simulator predictions; no later human target scored yet'}
         write_json(output/'summary.json',summary)
         print(json.dumps({'status':'succeeded','runId':output.name,'nativeCalls':summary['nativeCalls'],'jobs':jobs},indent=2))
 
