@@ -92,3 +92,11 @@ test('Astra receives optional visual context with explicit unchanged anatomy sem
  assert.equal(response.status,200);assert.equal(visual.modelUpdated,false);assert.deepEqual(visual.forecasts,[]);
  assert.match(visual.interpretation,/not measured internal anatomy/);
 });
+
+test('optional teaching selection is exact, model-bound and backward compatible',async t=>{
+ const before=process.env.VISUAL_TEACHING_ENABLED;process.env.VISUAL_TEACHING_ENABLED='1';t.after(()=>{if(before===undefined)delete process.env.VISUAL_TEACHING_ENABLED;else process.env.VISUAL_TEACHING_ENABLED=before;});
+ const s=await setup(t,{decide:({input,schema})=>{assert.equal(input.teaching.version,'visual-teaching-1');assert.ok(schema.required.includes('demonstrationId'));assert.deepEqual(schema.properties.cueId.enum,[null]);return {action:'record',experimentId:'a',cue:'Sing a comfortable ah.',explanation:'Compare the current vowel prediction.',demonstrationId:'tongue-jaw-vowels',cueId:null};}});
+ const response=await s.request({requestId:'illustrated'});assert.equal(response.status,200);assert.equal(response.data.teachingVersion,'visual-teaching-1');assert.equal(response.data.decision.demonstrationId,'tongue-jaw-vowels');
+ const bad=await setup(t,{decide:()=>({action:'record',experimentId:'a',cue:'Sing a comfortable ah.',explanation:'Compare.',demonstrationId:'cricothyroid-pitch',cueId:'small-glide'})});
+ assert.equal((await bad.request({requestId:'wrong-cue'})).status,502);assert.equal(bad.commands.length,0);
+});

@@ -1,0 +1,73 @@
+{
+  "version": "visual-teaching-1",
+  "demonstrations": [
+    {
+      "id": "cricothyroid-pitch",
+      "title": "How pitch coordination changes",
+      "mechanism": "The cricothyroid muscle links two laryngeal cartilages: thyroid and cricoid. Their relative motion can separate the vocal-fold attachments and lengthen the folds. Pitch reflects coordinated stiffness, length, effective vibrating mass and pressure, with several muscles involved.",
+      "cues": [
+        {
+          "id": "small-glide",
+          "text": "On an easy “oo,” glide a little higher and back without getting louder.",
+          "notice": "Notice whether the pitch moves easily. A small glide is enough."
+        },
+        {
+          "id": "nearby-note",
+          "text": "Sing an easy “oo,” then a nearby higher note at a comfortable level.",
+          "notice": "Compare the pitch and effort; do not reach for the top of your range."
+        }
+      ]
+    },
+    {
+      "id": "soft-palate-coupling",
+      "title": "The mouth–nose connection",
+      "mechanism": "The velum, or soft palate, helps control the opening to the nasal pathway. Raising it can reduce nasal coupling, changing resonances and cancellations in the sound.",
+      "cues": [
+        {
+          "id": "ng-to-ah",
+          "text": "Gently sustain “ng” as in “sing,” then release to an easy “ah.”",
+          "notice": "Listen for a change in sound and notice the tongue release. Several structures change together."
+        },
+        {
+          "id": "repeat-release",
+          "text": "Repeat one comfortable “ng–ah” and compare it with your previous attempt.",
+          "notice": "Notice the difference without trying to force a particular palate position."
+        }
+      ]
+    },
+    {
+      "id": "tongue-jaw-vowels",
+      "title": "Vowel shape and tone",
+      "mechanism": "Tongue and jaw positions change tract constrictions. These alter which frequencies are reinforced, contributing to vowel differences.",
+      "cues": [
+        {
+          "id": "small-jaw-release",
+          "text": "On an easy “ah,” allow a small jaw release while keeping the note comfortable.",
+          "notice": "Listen for a tone change; keep pitch and level similar if you can."
+        },
+        {
+          "id": "vowel-contrast",
+          "text": "At an easy pitch, alternate a gentle “ee” and “ah.”",
+          "notice": "Compare vowel colour. Your tongue, lips and jaw may all move."
+        }
+      ]
+    },
+    {
+      "id": "source-filter",
+      "title": "Pitch and tone are different controls",
+      "mechanism": "Vocal-fold vibration supplies excitation. The vocal tract filters that sound, emphasizing some frequency regions. In a simplified model, source repetition sets the fundamental frequency and tract shape affects the spectral envelope.",
+      "cues": [
+        {
+          "id": "tone-at-one-note",
+          "text": "Keep an easy note while gently changing “oo” toward “ah.”",
+          "notice": "Listen for tone colour changing even if the note stays similar."
+        },
+        {
+          "id": "pitch-at-one-vowel",
+          "text": "Keep an easy “oo” and try a small pitch glide.",
+          "notice": "Compare a pitch change with the vowel change; neither trial isolates every structure."
+        }
+      ]
+    }
+  ]
+}

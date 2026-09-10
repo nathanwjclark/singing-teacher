@@ -120,7 +120,7 @@ class ScientificHTTPServer(ThreadingHTTPServer):
         if hashlib.sha256(manifest_raw).hexdigest() != self.jobs.status(identity)['manifest_hash']:
             raise RuntimeError('Artifact manifest integrity failure')
         manifest = json.loads(manifest_raw)
-        names = ('tract0.obj', 'tract0.mtl', 'tract.svg', 'geometry.json', 'manifest.json')
+        names = ('tract0.obj', 'tract0.mtl', 'tract.svg', 'geometry.json', 'manifest.json', 'audio.wav')
         files, total = {}, 0
         for name in names:
             path = destination / 'forward' / name
