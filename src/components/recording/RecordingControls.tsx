@@ -3,6 +3,7 @@ import { chooseRecordingMime, describeTrack, finishRecording, recordingTracks } 
 import type { Ref } from 'react'
 import type { FinishedRecording, RecordingManifest } from '../../lib/recording'
 import './RecordingControls.css'
+import { RecordedPitch } from './RecordedPitch'
 
 export interface RecordingController { start: () => void; stop: () => Promise<FinishedRecording> }
 interface Props {
@@ -137,6 +138,7 @@ export function RecordingControls({ videoStream, audioStream, profileId = 'local
         {result.manifest.tracks.some(track => track.kind === 'video') ? <video src={mediaUrl} controls playsInline /> : <audio src={mediaUrl} controls />}
         <p>{Math.round(result.manifest.observedDurationMs / 1000)} seconds · {(result.blob.size / 1024 / 1024).toFixed(1)} MB · Stored in this tab until replaced or closed.</p>
         <div className="recording-downloads"><a href={mediaUrl} download={result.filename}>Download recording</a><a href={manifestUrl} download={`${result.manifest.id}.json`}>Download manifest</a></div>
+        <RecordedPitch key={result.manifest.id} recording={result} />
         <p className="recording-note">Browser audio/video capture. Sensor timestamps, measured depth and camera calibration are unavailable; synchronization uncertainty is unknown. Keep both downloads together for replay and analysis.</p>
       </section>
     </div>}

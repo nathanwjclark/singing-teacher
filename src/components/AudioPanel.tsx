@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Mic, Square, AudioLines } from 'lucide-react';
-import { analyzeAudioFrame, serializeAudioMeasurement, pitchToNote } from '../lib/audio';
+import { analyzeAudioFrame, serializeAudioMeasurement, pitchToNote, audioFrameSize, pitchStatus } from '../lib/audio';
 import type { AudioMetrics } from '../lib/audio';
 import { AmbientCalibrator } from '../lib/audioCalibration';
 import type { AudioCalibration } from '../lib/audioCalibration';
@@ -57,7 +57,7 @@ function drawHistory(canvas: HTMLCanvasElement | null, history: Point[], now: nu
     if (x < 0 || value === null) { connected = false; continue; }
     const y = 2 + (1 - Math.max(0, Math.min(1, (value - min) / (max - min)))) * (height - 4);
     if (connected && point.time - previousTime < 0.4) ctx.lineTo(x, y);
-    else ctx.moveTo(x, y);
+    else { ctx.moveTo(x - 0.7, y); ctx.lineTo(x, y); }
     connected = true;
     previousTime = point.time;
   }
@@ -89,6 +89,7 @@ function drawWave(canvas: HTMLCanvasElement | null, wave: Float32Array, active: 
 export function AudioPanel({ demo = false, autoStart = false, externalStream = null, onStream, onMeasurement }: AudioPanelProps) {
   const [status, setStatus] = useState<AudioStatus>('idle');
   const [error, setError] = useState('');
+  const [inputDescription, setInputDescription] = useState('');
   const [metrics, setMetrics] = useState<AudioMetrics>(EMPTY);
   const [calibration, setCalibration] = useState<AudioCalibration | null>(null);
   const calibrator = useRef(new AmbientCalibrator());
@@ -151,11 +152,13 @@ export function AudioPanel({ demo = false, autoStart = false, externalStream = n
         return;
       }
       const analyser = acquiredContext.createAnalyser();
-      analyser.fftSize = 4096;
+      analyser.fftSize = audioFrameSize(acquiredContext.sampleRate);
+      waveform.current = new Float32Array(analyser.fftSize);
       analyser.smoothingTimeConstant = 0;
       const source = acquiredContext.createMediaStreamSource(acquiredStream);
       source.connect(analyser); // Deliberately never connect to the audio destination.
       resources.current = { owned: !externalStream, clockId: `audio-${crypto.randomUUID()}`, startedMs: performance.now(), deviceKey: JSON.stringify(acquiredStream.getAudioTracks().map(track => [track.id, track.getSettings()])), stream: acquiredStream, context: acquiredContext, source, analyser };
+      setInputDescription(`${acquiredStream.getAudioTracks()[0]?.label || (externalStream ? 'Phone microphone' : 'Microphone')} · ${acquiredContext.sampleRate / 1000} kHz`);
       calibrator.current = new AmbientCalibrator();
       setCalibration(null);
       callbacks.current.onStream?.(acquiredStream);
@@ -241,18 +244,23 @@ export function AudioPanel({ demo = false, autoStart = false, externalStream = n
         } else if (live && live.context.state === 'running') {
           live.analyser.getFloatTimeDomainData(waveform.current);
           if (now - lastSample >= 0.1) {
-            latest = analyzeAudioFrame(waveform.current, live.context.sampleRate);
-            const deviceKey = JSON.stringify(live.stream.getAudioTracks().map(track => [track.id, track.getSettings()]));
-            if (deviceKey !== live.deviceKey) { calibrator.current = new AmbientCalibrator(); live.deviceKey = deviceKey; }
-            const ambient = calibrator.current.update(latest, waveform.current, ms);
-            setCalibration(ambient);
-            const settings = live.stream.getAudioTracks()[0]?.getSettings();
-            callbacks.current.onMeasurement?.(serializeAudioMeasurement(latest, waveform.current.length, live.context.sampleRate, {
-              id: `${live.clockId}-${sequence++}`, observationId: live.clockId, artifactId: `${live.clockId}-unrecorded-pcm`,
-              startMs: Math.max(0, ms - live.startedMs - waveform.current.length / live.context.sampleRate * 1000),
-              timebase: { clockId: live.clockId, origin: 'session-start', unit: 'ms', syncUncertaintyMs: null, referenceClockId: null, offsetToReferenceMs: null },
-              calibration: ambient, qualityFlags: ['live-preview-not-recorded', 'analysis-poll-timestamp', ...(externalStream ? ['remote-input-latency-unknown'] : []), ...(settings?.autoGainControl || settings?.noiseSuppression || settings?.echoCancellation ? ['device-audio-processing-enabled'] : [])],
-            }));
+            try {
+              latest = analyzeAudioFrame(waveform.current, live.context.sampleRate);
+              const deviceKey = JSON.stringify(live.stream.getAudioTracks().map(track => [track.id, track.getSettings()]));
+              if (deviceKey !== live.deviceKey) { calibrator.current = new AmbientCalibrator(); live.deviceKey = deviceKey; }
+              const ambient = calibrator.current.update(latest, waveform.current, ms);
+              setCalibration(ambient);
+              const settings = live.stream.getAudioTracks()[0]?.getSettings();
+              callbacks.current.onMeasurement?.(serializeAudioMeasurement(latest, waveform.current.length, live.context.sampleRate, {
+                id: `${live.clockId}-${sequence++}`, observationId: live.clockId, artifactId: `${live.clockId}-unrecorded-pcm`,
+                startMs: Math.max(0, ms - live.startedMs - waveform.current.length / live.context.sampleRate * 1000),
+                timebase: { clockId: live.clockId, origin: 'session-start', unit: 'ms', syncUncertaintyMs: null, referenceClockId: null, offsetToReferenceMs: null },
+                calibration: ambient, qualityFlags: ['live-preview-not-recorded', 'analysis-poll-timestamp', ...(externalStream ? ['remote-input-latency-unknown'] : []), ...(settings?.autoGainControl || settings?.noiseSuppression || settings?.echoCancellation ? ['device-audio-processing-enabled'] : [])],
+              }));
+            } catch (cause) {
+              latest = EMPTY;
+              setError(`Audio analysis failed: ${cause instanceof Error ? cause.message : String(cause)}`);
+            }
           }
         } else {
           waveform.current.fill(0);
@@ -312,11 +320,11 @@ export function AudioPanel({ demo = false, autoStart = false, externalStream = n
           <div className="audio-chart-title"><h3>Waveform</h3><span>{active ? 'LIVE SNAPSHOT' : 'READY WHEN YOU ARE'}</span></div>
           <div className="audio-wave-surface"><canvas ref={waveCanvas} role="img" aria-label="Current microphone waveform. Display amplitude is automatically scaled." />{!active && <span className="audio-wave-placeholder">A little space to hear yourself.</span>}</div>
           <div className="audio-axis"><span>0 ms</span><span>{windowMs} ms · auto-scale</span></div>
-          <p className="audio-chart-caption">{demo ? 'Illustrative wave and histories. No microphone access.' : 'The actual sound wave from your microphone.'}</p>
+          <p className="audio-chart-caption">{demo ? 'Illustrative wave and histories. No microphone access.' : active && inputDescription ? inputDescription : 'The actual sound wave from your microphone.'}</p>
         </article>
         <div className="audio-histories">
           <article className="audio-history-card audio-history-card--pitch">
-            <div className="audio-chart-title"><h3><i />Pitch <span>A4 = 440</span></h3><strong>{note ? `${note.name}${note.octave}` : '—'} <small>{note ? `${note.cents > 0 ? '+' : ''}${note.cents}¢ · ${Math.round(metrics.pitchHz!)} Hz` : 'note · Hz'}</small></strong></div>
+            <div className="audio-chart-title"><h3><i />Pitch <span>A4 = 440</span></h3><strong>{note ? `${note.name}${note.octave}` : '—'} <small>{note ? `${note.cents > 0 ? '+' : ''}${note.cents}¢ · ${Math.round(metrics.pitchHz!)} Hz` : active ? pitchStatus(metrics) : 'note · Hz'}</small></strong></div>
             <div className="audio-history-surface"><div className="audio-y-axis audio-note-axis"><span>C6</span><span>C4</span><span>C2</span></div><canvas ref={pitchCanvas} role="img" aria-label="Trailing 25 seconds of detected pitch on a musical note scale from C2 to C sharp 6. Notes and cents use A4 equals 440 Hz. Gaps mean no reliable pitch." /></div>
             <div className="audio-axis audio-time-axis"><span>−25 s</span><span>now</span></div>
           </article>

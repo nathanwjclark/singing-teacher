@@ -32,3 +32,30 @@ test('ambient calibration waits for quiet windows, does not absorb singing, and 
   const clipped = new Float32Array(4096).fill(1);
   assert.equal(calibrator.update(analyzeAudioFrame(clipped, 48000), clipped, 6200).clipping, true);
 });
+
+test('pitch spans the advertised voice range at device rates including 192 kHz', async () => {
+  const { audioFrameSize } = await import('./audio.ts');
+  for (const rate of [44100, 48000, 96000, 192000]) {
+    for (const hz of [65, 80, 110, 220, 440, 880, 1100]) {
+      const pcm = Float32Array.from({ length: audioFrameSize(rate) }, (_, i) => .2 * Math.sin(i / rate * hz * Math.PI * 2));
+      const measured = analyzeAudioFrame(pcm, rate);
+      assert.notEqual(measured.pitchHz, null, `${hz} Hz at ${rate} Hz`);
+      assert.ok(Math.abs(measured.pitchHz! - hz) < 2, `${hz} Hz at ${rate} Hz: ${measured.pitchHz}`);
+    }
+  }
+});
+test('recorded pitch windows preserve sub-second note changes and silent gaps', async () => {
+  const { recordingAudioWindows } = await import('./recordingMeasurements.ts');
+  const rate = 48000;
+  const pcm = Float32Array.from({ length: rate * 2 }, (_, i) => {
+    const hz = [220, 440, 0, 330][Math.floor(i / (rate / 2))];
+    return hz ? .2 * Math.sin(i / rate * hz * Math.PI * 2) : 0;
+  });
+  const rows = [...recordingAudioWindows(pcm, rate)].map(window => ({ time: window.startMs, pitch: analyzeAudioFrame(window.waveform, rate).pitchHz }));
+  assert.equal(rows.length, 20);
+  for (const [time, expected] of [[200, 220], [700, 440], [1200, null], [1700, 330]] as const) {
+    const result = rows.find(row => row.time === time)!;
+    if (expected === null) assert.equal(result.pitch, null);
+    else assert.ok(Math.abs(result.pitch! - expected) < 2);
+  }
+});

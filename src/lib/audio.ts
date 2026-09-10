@@ -36,7 +36,7 @@ export function detectPitch(waveform: Float32Array, sampleRate: number): { pitch
   }
   if (energy / samples.length < 1e-6) return { pitchHz: null, periodicity: null };
   const minLag = Math.max(2, Math.floor(rate / 1100));
-  const maxLag = Math.min(Math.ceil(rate / 65), Math.floor(samples.length / 2));
+  const maxLag = Math.min(Math.ceil(rate / 65) + 1, Math.floor((samples.length - 2) / 2));
   const window = samples.length - maxLag - 1;
   if (maxLag <= minLag || window < maxLag) return { pitchHz: null, periodicity: null };
   const normalized = new Float32Array(maxLag + 1);
@@ -82,7 +82,8 @@ export function detectPitch(waveform: Float32Array, sampleRate: number): { pitch
   const denominator = left - 2 * center + right;
   const shift = Math.abs(denominator) > 1e-9 ? Math.max(-0.5, Math.min(0.5, 0.5 * (left - right) / denominator)) : 0;
   const pitchHz = rate / (trough + shift);
-  return { pitchHz: pitchHz >= 65 && pitchHz <= 1100 ? pitchHz : null, periodicity };
+  // Allow the small interpolation error at the two advertised range boundaries.
+  return { pitchHz: pitchHz >= 64.5 && pitchHz <= 1105 ? Math.max(65, Math.min(1100, pitchHz)) : null, periodicity };
 }
 
 /** Power-weighted spectral descriptors from 80 Hz to 10 kHz, gated below -60 dBFS. */
@@ -117,7 +118,20 @@ export function analyzeAudio(waveform: Float32Array, spectrumDb: Float32Array, s
 }
 
 
-export const AUDIO_EXTRACTOR_VERSION = '1.0.0';
+export const AUDIO_EXTRACTOR_VERSION = '1.1.0';
+/** Keep at least 85 ms of PCM at every device rate, including 96/192 kHz interfaces. */
+export function audioFrameSize(sampleRate: number): number {
+  if (!Number.isFinite(sampleRate) || sampleRate <= 0) throw new Error('Invalid sample rate.');
+  return Math.min(32768, Math.max(2048, 2 ** Math.ceil(Math.log2(sampleRate * 0.085))));
+}
+export function pitchStatus(metrics: AudioMetrics): string {
+  if (metrics.dbfs < -60) return 'Too quiet for pitch';
+  if (metrics.pitchHz !== null) return 'Pitch detected';
+  return metrics.periodicity !== null && metrics.periodicity >= 0.85
+    ? 'Periodic sound · outside pitch range or ambiguous harmonics'
+    : 'No stable pitch · sustain one vowel';
+}
+
 /** Same PCM/Blackman spectrum path for live, recorded and engine-generated audio.
  * No temporal spectral smoothing; captures the current window only.
  * Window convention: https://www.w3.org/TR/webaudio/#blackman-window
