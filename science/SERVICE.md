@@ -23,6 +23,11 @@ Requests contain `operation` and `parameters`. Supported operations:
   cue/version/context/mode and a native call cap.
 - `condition_prediction`: a frozen prospective artifact plus separately timestamped
   post-capture execution evidence. It produces a new conditional artifact and job.
+- `fit_frozen_control`: estimates per-frame articulation against one explicitly
+  frozen anatomy candidate; it does not update anatomy.
+- `rank_interventions`: scores predeclared named simulator poses against a finite
+  frozen hypothesis set. Its separation score is a declared heuristic, not a
+  posterior or significance test.
 
 Optional `session_id` and `model_id` must occur together. Register the current
 model using `register_model`. Stale requests are rejected; model changes during

@@ -168,12 +168,12 @@ B retains public schemas, canonical acoustic extraction and independent release 
 
 | ID | Owner / branch | Acceptance experiment | Status |
 |---|---|---|---|
-| IDENT-01 | a_prediction / codex/a-identifiability | Freeze competing physical hypotheses; rank supported simulator experiments under declared noise; score only after ranking is saved | running |
-| SEP-01 | a_forward / codex/a-joint-recovery | Predeclared multi-anatomy, varying-articulation recovery matrix with equal-budget baseline and held-out conditional predictions | running |
-| UNC-01 | a_scientific_review / codex/a-mismatch-uncertainty | Repeated clean/omitted-geometry fits; compare errors, residuals and candidate spread without posterior claims | running |
-| MOT-03 | a_inverse / codex/a-frozen-control | Single-vowel trajectory reconstruction with immutable anatomy, disjoint evidence, bounded JA search and real-native tests | running |
-| SVC-02 | A coordinator / codex/a-research-service | Durable jobs and replay for new supported scientific operations, model binding and failure checks | running |
-| REVIEW-02 | a_geometry; independent review | Evidence identity, timing, missing geometry and control lineage audit | running |
+| IDENT-01 | a_prediction / codex/a-identifiability | Freeze competing physical hypotheses; rank supported simulator experiments under declared noise; score only after ranking is saved | implemented; synthetic challenge completed |
+| SEP-01 | a_forward / codex/a-joint-recovery | Predeclared multi-anatomy, varying-articulation recovery matrix with equal-budget baseline and held-out conditional predictions | implemented; 4 cases scored, all acceptance checks false |
+| UNC-01 | a_scientific_review / codex/a-mismatch-uncertainty | Repeated clean/omitted-geometry fits; compare errors, residuals and candidate spread without posterior claims | implemented; 6 cases completed, no calibrated-posterior claim |
+| MOT-03 | a_inverse / codex/a-frozen-control | Single-vowel trajectory reconstruction with immutable anatomy, disjoint evidence, bounded JA search and real-native tests | implemented; service wiring and tests pending |
+| SVC-02 | A coordinator / codex/a-research-service | Durable jobs and replay for new supported scientific operations, model binding and failure checks | implemented; full suite passed |
+| REVIEW-02 | a_geometry; independent review | Evidence identity, timing, missing geometry and control lineage audit | review found a held-out geometry identity gap in direct joint path; fix pending |
 
 Research failures and exhausted optimization budgets remain in every report.
 These investigations do not replace B's evaluator or demonstrate human anatomy
