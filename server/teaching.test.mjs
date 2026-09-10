@@ -5,6 +5,28 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {createTeachingRoutes} from './teaching.mjs';
 
+test('prepare reserves the operation before reading a delayed body and releases on return or failure',async()=>{
+ const root=await mkdtemp(join(tmpdir(),'teaching-concurrency-'));const replies=new Map();
+ const route=createTeachingRoutes({repo:process.cwd(),dataRoot:root,enabled:true,json:(response,code,body)=>replies.set(response,{code,body})});
+ const base={method:'POST',headers:{host:'localhost'},socket:{remoteAddress:'127.0.0.1'}};
+ let release;const gate=new Promise(resolve=>{release=resolve});
+ const body=Buffer.from(JSON.stringify({demonstrationId:'soft-palate-coupling',modelId:'m',designId:'d'}));
+ try{
+  const first=route({...base,async *[Symbol.asyncIterator](){await gate;yield body;}},'first',new URL('http://localhost/api/teaching/prepare'));
+  await route({...base,async *[Symbol.asyncIterator](){throw Error('Busy request body must not be read');}},'second',new URL('http://localhost/api/teaching/prepare'));
+  assert.equal(replies.get('second').code,409);assert.match(replies.get('second').body.error,/already running/);
+  // A separate failed read-only request must not release another request's reservation.
+  await route({...base,method:'GET'},'asset',new URL('http://localhost/api/teaching/asset?attempt=teaching-abcd&name=before-tract.svg'));
+  await route({...base,async *[Symbol.asyncIterator](){yield body;}},'third',new URL('http://localhost/api/teaching/prepare'));
+  assert.equal(replies.get('third').code,409);
+  release();await first;assert.equal(replies.get('first').body.status,'educational-only');
+  await route({...base,async *[Symbol.asyncIterator](){yield Buffer.from('{');}},'invalid',new URL('http://localhost/api/teaching/prepare'));
+  assert.equal(replies.get('invalid').code,409);
+  await route({...base,async *[Symbol.asyncIterator](){yield body;}},'retry',new URL('http://localhost/api/teaching/prepare'));
+  assert.equal(replies.get('retry').body.status,'educational-only');
+ }finally{release();await rm(root,{recursive:true,force:true});}
+});
+
 test('teaching disabled and educational-only modes never invent personalized assets',async()=>{
  const root=await mkdtemp(join(tmpdir(),'teaching-test-'));let reply;
  const json=(_,code,body)=>{reply={code,body}};

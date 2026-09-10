@@ -49,6 +49,7 @@ export function createTeachingRoutes({repo,dataRoot,json,enabled=process.env.VIS
  return async(req,res,url)=>{
   if(!url.pathname.startsWith('/api/teaching/'))return false;
   const host=req.headers.host,address=req.socket.remoteAddress?.replace(/^::ffff:/,'');if(!['127.0.0.1','::1'].includes(address)||!/^((localhost|127\.0\.0\.1)|\[::1\])(:\d+)?$/.test(host||'')||(req.headers.origin&&!['http://'+host,'https://'+host].includes(req.headers.origin))){json(res,403,{error:'Use teaching from the local app'});return true;}
+  let reserved=false,launched=false;
   try{
    if(req.method==='GET'&&url.pathname==='/api/teaching/status'){json(res,200,await status());return true;}
    if(req.method==='GET'&&url.pathname==='/api/teaching/asset'){
@@ -60,17 +61,19 @@ export function createTeachingRoutes({repo,dataRoot,json,enabled=process.env.VIS
    if(req.method!=='POST'||url.pathname!=='/api/teaching/prepare'){json(res,405,{error:'Method not allowed'});return true;}
    if(!enabled){json(res,200,await status());return true;}
    if(running){json(res,409,{error:'Teaching export is already running'});return true;}
+   running=true;reserved=true;
    const chunks=[];let length=0;for await(const chunk of req){length+=chunk.length;if(length>2048)throw Error('Teaching request too large');chunks.push(chunk);}
    const request=JSON.parse(Buffer.concat(chunks).toString());if(Object.keys(request).sort().join(',')!=='demonstrationId,designId,modelId'||!['cricothyroid-pitch','soft-palate-coupling','tongue-jaw-vowels','source-filter'].includes(request.demonstrationId))throw Error('Unsupported teaching request');
    if(request.demonstrationId!=='tongue-jaw-vowels'){json(res,200,{status:'educational-only',demonstrationId:request.demonstrationId,reason:'This mechanism has general educational support; no personalized operator is available'});return true;}
    const c=await context();if(!isCurrent(c,{...request,runId:c.runId,sessionId:c.sessionId}))throw Error('A current committed recording design is required');
    const prior=await status();if(prior.current&&prior.result?.designId===request.designId&&prior.result?.modelId===request.modelId&&prior.result?.capabilities.synthesis.available===audioEnabled){json(res,200,prior);return true;}
-   running=true;const attempt='teaching-'+randomUUID(),output=resolve(dataRoot,'teaching-attempts',attempt);await mkdir(output,{recursive:true,mode:0o700});await save(resolve(output,'request.json'),request);
+   const attempt='teaching-'+randomUUID(),output=resolve(dataRoot,'teaching-attempts',attempt);await mkdir(output,{recursive:true,mode:0o700});await save(resolve(output,'request.json'),request);
    const record={status:'running',attemptId:attempt};await save(index,record);
    const args=[resolve(repo,'science/scripts/app_teaching.py'),'--data-root',dataRoot,'--output',output,'--request',resolve(output,'request.json'),...(audioEnabled?['--audio']:[])];
-   child=spawn(process.env.SINGING_PYTHON||resolve(repo,'science/.venv/bin/python'),args,{cwd:repo,env:{...process.env,PYTHONPATH:repo+':'+resolve(repo,'science/src')},stdio:['ignore','ignore','ignore']});
-   const timer=setTimeout(()=>child?.kill('SIGTERM'),120000);child.once('error',()=>{});child.once('close',async code=>{clearTimeout(timer);try{const result=code===0?await read(resolve(output,'result.json')):null;await save(index,{...record,status:result?'succeeded':'failed',...(result?{result}:{reason:'Optional teaching export unavailable; text coaching remains available'})});}catch{console.error('Teaching completion could not be saved');}finally{running=false;child=null;}});
+   const launchedChild=spawn(process.env.SINGING_PYTHON||resolve(repo,'science/.venv/bin/python'),args,{cwd:repo,env:{...process.env,PYTHONPATH:repo+':'+resolve(repo,'science/src')},stdio:['ignore','ignore','ignore']});
+   child=launchedChild;launched=true;
+   const timer=setTimeout(()=>launchedChild.kill('SIGTERM'),120000);launchedChild.once('error',()=>{});launchedChild.once('close',async code=>{clearTimeout(timer);try{const result=code===0?await read(resolve(output,'result.json')):null;await save(index,{...record,status:result?'succeeded':'failed',...(result?{result}:{reason:'Optional teaching export unavailable; text coaching remains available'})});}catch{console.error('Teaching completion could not be saved');}finally{if(child===launchedChild){running=false;child=null;}}});
    json(res,202,record);return true;
-  }catch{if(!child)running=false;json(res,409,{error:'Teaching comparison unavailable or stale; refresh the current recording decision'});return true;}
+  }catch{json(res,409,{error:'Teaching comparison unavailable or stale; refresh the current recording decision'});return true;}finally{if(reserved&&!launched)running=false;}
  };
 }
