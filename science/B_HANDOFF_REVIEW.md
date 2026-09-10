@@ -173,3 +173,59 @@ Readiness: the reviewed PCM/KIT paths are suitable for the declared conditional
 synthetic/hypothesis workflow after root integration checks. Scalar-record source
 authenticity, model identifiability, microphone-response calibration and actual
 phone/human acceptance remain separate unresolved requirements.
+
+## Native LPCM bridge review
+
+Reviewed `science/scripts/import_native_pcm.ts` and its complete test file in
+`codex/a-native-pcm`, including the clipping-threshold change in `extract_pcm.ts`.
+The bridge calls B's actual native package verifier and canonical audio extractor;
+it does not substitute a new feature implementation. Supported ASBD encodings are
+explicit interleaved little-endian float32 and signed PCM16 at 44.1/48/96 kHz.
+PCM16 is divided by 32768 without normalization. Unsupported flags, inconsistent
+byte widths, nonfinite samples, duration inconsistencies and changed input hashes
+are rejected. Unknown audio/video synchronization stays unknown.
+
+Concrete review findings, in priority order:
+
+1. **Timing correctness, fixed by owner:** individually tolerated fractional
+   sample gaps could accumulate while the output segment claimed a contiguous
+   sample-index clock. The importer now compares each chunk start against the
+   entire current segment's expected time and cuts when deviation exceeds one
+   quarter sample. The regression accumulates 0.2-sample gaps and verifies cuts.
+2. **Source replay completeness, fixed by owner:** splitting one source chunk at
+   five seconds previously omitted its original sample offset in the binding.
+   `source_sample_offset` now records the exact slice; a six-second chunk test
+   verifies offsets 0 and 240000 at 48 kHz.
+3. **CLI optional argument handling, fixed in `a387bf6`:** the development
+   fixture flag could not be supplied without the optional pose. Parsing now
+   removes the trailing flag independently; a real CLI subprocess regression
+   verifies fixture provenance and absent automatic fit options without a pose.
+
+Independent command on the reviewed worktree:
+
+```sh
+node --experimental-strip-types --test science/scripts/import_native_pcm.test.ts
+```
+
+All eight tests passed independently after `a387bf6` (397 ms rounded). They
+exercise real package hashing,
+LPCM decoding, canonical extraction, private exclusive output writes, gap/drop
+segmentation, source offsets, short-window fit eligibility and clipping flags.
+Software fixtures are explicitly declared `development-fixture`, including the
+nested source observation. These tests do not establish actual device acceptance.
+
+No-stubs audit: no TODO, FIXME, placeholder, dummy, fake or stub implementation
+was found in the bridge or its test file. Synthetic PCM is confined to explicitly
+labeled development tests. Wiring audit: both the exported API and CLI execute
+B's verifier/extractor and serialize validated records plus derived media. The
+returned `fit_trial_options` are selectable inputs, not automatic fitting or
+independent trials; selecting calibration windows and candidates remains an
+explicit caller step. No automatic fit connection is claimed. Minimality audit:
+no dependency was added, and existing contract/extractor code is reused. The
+second selected-artifact read deliberately verifies that bytes did not change
+since package validation; it is not redundant evidence of device authenticity.
+
+No remaining scientific blocker was found in this bounded importer. Root must
+still run its integrated service replay and overall checks. Physical capture,
+room/microphone calibration, depth rectification, head registration and measured
+cross-modal timing remain separate acceptance requirements.
