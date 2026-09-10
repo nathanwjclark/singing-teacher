@@ -26,3 +26,7 @@ dist-ssr
 # Browser test artifacts
 /test-results/
 /playwright-report/
+
+# Local participant captures and private HTTPS keys
+.local-data/
+.local-certs/

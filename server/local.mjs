@@ -1,0 +1,55 @@
+import http from 'node:http';
+import https from 'node:https';
+import {readFile,writeFile,mkdir} from 'node:fs/promises';
+import {randomBytes,randomUUID,timingSafeEqual} from 'node:crypto';
+import {resolve,extname} from 'node:path';
+
+const port=Number(process.env.PORT||5173),host=process.env.HOST||'127.0.0.1';
+const root=resolve(import.meta.dirname,'../dist'),dataRoot=resolve(process.env.LOCAL_DATA_DIR||'.local-data');
+const sessions=new Map();
+const mime={'.html':'text/html','.js':'text/javascript','.css':'text/css','.json':'application/json','.png':'image/png','.svg':'image/svg+xml','.bin':'application/octet-stream','.md':'text/plain','.wasm':'application/wasm'};
+const json=(res,status,body)=>{res.writeHead(status,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify(body))};
+const equal=(a,b)=>typeof a==='string'&&a.length===b.length&&timingSafeEqual(Buffer.from(a),Buffer.from(b));
+async function body(req){let size=0;const chunks=[];for await(const chunk of req){size+=chunk.length;if(size>12*1024*1024)throw Object.assign(Error('Request too large'),{status:413});chunks.push(chunk)}try{return JSON.parse(Buffer.concat(chunks).toString()||'{}')}catch{throw Object.assign(Error('Invalid JSON'),{status:400})}}
+function phoneBase(value){if(!value)return null;const u=new URL(value);if(u.protocol!=='https:'||u.username||u.password||['localhost','127.0.0.1','::1','[::1]'].includes(u.hostname))throw Object.assign(Error('Use a phone-reachable trusted HTTPS URL, not localhost'),{status:400});return u.origin}
+const serverHandler=async(req,res)=>{try{
+  const url=new URL(req.url,'http://localhost');
+  // Refuse cross-origin browser writes; pairing tokens authorize phone routes.
+  if(req.method==='POST'&&req.headers.origin&&new URL(req.headers.origin).host!==req.headers.host)return json(res,403,{error:'Cross-origin write refused'});
+  if(url.pathname==='/api/status')return json(res,200,{local:true,https:!!process.env.HTTPS_CERT,phoneBaseUrl:process.env.PHONE_BASE_URL||null,engineAvailable:false});
+  if(url.pathname==='/api/pair'&&req.method==='POST'){
+    const remote=req.socket.remoteAddress;
+    if(!['127.0.0.1','::1','::ffff:127.0.0.1'].includes(remote))return json(res,403,{error:'Create pairing from this computer'});
+    const input=await body(req),base=phoneBase(input.baseUrl||process.env.PHONE_BASE_URL);
+    const sessionId=randomUUID(),token=randomBytes(24).toString('hex');
+    const session={sessionId,token,createdAt:new Date().toISOString(),expiresAt:Date.now()+12*3600_000,snapshots:[],signals:[],sequence:0};sessions.set(sessionId,session);
+    return json(res,201,{sessionId,token,pairUrl:base?`${base}/phone?session=${sessionId}&token=${token}`:'',secure:!!base,connectionHint:base?'Phone and computer must reach this HTTPS address.':'Set a phone-reachable trusted HTTPS URL. No public server is required on the same Wi-Fi.'});
+  }
+  const route=/^\/api\/pair\/([a-zA-Z0-9-]+)(?:\/(snapshots|signals))?$/.exec(url.pathname);
+  if(route){const session=sessions.get(route[1]);if(!session||session.expiresAt<Date.now())return json(res,404,{error:'Pairing expired. Create a new QR code.'});
+    const token=url.searchParams.get('token')||req.headers.authorization?.replace(/^Bearer /,'');if(!equal(token,session.token))return json(res,403,{error:'Invalid pairing token'});
+    const summary=()=>({sessionId:session.sessionId,createdAt:session.createdAt,snapshotCount:session.snapshots.length,snapshots:session.snapshots});
+    if(!route[2]&&req.method==='GET')return json(res,200,summary());
+    if(route[2]==='signals'){
+      if(req.method==='GET'){const role=url.searchParams.get('role'),after=Number(url.searchParams.get('after')||0);if(!['desktop','phone'].includes(role))return json(res,400,{error:'Invalid role'});return json(res,200,{messages:session.signals.filter(m=>m.from!==role&&m.id>after).map(({id,signal})=>({id,signal}))})}
+      if(req.method==='POST'){const input=await body(req);if(!['desktop','phone'].includes(input.from)||!input.signal||JSON.stringify(input.signal).length>100_000)return json(res,400,{error:'Invalid signal'});session.signals.push({id:++session.sequence,from:input.from,signal:input.signal});session.signals=session.signals.slice(-200);return json(res,201,{ok:true})}
+    }
+    if(route[2]==='snapshots'&&req.method==='POST'){
+      const input=await body(req);const match=/^data:image\/(jpeg|png);base64,([A-Za-z0-9+/=]+)$/.exec(input.imageDataUrl||'');if(!match||typeof input.stepId!=='string')return json(res,400,{error:'Expected a captured JPEG/PNG image and step ID'});
+      const id=randomUUID(),dir=resolve(dataRoot,'captures',session.sessionId);await mkdir(dir,{recursive:true});const file=`${id}.${match[1]==='jpeg'?'jpg':'png'}`;await writeFile(resolve(dir,file),Buffer.from(match[2],'base64'));
+      const snapshot={id,stepId:input.stepId,capturedAt:input.capturedAt,width:input.width,height:input.height,landmarks:input.landmarks,source:'phone-rgb',depth:{available:false,reason:'Browser capture does not expose measured hardware depth'},file};
+      await writeFile(resolve(dir,`${id}.json`),JSON.stringify(snapshot,null,2));session.snapshots.push(snapshot);return json(res,201,{snapshot,...summary()});
+    }
+    return json(res,405,{error:'Method not allowed'});
+  }
+  if(url.pathname.startsWith('/api/'))return json(res,404,{error:'Unknown API route'});
+  if(req.method!=='GET'&&req.method!=='HEAD')return json(res,405,{error:'Method not allowed'});
+  let file=resolve(root,'.'+decodeURIComponent(url.pathname));if(file!==root&&!file.startsWith(root+'/'))return json(res,403,{error:'Invalid path'});
+  if(!extname(file))file=resolve(root,'index.html');
+  let content;try{content=await readFile(file)}catch{return json(res,404,{error:'File not found. Run npm run build first.'})}
+  res.writeHead(200,{'Content-Type':mime[extname(file)]||'application/octet-stream','Cache-Control':extname(file)==='.html'?'no-cache':'public, max-age=300','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer'});res.end(req.method==='HEAD'?undefined:content);
+}catch(error){json(res,error.status||500,{error:error.status?error.message:'Local request failed'});if(!error.status)console.error(error.message)}};
+await mkdir(dataRoot,{recursive:true});
+const server=process.env.HTTPS_CERT&&process.env.HTTPS_KEY?https.createServer({cert:await readFile(process.env.HTTPS_CERT),key:await readFile(process.env.HTTPS_KEY)},serverHandler):http.createServer(serverHandler);
+server.listen(port,host,()=>console.log(`Local singing teacher: ${process.env.HTTPS_CERT?'https':'http'}://${host}:${port}`));
+setInterval(()=>{for(const [id,s] of sessions)if(s.expiresAt<Date.now())sessions.delete(id)},60_000).unref();
