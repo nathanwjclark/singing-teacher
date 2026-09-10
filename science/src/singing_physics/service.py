@@ -6,6 +6,7 @@ belongs to the shared contract handoff, not an invented parallel wire protocol.
 from __future__ import annotations
 
 import hashlib
+import signal
 import os
 from contextlib import contextmanager
 import json
@@ -37,13 +38,14 @@ def connect(root):
 
 def _worker(root, job_id, parent_pid, timeout_s):
     """Only this subprocess owns a native Engine. Parent owns scheduling."""
+    os.setsid()  # Isolate optional extractor subprocesses in this disposable job group.
     def watchdog():
         deadline = time.monotonic() + timeout_s + 1
         while time.monotonic() < deadline:
             if os.getppid() != parent_pid:
-                os._exit(70)
+                os.killpg(os.getpgrp(), signal.SIGKILL)
             time.sleep(.1)
-        os._exit(124)
+        os.killpg(os.getpgrp(), signal.SIGKILL)
     threading.Thread(target=watchdog, daemon=True).start()
     from .engine import Engine, digest, write_json
     from .inverse import fit
@@ -58,7 +60,27 @@ def _worker(root, job_id, parent_pid, timeout_s):
         params = request['parameters']
         if request['operation'] == 'evaluate_probe' and 'model_id' in request and json.loads(request['parameters']['forecast_json']).get('model_id') != request['model_id']:
             raise ValueError('Forecast model does not match job model')
-        if request['operation'] == 'fit_control':
+        if request['operation'] in {'fit_phonation', 'forecast_phonation', 'score_phonation'}:
+            # Optional modules load only inside the bounded disposable worker.
+            if params.get('enabled', False) is not True:
+                result = {'status': 'disabled', 'reason': 'Optional phonation source operations disabled', 'model_updated': False}
+            else:
+                try:
+                    from .phonation import fit_phonation, forecast_phonation, score_phonation_forecast
+                except ImportError:
+                    result = {'status': 'unsupported', 'reason': 'Optional phonation source module unavailable', 'model_updated': False}
+                else:
+                    options = {k:v for k,v in params.items() if k != 'enabled'}
+                    if request['operation'] == 'score_phonation':
+                        result = score_phonation_forecast(**options)
+                    else:
+                        with Engine() as engine:
+                            if request['operation'] == 'fit_phonation':
+                                options['timeout_s'] = min(options.get('timeout_s', 60.), timeout_s)
+                                result = fit_phonation(engine, enabled=True, **options)
+                            else:
+                                result = forecast_phonation(engine, **options)
+        elif request['operation'] == 'fit_control':
             from .control import fit_control_profile
             result = fit_control_profile(**params)
         elif request['operation'] in {'control_predict', 'condition_prediction'}:
@@ -221,9 +243,12 @@ class JobService:
         self._identity(idempotency_key, 'idempotency_key')
         if not isinstance(request, dict) or set(request) - {'operation', 'parameters', 'session_id', 'model_id'}:
             raise ValueError('Invalid local job request fields')
-        if request.get('operation') not in {'forward', 'fit_transfer', 'fit_joint', 'predict', 'fit_dynamic', 'fit_control', 'control_predict', 'condition_prediction', 'fit_frozen_control', 'rank_interventions', 'fit_pcm', 'search_pcm', 'design_pcm', 'update_pcm', 'fit_probe_pcm', 'predict_probe', 'evaluate_probe'} or not isinstance(request.get('parameters'), dict):
+        if request.get('operation') not in {'forward', 'fit_transfer', 'fit_joint', 'predict', 'fit_dynamic', 'fit_control', 'control_predict', 'condition_prediction', 'fit_frozen_control', 'rank_interventions', 'fit_pcm', 'search_pcm', 'design_pcm', 'update_pcm', 'fit_probe_pcm', 'predict_probe', 'evaluate_probe', 'fit_phonation', 'forecast_phonation', 'score_phonation'} or not isinstance(request.get('parameters'), dict):
             raise ValueError('Unsupported operation or missing parameters')
         allowed = {
+            'fit_phonation': {'document','candidates','max_synthesis_calls','enabled','timeout_s'},
+            'forecast_phonation': {'fit_result','family','candidate_id','reference_trial_id','pose','controls','target_id','enabled'},
+            'score_phonation': {'frozen','pcm','metadata','enabled'},
             'evaluate_probe': {'forecast_json', 'expected_digest', 'document', 'receipt', 'configuration_json', 'original_artifacts', 'supplemental_artifacts', 'capture_started_at'},
             'predict_probe': {'snapshot_json', 'expected_digest', 'prediction_id', 'target_evidence_id', 'generated_at', 'pose', 'frequency_hz', 'placement', 'calibration', 'calibration_evidence_ids', 'calibration_frozen_at', 'articulation', 'channel', 'comparison', 'timing', 'termination', 'termination_resistance_pa_s_m3', 'attenuation_np_per_m', 'max_operator_calls'},
             'fit_probe_pcm': {'observations', 'probe_observations', 'candidates', 'max_native_calls', 'pcm_weight', 'probe_weight'},
@@ -249,6 +274,9 @@ class JobService:
         if request['operation'] == 'predict' and not {'snapshot_json', 'expected_digest', 'prediction_id', 'target_evidence_id', 'generated_at', 'intervention'} <= set(request['parameters']):
             raise ValueError('Missing prediction parameters')
         required = {
+            'fit_phonation': {'document','candidates'},
+            'forecast_phonation': {'fit_result','family','candidate_id','reference_trial_id','pose','controls','target_id'},
+            'score_phonation': {'frozen','pcm','metadata'},
             'evaluate_probe': {'forecast_json', 'expected_digest', 'document', 'receipt', 'configuration_json', 'original_artifacts', 'supplemental_artifacts', 'capture_started_at'},
             'predict_probe': {'snapshot_json', 'expected_digest', 'prediction_id', 'target_evidence_id', 'generated_at', 'pose', 'frequency_hz', 'placement', 'calibration', 'calibration_evidence_ids', 'calibration_frozen_at'},
             'fit_probe_pcm': {'observations', 'probe_observations', 'candidates'},
@@ -325,12 +353,20 @@ class JobService:
 
     @staticmethod
     def _terminate(process):
+        # Worker is its own session leader; kill its extractor descendants as well.
+        # During the short spawn-before-setsid interval no descendants exist yet.
+        try:
+            os.killpg(process.pid, signal.SIGTERM)
+        except (ProcessLookupError, PermissionError):
+            if process.is_alive(): process.terminate()
+        process.join(timeout=1)
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except (ProcessLookupError, PermissionError):
+            pass
         if process.is_alive():
-            process.terminate()
-            process.join(timeout=1)
-            if process.is_alive():
-                process.kill()
-                process.join(timeout=1)
+            process.kill()
+        process.join(timeout=1)
 
     def _schedule(self):
         while not self._stop.wait(.03):
