@@ -30,6 +30,8 @@ iPhone capture app
             existing web interface on the MacBook
 ```
 
+Under the revision 5 parallel-agent execution plan, B coordinates the native acquisition agent (CAP-01/02), acoustic measurement agent (AUD-01), orchestration agent (ACT-01) and independent evaluator (DEPTH-02). A coordinates visual/depth measurements (GEO-01), inverse fusion (FUSE-01) and numerical forecasts (PRED-01). B owns the repository integration queue; A accepts scientific fusion. Separate processing agents preserve common evidence IDs and timestamps.
+
 Person B owns all acquisition modalities and alignment, including the native iOS adapter. Person A owns the physical observation model: how visible geometry, depth and sound constrain common anatomy and time-varying articulation. They jointly define the bundle. There is no separate audio-owner versus camera-owner split.
 
 Minimum bundle fields: participant/session/trial IDs; prediction ID; sensor/device/OS identifiers; audio samples and presentation timestamps; RGB frame timestamps; depth values and their own timestamps; depth-versus-disparity representation and units; camera intrinsics/distortion and alignment metadata; pose/transforms where actually available; capture formats and settings; missing/dropped data; filtering flags; artifact hashes; and estimated synchronization uncertainty. An AR face mesh is a derived estimate with its own provenance, not raw measured interior geometry.
@@ -79,4 +81,4 @@ B's early priority becomes the unified capture session and native depth spike, k
 
 First produce a deployable capture path, then a real synchronized export and measured sensor quality. These are CAP-01 and CAP-02, owned by B. A then implements FUSE-01. If native capture is blocked, retain synchronized browser RGB/audio as a working instrument while reporting depth integration as unfinished. Do not substitute landmark-derived depth for hardware depth without labeling it.
 
-These changes are incorporated into main specification revision 4, section 8, including owners and CAP-01/02, FUSE-01 and DEPTH-01/02 acceptance gates. The PDF is regenerated from that specification. No application implementation or remote changes have been performed.
+These changes are incorporated into main specification revision 5, section 8, including owners and CAP-01/02, FUSE-01 and DEPTH-01/02 acceptance gates. The PDF is regenerated from that specification and the parallel-agent execution appendix. These documents specify planned work; they do not establish application implementation or anatomical recovery.
