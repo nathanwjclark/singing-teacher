@@ -67,8 +67,14 @@ def compare(observed,predicted):
             missing.append(name)
         else:
             errors[name]=pred[name]['value']-target[name]['value']
-    score=float(np.mean([(value/FEATURES[name][1])**2 for name,value in errors.items()])) if len(errors)>=3 and not missing else None
-    return {'descriptor_errors':errors,'missing_descriptors':missing,'weighted_discrepancy':score}
+    quality_failures=[]
+    for source,record in [('observed',observed),('predicted',predicted)]:
+        quality=record.get('quality',{})
+        rejected=sorted(set(quality.get('flags',[]))&{'clipping','invalid','dropped','low-signal-to-noise'})
+        if rejected or quality.get('missingReason') is not None:
+            quality_failures.append({'source':source,'flags':rejected,'missing_reason':quality.get('missingReason')})
+    score=float(np.mean([(value/FEATURES[name][1])**2 for name,value in errors.items()])) if len(errors)>=3 and not missing and not quality_failures else None
+    return {'descriptor_errors':errors,'missing_descriptors':missing,'quality_failures':quality_failures,'weighted_discrepancy':score}
 
 
 def run(output,protocol=None):

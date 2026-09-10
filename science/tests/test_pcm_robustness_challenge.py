@@ -33,3 +33,17 @@ def test_native_smoke_freezes_before_holdout_and_preserves_hard_budget_failure(t
     assert failed['cases'][0]['status']=='failed'
     assert failed['actual_synthesis_calls']==1
     assert 'budget' in failed['cases'][0]['fit_error']
+
+
+@pytest.mark.parametrize('source',['observed','predicted'])
+@pytest.mark.parametrize('flag',['clipping','invalid','dropped','low-signal-to-noise',None])
+def test_heldout_quality_failures_do_not_become_finite_scores(source,flag):
+    clean={'measurements':[{'name':name,'value':1.} for name in m.FEATURES],
+           'quality':{'flags':[],'missingReason':None}}
+    observed,predicted=deepcopy(clean),deepcopy(clean)
+    bad=observed if source=='observed' else predicted
+    bad['quality']={'flags':[flag] if flag else [],'missingReason':None if flag else 'not-captured'}
+    score=m.compare(observed,predicted)
+    assert score['weighted_discrepancy'] is None
+    assert score['quality_failures'][0]['source']==source
+    assert all(error==0 for error in score['descriptor_errors'].values())
