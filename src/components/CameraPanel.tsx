@@ -125,7 +125,7 @@ export default function CameraPanel({ active, onFrame, onStatus, onStream }: Pro
         {status === 'idle' && <span className="camera-private"><ShieldCheck size={14} /> Video stays on your device</span>}
       </div>}
       {status === 'no-face' && <div className="camera-no-face"><ScanFace size={18} /> Bring your face into the frame</div>}
-      {status === 'tracking' && <div className="camera-tongue-status">{tongueStatus}<small>Experimental visible-tissue estimate</small></div>}
+      {status === 'tracking' && <div className="camera-tongue-status">{tongueStatus}<small>Experimental visible-tissue estimate</small><button type="button" onClick={()=>engineRef.current?.calibrateTongue()} title="Hold your tongue centered, then set this as its neutral position">Recenter tongue</button></div>}
       <div className="camera-stage-label"><span className={status === 'tracking' ? 'camera-light live' : 'camera-light'} /> {status === 'tracking' ? 'LIVE CAMERA' : 'CAMERA VIEW'}<span>MIRRORED</span></div>
     </div>
     <div className="camera-depth">

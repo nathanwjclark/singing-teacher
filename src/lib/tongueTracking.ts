@@ -62,22 +62,29 @@ export function detectVisibleTongue(pixels: Uint8ClampedArray, width: number, he
   const tipX=tipPixels.reduce((sum,p)=>sum+p%width,0)/tipPixels.length;
   const tipY=tipPixels.reduce((sum,p)=>sum+Math.floor(p/width),0)/tipPixels.length;
   return {x:x/width,y:y/height,
-    lateral:Math.max(-1,Math.min(1,(tipX-(minX+maxX)/2)/(mouthWidth*.5))),
+    lateral:Math.max(-1,Math.min(1,(x-(minX+maxX)/2)/mouthWidth)),
     lift:Math.max(0,Math.min(1,1-(y-minY)/(maxY-minY))),
     extension:Math.max(0,Math.min(1,(tipY-maxY)/(mouthWidth*.45))),
-    elevation:Math.max(-1,Math.min(1,(maxY-tipY)/(mouthWidth*.35))),
+    elevation:Math.max(-1,Math.min(1,((minY+maxY)/2-y)/mouthWidth)),
     tip:{x:tipX/width,y:tipY/height},visibleFraction:fraction,outline};
 }
 
 export function createTongueTracker() {
   let hits=0;
+  let reference:{x:number;y:number}|undefined;
   let smooth:TongueObservation|undefined;
-  return (pixels:Uint8ClampedArray,width:number,height:number,face:Landmark[]) => {
+  const track = (pixels:Uint8ClampedArray,width:number,height:number,face:Landmark[]) => {
     const observed=detectVisibleTongue(pixels,width,height,face);
-    if(!observed){hits=0;smooth=undefined;return undefined;}
+    if(!observed){hits=0;smooth=undefined;if(!face.length)reference=undefined;return undefined;}
     hits++;
+    // Track the region's center independently of its lowest edge. The lowest
+    // edge is useful for extension but biases all vertical motion downward.
+    reference??={x:observed.lateral,y:observed.elevation??0};
+    observed.lateral=Math.max(-1,Math.min(1,(observed.lateral-reference.x)*6));
+    observed.elevation=Math.max(-1,Math.min(1,((observed.elevation??0)-reference.y)*6));
     if(smooth) for(const key of ['x','y','lateral','lift','visibleFraction','extension','elevation'] as const) observed[key]=(smooth[key]??observed[key]??0)+((observed[key]??0)-(smooth[key]??0))*.45;
     smooth=observed;
     return hits>=2 ? observed : undefined;
   };
+  return Object.assign(track,{resetMotionReference(){reference=undefined;smooth=undefined;hits=0;}});
 }

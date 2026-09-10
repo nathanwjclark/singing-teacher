@@ -46,7 +46,7 @@ function loadOpenCV(): Promise<{ cv: OpenCV }> {
   return cvPromise;
 }
 
-export interface VisionEngine { process(video: HTMLVideoElement, timestamp: number): TrackingFrame; calibrate(): boolean; close(): void }
+export interface VisionEngine { process(video: HTMLVideoElement, timestamp: number): TrackingFrame; calibrate(): boolean; calibrateTongue(): void; close(): void }
 
 export async function createVisionEngine(): Promise<VisionEngine> {
   const { cv } = await loadOpenCV();
@@ -148,6 +148,7 @@ export async function createVisionEngine(): Promise<VisionEngine> {
       } else trackTongue(new Uint8ClampedArray(0),0,0,[]);
       return { tongue, tongueStatus, tongueSearch, face: landmarks, pose: cachedPose, worldPose: cachedWorldPose, faceTransform, blendshapes, timestamp, metrics: stabilizer.metrics({ mouthOpen, headTilt: tilt(landmarks[33], landmarks[263]), shoulderTilt: tilt(cachedPose[11], cachedPose[12]), brightness, motion, ...depth }, timestamp, landmarks.length > 0) };
     },
+    calibrateTongue() { trackTongue.resetMotionReference(); },
     calibrate() { if (closed || recentDistance === undefined || depthHistory.length < 5) return false; baselineDistance = recentDistance; return true; },
     close() { if (!closed) { closed = true; face.close(); pose.close(); previous.delete(); } },
   };
@@ -192,7 +193,7 @@ export function drawTracking(context: CanvasRenderingContext2D, frame: TrackingF
   if(frame.tongue) {
     context.fillStyle='#ff71aa';context.strokeStyle='#ffb3d0';context.lineWidth=2;
     for(const p of frame.tongue.outline??[]){context.beginPath();context.arc(p.x*width,p.y*height,1.6,0,Math.PI*2);context.fill();}
-    const x=(frame.tongue.tip?.x??frame.tongue.x)*width,y=(frame.tongue.tip?.y??frame.tongue.y)*height;
+    const x=frame.tongue.x*width,y=frame.tongue.y*height;
     context.beginPath();context.arc(x,y,6,0,Math.PI*2);context.moveTo(x-10,y);context.lineTo(x+10,y);context.moveTo(x,y-10);context.lineTo(x,y+10);context.stroke();
   }
   context.restore();
