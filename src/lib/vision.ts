@@ -1,59 +1,13 @@
 import { FaceLandmarker, FilesetResolver, PoseLandmarker } from '@mediapipe/tasks-vision';
 import type { Landmark, TrackingFrame } from '../types';
-import { createTongueTracker } from './tongueTracking';
+import { tongueCrop } from './tongueCrop';
+import { createNeuralTongueTracker } from './tongueNeural';
 import { depthMetrics } from './depth';
 import { createTrackingStabilizer } from './trackingStability';
 
-interface Mat { delete(): void; copyTo(destination: Mat): void }
-interface OpenCV {
-  Mat: new () => Mat;
-  imread(canvas: HTMLCanvasElement): Mat;
-  cvtColor(source: Mat, destination: Mat, conversion: number): void;
-  absdiff(first: Mat, second: Mat, destination: Mat): void;
-  mean(mat: Mat): number[];
-  COLOR_RGBA2GRAY: number;
-}
-
-let cvPromise: Promise<{ cv: OpenCV }> | undefined;
-function loadOpenCV(): Promise<{ cv: OpenCV }> {
-  if (cvPromise) return cvPromise;
-  cvPromise = new Promise<{ cv: OpenCV }>((resolve, reject) => {
-    const global = window as unknown as { cv?: OpenCV };
-    const script = document.createElement('script');
-    const timeout = window.setTimeout(() => finish(new Error('OpenCV could not load. Check your connection and try again.')), 60000);
-    const interval = window.setInterval(check, 100);
-    let finished = false;
-    function finish(error?: Error, cv?: OpenCV) {
-      if (finished) return;
-      finished = true;
-      clearTimeout(timeout);
-      clearInterval(interval);
-      if (error) { script.remove(); reject(error); }
-      // This OpenCV build is a self-resolving Emscripten thenable. Wrapping it
-      // prevents native Promise assimilation from looping indefinitely.
-      else resolve({ cv: cv! });
-    }
-    function check() {
-      if (global.cv?.Mat) finish(undefined, global.cv);
-    }
-    script.src = 'https://docs.opencv.org/4.13.0/opencv.js';
-    script.async = true;
-    script.onload = check;
-    script.onerror = () => finish(new Error('Unable to download OpenCV. Check your connection and try again.'));
-    if (global.cv) void check();
-    else document.head.appendChild(script);
-  }).catch(error => { cvPromise = undefined; throw error; });
-  return cvPromise;
-}
-
-export interface VisionEngine { process(video: HTMLVideoElement, timestamp: number): TrackingFrame; calibrate(): boolean; calibrateTongue(): void; selectTongueTip(x:number,y:number): void; close(): void }
+export interface VisionEngine { process(video: HTMLVideoElement, timestamp: number): TrackingFrame; calibrate(): boolean; calibrateTongue(): void; close(): void }
 
 export async function createVisionEngine(): Promise<VisionEngine> {
-  const { cv } = await loadOpenCV();
-  // OpenCV's UMD footer leaves its initialized Emscripten module globally.
-  // MediaPipe otherwise reuses that incompatible module and never initializes.
-  const globals = window as unknown as { Module?: unknown };
-  if (globals.Module === cv) delete globals.Module;
   const fileset = await FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/wasm');
   const face = await FaceLandmarker.createFromOptions(fileset, {
     baseOptions: { modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task', delegate: 'CPU' },
@@ -71,8 +25,7 @@ export async function createVisionEngine(): Promise<VisionEngine> {
   canvas.width = 160; canvas.height = 120;
   const context = canvas.getContext('2d', { willReadFrequently: true });
   if (!context) { face.close(); pose.close(); throw new Error('This browser does not support camera image processing.'); }
-  const previous = new cv.Mat();
-  let hasPrevious = false;
+  let previous:Uint8Array|undefined;
   let cachedPose: Landmark[] = [];
   let cachedWorldPose: Landmark[] = [];
   let depthHistory: number[] = [];
@@ -80,16 +33,10 @@ export async function createVisionEngine(): Promise<VisionEngine> {
   let recentDistance: number | undefined;
   const stabilizer = createTrackingStabilizer();
   const tongueCanvas = document.createElement('canvas');
-  tongueCanvas.width=160; tongueCanvas.height=128;
+  tongueCanvas.width=256; tongueCanvas.height=256;
   const tongueContext=tongueCanvas.getContext('2d', {willReadFrequently:true})!;
-  const trackTongue=createTongueTracker();
-  let pendingTongueTip:{x:number;y:number}|undefined;
+  const trackTongue=createNeuralTongueTracker();
   let closed = false;
-  const profileRequest=new AbortController();
-  void fetch('/api/tongue-profile',{cache:'no-store',signal:profileRequest.signal}).then(async response=>{
-    if(!response.ok){if(!closed)trackTongue.profileUnavailable();return;}
-    const profile:unknown=await response.json();if(!closed)trackTongue.setProfile(profile);
-  }).catch(()=>{if(!closed)trackTongue.profileUnavailable();});
   return {
     process(video, timestamp) {
       if (closed) throw new Error('Vision engine is closed.');
@@ -101,17 +48,10 @@ export async function createVisionEngine(): Promise<VisionEngine> {
       cachedPose = stabilizer.pose(poseResult.landmarks[0] ?? [], timestamp);
       cachedWorldPose = stabilizer.worldPose(poseResult.worldLandmarks[0] ?? [], timestamp);
       context.drawImage(video, 0, 0, canvas.width, canvas.height);
-      const rgba = cv.imread(canvas);
-      const gray = new cv.Mat();
-      const difference = new cv.Mat();
-      let brightness = 0, motion = 0;
-      try {
-        cv.cvtColor(rgba, gray, cv.COLOR_RGBA2GRAY);
-        brightness = cv.mean(gray)[0];
-        if (hasPrevious) { cv.absdiff(gray, previous, difference); motion = cv.mean(difference)[0] / 255; }
-        gray.copyTo(previous);
-        hasPrevious = true;
-      } finally { rgba.delete(); gray.delete(); difference.delete(); }
+      const rgba=context.getImageData(0,0,160,120).data,gray=new Uint8Array(160*120);
+      let brightness=0,motion=0;
+      for(let i=0;i<gray.length;i++){gray[i]=rgba[i*4]*.299+rgba[i*4+1]*.587+rgba[i*4+2]*.114;brightness+=gray[i];if(previous)motion+=Math.abs(gray[i]-previous[i]);}
+      brightness/=gray.length;motion/=gray.length*255;previous=gray;
       const aspect = video.videoWidth / video.videoHeight;
       const distance = (a: Landmark, b: Landmark) => Math.hypot((a.x - b.x) * aspect, a.y - b.y);
       const tilt = (a?: Landmark, b?: Landmark) => {
@@ -133,34 +73,29 @@ export async function createVisionEngine(): Promise<VisionEngine> {
       let tongueSearch: TrackingFrame['tongueSearch'];
       let tongueStatus='Show your face';
       if(landmarks.length>308) {
-        const mouthLeft=Math.min(landmarks[78].x,landmarks[308].x);
         const mouthWidth=Math.abs(landmarks[78].x-landmarks[308].x);
-        const x=Math.max(0,mouthLeft-mouthWidth*.15),y=Math.max(0,landmarks[13].y-mouthWidth*.15);
-        const width=Math.min(1-x,mouthWidth*1.3);
-        const height=Math.min(1-y,Math.max(landmarks[14].y-y+mouthWidth*.65,mouthWidth*.8));
+        const {x,y,width,height}=tongueCrop(landmarks,video.videoWidth,video.videoHeight)!;
         tongueSearch={x,y,width,height};
         tongueStatus=Math.abs(depth.headYaw??0)>40 ? 'Face forward' : mouthOpen<.06 ? 'Open your mouth / show your tongue' : mouthWidth*video.videoWidth<16 ? 'Move closer for tongue tracking' : 'Searching for visible tongue';
         if(tongueStatus==='Searching for visible tongue') {
           // Preserve the native mouth detail instead of downsampling the entire
           // video until the tongue is only a handful of pixels high.
-          tongueContext.drawImage(video,x*video.videoWidth,y*video.videoHeight,width*video.videoWidth,height*video.videoHeight,0,0,160,128);
-          if(pendingTongueTip){trackTongue.selectTip((pendingTongueTip.x-x)/width,(pendingTongueTip.y-y)/height);pendingTongueTip=undefined;}
+          tongueContext.drawImage(video,x*video.videoWidth,y*video.videoHeight,width*video.videoWidth,height*video.videoHeight,0,0,256,256);
           const localFace=landmarks.map(p=>({...p,x:(p.x-x)/width,y:(p.y-y)/height}));
-          const local=trackTongue(tongueContext.getImageData(0,0,160,128).data,160,128,localFace);
+          const local=trackTongue(tongueContext.getImageData(0,0,256,256).data,256,256,localFace,timestamp);
           if(local) {
             tongue={...local,x:x+local.x*width,y:y+local.y*height,tip:local.tip ? {x:x+local.tip.x*width,y:y+local.tip.y*height} : undefined,outline:local.outline?.map(p=>({x:x+p.x*width,y:y+p.y*height}))};
-            tongueStatus=local.trackingMode==='tip'?'Tongue tip tracked · crosshair':trackTongue.isTipSelected()?'Tip lost · select it again':'Tongue visible · select Track tip';
+            tongueStatus='Neural tongue tip · estimated 3D';
           }
-        } else trackTongue(new Uint8ClampedArray(0),0,0,[]);
-      } else trackTongue(new Uint8ClampedArray(0),0,0,[]);
+        } else trackTongue(new Uint8ClampedArray(0),0,0,[],timestamp);
+      } else trackTongue(new Uint8ClampedArray(0),0,0,[],timestamp);
       const tongueDiagnostic=trackTongue.diagnostics();
       if(tongueDiagnostic.state==='lost'&&tongueStatus==='Searching for visible tongue')tongueStatus='Tip lost · open Tongue lab for details';
       return { tongue, tongueStatus, tongueSearch, tongueDiagnostic, face: landmarks, pose: cachedPose, worldPose: cachedWorldPose, faceTransform, blendshapes, timestamp, metrics: stabilizer.metrics({ mouthOpen, headTilt: tilt(landmarks[33], landmarks[263]), shoulderTilt: tilt(cachedPose[11], cachedPose[12]), brightness, motion, ...depth }, timestamp, landmarks.length > 0) };
     },
-    selectTongueTip(x,y) { pendingTongueTip={x,y}; },
     calibrateTongue() { trackTongue.resetMotionReference(); },
     calibrate() { if (closed || recentDistance === undefined || depthHistory.length < 5) return false; baselineDistance = recentDistance; return true; },
-    close() { if (!closed) { closed = true; profileRequest.abort(); face.close(); pose.close(); previous.delete(); } },
+    close() { if (!closed) { closed = true; trackTongue.close(); face.close(); pose.close(); previous=undefined; } },
   };
 }
 

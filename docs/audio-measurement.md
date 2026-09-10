@@ -30,3 +30,14 @@ The synthetic UI demo remains an illustrative animation; it emits no measured ev
 **Last recording** shows the saved pitch trajectory, voiced-window count, note names, and a downloadable JSON of versioned audio measurements. It never substitutes the live graph for recorded evidence. Missing pitch remains a gap. The live graph also renders isolated voiced samples and explains quiet/unsteady/ambiguous input, displays the actual input label and AudioContext sample rate, and surfaces analysis errors without terminating its render loop.
 
 Targeted Chrome browser check: inject an oscillator-backed microphone, explicitly record 220 → 440 → silence → 330 Hz, stop and decode the actual MediaRecorder blob, open Last recording, and inspect exported JSON. Result: 25 windows, A3/A4/E4, and five silent gaps. The normal 48 kHz live path already worked with injected input; this does not establish the cause on the user's physical microphone. A real-device check is still required, especially for input selection, permission/autoplay, noisy rooms and phone/WebRTC routing. This work does not claim room EQ compensation or anatomical inference.
+
+### Sensitive live pitch meter
+
+The Studio pitch meter uses an 18 dB lower input floor (−78 dBFS instead of
+−60 dBFS) and a 0.72 YIN periodicity threshold when the canonical detector has no
+pitch. This is a display estimate: microphone PCM, recorded audio, and the
+versioned canonical measurements supplied to experiments remain unchanged.
+Ambient calibration sees the sensitive periodicity so quiet sustained singing
+is not mistaken for room noise. The waveform display also scales up quieter
+input. Silence and non-periodic noise still produce pitch gaps; a periodic fan
+or accompaniment can produce a note, since periodicity does not identify a voice.

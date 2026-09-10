@@ -59,3 +59,32 @@ test('recorded pitch windows preserve sub-second note changes and silent gaps', 
     else assert.ok(Math.abs(result.pitch! - expected) < 2);
   }
 });
+
+test('sensitive live meter detects quiet voices without changing canonical measurements or voicing noise', async () => {
+  const { livePitchMetrics, pitchStatus, LIVE_PITCH_MIN_DBFS } = await import('./audio.ts');
+  for (const hz of [80, 220, 440, 880]) for (const db of [-62, -72, -77]) {
+    const pcm = wave(hz, Math.SQRT2 * 10 ** (db / 20));
+    const canonical = analyzeAudioFrame(pcm, 48000);
+    const live = livePitchMetrics(pcm, 48000, canonical);
+    assert.equal(canonical.pitchHz, null, 'canonical extractor retains its published floor');
+    assert.ok(live.pitchHz !== null && Math.abs(live.pitchHz - hz) < 2, `${hz} Hz at ${db} dBFS`);
+    assert.equal(pitchStatus(live, LIVE_PITCH_MIN_DBFS), 'Pitch detected');
+  }
+  let voiceSeed = 7;
+  const noisyVoice = Float32Array.from({ length: 4096 }, (_, i) => {
+    voiceSeed = (1664525 * voiceSeed + 1013904223) >>> 0;
+    return 0.01 * (Math.SQRT2 * Math.sin(i / 48000 * 220 * Math.PI * 2) + (voiceSeed / 2 ** 32 - 0.5) * Math.sqrt(12));
+  });
+  const strict = analyzeAudioFrame(noisyVoice, 48000);
+  assert.equal(strict.pitchHz, null);
+  const sensitive = livePitchMetrics(noisyVoice, 48000, strict);
+  assert.ok(sensitive.pitchHz !== null && Math.abs(sensitive.pitchHz - 220) < 6);
+  let seed = 22;
+  for (let i = 0; i < 30; i++) {
+    const noise = Float32Array.from({ length: 4096 }, () => { seed = (1664525 * seed + 1013904223) >>> 0; return (seed / 2 ** 32 - 0.5) * 0.01; });
+    assert.equal(livePitchMetrics(noise, 48000, analyzeAudioFrame(noise, 48000)).pitchHz, null);
+  }
+  for (const pcm of [new Float32Array(4096), wave(220, Math.SQRT2 * 10 ** (-82 / 20))]) {
+    assert.equal(livePitchMetrics(pcm, 48000, analyzeAudioFrame(pcm, 48000)).pitchHz, null);
+  }
+});

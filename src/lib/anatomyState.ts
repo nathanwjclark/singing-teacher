@@ -26,8 +26,8 @@ export function createAnatomyMotion(){
   lastDemo=demo;
   const observed=frame?.tongue?.trackingMode==='region'?undefined:frame?.tongue;
   // A cached frame must not refresh an old tip forever when the camera stalls.
-  if(observed && (demo || frame?.timestamp!==lastFrameTimestamp)){lastTongue=observed;lastSeen=time;}
-  lastFrameTimestamp=frame?.timestamp;
+  if(observed && (demo || (observed.observedAt??frame?.timestamp)!==lastFrameTimestamp)){lastTongue=observed;lastSeen=time;}
+  lastFrameTimestamp=observed?.observedAt??frame?.timestamp;
   const visible=frame && time-lastSeen<200?lastTongue:undefined;
   const elevation=visible?bound(visible.elevation??(visible.lift-.5)*2,-1,1):0;
   const alpha=1-Math.exp(-dt/.085),t=state.tongue;

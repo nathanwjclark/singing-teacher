@@ -3,7 +3,7 @@ import {resolve,dirname} from 'node:path';
 import {randomUUID,createHash} from 'node:crypto';
 import {spawn} from 'node:child_process';
 
-const files=new Set(['tract0.obj','tract0.mtl','tract.svg','geometry.json','manifest.json','fit.json','forecast.json','summary.json']);
+const files=new Set(['space-diff.json','tract0.obj','tract0.mtl','tract.svg','geometry.json','manifest.json','fit.json','forecast.json','summary.json']);
 const types={obj:'text/plain',mtl:'text/plain',svg:'image/svg+xml',json:'application/json'};
 export function scienceRoutes({repo,dataRoot,json}) {
   let running=null,starting=false;
@@ -31,8 +31,13 @@ export function scienceRoutes({repo,dataRoot,json}) {
     });
   }
   return async(req,res,url)=>{
-    if(!['/api/tongue-profile','/api/science/status','/api/science/asset','/api/science/run','/api/science/outcome'].includes(url.pathname))return false;
+    if(!['/api/tongue-profile','/api/science/status','/api/science/asset','/api/science/run','/api/science/outcome'].includes(url.pathname)&&!url.pathname.startsWith('/api/tongue-neural/'))return false;
     if(!['127.0.0.1','::1'].includes(req.socket.remoteAddress?.replace(/^::ffff:/,''))){json(res,403,{error:'Private model data is available only on this Mac'});return true}
+    if(url.pathname.startsWith('/api/tongue-neural/')&&req.method==='GET'){
+      const name={'/api/tongue-neural/model':'tongue.onnx','/api/tongue-neural/manifest':'manifest.json'}[url.pathname];
+      if(!name){json(res,404,{error:'Unknown tongue model artifact'});return true;}
+      try{const data=await readFile(resolve(dataRoot,'tongue-neural/current',name));res.writeHead(200,{'Content-Type':name.endsWith('.json')?'application/json':'application/octet-stream','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});res.end(data)}catch{json(res,404,{error:'Personal tongue model unavailable'})}return true;
+    }
     if(url.pathname==='/api/tongue-profile'&&req.method==='GET'){
       try{const profile=JSON.parse(await readFile(resolve(dataRoot,'tongue-review/live-tip-profile.json'),'utf8'));json(res,200,profile)}catch{json(res,404,{error:'No private tongue profile installed'})}return true;
     }

@@ -55,3 +55,42 @@ test('threshold boundaries avoid unnecessary corrections and nonfinite data does
   assert.deepEqual(tips.map(tip => tip.id), ['measurement-unavailable']);
   assert.deepEqual(getTips(frame({ shoulderTilt: Number.NaN })).map(tip => tip.id), ['show-shoulders']);
 });
+
+test('idle and closed mouths never receive vowel opening advice', () => {
+  assert.equal(getTips(frame({mouthOpen:0}))[0].id,'no-singing');
+  assert.equal(getTips(frame({mouthOpen:0.02}))[0].title,'No singing detected');
+  assert.equal(getTips(frame({mouthOpen:0.08}),{singing:false})[0].id,'no-singing');
+  assert.ok(getTips(frame({mouthOpen:0.08}),{singing:true}).some(tip=>tip.id==='mouth-open'));
+});
+
+test('green resolution requires an observed change; signal loss gets the normal fade', async () => {
+  const {resolvedTipIds} = await import('./coaching.ts');
+  const {updateRecentTips} = await import('./recentTips.ts');
+  const before=frame({mouthOpen:.08,headTilt:15,shoulderTilt:12});before.timestamp=100;
+  const after=frame({mouthOpen:.15,headTilt:3,shoulderTilt:2});after.timestamp=200;
+  const initial=updateRecentTips([],getTips(before,{limit:12,uniqueRegions:false}),1000);
+  const resolved=resolvedTipIds(before,after);
+  assert.deepEqual([...resolved].sort(),['head-level','mouth-open','shoulder-level']);
+  const improved=updateRecentTips(initial,getTips(after),1250,resolved);
+  assert.ok(improved.every(tip=>tip.resolved && !tip.active));
+  assert.equal(updateRecentTips(improved,[],2750).length,0);
+  const lost={...after,face:[]};
+  assert.equal(resolvedTipIds(before,lost).size,0);
+  assert.equal(resolvedTipIds(before,before).size,0);
+  const closed=frame({mouthOpen:0});closed.timestamp=200;
+  assert.equal(resolvedTipIds(before,closed).size,0);
+  const paused=updateRecentTips(initial,getTips(null),1250);
+  assert.ok(paused.every(tip=>!tip.resolved && !tip.active));
+  assert.equal(updateRecentTips(paused,[],3000).length,3);
+  assert.equal(updateRecentTips(paused,[],6250).length,0);
+  const occluded={...after,pose:[]};
+  assert.ok(!resolvedTipIds(before,occluded).has('shoulder-level'));
+});
+
+test('voice activity expires when the microphone stops producing observations', async () => {
+  const {hasRecentVoice}=await import('./voiceActivity.ts');
+  assert.equal(hasRecentVoice({voiced:true,at:1000},1400),true);
+  assert.equal(hasRecentVoice({voiced:true,at:1000},1700),false);
+  assert.equal(hasRecentVoice({voiced:false,at:1000},1100),false);
+  assert.equal(hasRecentVoice(null,1100),false);
+});

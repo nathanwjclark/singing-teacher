@@ -18,6 +18,7 @@ from singing_physics.engine import digest, write_json
 from singing_physics.pcm_inverse import FEATURES
 from singing_physics.service import JobService, canonical
 from singing_physics.session import SessionController
+from science.scripts.model_space_diff import pair
 
 ROOT = Path(__file__).resolve().parents[2]
 EXPORTS = ('tract0.obj','tract0.mtl','tract.svg','geometry.json','manifest.json')
@@ -158,31 +159,40 @@ def pipeline(data, output, backend, session_id):
         'feature_scales':{name:{'unit':unit,'scale':scale,'assumption':'Engineering discrepancy scale, not calibrated noise'} for name,(unit,scale) in FEATURES.items()},
         'minimum_separation':.05,'retention_margin':.05,'maximum_discrepancy':2.,'max_synthesis_calls':3*len(snapshot['hypotheses'])})
     write_json(output/'forecast.json',forecast)
-    request={'operation':'forward','session_id':session_id,'model_id':snapshot['model_id'],
-        'parameters':{'pose':'a','anatomy':best['anatomy'],'articulation':{'JA':-3.},'f0_hz':180.,'duration_s':.25}}
-    write_json(output/'forward-request.json',request)
-    backend.forward_intent=(request,output.name+'-forward')
-    forward_id=backend.submit(*backend.forward_intent);backend.forward_job_id=forward_id
-    receipt=wait(backend,forward_id)
-    jobs.append({'id':forward_id,'operation':'forward','status':receipt['status']})
-    if receipt['status']!='succeeded': raise RuntimeError('Forward export failed: '+str(receipt.get('error')))
-    forward=backend.result(forward_id);bundle=backend.exports(forward_id)
-    if bundle.get('job_id')!=forward_id: raise ValueError('Export belongs to a different job')
-    files={}
-    for name in EXPORTS:
-        entry=bundle['files'][name];raw=base64.b64decode(entry['base64'],validate=True)
-        sha=hashlib.sha256(raw).hexdigest()
-        if len(raw)!=entry['byteLength'] or sha!=entry['sha256'] or (name!='manifest.json' and sha!=forward['files'][name]):
-            raise ValueError('Forward export integrity failure')
-        if name=='manifest.json' and json.loads(raw)!=forward: raise ValueError('Forward manifest differs from verified result')
-        (output/name).write_bytes(raw);files[name]={'sha256':sha,'byteLength':len(raw)}
     baseline=fit['fixed_anatomy_baseline']['best']
     reference=fit['fixed_anatomy_baseline']['candidates'][0]['anatomy']
+    def export_geometry(anatomy,key,directory):
+        request={'operation':'forward','session_id':session_id,'model_id':snapshot['model_id'],
+            'parameters':{'pose':'a','anatomy':anatomy,'articulation':{'JA':-3.},'f0_hz':180.,'duration_s':.25}}
+        write_json(output/f'{key}-request.json',request)
+        backend.forward_job_id=None
+        backend.forward_intent=(request,output.name+'-'+key)
+        forward_id=backend.submit(*backend.forward_intent);backend.forward_job_id=forward_id
+        receipt=wait(backend,forward_id)
+        jobs.append({'id':forward_id,'operation':'forward','role':key,'status':receipt['status']})
+        if receipt['status']!='succeeded': raise RuntimeError('Forward export failed: '+str(receipt.get('error')))
+        forward=backend.result(forward_id);bundle=backend.exports(forward_id)
+        if bundle.get('job_id')!=forward_id: raise ValueError('Export belongs to a different job')
+        directory.mkdir(parents=True,exist_ok=True,mode=0o700)
+        files={}
+        for name in EXPORTS:
+            entry=bundle['files'][name];raw=base64.b64decode(entry['base64'],validate=True)
+            sha=hashlib.sha256(raw).hexdigest()
+            if len(raw)!=entry['byteLength'] or sha!=entry['sha256'] or (name!='manifest.json' and sha!=forward['files'][name]):
+                raise ValueError('Forward export integrity failure')
+            if name=='manifest.json' and json.loads(raw)!=forward: raise ValueError('Forward manifest differs from verified result')
+            (directory/name).write_bytes(raw);files[name]={'sha256':sha,'byteLength':len(raw)}
+        return files
+    files=export_geometry(best['anatomy'],'forward',output)
+    reference_directory=output/'reference'
+    export_geometry(reference,'reference-forward',reference_directory)
+    write_json(output/'space-diff.json',pair(output,reference_directory))
+    files['space-diff.json']={'sha256':digest(output/'space-diff.json'),'byteLength':(output/'space-diff.json').stat().st_size}
     summary={'schemaVersion':'local-science-result-1','runId':output.name,'sessionId':session_id,'modelId':snapshot['model_id'],
         'sessionVersion':state['version'],'designId':forecast['design_id'],'createdAt':now(),'status':'succeeded',
         'source':data['declared_evidence_kind'],'sourceAuthenticity':'Package byte consistency verified; physical device and human origin are caller-declared',
         'sourceImportSha256':digest(output/'import/native-pcm.json'),'calibrationWindows':len(trials),'eligibleWindows':len(eligible),'jobs':jobs,
-        'nativeCalls':fit['actual_synthesis_calls']+forecast['actual_synthesis_calls']+1,
+        'nativeCalls':fit['actual_synthesis_calls']+forecast['actual_synthesis_calls']+2,
         'nativeCallsScope':'Actual PCM synthesis calls only; export also performs spectrum, tube geometry, mesh and SVG operations',
         'candidateId':best['candidate_id'],'anatomy':best['anatomy'],'referenceAnatomy':reference,
         'fitDiscrepancy':best['weighted_mean_square_discrepancy'],

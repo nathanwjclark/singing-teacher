@@ -11,7 +11,7 @@ export function SideAnatomyPanel({ motion }: Props) {
     let request = 0;
     const draw = () => {
       const state = motion.current;
-      if (status.current) status.current.textContent = state.demo ? 'DEMO MOTION' : state.tongue.visible ? 'OBSERVED TIP · REFERENCE SHAPE' : state.frame ? 'SHARED CAMERA MOTION' : 'REFERENCE · WAITING FOR CAMERA';
+      if (status.current) status.current.textContent = state.demo ? 'DEMO MOTION' : state.tongue.visible ? 'NEURAL TIP · DEPTH ESTIMATED' : state.frame ? 'SHARED CAMERA MOTION' : 'REFERENCE · WAITING FOR CAMERA';
       request = requestAnimationFrame(draw);
     };
     draw();
@@ -25,6 +25,6 @@ export function SideAnatomyPanel({ motion }: Props) {
       <div className="side-anatomy-key"><i className="lumen"/>Airway cast<i className="tongue"/>Tongue boundary<span>20% anatomy</span></div>
       <div className="atlas-credit"><a href="https://commons.wikimedia.org/wiki/File:Head_sagittal_mouth.jpg" target="_blank" rel="noreferrer">Patrick J. Lynch · C. Carl Jaffe</a><span>Animated adaptation · <a href="https://creativecommons.org/licenses/by/2.5/" target="_blank" rel="noreferrer">CC BY 2.5</a></span></div>
     </section>
-    <footer><span ref={status}>REFERENCE · WAITING FOR CAMERA</span><p>Visible tip height and protrusion drive the reference shape. Sideways motion is out of this plane; internal shape is not measured.</p></footer>
+    <footer><span ref={status}>REFERENCE · WAITING FOR CAMERA</span><p>Detected tip height and learned depth drive the reference shape. Sideways motion is out of this plane; internal shape is not measured.</p></footer>
   </div>;
 }

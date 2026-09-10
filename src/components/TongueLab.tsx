@@ -5,9 +5,9 @@ import './TongueLab.css';
 
 type Point={x:number;y:number};
 type Sample={image:string;time:number;motion:string;status:string;diagnostic:TrackingFrame['tongueDiagnostic'];prediction?:Point;label?:Point|null;crop:{x:number;y:number;width:number;height:number}};
-type Props={video:RefObject<HTMLVideoElement|null>;frame:RefObject<TrackingFrame|undefined>;select:(x:number,y:number)=>void;close:()=>void};
+type Props={video:RefObject<HTMLVideoElement|null>;frame:RefObject<TrackingFrame|undefined>;close:()=>void};
 const W=480,H=384;
-export default function TongueLab({video,frame,select,close}:Props){
+export default function TongueLab({video,frame,close}:Props){
   const canvas=useRef<HTMLCanvasElement>(null);
   const [samples,setSamples]=useState<Sample[]>([]);
   const [recording,setRecording]=useState(false);
@@ -15,6 +15,7 @@ export default function TongueLab({video,frame,select,close}:Props){
   const [index,setIndex]=useState<number|null>(null);
   const [motion,setMotion]=useState('up');
   const [status,setStatus]=useState('Waiting for a mouth crop');
+  const [tip3D,setTip3D]=useState<TrackingFrame['tongue']>();
   const [diagnostic,setDiagnostic]=useState<TrackingFrame['tongueDiagnostic']>();
   const currentCrop=useRef<TrackingFrame['tongueSearch']>(undefined);
   const chosen=index===null?undefined:samples[index];
@@ -30,7 +31,7 @@ export default function TongueLab({video,frame,select,close}:Props){
         currentCrop.current=crop;setCanFreeze(true);
         ctx.drawImage(v,crop.x*v.videoWidth,crop.y*v.videoHeight,crop.width*v.videoWidth,crop.height*v.videoHeight,0,0,W,H);
         const p=f.tongue?.trackingMode==='tip'?{x:(f.tongue.x-crop.x)/crop.width,y:(f.tongue.y-crop.y)/crop.height}:undefined;
-        setStatus(f.tongueStatus??'No tip observation');setDiagnostic(f.tongueDiagnostic);
+        setStatus(f.tongueStatus??'No tip observation');setDiagnostic(f.tongueDiagnostic);setTip3D(f.tongue);
         // Save the raw crop before drawing predictions: labels must see original pixels.
         if(capture.current.recording&&now-last>=250&&f.timestamp!==lastFrame){last=now;lastFrame=f.timestamp;
           if(capture.current.count>=80){setRecording(false);}else{
@@ -40,7 +41,7 @@ export default function TongueLab({video,frame,select,close}:Props){
         }
         ctx.fillStyle='#ff71aa';for(const o of f.tongue?.outline??[]){ctx.beginPath();ctx.arc((o.x-crop.x)/crop.width*W,(o.y-crop.y)/crop.height*H,2,0,Math.PI*2);ctx.fill();}
         if(p)cross(ctx,p,'#ff71aa');
-      }else{setCanFreeze(false);currentCrop.current=undefined;setStatus('Waiting for a live mouth crop');setDiagnostic(undefined);ctx?.clearRect(0,0,W,H);}
+      }else{setCanFreeze(false);currentCrop.current=undefined;setStatus('Waiting for a live mouth crop');setDiagnostic(undefined);setTip3D(undefined);ctx?.clearRect(0,0,W,H);}
       raf=requestAnimationFrame(tick);
     };raf=requestAnimationFrame(tick);return()=>cancelAnimationFrame(raf);
   },[index,video,frame]);
@@ -56,16 +57,17 @@ export default function TongueLab({video,frame,select,close}:Props){
     setSamples(old=>[...old,sample]);setIndex(samples.length);
   };
   const label=(value:Point|null)=>{if(index===null)return;setSamples(old=>old.map((s,i)=>i===index?{...s,label:value}:s))};
-  const click=(e:React.MouseEvent<HTMLCanvasElement>)=>{const r=e.currentTarget.getBoundingClientRect();const p={x:1-(e.clientX-r.left)/r.width,y:(e.clientY-r.top)/r.height};if(index!==null)label(p);else{const c=currentCrop.current;if(c)select(c.x+p.x*c.width,c.y+p.y*c.height)}};
+  const click=(e:React.MouseEvent<HTMLCanvasElement>)=>{const r=e.currentTarget.getBoundingClientRect();const p={x:1-(e.clientX-r.left)/r.width,y:(e.clientY-r.top)/r.height};if(index!==null)label(p);};
   const labeled=samples.filter(s=>s.label!==undefined),visible=labeled.filter(s=>s.label!==null),matched=visible.filter(s=>s.prediction);
   const errors=matched.map(s=>Math.hypot((s.prediction!.x-s.label!.x)*W,(s.prediction!.y-s.label!.y)*H));
-  const exportData=()=>{const blob=new Blob([JSON.stringify({schema:'tongue-tip-review/v1',createdAt:new Date().toISOString(),coordinates:'unmirrored normalized mouth crop',cropPixels:{width:W,height:H},method:'selected-patch correlation; not an anatomical detector',samples},null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='tongue-tip-review.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)};
+  const exportData=()=>{const blob=new Blob([JSON.stringify({schema:'tongue-tip-review/v1',createdAt:new Date().toISOString(),coordinates:'unmirrored normalized mouth crop',cropPixels:{width:W,height:H},method:'personal neural heatmap and separately supervised depth estimate',samples},null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='tongue-tip-review.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)};
   const d=chosen?chosen.diagnostic:diagnostic;
   return <div className="tongue-lab-backdrop"><section role="dialog" aria-modal="true" aria-labelledby="tongue-lab-title" className="tongue-lab" onKeyDown={e=>{if(e.key==='Escape')close()}}>
     <header><h2 id="tongue-lab-title">Tongue observation lab</h2><button autoFocus onClick={close}>Close</button></header>
-    <p>Pink shows the live tracker. Green appears only when you click the actual tip on a frozen frame—it is your manual label, not an automatic detection.</p>
-    <div className="tongue-lab-grid"><div><canvas ref={canvas} width={W} height={H} onClick={click} aria-label={index===null?'Mirrored live mouth crop. Click the visible tip to track it.':'Captured mouth crop. Click the actual tip to label it.'}/><p>{index===null?'LIVE · Clicking here initializes the pink tracker. To add a green label, choose Freeze frame & label tip first.':`FRAME ${index+1} · ${chosen?.motion} · Click the actual tip to place a green label.`}</p></div>
-    <div className="tongue-lab-controls"><strong role="status">{chosen?.status??status}</strong><span>Tracker: {d?.state??'unavailable'}</span><span>{d?.reason??'No tracker observation yet'}</span><span>Patch match: {d?.score===undefined?'—':d.score.toFixed(2)} (similarity, not probability)</span><span>Separation from other matches: {d?.margin===undefined?'—':d.margin.toFixed(3)}</span>
+    <p>Pink shows the neural tip detector. Depth is estimated from your depth-capture examples. Green appears only when you click the actual tip on a frozen frame—it is your manual label, not an automatic detection.</p>
+    <div className="tongue-lab-grid"><div><canvas ref={canvas} width={W} height={H} onClick={click} aria-label={index===null?'Mirrored live mouth crop. Neural tongue tip tracking.':'Captured mouth crop. Click the actual tip to label it.'}/><p>{index===null?'LIVE · Automatic neural tip. Freeze a frame to add a manual comparison label.':`FRAME ${index+1} · ${chosen?.motion} · Click the actual tip to place a green label.`}</p></div>
+    <div className="tongue-lab-controls"><strong role="status">{chosen?.status??status}</strong><span>Tracker: {d?.state??'unavailable'}</span><span>{d?.reason??'No tracker observation yet'}</span><span>Visibility score: {d?.score===undefined?'—':d.score.toFixed(2)} (uncalibrated)</span><span>Tip heatmap peak: {d?.margin===undefined?'—':d.margin.toFixed(3)}</span>
+    {index===null&&<output aria-label="Tongue tip XYZ">{tip3D?.tip3D?`X ${tip3D.tip3D.x.toFixed(3)} · Y ${tip3D.tip3D.y.toFixed(3)} · Z ${tip3D.tip3D.z.toFixed(3)} (depth estimated; mouth-width units)`:'XYZ unavailable · tip not detected'}</output>}
     {index===null?<><button disabled={!canFreeze||recording||samples.length>=80} onClick={freeze}>Freeze frame & label tip</button><small>1. Freeze a mouth image. 2. Click the tip on that image. A green marker appears where you click.</small></>:<strong role="status">{chosen?.label===null?'Tip marked hidden; no green marker for this frame.':chosen?.label?'Green marker = your label. Click again to move it.':'Frozen frame: click the visible tongue tip to add a green marker.'}</strong>}
     <label>Motion <select value={motion} disabled={recording} onChange={e=>setMotion(e.target.value)}>{['up','down','left','right','out','retract','head still / tongue still','head movement / tongue still'].map(m=><option key={m}>{m}</option>)}</select></label>
     <button disabled={index!==null||samples.length>=80} onClick={()=>setRecording(r=>!r)}>{recording?'Stop capture':'Start capture'}</button>

@@ -50,9 +50,13 @@ def test_native_capture_freezes_authoritative_session_and_verified_export(tmp_pa
     try:
         summary=live.run(source,output,development_fixture=True)
         assert summary['source']=='development-fixture' and not summary['anatomyValidated']
-        assert len(summary['jobs'])==3 and summary['nativeCalls']==46
+        assert len(summary['jobs'])==4 and summary['nativeCalls']==47
         assert summary['modelId']==summary['forecast']['model_id']
         assert summary['forecast']['profile']=={'sample_rate_hz':48000,'frame_start_sample':4800,'frame_size':4096,'duration_s':.25}
+        comparison=json.loads((output/'space-diff.json').read_text())
+        assert comparison['anatomy']==summary['anatomy']
+        assert comparison['referenceAnatomy']==summary['referenceAnatomy']
+        assert comparison['articulation']['JA']['applied']==comparison['referenceArticulation']['JA']['applied']==-3
         receipt=json.loads((output/'session-ledger.json').read_text())
         state=receipt['state'];design=state['designs'][summary['designId']]
         assert state['snapshot']['model_id']==summary['modelId']

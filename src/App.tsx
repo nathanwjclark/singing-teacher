@@ -6,6 +6,7 @@ import { SideAnatomyPanel } from './components/anatomy/SideAnatomyPanel'
 import { useAnatomyMotion } from './hooks/useAnatomyMotion'
 import AudioPanel from './components/AudioPanel'
 import { CoachingPanel } from './components/CoachingPanel'
+import type { VoiceActivity } from './lib/voiceActivity'
 import { useRecentTips } from './hooks/useRecentTips'
 import type { Metrics, TrackingFrame, TrackingStatus } from './types'
 import PhonePairing from './components/phone/PhonePairing'
@@ -29,6 +30,8 @@ import CoachLearningPanel from './components/coach/CoachLearningPanel'
 import { ScientificModelPanel } from './components/science/ScientificModelPanel'
 import { ScientificSideView } from './components/science/ScientificGeometry'
 import { NativePullButton } from './components/phone/NativePullButton'
+import {ModelAdjustmentControls} from './components/science/ModelAdjustmentControls'
+import {setModelAdjustments} from './components/science/modelAdjustments'
 import './App.css'
 
 const demoFrame: TrackingFrame = {
@@ -100,6 +103,7 @@ function StudioApp() {
   const [demo, setDemo] = useState(false)
   const [scenario, setScenario] = useState(0)
   const [demoTime, setDemoTime] = useState(0)
+  const voiceActivity=useRef<VoiceActivity|null>(null)
   const [selectedTipId, setSelectedTipId] = useState<string>()
   const [frame, setFrame] = useState<TrackingFrame | null>(null)
   const [status, setStatus] = useState<TrackingStatus>('loading')
@@ -132,9 +136,9 @@ function StudioApp() {
   const exampleFrame: TrackingFrame = { ...demoFrame, tongue: demoScenarios[scenario].name === 'Tongue' ? {x:.5,y:.5,lateral:Math.sin(demoTime*1.5)*.8,lift:.5+Math.sin(demoTime)*.3,visibleFraction:.45,extension:(1+Math.sin(demoTime*1.2))*.35,elevation:Math.sin(demoTime*1.8)*.8} : undefined, pose: examplePose, worldPose: exampleWorld, blendshapes: {browInnerUp:brow,browOuterUpLeft:brow,browOuterUpRight:brow*.6,cheekSquintLeft:brow*.5,cheekSquintRight:brow*.5,mouthSmileLeft:brow*.7,mouthSmileRight:brow*.7}, metrics: { ...demoFrame.metrics, distanceCm: 65, relativeDepth: 1, headYaw: 0, headPitch: 0, shoulderDepth: 0, torsoLean: 0, ...demoScenarios[scenario].metrics } }
   const shownFrame = demo ? exampleFrame : active && (status === 'tracking' || status === 'no-face') ? frame : null
   const anatomyMotion = useAnatomyMotion(shownFrame, demo, trackingEpoch)
-  const { tips, now: cueNow } = useRecentTips(shownFrame, `${trackingEpoch}:${demo ? 'demo' : active ? 'live' : 'idle'}`)
+  const { tips, now: cueNow } = useRecentTips(shownFrame, `${trackingEpoch}:${demo ? 'demo' : active ? 'live' : 'idle'}`, {voice:voiceActivity,demo})
   const selectedTip = tips.find(tip => tip.id === selectedTipId) ?? tips[0]
-  async function resetTracking(){await recorder.current?.stop().catch(()=>{});setFrame(null);setDemo(false);setScientificPreview(false);setSelectedTipId(undefined);setSeconds(0);setStatus('loading');setMessage('');setTrackingEpoch(n=>n+1);setActive(true)}
+  async function resetTracking(){await recorder.current?.stop().catch(()=>{});setModelAdjustments(null);setFrame(null);setDemo(false);setScientificPreview(false);setSelectedTipId(undefined);setSeconds(0);setStatus('loading');setMessage('');setTrackingEpoch(n=>n+1);setActive(true)}
   function toggleCamera() { setDemo(false); setFrame(null); setSeconds(0); setStatus(active ? 'idle' : 'loading'); setMessage(''); setActive(!active) }
   return (
     <div className="app-shell">
@@ -151,7 +155,7 @@ function StudioApp() {
       <div className="workspace-tools">
         <nav aria-label="Workspace"><button aria-pressed={tab==='studio'} onClick={()=>setTab('studio')}>Studio</button><button aria-pressed={tab==='experiments'} onClick={()=>setTab('experiments')}>Experiments</button></nav>
         <button onClick={()=>setPairOpen(true)}>Connect phone / QR</button>
-        <NativePullButton/>
+        <ModelAdjustmentControls/><NativePullButton/>
         {phoneMicrophone && <span>Phone microphone connected</span>}
         <RecordingControls controllerRef={recorder} videoStream={videoStream} audioStream={audioStream} onRecording={onRecording} transformRecording={transformRecording}/>
       </div>
@@ -164,7 +168,7 @@ function StudioApp() {
           <section className="studio-column coach-column"><div className="column-title"><span className="column-number">04</span><h2>Your next adjustments</h2><span className="live-tag">{demo ? 'DEMO' : active && status === 'tracking' ? 'LIVE' : 'COACH'}</span></div><div className="panel-body"><CoachingPanel tips={tips} demo={demo} tracking={!!shownFrame?.face.length} selectedTipId={selectedTip?.id} now={cueNow} onSelectTip={tip => setSelectedTipId(tip.id)}/></div></section>
         </div>
         {message && status === 'error' && <p className={`session-message ${status === 'error' ? 'error' : ''}`} role="status">{message}</p>}
-        <AudioPanel demo={demo} autoStart externalStream={phoneMicrophone} onStream={setAudioStream}/>
+        <AudioPanel onVoiceActivity={value=>{voiceActivity.current=value}} demo={demo} autoStart externalStream={phoneMicrophone} onStream={setAudioStream}/>
       </main>
       <main className="research-workspace" style={tab==='experiments'?undefined:{display:'none'}}>
         <h2>Experiments and evidence</h2><p>{recordingNotice}</p>

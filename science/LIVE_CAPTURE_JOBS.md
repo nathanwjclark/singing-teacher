@@ -4,7 +4,7 @@
 --output NEW_PRIVATE_RUN` verifies/imports captured LPCM, selects two eligible
 canonical voiced windows under a saved protocol, launches bounded anatomical
 search, freezes supported geometries, commits a prospective vowel design, then
-exports the selected model's native geometry. It does not score a later outcome.
+exports the selected model's native geometry and a same-pose reference comparison. It does not score a later outcome.
 
 When both `SCIENCE_URL` and `SCIENCE_TOKEN` are present, every numerical job and
 session command uses that existing authenticated worker. The URL must be literal
@@ -44,7 +44,8 @@ anatomy or human validation. Existing observations remain unmodified.
 
 CLI SIGTERM/SIGINT is handled as an interruption. The script cancels only its own
 current session-job intent, collects the terminal receipt to clear pending state,
-and cancels its direct forward-export job. An idempotent forward request recovers
+and cancels its current candidate or reference forward-export job. Sequential
+exports reset their active job identity before each submission. An idempotent forward request recovers
 a lost submission reply. A job that completed before cancellation is retained,
 but the script does not launch the next stage. `interruption.json` records cleanup
 and `session-ledger.json` preserves the remaining state. HTTP cleanup uses bounded
@@ -52,3 +53,16 @@ three-second request timeouts. Unreachable services produce an explicit
 `reconciliation_required` receipt instead of claiming cancellation succeeded.
 SIGKILL, host crashes and power loss cannot execute this cleanup; existing durable
 session/job state remains available for manual cancellation/collection on restart.
+
+## Integrated geometry comparison
+
+The live path exports both candidate and reference anatomy through the same local
+or HTTP backend. Both forward results and every copied file are verified before
+`space-diff.json` is paired and hashed into the summary. Reference files remain in
+`reference/` under the private run. The two exports add two PCM synthesis calls;
+the current three-hypothesis protocol uses 47 calls total. These forward jobs are
+bound to the session/model but do not alter the committed forecast ledger. The
+Studio model-adjustment control consumes this paired artifact while retaining
+live tongue motion. The explicit fixed jaw pose is a preview, not a fitted jaw
+correction. Neural tongue model endpoints and private USB actions coexist with
+the durable scientific proxy routes.

@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
 import * as THREE from 'three';
+import {getModelAdjustments,useModelAdjustments} from '../science/modelAdjustments';
+import {createModelTractOverlay} from '../science/modelSpaceTexture';
 import { createTractOverlay } from './tractOverlay';
 import type { AnatomyMotionState } from '../../lib/anatomyState';
 import { ATLAS_WIDTH as W, ATLAS_HEIGHT as H, deformAtlasPoint } from '../../lib/atlasMotion';
@@ -10,6 +12,7 @@ const outline = 'M440 1357 L1122 1357 C1070 1310 992 1160 973 1060 C954 954 1003
 
 export function AtlasCrossSection({ motion }: { motion: RefObject<AnatomyMotionState> }) {
   const mount = useRef<HTMLDivElement>(null);
+  const model=useModelAdjustments();
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   useEffect(() => {
     const host = mount.current;
@@ -41,11 +44,14 @@ export function AtlasCrossSection({ motion }: { motion: RefObject<AnatomyMotionS
     const mesh = new THREE.Mesh(geometry, material);
     mesh.frustumCulled = false;
     scene.add(mesh);
-    const tractTexture = createTractOverlay();
+    let tractTexture = createTractOverlay();
+    let appliedModel = getModelAdjustments();
+    if(appliedModel){tractTexture.dispose();tractTexture=createModelTractOverlay(appliedModel.diff,appliedModel.showDiff)}
     const tractMaterial = new THREE.MeshBasicMaterial({ map: tractTexture, transparent: true, side: THREE.DoubleSide, depthWrite: false });
     const tractMesh = new THREE.Mesh(geometry, tractMaterial);
     tractMesh.frustumCulled = false; tractMesh.renderOrder = 1;
     scene.add(tractMesh);
+    const tipMarker=new THREE.Mesh(new THREE.CircleGeometry(15,20),new THREE.MeshBasicMaterial({color:0x75ffc1,depthTest:false}));tipMarker.renderOrder=5;scene.add(tipMarker);
     let texture: THREE.CanvasTexture | undefined;
     const image = new Image();
     image.onload = () => {
@@ -78,11 +84,19 @@ export function AtlasCrossSection({ motion }: { motion: RefObject<AnatomyMotionS
     renderer.setAnimationLoop(() => {
       if (!texture) return;
       const state = motion.current;
+      const nextModel=getModelAdjustments();
+      if(nextModel!==appliedModel){
+        appliedModel=nextModel;tractTexture.dispose();
+        tractTexture=nextModel?createModelTractOverlay(nextModel.diff,nextModel.showDiff):createTractOverlay();
+        tractMaterial.map=tractTexture;tractMaterial.needsUpdate=true;
+      }
       for (let i = 0; i < positions.count; i++) {
         const [x, y] = deformAtlasPoint(rest[i * 2], rest[i * 2 + 1], state);
         // Both plate and cast share these exact vertices, projection and motion.
         positions.setXYZ(i, W - x, -y, 0);
       }
+      const tip=deformAtlasPoint(175.8,877.8,state);tipMarker.position.set(W-tip[0],-tip[1],.1);tipMarker.visible=state.tongue.visible;
+      host.dataset.tipPosition=JSON.stringify([W-tip[0],-tip[1]]);
       positions.needsUpdate = true;
       renderer.render(scene, camera);
     });
@@ -90,11 +104,13 @@ export function AtlasCrossSection({ motion }: { motion: RefObject<AnatomyMotionS
       disposed = true; image.onload = null; image.onerror = null;
       observer.disconnect(); renderer.setAnimationLoop(null);
       renderer.domElement.removeEventListener('webglcontextlost', lost);
+      tipMarker.geometry.dispose();tipMarker.material.dispose();
       geometry.dispose(); material.dispose(); tractMaterial.dispose(); tractTexture.dispose(); texture?.dispose(); renderer.dispose();
       renderer.domElement.remove();
     };
   }, [motion]);
   return <div className="atlas-cross-section" ref={mount} data-atlas-status={status} data-atlas-opacity="0.2" data-unified-tract="true">
+    {model&&<div className="model-diff-legend" data-model-run={model.runId}><span>BLUE · native reference</span>{model.showDiff&&<><b>GREEN · added</b><em>RED · removed</em></>}<small>Same-pose model comparison · illustrative atlas placement{model.jawPreview?' · fixed jaw preview':''}</small></div>}
     {status === 'loading' && <span className="atlas-message">Loading anatomy plate…</span>}
     {status === 'error' && <div className="atlas-fallback"><img src="/anatomy/reference/lynch-head-sagittal.jpg" alt="Head and mouth anatomical reference by Patrick J. Lynch"/><span>Animation unavailable · reference image</span></div>}
   </div>;
