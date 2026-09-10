@@ -18,7 +18,7 @@ The OBJ header explicitly states that this asset was released as CC0 in Septembe
 
 At runtime, `src/lib/modelHair.ts` preserves the source topology and UV coordinates, scales/translates its positions into the anatomy head rig, gently shapes a crown valley, and adds a narrow scalp-colored ribbon following the imported surface to make the offset part visible. A slight cool material tint is applied. No individual 3D strand tubes are added. The asset is decorative and is not an anatomical measurement.
 
-The target head rig origin is world `(0,151,-1)` centimeters. Source coordinates are mapped to head-local x `(x+0.00515)*10.55`, y `8+(y-6.4721)*7.08`, z `-10.7+(z+0.4595)*10.9`, followed by the small crown adjustment described above.
+The target head rig origin is world `(0,151,-1)` centimeters. Source coordinates are mapped to head-local x `(x+0.00515)*10.55`, y `8+(y-6.4721)*7.08`, z `-10.7+(z+0.4595)*10.9`, followed by the small crown adjustment described above. The forward hairline is lowered by up to 3.25 cm (smoothly across local z −1 to 9) to cover the taller Z-Anatomy frontal vault while preserving the brow muscles and crown volume.
 
 ## Source checksums (SHA-256)
 

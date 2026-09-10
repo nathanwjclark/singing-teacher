@@ -42,6 +42,9 @@ export function createModelHair(): THREE.Group {
         const x = (positions.getX(i) + .00515) * 10.55;
         let y = 8 + (positions.getY(i) - 6.4721) * 7.08;
         const z = -10.7 + (positions.getZ(i) + .4595) * 10.9;
+        // Z-Anatomy has a taller frontal vault than the source mannequin.
+        // Lower the forward hairline onto the frontalis while retaining crown volume.
+        y -= 3.25 * THREE.MathUtils.smoothstep(z, -1, 9);
         const partX = -1.2 + z * .07;
         // Preserve original topology, create a shallow valley between two halves.
         const top = THREE.MathUtils.smoothstep(y, 17, 20);
@@ -61,10 +64,10 @@ export function createModelHair(): THREE.Group {
     const ray = new THREE.Raycaster();
     const points: THREE.Vector3[] = [];
     for (let i = 0; i <= 36; i++) {
-      const z = 8.4 - i * .37, x = -1.2 + z * .07;
+      const z = 9.65 - i * .42, x = -1.2 + z * .07;
       ray.set(new THREE.Vector3(x, 40, z), new THREE.Vector3(0, -1, 0));
       const hit = ray.intersectObject(source, true)[0];
-      if (hit && hit.point.y > 16) points.push(hit.point.clone().add(new THREE.Vector3(0, .055, 0)));
+      if (hit && hit.point.y > 14) points.push(hit.point.clone().add(new THREE.Vector3(0, .055, 0)));
     }
     const vertices: number[] = [], indices: number[] = [];
     for (let i = 0; i < points.length; i++) {
