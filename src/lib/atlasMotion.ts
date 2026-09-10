@@ -45,7 +45,11 @@ export function deformAtlasPoint(x: number, y: number, state: AnatomyMotionState
   const jawWeight = layer === 'structure'
     ? smooth(842, 925, y) * (1 - smooth(440, 660, x)) * (1 - smooth(1090, 1240, y))
     : layer === 'tongue' || layer === 'lower-oral' ? 1 : 0;
-  const jawAngle = -state.jawOpen * jawWeight;
+  // Side-view registration: aim the tongue ten degrees above the lower jaw so
+  // forward travel exits between the lips rather than through the lower lip.
+  // Both native comparison surfaces and the tip marker share this display angle.
+  const tongueElevation = layer === 'tongue' ? 10 * Math.PI / 180 : 0;
+  const jawAngle = -state.jawOpen * jawWeight + tongueElevation;
   const jx = px - 610, jy = py - 735;
   px = 610 + jx * Math.cos(jawAngle) - jy * Math.sin(jawAngle);
   py = 735 + jx * Math.sin(jawAngle) + jy * Math.cos(jawAngle);
