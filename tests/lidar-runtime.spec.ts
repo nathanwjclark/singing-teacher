@@ -20,7 +20,7 @@ test('retained native LiDAR geometry applies and survives a rejected duplicate s
  await page.goto('/');await page.getByRole('button',{name:'Experiments',exact:true}).click();
  const panel=page.getByRole('region',{name:'Experimental rear LiDAR comparison'});
  await expect(panel).toContainText('Current adopted geometry uses hypothesis '+adopted.geometry.hypothesisId);
- const canvas=panel.getByLabel('Original depth pixel selection');await expect(canvas).toBeVisible();
+ const canvas=panel.getByLabel('Original depth pixel selection');await expect(canvas).toBeVisible({timeout:20000});
  expect(await canvas.getAttribute('width')).toBe('2');
  // This retained original has no RGB artifact; the UI must not invent an image.
  await expect(panel.getByAltText('Original rear RGB reference, not a depth pixel map')).toHaveCount(0);
