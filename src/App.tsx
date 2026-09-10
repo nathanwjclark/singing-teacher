@@ -28,6 +28,7 @@ import { MotionCapturePanel } from './components/motion/MotionCapturePanel'
 import CoachLearningPanel from './components/coach/CoachLearningPanel'
 import { ScientificModelPanel } from './components/science/ScientificModelPanel'
 import { ScientificSideView } from './components/science/ScientificGeometry'
+import { NativePullButton } from './components/phone/NativePullButton'
 import './App.css'
 
 const demoFrame: TrackingFrame = {
@@ -150,6 +151,7 @@ function StudioApp() {
       <div className="workspace-tools">
         <nav aria-label="Workspace"><button aria-pressed={tab==='studio'} onClick={()=>setTab('studio')}>Studio</button><button aria-pressed={tab==='experiments'} onClick={()=>setTab('experiments')}>Experiments</button></nav>
         <button onClick={()=>setPairOpen(true)}>Connect phone / QR</button>
+        <NativePullButton/>
         {phoneMicrophone && <span>Phone microphone connected</span>}
         <RecordingControls controllerRef={recorder} videoStream={videoStream} audioStream={audioStream} onRecording={onRecording} transformRecording={transformRecording}/>
       </div>

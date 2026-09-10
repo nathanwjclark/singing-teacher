@@ -10,7 +10,7 @@ export interface ScienceStatus {status:string;runId?:string;error?:string;result
 export const scienceAsset=(run:string,name:string)=>`/api/science/asset?run=${encodeURIComponent(run)}&name=${encodeURIComponent(name)}`;
 export function useScienceStatus(){
  const [state,setState]=useState<ScienceStatus>({status:'loading'});
- useEffect(()=>{let active=true;const refresh=async()=>{try{const r=await fetch('/api/science/status',{cache:'no-store'});if(!r.ok)throw Error('Local scientific service unavailable');const s=await r.json();if(active)setState(s)}catch{if(active)setState({status:'unavailable'})}};void refresh();const timer=setInterval(()=>void refresh(),3000);return()=>{active=false;clearInterval(timer)}},[]);
+ useEffect(()=>{let active=true;const refresh=async()=>{try{const r=await fetch('/api/science/status',{cache:'no-store'});if(!r.ok)throw Error('Local scientific service unavailable');const s=await r.json();if(active)setState(previous=>previous.status===s.status&&previous.runId===s.runId&&previous.error===s.error?previous:s)}catch{if(active)setState({status:'unavailable'})}};void refresh();const timer=setInterval(()=>void refresh(),3000);return()=>{active=false;clearInterval(timer)}},[]);
  return state;
 }
 export async function verifiedScienceAsset(result:ScientificResult,name:string){

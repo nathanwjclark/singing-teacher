@@ -1,4 +1,4 @@
-import {readFile, writeFile, mkdir} from 'node:fs/promises';
+import {readFile, writeFile, mkdir, rename} from 'node:fs/promises';
 import {resolve} from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {spawn} from 'node:child_process';
@@ -6,9 +6,9 @@ import {spawn} from 'node:child_process';
 const files=new Set(['tract0.obj','tract0.mtl','tract.svg','geometry.json','manifest.json','fit.json','forecast.json','summary.json']);
 const types={obj:'text/plain',mtl:'text/plain',svg:'image/svg+xml',json:'application/json'};
 export function scienceRoutes({repo,dataRoot,json}) {
-  let running=null;
+  let running=null,starting=false;
   const index=resolve(dataRoot,'science-current.json');
-  const save=async value=>writeFile(index,JSON.stringify(value,null,2),{mode:0o600});
+  const save=async value=>{const temporary=index+'.'+randomUUID()+'.tmp';await writeFile(temporary,JSON.stringify(value,null,2),{mode:0o600});await rename(temporary,index)};
   async function status(){try{return JSON.parse(await readFile(index,'utf8'))}catch{return {status:'not-run'}}}
   const terminate=()=>{if(running){try{process.kill(-running.pid,'SIGTERM')}catch{/* already exited */}}};
   process.once('exit',terminate);
@@ -30,7 +30,9 @@ export function scienceRoutes({repo,dataRoot,json}) {
       try{const data=await readFile(resolve(dataRoot,'science-runs',run,name));res.writeHead(200,{'Content-Type':types[name.split('.').at(-1)],'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'"});res.end(data)}catch{json(res,404,{error:'Artifact unavailable'})}return true;
     }
     if(url.pathname==='/api/science/run'&&req.method==='POST'){
-      if(running){json(res,409,{error:'A scientific job is already running'});return true}
+      if(running||starting){json(res,409,{error:'A scientific job is already running'});return true}
+      if(url.search||Number(req.headers['content-length']||0)>0||req.headers['transfer-encoding']){json(res,400,{error:'This action takes no parameters'});return true}
+      starting=true;try{
       let config;try{config=JSON.parse(await readFile(resolve(dataRoot,'science-input.json'),'utf8'))}catch{json(res,409,{error:'No verified local voice capture configured'});return true}
       const source=resolve(dataRoot,config.sourceDirectory||'');
       if(!source.startsWith(dataRoot+'/')){json(res,400,{error:'Voice source must remain in the private data directory'});return true}
@@ -39,11 +41,12 @@ export function scienceRoutes({repo,dataRoot,json}) {
       const record={status:'running',runId,startedAt:new Date().toISOString()};await save(record);
       const python=process.env.SINGING_PYTHON||resolve(repo,'science/.venv/bin/python');
       const child=spawn(python,[resolve(repo,'science/scripts/live_capture_jobs.py'),'--source',source,'--output',output],{cwd:repo,env:{...process.env,PYTHONPATH:repo+':'+resolve(repo,'science/src')},detached:true,stdio:['ignore','pipe','pipe']});running=child;
-      let logs='';for(const stream of [child.stdout,child.stderr])stream.on('data',data=>{logs=(logs+data.toString()).slice(-100_000)});
+      let logs='',launchError=false;for(const stream of [child.stdout,child.stderr])stream.on('data',data=>{logs=(logs+data.toString()).slice(-100_000)});
       const timer=setTimeout(()=>{try{process.kill(-child.pid,'SIGTERM')}catch{/* exited */}},570_000);timer.unref();
-      child.once('error',async()=>{clearTimeout(timer);running=null;await save({...record,status:'failed',error:'Scientific Python could not start'})});
-      child.once('close',async code=>{clearTimeout(timer);running=null;await mkdir(output,{recursive:true,mode:0o700});await writeFile(resolve(output,'process.log'),logs,{mode:0o600});await save({...record,status:code===0?'succeeded':'failed',finishedAt:new Date().toISOString(),...(code===0?{}:{error:'Scientific job failed; private output and process.log retained'})})});
+      child.once('error',()=>{launchError=true});
+      child.once('close',async code=>{clearTimeout(timer);running=null;await mkdir(output,{recursive:true,mode:0o700});await writeFile(resolve(output,'process.log'),logs,{mode:0o600});await save({...record,status:code===0?'succeeded':'failed',finishedAt:new Date().toISOString(),...(code===0?{}:{error:launchError?'Scientific Python could not start':'Scientific job failed; private output and process.log retained'})})});
       json(res,202,record);return true;
+      }finally{starting=false}
     }
     json(res,405,{error:'Method not allowed'});return true;
   };
