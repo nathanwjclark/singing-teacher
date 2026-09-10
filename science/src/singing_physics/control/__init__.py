@@ -69,7 +69,7 @@ def fit_control_profile(attempts, *, anatomy_model_id, fitted_at):
                 'observed_at', 'sensor_status', 'sensor_reason', 'execution_status',
                 'JA', 'measurement_sigma_deg', 'operator_id', 'comfortable',
                 'source_kind', 'uncertainty_scope', 'derived_model_id'}
-    ids, records = set(), []
+    ids, evidence_ids, records = set(), set(), []
     for attempt in _copy(attempts):
         if not isinstance(attempt, dict) or set(attempt) - (required | {'sensation_report'}) or not required <= set(attempt):
             raise ValueError('attempt has missing or unsupported fields')
@@ -78,6 +78,9 @@ def fit_control_profile(attempts, *, anatomy_model_id, fitted_at):
         if attempt['attempt_id'] in ids:
             raise ValueError('duplicate attempt_id')
         ids.add(attempt['attempt_id'])
+        if attempt['evidence_id'] in evidence_ids:
+            raise ValueError('duplicate evidence_id cannot count as an independent attempt')
+        evidence_ids.add(attempt['evidence_id'])
         _key(attempt['cue_id'], attempt['cue_version'], attempt['context'], attempt['mode'])
         attempt['context'] = _context(attempt['context'])
         try:
@@ -93,6 +96,8 @@ def fit_control_profile(attempts, *, anatomy_model_id, fitted_at):
         _text(attempt['uncertainty_scope'], 'uncertainty_scope')
         if attempt['source_kind'] == 'inferred_articulation':
             _text(attempt['derived_model_id'], 'derived_model_id')
+            if attempt['derived_model_id'] != anatomy_model_id:
+                raise ValueError('inferred articulation derived_model_id must match anatomy_model_id')
         elif attempt['derived_model_id'] is not None:
             _text(attempt['derived_model_id'], 'derived_model_id')
         if type(attempt['comfortable']) is not bool:

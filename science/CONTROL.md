@@ -17,12 +17,14 @@ context; mode (`elicited`, `recalled`, `transfer`); timezone-aware `observed_at`
 sensor reason; execution status (`successful`/`unsuccessful`/`unknown`); nullable
 `JA` in degrees and `measurement_sigma_deg`; `source_kind` (`direct_measurement`,
 `inferred_articulation`, `synthetic`); `uncertainty_scope`; nullable
-`derived_model_id` (required for inferred articulation). Optional sensation text
+`derived_model_id` (required for inferred articulation and must equal the profile
+`anatomy_model_id`; cross-model transformations are unsupported). Optional sensation text
 is retained subjectively and never used to update anatomy or numerical control
 estimates. Level is a declared matching task label, not invented calibrated SPL.
 Missing/sensor-invalid movement is null, never fabricated zero motion.
 
-The profile retains all attempts and evidence IDs, checks duplicates and rejects
+The profile retains all attempts and evidence IDs, rejects duplicate attempt IDs
+and duplicate evidence IDs independently (including failed/missing attempts), and rejects
 post-freeze observations. `profile_sha256` hashes sorted compact JSON of every
 profile field except that hash. `execution_distribution` reconstructs and
 validates the profile and hash before use. Callers must separately exclude target

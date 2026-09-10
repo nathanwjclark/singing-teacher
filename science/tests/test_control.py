@@ -60,7 +60,7 @@ def test_measured_failure_missing_occlusion_and_contexts_are_retained():
 
 def test_inferred_dispersion_is_not_calibrated_motor_variance():
     profile = fit([attempt(i, -i, source_kind='inferred_articulation',
-                          uncertainty_scope='conditional_on_model', derived_model_id='fit-1') for i in range(3)])
+                          uncertainty_scope='conditional_on_model', derived_model_id='stable-anatomy-1') for i in range(3)])
     result = distribution(profile)
     assert result['estimated_between_attempt_variance_deg2'] is None
     assert result['mean_measurement_variance_deg2'] is None
@@ -98,8 +98,27 @@ def test_sensations_never_change_control_values_or_anatomy_and_small_noise():
 def test_inferred_unknown_uncertainty_is_preserved_without_fabrication():
     result = distribution(fit([attempt(i, -i, source_kind='inferred_articulation',
         measurement_sigma_deg=None, uncertainty_scope='uncalibrated_conditional_on_model_and_observations',
-        derived_model_id='fit-1') for i in range(3)]))
+        derived_model_id='stable-anatomy-1') for i in range(3)]))
     assert result['status'] == 'supported'
     assert result['mean_reported_uncertainty_variance_deg2'] is None
     assert result['estimated_between_attempt_variance_deg2'] is None
     assert all(sample['measurement_sigma_deg'] is None for sample in result['samples'])
+
+
+def test_cloned_evidence_cannot_inflate_support_even_for_failure_or_missing():
+    for source in (attempt(0), attempt(0, execution_status='unsuccessful'),
+                   attempt(0, None, sensor_status='invalid', sensor_reason='occluded',
+                           measurement_sigma_deg=None, execution_status='unknown')):
+        clones = [{**source, 'attempt_id': f'clone-{i}'} for i in range(3)]
+        with pytest.raises(ValueError, match='duplicate evidence_id'):
+            fit(clones)
+
+
+def test_inferred_model_lineage_must_match_stable_anatomy():
+    records = [attempt(i, source_kind='inferred_articulation',
+                      uncertainty_scope='conditional_on_model', derived_model_id=f'other-model-{i}')
+               for i in range(3)]
+    with pytest.raises(ValueError, match='derived_model_id must match anatomy_model_id'):
+        fit(records)
+    with pytest.raises(ValueError, match='derived_model_id must match anatomy_model_id'):
+        fit([{**a, 'derived_model_id': 'one-different-model'} for a in records])
