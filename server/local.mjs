@@ -1,4 +1,5 @@
 import './environment.mjs';
+import {createMotionRoutes} from './motion.mjs';
 import {createSessionExportRoutes} from './sessionExport.mjs';
 import {createProbeRoutes} from './probe.mjs';
 import {createAstraRoutes} from './astra.mjs';
@@ -31,6 +32,7 @@ const handleLearning=createLearningRoutes({repo:resolve(import.meta.dirname,'..'
 const handleAstra=createAstraRoutes({repo:resolve(import.meta.dirname,'..'),dataRoot,json});
 const handleProbe=createProbeRoutes({repo:resolve(import.meta.dirname,'..'),dataRoot,json});
 const handleSessionExport=createSessionExportRoutes({dataRoot,json});
+const handleMotion=createMotionRoutes({dataRoot,json});
 let handlePhonation;
 let handleSource;
 try{const {createSourceInferenceRoutes}=await import('./sourceInference.mjs');handleSource=createSourceInferenceRoutes({repo:resolve(import.meta.dirname,'..'),dataRoot,json});}
@@ -53,6 +55,7 @@ const serverHandler=async(req,res)=>{try{
   if(await handleSessionExport(req,res,url))return;
   if(await handlePhonation(req,res,url))return;
   if(await handleSource(req,res,url))return;
+  if(await handleMotion(req,res,url))return;
   if(await handleScience(req,res,url))return;
   if(await handleVoiceCapture(req,res,url))return;
   if(await handleNativePull(req,res,url))return;

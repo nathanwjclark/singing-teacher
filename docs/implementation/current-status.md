@@ -59,8 +59,32 @@ require device evidence. Depth and visible tongue measurements do not expose
 hidden cavities or internal musculature. These limitations constrain scientific
 claims; they do not mean the numerical engine or connected app is absent.
 
-Motion exports currently support recorded 2D trajectory review. They cannot be
+Motion recordings support recorded 2D trajectory review and app-side retention of
+the original JSON and hash-bound companion video. Saving is available from the
+normal capture/replay controls; saved download links survive reload. Gaps, failed
+attempt markers and unknown synchronization remain explicit. This evidence is
+not automatically included in a physical fit. They cannot be
 converted into the existing synthetic direct-transfer dynamic fitter's input:
 depth, rigid alignment, synchronization and the acoustic quantity differ. A
 real-media dynamic inference consumer is additional modeling work, not a missing
 format conversion or a task that can be declared blocked solely on B.
+
+## Remaining ownership
+
+- **Lead A, next modeling increment:** build a microphone-PCM dynamic consumer
+  for retained anatomy hypotheses, rather than substituting microphone spectra
+  into the existing direct-transfer fitter. Keep source assumptions and competing
+  per-window articulation states explicit; preserve silent/failed windows. This
+  is unblocked software work, but is not implemented by motion persistence.
+- **Lead B, acquisition evidence:** collect real phone/depth/probe captures with
+  declared device calibration and timing uncertainty; complete native iOS build
+  and device checks in an Xcode-capable environment.
+- **Both leads, scientific validation:** evaluate held-out human recordings and
+  paired reference measurements before claiming anatomical recovery, closure
+  detection or coaching benefit. Synthetic recovery establishes software
+  execution only.
+
+Current integration evidence: source/replay/learning browser suite 20 passed;
+actual native source lifecycle and source-to-Astra route checks passed; motion
+persistence adds two real-server browser tests with exact original downloads
+and rejection/fallback coverage. Build/typecheck and lint passed.
