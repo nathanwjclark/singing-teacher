@@ -1,5 +1,6 @@
 import http from 'node:http';
 import {scienceRoutes} from './science.mjs';
+import {createVoiceCaptureRoutes} from './voiceCapture.mjs';
 import {createNativePullRoutes} from './nativePull.mjs';
 import https from 'node:https';
 import {readFile,writeFile,mkdir,access} from 'node:fs/promises';
@@ -17,6 +18,7 @@ const allowedHosts=new Set(['localhost','[::1]',hostname().toLowerCase(),hostnam
 const mime={'.html':'text/html','.js':'text/javascript','.css':'text/css','.json':'application/json','.png':'image/png','.svg':'image/svg+xml','.bin':'application/octet-stream','.md':'text/plain','.wasm':'application/wasm','.mp4':'video/mp4'};
 const json=(res,status,body)=>{res.writeHead(status,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify(body))};
 const handleScience=scienceRoutes({repo:resolve(import.meta.dirname,'..'),dataRoot,json});
+const handleVoiceCapture=createVoiceCaptureRoutes({repo:resolve(import.meta.dirname,'..'),dataRoot,json});
 const handleNativePull=createNativePullRoutes({repo:resolve(import.meta.dirname,'..'),dataRoot,json});
 const engineAvailable=await access(process.env.SINGING_PYTHON||resolve(import.meta.dirname,'../science/.venv/bin/python')).then(()=>true).catch(()=>false);
 const equal=(a,b)=>typeof a==='string'&&a.length===b.length&&timingSafeEqual(Buffer.from(a),Buffer.from(b));
@@ -28,6 +30,7 @@ const serverHandler=async(req,res)=>{try{
   // Refuse cross-origin browser writes; pairing tokens authorize phone routes.
   if(req.method==='POST'&&req.headers.origin&&new URL(req.headers.origin).host!==req.headers.host)return json(res,403,{error:'Cross-origin write refused'});
   if(await handleScience(req,res,url))return;
+  if(await handleVoiceCapture(req,res,url))return;
   if(await handleNativePull(req,res,url))return;
   if(url.pathname.startsWith('/api/science/')){
     if(!scienceProxy)return json(res,503,{error:'Scientific service is not configured'});

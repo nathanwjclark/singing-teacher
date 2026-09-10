@@ -1,5 +1,25 @@
 # Current Lead A integration status
 
+## App-operated outcomes
+
+Ordinary native voice fitting and outcome scoring now run from the app controls,
+without learner-created configuration files, hashes or backend commands. The
+latest pulled capture is verified and prepared automatically; outcome submission,
+collection, numerical scores and replay use the authoritative session. See
+[APP_VOICE_FLOW.md](APP_VOICE_FLOW.md). Interrupted preparation/submission and
+stale collection retries preserve identity, and stopped attempts cannot publish
+late worker success. Normal client interruption cancels owned reachable jobs.
+
+Fresh verification: **15 pipeline/recovery Python tests passed in 81.17 s**,
+including actual app API preparation of original archives followed by native fit
+and later update. The final atomic preparation regression also passed in the
+four-test preparation suite. **Five Node integration tests**, **eight browser
+tests**, build, TypeScript and lint passed. UI checks cover preparation failure,
+automatic requests, exact displayed scores, stopped outcomes and refreshed results.
+USB transfer is simulated with explicitly generated native bytes in these tests;
+no physical device or human validation is claimed. Existing bundle-size advisory
+remains. Live Astra and actual device demonstration are still separate work.
+
 ## B runtime continuation (main `1067c89`)
 
 The saved-capture app run now uses the authoritative session in the running HTTP

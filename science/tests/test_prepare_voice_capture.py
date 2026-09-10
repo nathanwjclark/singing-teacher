@@ -7,6 +7,7 @@ import zipfile
 import pytest
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'scripts'))
 from prepare_voice_capture import prepare
+import prepare_voice_capture
 
 
 def fixture(root):
@@ -54,3 +55,14 @@ def test_invalid_claims_probe_receipt_and_archive_hash_rejected(tmp_path):
     with pytest.raises(ValueError,match='unsupported'):prepare(tmp_path,'calibration','a',False)
     receipt['name']=name;receipt['sha256']='0'*64;(tmp_path/'native-pull-latest.json').write_text(json.dumps(receipt))
     with pytest.raises(ValueError,match='hash'):prepare(tmp_path,'calibration','a',False)
+
+
+def test_interrupted_preparation_does_not_block_app_retry(tmp_path,monkeypatch):
+    fixture(tmp_path)
+    with monkeypatch.context() as patch:
+        def interrupted(*args):raise OSError('interrupted publication')
+        patch.setattr(prepare_voice_capture.os,'rename',interrupted)
+        with pytest.raises(OSError,match='interrupted'):
+            prepare(tmp_path,'calibration','a',False)
+    assert not (tmp_path/'science-input.json').exists()
+    assert prepare(tmp_path,'calibration','a',False)['prepared']

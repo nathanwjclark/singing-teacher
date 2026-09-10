@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
 import tempfile
 from import_session_bundle import _archive, _phase, _json
 
@@ -60,9 +61,13 @@ def prepare(data_root, purpose, pose, contains_external_excitation):
             if p.is_symlink() or p.read_bytes()!=data:
                 raise ValueError('Prepared capture hash mismatch')
     else:
-        destination.mkdir(mode=0o700)
-        for name,data in files.items():
-            with os.fdopen(os.open(destination/name,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600),'wb') as output:output.write(data)
+        staging=Path(tempfile.mkdtemp(prefix='.preparing-',dir=parent))
+        try:
+            for name,data in files.items():
+                with os.fdopen(os.open(staging/name,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600),'wb') as output:output.write(data)
+            os.rename(staging,destination)
+        finally:
+            if staging.exists():shutil.rmtree(staging)
     relative=str(destination.relative_to(root))
     config={'sourceDirectory':relative,'evidenceKind':'human-observation'} if purpose=='calibration' else {
         'sourceDirectory':relative,'pose':pose,'segment_index':0,'evidence_kind':'human-observation',
