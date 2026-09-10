@@ -78,3 +78,14 @@ Fitted/reference geometry is hash-verified before display. Outcome updates retai
 The current optional tongue path uses a private neural model with visible-tip, visibility and depth outputs, loaded locally through ONNX Runtime Web with verified model bytes. It supersedes the selected-patch and color trackers. Missing private weights or weak/hidden detections remain unavailable; the repository does not include participant training data. Front and side views use the same estimated pose. Tongue Lab retains inspection and manual comparison tools. See [neural tongue tracking](docs/implementation/NEURAL-TONGUE.md) for model setup, coordinate assumptions and evaluation limits.
 
 Visible tongue estimates do not reveal hidden tongue shape, internal muscle activation, or precise anatomy. Optional phonation acoustics likewise do not diagnose vocal-fold closure. Source-model integration is currently in progress; see [optional phonation status](docs/implementation/PHONATION-STATUS.md) and the [current status](docs/implementation/current-status.md) before enabling research features.
+
+## Optional visual experiments
+
+The Experiments page supports original-frame conditional visual forecasts with
+`VISUAL_LIKELIHOOD_ENABLED=1`. The separate illustrated-teaching integration uses
+`VISUAL_TEACHING_ENABLED=1`, `VISUAL_TEACHING_MODEL_ENABLED=1` and
+`VISUAL_TEACHING_AUDIO_ENABLED=1` for its independently gated modes. Set desired
+flags at app startup; learners use app controls without per-attempt backend
+commands. Defaults remain optional/off. See [setup, app actions and current
+verification limits](docs/implementation/VISUAL-EXPERIMENTS.md); teaching browser
+acceptance is still pending.

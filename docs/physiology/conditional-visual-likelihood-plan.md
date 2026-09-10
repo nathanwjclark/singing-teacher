@@ -1,16 +1,18 @@
-# Conditional visual observation likelihood: proposed next lane
+# Conditional visual observation likelihood: delivered conditional software
 
-Status: implementation proposal, not a completed physiological inference capability. This proposal is separate from the implemented motion-audio analysis, LiDAR fusion, and source forecasting work. It requires no new native iPhone capture code for the first software experiment.
+Status: the conditional native projection, fixed-camera calibration, durable forecast, original-frame annotation and held-out scoring path are implemented. This is not a validated physiological inference capability. It remains separate from motion-audio analysis, LiDAR fusion and source forecasting; the first software experiment requires no new native iPhone capture code.
 
-## Concrete current gap
+Actual app/browser verification passed two synthetic-video flows in 38.5 seconds: calibration clicks → native forecast → reload → visible-target scoring, and the equivalent missing/occluded-target path. Both retain the frozen artifact and unchanged baseline. See [app setup and verification limits](../implementation/VISUAL-EXPERIMENTS.md).
+
+## Measurement mismatch addressed by the separate operator
 
 `science/src/singing_physics/engine.py::Engine.lip_markers` returns actual native upper/lower XYZ positions in meters at fixed surface/vertex identities `[4,89]` and `[5,89]`, with operator ID `vtl-upper4-lower5-vertex89-distance-v1` and native provenance. `observations/geometry/lips.py` uses those identities for an explicitly annotated metric surface-distance observation. The integrated joint fitter consumes that metric distance.
 
 `src/capture/motion.ts` instead records MediaPipe landmarks 13/14 as `upper_lip`/`lower_lip`, 61/291 as mouth corners, and uses eye landmarks 33/263 for its image-relative transform. The MediaPipe lip points are not established correspondences to the native outer-surface vertices. The names alone do not make the physical measurements equivalent. The native model does not provide the eye landmarks used by that transform. A direct comparison of current `headRelative` values with native meters would be dimensionally and semantically invalid.
 
-This is a wiring gap for a visual forward likelihood, not evidence that the existing motion recorder is incorrect. The current recorder measures visible movement without claiming a native vertex correspondence.
+The separate explicit-annotation operator addresses this wiring gap without treating the existing motion recorder as incorrect. The current recorder measures visible movement without claiming a native vertex correspondence.
 
-## Minimal proposed operator
+## Implemented bounded operator
 
 Start with the projected upper-minus-lower marker vector in a stable, approximately frontal segment:
 
@@ -62,4 +64,4 @@ A human-recording accuracy gate remains a separate experiment requiring defensib
 
 ## Review disposition
 
-Priority is to make the missing physical correspondence and coordinate metadata explicit before adding a visual likelihood to model fitting. A new interface that compares existing normalized lip points directly with native metric distance would be a real correctness defect. The smallest defensible implementation is a conditional projected two-marker observation with frozen nuisance, explicit missing evidence, and one connected session scoring path. This document contains no implementation stub and claims no completed code or accuracy result.
+Priority is to make the missing physical correspondence and coordinate metadata explicit before adding a visual likelihood to model fitting. A new interface that compares existing normalized lip points directly with native metric distance would be a real correctness defect. The smallest defensible implementation is a conditional projected two-marker observation with frozen nuisance, explicit missing evidence, and one connected session scoring path. The connected software now implements that conditional path. Continuous calibrated motion inference, defensible human correspondences and independent accuracy measurements remain future evidence work; no anatomy or learning-efficacy result follows from the software checks.
