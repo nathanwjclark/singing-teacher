@@ -48,6 +48,26 @@ def review(path):
             if not math.isfinite(seconds) or value.get('seconds') is None or abs(seconds-value['seconds']) > 1e-6:
                 raise ValueError('Invalid/inconsistent source time')
             return seconds, value['epoch']
+        audio_rows = manifest.get('audio', {}).get('samples', [])
+        audio_checked = 0
+        prior_audio = None
+        for sample in audio_rows:
+            if not sample.get('artifact'):
+                if not sample.get('missing_reason'):
+                    raise ValueError('Missing audio chunk lacks reason')
+                continue
+            data = artifact(sample['artifact'])
+            stamp, epoch = timestamp(sample['presentation_timestamp'])
+            if prior_audio is not None and (epoch != prior_audio[1] or stamp < prior_audio[0]):
+                raise ValueError('Audio clock reversed or changed epoch')
+            prior_audio = stamp, epoch
+            fmt = sample['asbd']
+            count, stride = sample['num_samples'], fmt['bytes_per_frame']
+            if not isinstance(count, int) or count <= 0 or not isinstance(stride, int) or stride <= 0 or len(data) != count*stride:
+                raise ValueError('Audio PCM dimensions disagree with bytes')
+            if not isinstance(fmt['sample_rate'], (int,float)) or not math.isfinite(fmt['sample_rate']) or fmt['sample_rate'] <= 0:
+                raise ValueError('Invalid native audio sample rate')
+            audio_checked += 1
         rows = []
         previous = None
         previous_seq = -1
@@ -95,7 +115,7 @@ def review(path):
                         raise ValueError('Invalid focal length')
                 row.update({'total_pixels':len(values),'positive_finite_pixels':len(valid),'valid_fraction':len(valid)/len(values),'median_depth_m':valid[len(valid)//2] if valid else None,'filtered':frame.get('depth_filtered'),'calibration_present':bool(calibration)})
             rows.append(row)
-        return {'kind':'native-depth-coverage-review','manifest_sha256':hashlib.sha256(raw_manifest).hexdigest(),'capture_id':manifest['capture_id'],'callbacks':len(rows),'frames_with_depth':sum('valid_fraction'in r for r in rows),'frames_with_rgb':sum(bool(f.get('rgb')) for f in manifest['frames']),'audio':manifest.get('audio'),'stop_reason':manifest.get('stop_reason'),'frames':rows,'limitations':['Coverage is whole-depth-frame coverage, not mouth segmentation.','No on-device capture is implied by running this validator on a fixture.','Positive finite depth is not evidence of accurate tongue/palate reconstruction.','Native distortion is not corrected and head/world pose is absent; no surface fusion or metric point cloud generated.','Timestamp differences do not establish absolute synchronization uncertainty.']}
+        return {'kind':'native-depth-coverage-review','manifest_sha256':hashlib.sha256(raw_manifest).hexdigest(),'capture_id':manifest['capture_id'],'callbacks':len(rows),'verified_audio_chunks':audio_checked,'frames_with_depth':sum('valid_fraction'in r for r in rows),'frames_with_rgb':sum(bool(f.get('rgb')) for f in manifest['frames']),'audio':manifest.get('audio'),'stop_reason':manifest.get('stop_reason'),'frames':rows,'limitations':['Coverage is whole-depth-frame coverage, not mouth segmentation.','No on-device capture is implied by running this validator on a fixture.','Positive finite depth is not evidence of accurate tongue/palate reconstruction.','Native distortion is not corrected and head/world pose is absent; no surface fusion or metric point cloud generated.','Timestamp differences do not establish absolute synchronization uncertainty.']}
 
 if __name__ == '__main__':
     parser=argparse.ArgumentParser(description=__doc__)

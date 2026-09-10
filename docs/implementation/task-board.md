@@ -62,4 +62,4 @@ The original eleven rows remain prototype implementation statuses, not scientifi
 | KIT/AUD handoff | Validated genuine native mesh/audio and canonical measurements; fixed-parameter geometry displayed in web viewer | A's microphone-source/capture likelihood and human fitting |
 | Pitch repair | Rate-aware live analysis; explicit no-pitch reasons; 10Hz saved pitch replay/export | User's actual mic/phone route confirmation |
 
-Private Wi-Fi HTTPS is prepared and locally deployed. Native depth acquisition remains unfinished; the browser surface capture route was a user-selected prototype scope, not satisfaction of the native device gate. The new surface-reconstruction direction does not turn estimated landmark z into measured depth.
+Private Wi-Fi HTTPS is prepared and locally deployed. A native TrueDepth/RGB/optional-PCM app is now implemented and compiles unsigned; physical device acquisition acceptance remains unfinished. The browser surface capture route was a user-selected prototype scope, not satisfaction of the native device gate. The new surface-reconstruction direction does not turn estimated landmark z into measured depth.

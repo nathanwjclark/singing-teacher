@@ -22,7 +22,7 @@ Output directories must be new. Adapter checks all native artifact hashes and ma
 
 ## Gates that still need external evidence
 
-- CAP native acceptance: actual iPhone synchronized audio/RGB/TrueDepth or LiDAR, calibration, sensor timestamps, missing samples and repeated stop/permission-loss trials on target devices. Current private-HTTPS browser capture does not expose raw hardware depth. A native acquisition adapter and a person operating the phone are required; browser landmark depth cannot substitute.
+- CAP native acceptance: actual iPhone synchronized audio/RGB/TrueDepth or LiDAR, calibration, sensor timestamps, missing samples and repeated stop/permission-loss trials on target devices. Current private-HTTPS browser capture does not expose raw hardware depth. A native acquisition app now exists in apps/ios and compiles unsigned; installing it on a compatible phone and collecting actual evidence remain required. Browser landmark depth cannot substitute.
 - AUD capture compensation: relative ambient-noise calibration is implemented. Recovering microphone/room transfer response requires a declared source/capture model and calibrated evidence, not only silence.
 - G2: independently scored hidden synthetic recovery with equal-budget baseline and A numerical signoff. Replaying A's existing synthetic workflow alone is not independent confirmation of anatomical recovery.
 - G3: real calibrated multimodal fitting and independently scored human outcomes. Depends on capture above and A's measured-audio likelihood.
@@ -45,3 +45,7 @@ The reconstruction direction is recorded in [mouth-reconstruction-direction.md](
 Revision 6 learning exports include `kit.records` alongside the local protocol/replay envelope. Run `node --experimental-strip-types scripts/validate-learning.ts EXPORT_JSON` to check the shared record schema and cue/attempt references. The validator cannot verify specialist credentials or substitute for actual learner evidence.
 
 Native depth export inspection is available as `python3 scripts/review-native-depth.py CAPTURE.zip --output NEW_REPORT.json`. It verifies recorded bytes and metadata and reports valid-depth coverage. It does not undistort, infer missing surfaces, or certify interior-mouth measurement accuracy.
+
+## Native acquisition implementation
+
+`apps/ios/SingingDepth/SingingDepth.xcodeproj` now provides explicit held-pose RGB/TrueDepth capture and optional raw microphone PCM with original timestamps/format metadata. The unsigned iPhoneOS build and ZIP integrity check passed. No compatible device was connected, so real capture, permission-loss, audio continuity, depth coverage and synchronization accuracy remain unverified. See [native capture instructions](../../apps/ios/README.md).
