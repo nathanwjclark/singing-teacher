@@ -63,19 +63,22 @@ Motion recordings support recorded 2D trajectory review and app-side retention o
 the original JSON and hash-bound companion video. Saving is available from the
 normal capture/replay controls; saved download links survive reload. Gaps, failed
 attempt markers and unknown synchronization remain explicit. This evidence is
-not automatically included in a physical fit. They cannot be
+not automatically included in a physical fit. These recordings cannot be
 converted into the existing synthetic direct-transfer dynamic fitter's input:
-depth, rigid alignment, synchronization and the acoustic quantity differ. A
-real-media dynamic inference consumer is additional modeling work, not a missing
-format conversion or a task that can be declared blocked solely on B.
+depth, rigid alignment, synchronization and the acoustic quantity differ.
+The app now offers a bounded audio-only consumer: it decodes the retained
+recording, compares three windows against finite source/articulation alternatives
+on retained anatomy, and preserves the original evidence and baseline. This is
+conditional acoustic analysis linked to motion review; measured 2D movement does
+not enter the physical fitting objective.
 
 ## Remaining ownership
 
-- **Lead A, next modeling increment:** build a microphone-PCM dynamic consumer
-  for retained anatomy hypotheses, rather than substituting microphone spectra
-  into the existing direct-transfer fitter. Keep source assumptions and competing
-  per-window articulation states explicit; preserve silent/failed windows. This
-  is unblocked software work, but is not implemented by motion persistence.
+- **Lead A, further research:** validate and extend the conditional audio windows
+  into a temporally coupled model, and define a calibrated visual forward
+  observation model before fitting visible trajectories jointly. The current
+  independent-window audio fit must not be described as recovered dynamic
+  anatomy or verified motor control.
 - **Lead B, acquisition evidence:** collect real phone/depth/probe captures with
   declared device calibration and timing uncertainty; complete native iOS build
   and device checks in an Xcode-capable environment.
@@ -88,3 +91,10 @@ Current integration evidence: source/replay/learning browser suite 20 passed;
 actual native source lifecycle and source-to-Astra route checks passed; motion
 persistence adds two real-server browser tests with exact original downloads
 and rejection/fallback coverage. Build/typecheck and lint passed.
+
+The optional motion-audio path additionally passed actual encoded-media app
+runtime checks (voiced, silent, no-audio, missing decoder, restart reuse and
+unchanged baseline), plus real-server browser checks for actual native results
+and unavailable states. The final UI refreshes baseline identity before a new
+analysis while preserving uncertain retry identities. See
+[motion audio review](motion-audio-review.md).
