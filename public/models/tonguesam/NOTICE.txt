@@ -1,0 +1,14 @@
+TongueSAM prompt-detector baseline for Tract Star
+
+Source: https://github.com/cshan-github/TongueSAM
+Revision: 3f6e8c620e4d89e669a92a22f3be3d007932ce45
+TongueSAM: Copyright (c) 2023 Shan Cao, MIT License.
+YOLOX architecture: Copyright (c) Megvii, Inc. and its affiliates,
+Apache License 2.0. Both license texts accompany this model.
+
+Modified artifact: segment/yolox.pth was converted to ONNX with decoded
+normalized boxes and confidence, using scripts/export-tonguesam-detector.py.
+No training or modification of the learned detector weights was performed.
+This is the tongue bounding-box prompt generator, not the full TongueSAM
+segmentation checkpoint, a tongue-tip estimator or a depth model.
+Public upstream example images are not redistributed with this model.
