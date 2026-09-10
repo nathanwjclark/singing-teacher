@@ -1,5 +1,5 @@
 import {useEffect,useRef,useState} from 'react';
-import {depthPixelAt,fitLidarCapture,importLidarCapture,lidarFrameUrl,parseDepthMapping,parseNumbers,readLidarFrame,readLidarStatus,verifiedLidarGeometry} from './lidarClient';
+import {depthPixelAt,fitLidarCapture,importLidarCapture,lidarFrameUrl,parseDepthMapping,parseNumbers,readLidarFrame,readLidarStatus,verifiedLidarGeometry,currentLidarPreview} from './lidarClient';
 import type {LidarAnnotation,LidarFrame,LidarStatus,Pixel} from './lidarClient';
 import {parseSpaceDiff,setModelAdjustments} from '../science/modelAdjustments';
 import './LidarFusionPanel.css';
@@ -25,6 +25,7 @@ export function LidarFusionPanel(){
  const [mapping,setMapping]=useState(''),[mappingWhy,setMappingWhy]=useState(''),[pose,setPose]=useState('a'),[jaw,setJaw]=useState('-3'),[weights,setWeights]=useState('1'),[measurementSigma,setMeasurementSigma]=useState(''),[modelSigma,setModelSigma]=useState(''),[uncertainty,setUncertainty]=useState(''),[correspondence,setCorrespondence]=useState(''),[registration,setRegistration]=useState(''),[declared,setDeclared]=useState(false);
  const notified=useRef(new Set<string>());
  const requestIdentity=useRef<{key:string;id:string}|null>(null),captureId=status?.capture?.captureId,frameInfo=status?.capture?.frames.find(item=>item.sequence===sequence);
+ const preview=currentLidarPreview(status);
  const selectedSequence=sequence??status?.capture?.frames[0]?.sequence;
  const frame=frameEntry&&frameEntry.captureId===captureId&&frameEntry.frame.sequence===selectedSequence?frameEntry.frame:null;
  useEffect(()=>{
@@ -57,7 +58,7 @@ export function LidarFusionPanel(){
   }catch(reason){setError(String(reason))}finally{setBusy(false)}
  }
  async function applyPreview(){
-  const receipt=status?.result;if(!receipt?.geometry)return;
+  const receipt=currentLidarPreview(status);if(!receipt?.geometry)return;
   setBusy(true);setError('');
   try{
    const latest=await readLidarStatus();setStatus(latest);
@@ -90,12 +91,13 @@ export function LidarFusionPanel(){
   {status?.result&&<div><h4>Recorded LiDAR contribution</h4>
    <p>Numerical result: {status.result.result.status}. {status.result.result.reason}</p>
    <p>{status.result.adoption?.model_updated?'The depth-ranked successor was adopted by the session.':'No successor model was adopted.'} {status.result.includedInFit?'Depth evidence participated in this conditional fit.':'Depth evidence was not included in the fit.'} This does not validate anatomy.</p>
-   <p>Model lineage: {status.result.parentModelId} → {status.result.modelId}. {status.currentModelId!==status.result.modelId?'Historical result: the current model has since changed.':''}</p>
+   <p>Model lineage: {status.result.parentModelId} → {status.result.modelId}. {status.result.adoption?.model_updated&&status.currentModelId!==status.result.modelId?'Historical result: the current model has since changed.':''}</p>
    {status.result.result.observed_distance_m!=null&&<p>Declared outer-lip distance: {status.result.result.observed_distance_m.toFixed(6)} m · {status.result.result.actual_geometry_calls??0} native geometry calls.</p>}
    <p>Without depth: {status.result.result.without_depth_order?.join(' → ')||'Unavailable'}</p><p>With depth: {status.result.result.with_depth_order?.join(' → ')||'Unavailable'}</p>
    {status.result.result.rankings?.length?<table><thead><tr><th>Hypothesis</th><th>Depth discrepancy</th></tr></thead><tbody>{status.result.result.rankings.map(row=><tr key={row.hypothesis_id}><td>{row.hypothesis_id}</td><td>{row.depth_discrepancy==null?'Unavailable':row.depth_discrepancy.toFixed(4)}</td></tr>)}</tbody></table>:null}
    <details><summary>Exact comparison and retained prediction evidence</summary><pre>{JSON.stringify({comparison:status.result.result.comparison,rankings:status.result.result.rankings},null,2)}</pre></details>
-   {status.result.geometry&&<><p>Geometry uses hypothesis {status.result.geometry.hypothesisId}, vowel {status.result.geometry.pose}, declared jaw {status.result.geometry.JA}°. It is a model surface, not a measured scan.</p><button disabled={working||status.currentModelId!==status.result.geometry.modelId} onClick={()=>void applyPreview()}>Apply depth-ranked model preview</button></>}
   </div>}
+  {status?.lastSuccessfulResult&&status.lastSuccessfulResult.fitId!==status.result?.fitId&&<details><summary>Previously adopted LiDAR result retained</summary><p>Fit {status.lastSuccessfulResult.fitId} · model {status.lastSuccessfulResult.modelId}. {status.lastSuccessfulResult.modelId===status.currentModelId?'This remains the current model.':'This is historical evidence; it cannot replace the current preview.'}</p><p>With-depth order: {status.lastSuccessfulResult.result.with_depth_order?.join(' → ')||'Unavailable'}</p></details>}
+  {preview?.geometry&&<div><p>Current adopted geometry uses hypothesis {preview.geometry.hypothesisId}, vowel {preview.geometry.pose}, declared jaw {preview.geometry.JA}°. It is a model surface, not a measured scan. {preview.fitId!==status?.result?.fitId?'The latest attempt did not replace this saved geometry.':''}</p><button disabled={working} onClick={()=>void applyPreview()}>Apply depth-ranked model preview</button></div>}
  </section>;
 }

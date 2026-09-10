@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {depthPixelAt,parseDepthMapping,parseNumbers,fitLidarCapture,readLidarStatus,verifiedLidarGeometry} from './lidarClient.ts';
-import type {LidarAnnotation,LidarFitReceipt} from './lidarClient.ts';
+import {depthPixelAt,parseDepthMapping,parseNumbers,fitLidarCapture,readLidarStatus,verifiedLidarGeometry,currentLidarPreview} from './lidarClient.ts';
+import type {LidarAnnotation,LidarFitReceipt,LidarStatus} from './lidarClient.ts';
 test('depth clicks select exact source pixels, not RGB display coordinates',()=>{
  assert.deepEqual(depthPixelAt(100,50,400,200,8,4),[2,1]);
  assert.deepEqual(depthPixelAt(400,200,400,200,8,4),[7,3]);
@@ -39,4 +39,14 @@ test('disabled status is preserved and server rejection remains visible',async()
   globalThis.fetch=async()=>Response.json({error:'Mapping evidence missing'},{status:409});
   await assert.rejects(readLidarStatus(),/Mapping evidence missing/);
  }finally{globalThis.fetch=original}
+});
+
+test('failed latest attempt preserves current adopted preview but never revives historical geometry',()=>{
+ const prior:LidarFitReceipt={captureId:'capture-example',importId:'import-example',archiveSha256:'example',sessionId:'session-example',parentModelId:'parent-example',modelId:'model-example',jobId:'job-example',fitId:'fit-example',status:'succeeded',includedInFit:true,result:{status:'ranked'},adoption:{status:'adopted',model_updated:true},geometry:{modelId:'model-example',hypothesisId:'hypothesis-example',pose:'a',JA:-3,files:{}}};
+ const failed:LidarFitReceipt={...prior,fitId:'failed-fit',status:'failed',result:{status:'rejected',reason:'Missing pixels'},adoption:{status:'rejected',model_updated:false},geometry:undefined};
+ const status:LidarStatus={enabled:true,busy:false,capture:null,currentModelId:'model-example',result:failed,lastSuccessfulResult:prior};
+ assert.equal(currentLidarPreview(status),prior);
+ assert.equal(status.result?.result.reason,'Missing pixels');
+ assert.equal(currentLidarPreview({...status,currentModelId:'newer-model'}),null);
+ assert.equal(currentLidarPreview({...status,lastSuccessfulResult:undefined}),null);
 });

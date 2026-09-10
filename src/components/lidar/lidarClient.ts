@@ -2,7 +2,11 @@ export type Pixel=[number,number];
 export interface LidarFrameInfo {sequence:number;width:number;height:number;calibration:unknown;depthFiltered:boolean;depthAccuracy:string;validPixels:number;rgbAvailable:boolean}
 export interface LidarStatus {
  enabled:boolean;busy:boolean;capture:null|{captureId:string;importId:string;archiveSha256:string;manifestSha256:string;frames:LidarFrameInfo[]};
- currentModelId:string|null;result:LidarFitReceipt|null;error?:string;
+ currentModelId:string|null;result:LidarFitReceipt|null;lastSuccessfulResult?:LidarFitReceipt|null;lastSuccessfulResultCurrent?:boolean;error?:string;
+}
+export function currentLidarPreview(status:LidarStatus|null):LidarFitReceipt|null{
+ if(!status?.currentModelId)return null;
+ return [status.result,status.lastSuccessfulResult].find(receipt=>receipt?.adoption?.model_updated&&receipt.geometry?.modelId===status.currentModelId)??null;
 }
 export interface LidarFitReceipt {
  captureId:string;importId:string;archiveSha256:string;sessionId:string;parentModelId:string;modelId:string;jobId:string;fitId:string;status:string;includedInFit:boolean;
