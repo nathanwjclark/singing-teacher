@@ -86,7 +86,6 @@ export function AnatomyPanel({ frame, activeRegion = 'jaw', activeMuscles, demo 
     const eyes: THREE.Group[] = [];
     const hair = createModelHair();
     head.add(hair);
-    hair.traverse(object => { if (object instanceof THREE.Mesh) decorative.push(object); });
     // Deliberately cartoon eyes; the surrounding anatomical surfaces come from the dataset.
     for (const side of [-1, 1]) {
       const eye = new THREE.Group();eye.position.set(side * 3.15,8,8.1);head.add(eye);eyes.push(eye);
@@ -210,7 +209,7 @@ export function AnatomyPanel({ frame, activeRegion = 'jaw', activeMuscles, demo 
     </div>
     <div className="anatomy-focus"><span className="anatomy-focus-dot"/><div><span>RELATED MUSCLES</span><strong>{focused.length?focused.join(' · '):'Full movement reference'}</strong></div></div>
     <p className="anatomy-disclaimer">Reference anatomy follows estimated visible movement.<br/>Muscle highlights are teaching cues, not measured tension.</p>
-    <a className="anatomy-attribution" href={`${import.meta.env.BASE_URL}models/ATTRIBUTION.md`} target="_blank" rel="noreferrer">Z-Anatomy · CC BY-SA 4.0 / BodyParts3D · CC BY-SA 2.1 JP ↗</a>
+    <div className="anatomy-credits"><a className="anatomy-attribution" href={`${import.meta.env.BASE_URL}models/ATTRIBUTION.md`} target="_blank" rel="noreferrer">Anatomy · Z-Anatomy / BodyParts3D ↗</a><a className="anatomy-attribution" href={`${import.meta.env.BASE_URL}models/hair/ATTRIBUTION.md`} target="_blank" rel="noreferrer">Hair · MakeHuman CC0 ↗</a></div>
   </section>;
 }
 export default AnatomyPanel;
