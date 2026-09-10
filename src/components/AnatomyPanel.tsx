@@ -1,95 +1,173 @@
-import { useId } from 'react';
-import type { TrackingFrame } from '../types';
+import { useEffect, useRef, useState } from 'react';
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import type { BodyRegion, TrackingFrame } from '../types';
 import './AnatomyPanel.css';
 
-type Props = {
-  frame: TrackingFrame | null;
-  activeRegion?: 'jaw' | 'neck' | 'shoulders' | 'general';
-  demo: boolean;
+type Props = { frame: TrackingFrame | null; activeRegion?: BodyRegion; activeMuscles?: string[]; demo: boolean };
+type Part = { name: string; kind: 'bone' | 'muscle'; muscleId: string; region: BodyRegion; rig: 'head' | 'jaw' | 'torso'; positionOffset: number; positionCount: number; indexOffset: number; indexCount: number; min: number[]; size: number[] };
+type AnatomyMesh = THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>;
+const normalize = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, '_');
+const regionMuscles: Record<BodyRegion, string[]> = {
+  jaw: ['Masseter', 'Digastric'], lips: ['Orbicularis oris'], neck: ['Sternocleidomastoid'],
+  shoulders: ['Trapezius', 'Levator scapulae'], chest: ['Pectoralis major'],
+  torso: ['External oblique', 'Erector spinae'], general: [],
 };
+const displayName = (name: string) => name.replace(/([a-z])[lr]$/, '$1').replace(/_/g, ' ').replace(/^./, c => c.toUpperCase());
+const bounded = (value: number | undefined, min: number, max: number) => THREE.MathUtils.clamp(Number.isFinite(value) ? value! : 0, min, max);
 
-export function AnatomyPanel({ frame, activeRegion = 'jaw', demo }: Props) {
-  const id = useId().replace(/:/g, '');
-  const clamp = (n: number, min: number, max: number) => Math.min(max, Math.max(min, n));
-  const headTilt = clamp(frame?.metrics.headTilt ?? 0, -20, 20);
-  const shoulderTilt = clamp(frame?.metrics.shoulderTilt ?? 0, -15, 15);
-  const jawOpen = clamp(frame?.metrics.mouthOpen ?? (demo ? 0.14 : 0), 0, 1) * 15;
-  const accent = '#ff947c';
-  const teal = '#8ccbbe';
-  const regionColor = (region: Props['activeRegion']) => activeRegion === region ? accent : teal;
+export function AnatomyPanel({ frame, activeRegion = 'jaw', activeMuscles, demo }: Props) {
+  const mount = useRef<HTMLDivElement>(null);
+  const latest = useRef({ frame, activeRegion, activeMuscles, demo, bones: true, muscles: true, xray: false });
+  const reset = useRef<() => void>(() => {});
+  const [bones, setBones] = useState(true);
+  const [muscles, setMuscles] = useState(true);
+  const [xray, setXray] = useState(false);
+  const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [hovered, setHovered] = useState('');
+  const [meshCount, setMeshCount] = useState(0);
+  latest.current = { frame, activeRegion, activeMuscles, demo, bones, muscles, xray };
+  const focused = activeMuscles?.length ? activeMuscles : regionMuscles[activeRegion];
 
-  return (
-    <section className="anatomy-panel" aria-label="Illustrative movement model">
-      <div className="anatomy-heading"><span className="anatomy-kicker">MOVEMENT MAP</span><span className="anatomy-view">FRONT VIEW <span>↗</span></span></div>
-      <div className="anatomy-stage">
-        <div className="anatomy-coordinates">Y +<br /><span>0.00</span></div>
-        <svg className="anatomy-svg" viewBox="0 0 400 460" role="img" aria-label="Illustrative skull, jaw, neck muscles, shoulders and ribs, reflecting visible movement">
-          <defs>
-            <radialGradient id={`${id}-halo`}><stop offset="0" stopColor="#76bdb0" stopOpacity=".09"/><stop offset="1" stopColor="#76bdb0" stopOpacity="0"/></radialGradient>
-            <linearGradient id={`${id}-muscle`} x1="0" y1="0" x2="1" y2="1"><stop stopColor="#7bc1b0" stopOpacity=".2"/><stop offset="1" stopColor="#7bc1b0" stopOpacity=".03"/></linearGradient>
-            <linearGradient id={`${id}-focus`} x1="0" y1="0" x2="1" y2="1"><stop stopColor={accent} stopOpacity=".24"/><stop offset="1" stopColor={accent} stopOpacity=".04"/></linearGradient>
-            <pattern id={`${id}-grid`} width="28" height="28" patternUnits="userSpaceOnUse"><path d="M28 0H0V28" fill="none" stroke="#8ccbbe" strokeOpacity=".055" strokeWidth=".6"/></pattern>
-          </defs>
-          <rect width="400" height="460" fill={`url(#${id}-grid)`}/>
-          <ellipse cx="200" cy="230" rx="180" ry="220" fill={`url(#${id}-halo)`}/>
-          <g stroke="#729990" fill="none" strokeWidth=".6" opacity=".24"><path d="M200 20V437" strokeDasharray="3 6"/><ellipse cx="200" cy="420" rx="122" ry="15"/><ellipse cx="200" cy="420" rx="75" ry="8"/><path d="M44 420H356"/></g>
-          <g transform={`rotate(${shoulderTilt} 200 252)`} strokeLinecap="round" strokeLinejoin="round">
-            <path d="M164 180C153 205 127 217 103 226C74 235 64 262 59 294L47 370M236 180C247 205 273 217 297 226C326 235 336 262 341 294L353 370" stroke="#86b2a7" strokeOpacity=".26" fill="none"/>
-            {/* Shoulder and chest muscle sheets. */}
-            <g fill={`url(#${id}-${activeRegion === 'shoulders' ? 'focus' : 'muscle'})`} stroke={regionColor('shoulders')} strokeWidth=".8" opacity=".82">
-              <path d="M153 209C126 216 102 228 91 245C76 267 75 289 79 309L109 326C102 298 104 270 120 253L175 247Z"/>
-              <path d="M247 209C274 216 298 228 309 245C324 267 325 289 321 309L291 326C298 298 296 270 280 253L225 247Z"/>
-              <path d="M191 254C167 245 136 249 116 269L139 311C158 303 175 295 192 289Z"/>
-              <path d="M209 254C233 245 264 249 284 269L261 311C242 303 225 295 208 289Z"/>
-            </g>
-            <g fill="none" stroke={regionColor('shoulders')} strokeWidth=".65" opacity=".35">
-              {[0, 1, 2, 3, 4].map(i => <path key={i} d={`M${151 - i * 8} ${220 + i * 4}Q${79 + i * 7} 247 ${86 + i * 5} ${306 - i * 6}M${249 + i * 8} ${220 + i * 4}Q${321 - i * 7} 247 ${314 - i * 5} ${306 - i * 6}`}/>)}
-              {[0, 1, 2, 3].map(i => <path key={i} d={`M190 ${260 + i * 7}Q166 ${261 + i * 9} ${122 + i * 5} ${274 + i * 9}M210 ${260 + i * 7}Q234 ${261 + i * 9} ${278 - i * 5} ${274 + i * 9}`}/>)}
-            </g>
-            {/* Sternum, clavicles and ribcage. */}
-            <g fill="none" stroke={teal} opacity=".64" strokeWidth="1.25">
-              <path d="M196 252C181 236 167 238 147 242L116 247M204 252C219 236 233 238 253 242L284 247" strokeWidth="3"/>
-              <path d="M195 255L192 285L197 325L200 335L203 325L208 285L205 255Z" fill="#8ccbbe" fillOpacity=".12"/>
-              {[0,1,2,3,4,5].map(i => <path key={i} d={`M${195 + Math.min(i, 3)} ${278 + i * 13}C${148 - i * 4} ${251 + i * 14} ${113 - i * 2} ${283 + i * 12} ${142 + i * 4} ${312 + i * 13}C160 ${327 + i * 11} 180 ${321 + i * 12} 195 ${307 + i * 9}M${205 - Math.min(i, 3)} ${278 + i * 13}C${252 + i * 4} ${251 + i * 14} ${287 + i * 2} ${283 + i * 12} ${258 - i * 4} ${312 + i * 13}C240 ${327 + i * 11} 220 ${321 + i * 12} 205 ${307 + i * 9}`} opacity={1 - i * .11}/>)}
-              <path d="M195 338L192 405M205 338L208 405M111 263L93 331L83 383M289 263L307 331L317 383" opacity=".5"/>
-              {[0,1,2,3,4,5].map(i => <path key={i} d={`M195 ${344 + i * 10}H205`} opacity=".3"/>)}
-            </g>
-            <g stroke={regionColor('neck')} strokeWidth=".9" fill={`url(#${id}-${activeRegion === 'neck' ? 'focus' : 'muscle'})`}>
-              <path d="M167 161C169 193 182 221 198 247C187 228 161 214 156 191L154 169Z"/>
-              <path d="M233 161C231 193 218 221 202 247C213 228 239 214 244 191L246 169Z"/>
-              <path d="M170 182L190 219L195 234M164 183L181 216M230 182L210 219L205 234M236 183L219 216" fill="none" opacity=".45"/>
-            </g>
-            <g stroke={teal} fill="none" opacity=".4" strokeWidth=".8"><path d="M190 184V211L200 223L210 211V184"/>{[0,1,2,3].map(i => <path key={i} d={`M190 ${190 + i * 6}Q200 ${196 + i * 6} 210 ${190 + i * 6}`}/>)}</g>
-          </g>
-          <g transform={`rotate(${headTilt} 200 170)`} strokeLinecap="round" strokeLinejoin="round">
-            {/* Cranial outline and facial bones. */}
-            <path d="M151 141C140 124 137 103 143 80C149 55 171 40 200 40C229 40 251 55 257 80C263 103 260 124 249 141L238 158L229 175H171L162 158Z" fill="#8ccbbe" fillOpacity=".045" stroke={teal} strokeWidth="1.2"/>
-            <path d="M150 102C146 78 168 49 200 48C232 49 254 78 250 102M151 86C170 77 186 78 200 82C214 78 230 77 249 86M200 48V78" stroke={teal} strokeWidth=".65" fill="none" opacity=".27"/>
-            <path d="M151 111C155 98 179 98 188 109L183 129C169 136 155 129 151 111ZM249 111C245 98 221 98 212 109L217 129C231 136 245 129 249 111Z" fill="#101e1b" fillOpacity=".55" stroke={teal} strokeWidth="1.1"/>
-            <path d="M199 112L189 140L200 136L211 140L201 112M153 131L160 146L178 150M247 131L240 146L222 150M155 139L153 155L163 166M245 139L247 155L237 166" fill="none" stroke={teal} strokeWidth="1"/>
-            <path d="M180 148Q200 142 220 148L218 161Q200 169 182 161Z" fill="#8ccbbe" fillOpacity=".09" stroke={teal} strokeWidth=".8"/>
-            {[0,1,2,3,4,5,6].map(i => <path key={i} d={`M${185 + i * 5} 150V161`} stroke={teal} opacity=".35" strokeWidth=".6"/>)}
-            <g transform={`translate(0 ${jawOpen})`} stroke={regionColor('jaw')}>
-              <path d="M155 143L161 169Q173 193 200 196Q227 193 239 169L245 143L237 149L231 169Q218 182 200 181Q182 182 169 169L163 149Z" fill={regionColor('jaw')} fillOpacity=".13" strokeWidth="1.2"/>
-              <path d="M180 170Q200 180 220 170M175 179Q200 195 225 179" fill="none" strokeWidth=".7" opacity=".65"/>
-              <circle cx="157" cy="145" r="3.3" fill={regionColor('jaw')} fillOpacity=".2"/><circle cx="243" cy="145" r="3.3" fill={regionColor('jaw')} fillOpacity=".2"/>
-            </g>
-            <path d="M147 120C131 110 133 142 149 149M253 120C269 110 267 142 251 149" stroke={teal} fill="none" opacity=".35"/>
-          </g>
-          <g className="anatomy-leaders" fill="none" strokeWidth=".65">
-            <path d="M231 176L277 153H340" stroke={regionColor('jaw')}/><circle cx="231" cy="176" r="2" fill={regionColor('jaw')} stroke="none"/>
-            <path d="M175 213L124 196H56" stroke={regionColor('neck')}/><circle cx="175" cy="213" r="2" fill={regionColor('neck')} stroke="none"/>
-            <path d="M268 246L299 277H345" stroke={regionColor('shoulders')}/><circle cx="268" cy="246" r="2" fill={regionColor('shoulders')} stroke="none"/>
-          </g>
-          <g className="anatomy-labels"><text x="285" y="145" fill={regionColor('jaw')}>JAW RELEASE</text><text x="55" y="188" fill={regionColor('neck')}>HEAD POSITION</text><text x="285" y="292" fill={regionColor('shoulders')}>SHOULDERS</text></g>
-          <g stroke="#8ccbbe" strokeWidth=".7" opacity=".3"><path d="M19 35V22H32M368 22H381V35M19 425V438H32M368 438H381V425"/></g>
-        </svg>
-        <span className="anatomy-model-tag">MODEL 01 / UPPER BODY</span>
-      </div>
-      <div className="anatomy-legend"><span><i/>Movement reference</span><span><i className="anatomy-focus-dot"/>Current focus</span></div>
-      <p className="anatomy-disclaimer">Illustrative anatomy · estimated visible movement.<br/>Your camera cannot measure muscles or bones.</p>
-    </section>
-  );
+  useEffect(() => {
+    const container = mount.current;
+    if (!container) return;
+    let renderer: THREE.WebGLRenderer;
+    try { renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'low-power' }); }
+    catch { setStatus('error'); return; }
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
+    renderer.setClearColor(0x14231e, 0);
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.35;
+    renderer.domElement.setAttribute('aria-label', 'Interactive 3D anatomical reference. Drag to orbit, scroll to zoom.');
+    renderer.domElement.setAttribute('role', 'img');
+    container.appendChild(renderer.domElement);
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(36, 1, .1, 600);
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true; controls.dampingFactor = .08;
+    controls.enablePan = false; controls.minDistance = 45; controls.maxDistance = 185;
+    controls.minPolarAngle = .3; controls.maxPolarAngle = Math.PI - .3;
+    const restore = () => { camera.position.set(16, 144, 127); controls.target.set(0, 140, 0); controls.update(); };
+    reset.current = restore; restore();
+    scene.add(new THREE.HemisphereLight(0xe8fff0, 0x303325, 2.2));
+    const key = new THREE.DirectionalLight(0xffefd5, 3.2);key.position.set(-40,190,80);scene.add(key);
+    const rim = new THREE.DirectionalLight(0x78d6c0, 2.7);rim.position.set(50,160,-50);scene.add(rim);
+    const fill = new THREE.DirectionalLight(0xe9c3b4, .8);fill.position.set(25,110,60);scene.add(fill);
+    const torso = new THREE.Group();torso.position.set(0,130,0);scene.add(torso);
+    const head = new THREE.Group();head.position.set(0,21,-1);torso.add(head);
+    const jaw = new THREE.Group();jaw.position.set(0,5,1);head.add(jaw);
+    const rigPivots = { torso: new THREE.Vector3(0,130,0), head: new THREE.Vector3(0,151,-1), jaw: new THREE.Vector3(0,156,0) };
+    const rigs = { torso, head, jaw };
+    const meshes: AnatomyMesh[] = [];
+    const decorative: THREE.Mesh[] = [];
+    const eyes: THREE.Group[] = [];
+    // Deliberately cartoon eyes; the surrounding anatomical surfaces come from the dataset.
+    for (const side of [-1, 1]) {
+      const eye = new THREE.Group();eye.position.set(side * 3.15,8,8.1);head.add(eye);eyes.push(eye);
+      const ball = new THREE.Mesh(new THREE.SphereGeometry(1.62,24,18),new THREE.MeshStandardMaterial({color:0xfffff6,roughness:.3}));eye.add(ball);decorative.push(ball);
+      const iris = new THREE.Mesh(new THREE.SphereGeometry(.78,20,16),new THREE.MeshStandardMaterial({color:0x49a58a,roughness:.3}));iris.scale.z=.32;iris.position.set(0,-.03,1.48);eye.add(iris);decorative.push(iris);
+      const pupil = new THREE.Mesh(new THREE.SphereGeometry(.41,16,12),new THREE.MeshStandardMaterial({color:0x10231e,roughness:.15}));pupil.scale.z=.3;pupil.position.set(0,-.03,1.69);eye.add(pupil);decorative.push(pupil);
+      const glint = new THREE.Mesh(new THREE.SphereGeometry(.17,10,8),new THREE.MeshBasicMaterial({color:0xffffff}));glint.position.set(-.17,.24,1.83);eye.add(glint);decorative.push(glint);
+    }
+    let disposed = false;
+    const abort = new AbortController();
+    const base = `${import.meta.env.BASE_URL}models/`;
+    Promise.all([
+      fetch(`${base}upper-body.json`,{signal:abort.signal}).then(r => {if(!r.ok) throw Error('Model manifest unavailable');return r.json() as Promise<{meshes:Part[]}>;}),
+      fetch(`${base}upper-body.bin`,{signal:abort.signal}).then(r => {if(!r.ok) throw Error('Anatomy data unavailable');return r.arrayBuffer();}),
+    ]).then(([manifest, binary]) => {
+      if (disposed) return;
+      for (const part of manifest.meshes) {
+        const quantized = new Uint16Array(binary, part.positionOffset, part.positionCount);
+        const positions = new Float32Array(part.positionCount);
+        const pivot = rigPivots[part.rig].toArray();
+        for(let i=0;i<positions.length;i++) { const axis=i%3;positions[i]=part.min[axis]+quantized[i]/65535*part.size[axis]-pivot[axis]; }
+        const geometry = new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.BufferAttribute(positions,3));
+        geometry.setIndex(new THREE.BufferAttribute(new Uint32Array(binary,part.indexOffset,part.indexCount),1));geometry.computeVertexNormals();geometry.computeBoundingSphere();
+        const material = new THREE.MeshStandardMaterial({color:part.kind==='bone'?0xe8dbc0:0xa56556,roughness:part.kind==='bone'?.68:.57,metalness:0,side:THREE.DoubleSide});
+        const mesh = new THREE.Mesh(geometry,material);mesh.name=part.name;mesh.userData=part;
+        if(part.muscleId==='orbicularis_oris') mesh.userData.restPositions = positions.slice();
+        rigs[part.rig].add(mesh);meshes.push(mesh);
+      }
+      setMeshCount(meshes.length);setStatus('ready');
+    }).catch(error => { if(!disposed && error.name!=='AbortError') { console.error('Anatomical model could not load',error);setStatus('error'); } });
+    const resize = () => { const w=container.clientWidth; const h=container.clientHeight;if(!w||!h)return;renderer.setSize(w,h);camera.aspect=w/h;camera.updateProjectionMatrix(); };
+    const observer = new ResizeObserver(resize);observer.observe(container);resize();
+    const raycaster = new THREE.Raycaster();const pointer = new THREE.Vector2();
+    const inspect = (event: PointerEvent) => {
+      if(event.buttons) return;
+      const rect=renderer.domElement.getBoundingClientRect();pointer.set((event.clientX-rect.left)/rect.width*2-1,-(event.clientY-rect.top)/rect.height*2+1);
+      raycaster.setFromCamera(pointer,camera);const hit=raycaster.intersectObjects(meshes.filter(m=>m.visible),false)[0];setHovered(hit?displayName(hit.object.name):'');
+    };
+    const leave = () => setHovered('');
+    renderer.domElement.addEventListener('pointermove',inspect);renderer.domElement.addEventListener('pointerleave',leave);
+    const contextLost = (event: Event) => {event.preventDefault();setStatus('error');};renderer.domElement.addEventListener('webglcontextlost',contextLost);
+    const radians = Math.PI/180;
+    let lastAppearance = '';
+    renderer.setAnimationLoop((time) => {
+      const props=latest.current;const m=props.frame?.metrics;
+      const simulation=props.demo&&!props.frame;
+      const shoulderRoll=bounded(m?.shoulderTilt,-20,20)*radians;
+      const torsoYaw=bounded(m?.shoulderDepth,-45,45)*radians;
+      torso.rotation.z=THREE.MathUtils.lerp(torso.rotation.z,-shoulderRoll,.1);
+      torso.rotation.y=THREE.MathUtils.lerp(torso.rotation.y,-torsoYaw,.1);
+      torso.rotation.x=THREE.MathUtils.lerp(torso.rotation.x,bounded(m?.torsoLean,-20,20)*radians,.1);
+      const yaw=bounded(m?.headYaw,-55,55)*radians+(simulation?Math.sin(time*.00032)*.075:0);
+      head.rotation.y=THREE.MathUtils.lerp(head.rotation.y,-yaw-torso.rotation.y,.14);
+      head.rotation.z=THREE.MathUtils.lerp(head.rotation.z,-bounded(m?.headTilt,-30,30)*radians-torso.rotation.z,.14);
+      head.rotation.x=THREE.MathUtils.lerp(head.rotation.x,bounded(m?.headPitch,-35,35)*radians-torso.rotation.x,.14);
+      const mouth=bounded(m?.mouthOpen,0,1)||(simulation?.17+Math.sin(time*.0018)*.08:0);
+      jaw.rotation.x=THREE.MathUtils.lerp(jaw.rotation.x,mouth*.5,.18);
+      const appearance=JSON.stringify([props.activeMuscles,props.activeRegion,props.bones,props.muscles,props.xray]);
+      if(appearance!==lastAppearance) {
+        lastAppearance=appearance;const selected=(props.activeMuscles?.length?props.activeMuscles:regionMuscles[props.activeRegion]).map(normalize);
+        for(const mesh of meshes) {
+          const part=mesh.userData as Part;const highlighted=part.kind==='muscle'&&selected.includes(part.muscleId);
+          mesh.visible=part.kind==='bone'?props.bones:props.muscles;
+          mesh.material.color.setHex(highlighted?0xff8769:part.kind==='bone'?0xe8dbc0:0x995d50);
+          mesh.material.emissive.setHex(highlighted?0x7c2510:0x000000);mesh.material.emissiveIntensity=highlighted?.3:0;
+          mesh.material.transparent=part.kind==='muscle'&&props.xray&&!highlighted;mesh.material.opacity=mesh.material.transparent?.19:1;
+          mesh.material.depthWrite=!mesh.material.transparent;mesh.material.needsUpdate=true;
+        }
+      }
+      for(const mesh of meshes) if(mesh.userData.restPositions) {
+        const rest=mesh.userData.restPositions as Float32Array;const attr=mesh.geometry.getAttribute('position');
+        for(let i=0;i<attr.count;i++){const y=rest[i*3+1];attr.setY(i,y-mouth*2*Math.max(0,Math.min(1,(2.7-y)/3)));}attr.needsUpdate=true;
+      }
+      const blink=props.frame?.blendshapes;
+      eyes.forEach((eye,i)=>{const value=blink?.[i===0?'eyeBlinkRight':'eyeBlinkLeft']??0;eye.scale.y=1-bounded(value,0,.95)*.8;});
+      controls.update();renderer.render(scene,camera);
+    });
+    return () => {
+      disposed=true;abort.abort();observer.disconnect();renderer.setAnimationLoop(null);controls.dispose();
+      renderer.domElement.removeEventListener('pointermove',inspect);renderer.domElement.removeEventListener('pointerleave',leave);renderer.domElement.removeEventListener('webglcontextlost',contextLost);
+      for(const mesh of meshes){mesh.geometry.dispose();mesh.material.dispose();}
+      for(const mesh of decorative){mesh.geometry.dispose();const mat=mesh.material;if(Array.isArray(mat))mat.forEach(m=>m.dispose());else mat.dispose();}
+      renderer.dispose();renderer.domElement.remove();reset.current=()=>{};
+    };
+  }, []);
+
+  return <section className="anatomy-panel" aria-label="Interactive anatomical movement model">
+    <div className="anatomy-heading"><span className="anatomy-kicker">ANATOMY IN MOTION</span><span className="anatomy-view">3D REFERENCE</span></div>
+    <div className="anatomy-toolbar" aria-label="Anatomy layers">
+      <button type="button" aria-pressed={bones} onClick={()=>setBones(!bones)}>Bones</button>
+      <button type="button" aria-pressed={muscles} onClick={()=>setMuscles(!muscles)}>Muscles</button>
+      <button type="button" aria-pressed={xray} onClick={()=>{setXray(!xray);setMuscles(true);}}>See through</button>
+      <button type="button" className="anatomy-reset" onClick={()=>reset.current()} aria-label="Reset anatomy camera">↺</button>
+    </div>
+    <div className="anatomy-stage">
+      <div className="anatomy-canvas" ref={mount}/>
+      {status==='loading'&&<div className="anatomy-loading" role="status"><span/>Loading anatomical meshes…</div>}
+      {status==='error'&&<div className="anatomy-loading" role="alert">The 3D model could not load.<br/>Reload with WebGL enabled to try again.</div>}
+      <div className="anatomy-orbit-hint">DRAG TO ROTATE · SCROLL TO ZOOM</div>
+      {hovered&&<div className="anatomy-hover-label">{hovered}</div>}
+      <span className="anatomy-model-tag">{status==='ready'?`${meshCount} DATASET MESHES`:'Z-ANATOMY'} / UPPER BODY</span>
+    </div>
+    <div className="anatomy-focus"><span className="anatomy-focus-dot"/><div><span>RELATED MUSCLES</span><strong>{focused.length?focused.join(' · '):'Full movement reference'}</strong></div></div>
+    <p className="anatomy-disclaimer">Reference anatomy follows estimated visible movement.<br/>Muscle highlights are teaching cues, not measured tension.</p>
+    <a className="anatomy-attribution" href={`${import.meta.env.BASE_URL}models/ATTRIBUTION.md`} target="_blank" rel="noreferrer">Z-Anatomy · CC BY-SA 4.0 / BodyParts3D · CC BY-SA 2.1 JP ↗</a>
+  </section>;
 }
-
 export default AnatomyPanel;
