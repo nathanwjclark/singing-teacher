@@ -3,23 +3,27 @@ import https from 'node:https';
 import {readFile,writeFile,mkdir} from 'node:fs/promises';
 import {randomBytes,randomUUID,timingSafeEqual} from 'node:crypto';
 import {resolve,extname} from 'node:path';
+import {networkInterfaces,hostname} from 'node:os';
 
 const port=Number(process.env.PORT||5173),host=process.env.HOST||'127.0.0.1';
 const root=resolve(import.meta.dirname,'../dist'),dataRoot=resolve(process.env.LOCAL_DATA_DIR||'.local-data');
 const sessions=new Map();
-const mime={'.html':'text/html','.js':'text/javascript','.css':'text/css','.json':'application/json','.png':'image/png','.svg':'image/svg+xml','.bin':'application/octet-stream','.md':'text/plain','.wasm':'application/wasm'};
+const localAddresses=new Set(['127.0.0.1','::1',...Object.values(networkInterfaces()).flat().filter(Boolean).map(n=>n.address)]);
+const allowedHosts=new Set(['localhost','[::1]',hostname().toLowerCase(),hostname().toLowerCase()+'.local',...localAddresses,...(process.env.PHONE_BASE_URL?[new URL(process.env.PHONE_BASE_URL).hostname]:[])]);
+const mime={'.html':'text/html','.js':'text/javascript','.css':'text/css','.json':'application/json','.png':'image/png','.svg':'image/svg+xml','.bin':'application/octet-stream','.md':'text/plain','.wasm':'application/wasm','.mp4':'video/mp4'};
 const json=(res,status,body)=>{res.writeHead(status,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify(body))};
 const equal=(a,b)=>typeof a==='string'&&a.length===b.length&&timingSafeEqual(Buffer.from(a),Buffer.from(b));
 async function body(req){let size=0;const chunks=[];for await(const chunk of req){size+=chunk.length;if(size>12*1024*1024)throw Object.assign(Error('Request too large'),{status:413});chunks.push(chunk)}try{return JSON.parse(Buffer.concat(chunks).toString()||'{}')}catch{throw Object.assign(Error('Invalid JSON'),{status:400})}}
 function phoneBase(value){if(!value)return null;const u=new URL(value);if(u.protocol!=='https:'||u.username||u.password||['localhost','127.0.0.1','::1','[::1]'].includes(u.hostname))throw Object.assign(Error('Use a phone-reachable trusted HTTPS URL, not localhost'),{status:400});return u.origin}
 const serverHandler=async(req,res)=>{try{
   const url=new URL(req.url,'http://localhost');
+  if(!allowedHosts.has(new URL('http://'+req.headers.host).hostname.toLowerCase()))return json(res,403,{error:'Unrecognized local host. Configure PHONE_BASE_URL for this hostname.'});
   // Refuse cross-origin browser writes; pairing tokens authorize phone routes.
   if(req.method==='POST'&&req.headers.origin&&new URL(req.headers.origin).host!==req.headers.host)return json(res,403,{error:'Cross-origin write refused'});
   if(url.pathname==='/api/status')return json(res,200,{local:true,https:!!process.env.HTTPS_CERT,phoneBaseUrl:process.env.PHONE_BASE_URL||null,engineAvailable:false});
   if(url.pathname==='/api/pair'&&req.method==='POST'){
     const remote=req.socket.remoteAddress;
-    if(!['127.0.0.1','::1','::ffff:127.0.0.1'].includes(remote))return json(res,403,{error:'Create pairing from this computer'});
+    if(!localAddresses.has(remote?.replace(/^::ffff:/,'')))return json(res,403,{error:'Create pairing from this computer'});
     const input=await body(req),base=phoneBase(input.baseUrl||process.env.PHONE_BASE_URL);
     const sessionId=randomUUID(),token=randomBytes(24).toString('hex');
     const session={sessionId,token,createdAt:new Date().toISOString(),expiresAt:Date.now()+12*3600_000,snapshots:[],signals:[],sequence:0};sessions.set(sessionId,session);
@@ -37,7 +41,7 @@ const serverHandler=async(req,res)=>{try{
     if(route[2]==='snapshots'&&req.method==='POST'){
       const input=await body(req);const match=/^data:image\/(jpeg|png);base64,([A-Za-z0-9+/=]+)$/.exec(input.imageDataUrl||'');if(!match||typeof input.stepId!=='string')return json(res,400,{error:'Expected a captured JPEG/PNG image and step ID'});
       const id=randomUUID(),dir=resolve(dataRoot,'captures',session.sessionId);await mkdir(dir,{recursive:true});const file=`${id}.${match[1]==='jpeg'?'jpg':'png'}`;await writeFile(resolve(dir,file),Buffer.from(match[2],'base64'));
-      const snapshot={id,stepId:input.stepId,capturedAt:input.capturedAt,width:input.width,height:input.height,landmarks:input.landmarks,source:'phone-rgb',depth:{available:false,reason:'Browser capture does not expose measured hardware depth'},file};
+      const snapshot={id,stepId:input.stepId,capturedAt:input.capturedAt,width:input.width,height:input.height,landmarks:input.landmarks,source:'phone-rgb',evidence:input.evidence,depth:{available:false,reason:'Browser capture does not expose measured hardware depth'},file};
       await writeFile(resolve(dir,`${id}.json`),JSON.stringify(snapshot,null,2));session.snapshots.push(snapshot);return json(res,201,{snapshot,...summary()});
     }
     return json(res,405,{error:'Method not allowed'});

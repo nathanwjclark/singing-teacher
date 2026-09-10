@@ -5,14 +5,14 @@ import type { VisionEngine } from '../lib/vision';
 import type { TrackingFrame, TrackingStatus } from '../types';
 import './CameraPanel.css';
 
-type Props = { active: boolean; onFrame: (frame: TrackingFrame) => void; onStatus: (status: TrackingStatus, message?: string) => void };
+type Props = { active: boolean; onFrame: (frame: TrackingFrame) => void; onStatus: (status: TrackingStatus, message?: string) => void; onStream?: (stream: MediaStream | null) => void };
 
-export default function CameraPanel({ active, onFrame, onStatus }: Props) {
+export default function CameraPanel({ active, onFrame, onStatus, onStream }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<VisionEngine | undefined>(undefined);
-  const callbacks = useRef({ onFrame, onStatus });
-  useEffect(() => { callbacks.current = { onFrame, onStatus }; }, [onFrame, onStatus]);
+  const callbacks = useRef({ onFrame, onStatus, onStream });
+  useEffect(() => { callbacks.current = { onFrame, onStatus, onStream }; }, [onFrame, onStatus, onStream]);
   const [status, setStatus] = useState<TrackingStatus>('idle');
   const [message, setMessage] = useState('');
   const [depth, setDepth] = useState<{ distance?: number; relative?: number; points: number }>({ points: 0 });
@@ -40,6 +40,7 @@ export default function CameraPanel({ active, onFrame, onStatus }: Props) {
       cancelAnimationFrame(animation);
       clearTimeout(modelTimeout);
       stream?.getTracks().forEach(track => track.stop());
+      callbacks.current.onStream?.(null);
       if (video.srcObject === stream) video.srcObject = null;
       if (engineRef.current === engine) engineRef.current = undefined;
       engine?.close(); engine = undefined;
@@ -58,6 +59,7 @@ export default function CameraPanel({ active, onFrame, onStatus }: Props) {
         if (cancelled) { release(); return; }
         setDepth({ points: 0 }); setCalibration('');
         video.srcObject = stream;
+        callbacks.current.onStream?.(stream);
         await video.play();
         if (cancelled) { release(); return; }
         update('loading', 'Loading face, posture, and OpenCV models. First start may take a moment.');

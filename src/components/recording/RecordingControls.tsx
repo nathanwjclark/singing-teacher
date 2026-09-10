@@ -1,17 +1,21 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { chooseRecordingMime, describeTrack, finishRecording, recordingTracks } from '../../lib/recording'
+import type { Ref } from 'react'
 import type { FinishedRecording, RecordingManifest } from '../../lib/recording'
 import './RecordingControls.css'
 
+export interface RecordingController { start: () => void; stop: () => Promise<FinishedRecording> }
 interface Props {
+  controllerRef?: Ref<RecordingController>
   videoStream?: MediaStream | null
   audioStream?: MediaStream | null
   profileId?: string
   onRecording?: (recording: FinishedRecording) => void
+  transformRecording?: (recording: FinishedRecording) => FinishedRecording
 }
 interface ActiveRecording { recorder: MediaRecorder; cancel: () => void; stop: (reason: RecordingManifest['stopReason']) => void }
 
-export function RecordingControls({ videoStream, audioStream, profileId = 'local-participant', onRecording }: Props) {
+export function RecordingControls({ videoStream, audioStream, profileId = 'local-participant', onRecording, controllerRef, transformRecording }: Props) {
   const [status, setStatus] = useState<'idle' | 'recording' | 'saving'>('idle')
   const [error, setError] = useState('')
   const [seconds, setSeconds] = useState(0)
@@ -19,6 +23,8 @@ export function RecordingControls({ videoStream, audioStream, profileId = 'local
   const [mediaUrl, setMediaUrl] = useState('')
   const [manifestUrl, setManifestUrl] = useState('')
   const [replay, setReplay] = useState(false)
+  const pending = useRef<{resolve:(value:FinishedRecording)=>void;reject:(error:Error)=>void}|null>(null)
+  const lastResult=useRef<FinishedRecording|null>(null)
   const active = useRef<ActiveRecording | null>(null)
   const mounted = useRef(false)
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; active.current?.cancel() } }, [])
@@ -26,11 +32,11 @@ export function RecordingControls({ videoStream, audioStream, profileId = 'local
   useEffect(() => () => { urls.current.forEach(url => URL.revokeObjectURL(url)) }, [])
 
   const start = () => {
-    if (active.current || status !== 'idle') return
+    if (active.current || status !== 'idle') return false
     setError('')
-    if (typeof MediaRecorder === 'undefined') { setError('Recording is unavailable in this browser.'); return }
+    if (typeof MediaRecorder === 'undefined') { setError('Recording is unavailable in this browser.'); return false }
     const sourceTracks = recordingTracks(videoStream, audioStream)
-    if (!sourceTracks.length) { setError('Start the camera or microphone first.'); return }
+    if (!sourceTracks.length) { setError('Start the camera or microphone first.'); return false }
     // Clones let cleanup release only recorder-owned tracks, preserving live analysis.
     const clones = sourceTracks.map(track => track.clone())
     const stream = new MediaStream(clones)
@@ -38,7 +44,7 @@ export function RecordingControls({ videoStream, audioStream, profileId = 'local
     try {
       const mimeType = chooseRecordingMime(clones.some(track => track.kind === 'video'))
       recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined)
-    } catch (cause) { clones.forEach(track => track.stop()); setError(String(cause)); return }
+    } catch (cause) { clones.forEach(track => track.stop()); setError(String(cause)); return false }
     const started = performance.now()
     const startedAt = new Date().toISOString()
     const tracks = sourceTracks.map(describeTrack)
@@ -87,12 +93,13 @@ export function RecordingControls({ videoStream, audioStream, profileId = 'local
       try {
         const blob = new Blob(chunks, { type: recorder.mimeType || chunks[0]?.type || '' })
         if (!blob.size) throw new Error('The browser returned an empty recording. Please try again.')
-        const finished = await finishRecording(blob, {
+        const raw = await finishRecording(blob, {
           id: `recording-${crypto.randomUUID()}`, profileId, startedAt, stoppedAt,
           observedDurationMs: observedStop - started, stopReason: reason, tracks, chunkEvents,
           timing: { clock: 'performance.now', sourcePresentationTimestamps: null, syncUncertaintyMs: null, notes: 'Start/stop and chunk delivery times are observed browser times, not sensor presentation timestamps. Audio/video clock offset and drift have not been measured.' },
           quality: { actualDepth: false, cameraCalibration: null, droppedFrames: null, interruptions },
         })
+        const finished=transformRecording?.(raw)??raw
         if (!mounted.current) return
         urls.current.forEach(url => URL.revokeObjectURL(url))
         const media = URL.createObjectURL(finished.blob)
@@ -102,15 +109,22 @@ export function RecordingControls({ videoStream, audioStream, profileId = 'local
         setManifestUrl(manifest)
         setResult(finished)
         if (reason !== 'user') setError(reason === 'limit' ? 'Recording stopped at the 10-minute / 256 MB limit.' : 'Source interrupted. Saved the captured portion.')
+        lastResult.current=finished
         onRecording?.(finished)
-      } catch (cause) { if (mounted.current) setError(cause instanceof Error ? cause.message : String(cause)) }
+        pending.current?.resolve(finished);pending.current=null
+      } catch (cause) { if (mounted.current) setError(cause instanceof Error ? cause.message : String(cause));pending.current?.reject(cause instanceof Error?cause:new Error(String(cause)));pending.current=null }
       finally { if (mounted.current) setStatus('idle') }
     }
     active.current = { recorder, stop, cancel: () => { cancelled = true; stop('user'); cleanup() } }
     try { recorder.start(1000); setSeconds(0); setStatus('recording'); setReplay(false) }
-    catch (cause) { cleanup(); setError(String(cause)); setStatus('idle') }
+    catch (cause) { cleanup(); setError(String(cause)); setStatus('idle');return false }
+    return true
   }
 
+  useImperativeHandle(controllerRef,()=>({
+    start(){if(!start())throw new Error('Recording could not start. Check camera/microphone access.');lastResult.current=null},
+    stop(){if(!active.current)return lastResult.current?Promise.resolve(lastResult.current):Promise.reject(new Error('No recording is active'));return new Promise<FinishedRecording>((resolve,reject)=>{pending.current={resolve,reject};active.current!.stop('user')})},
+  }))
   return <div className="recording-controls">
     <button type="button" className={status === 'recording' ? 'recording-active' : ''} disabled={status === 'saving'} onClick={() => status === 'recording' ? active.current?.stop('user') : start()} title="Records available camera and microphone locally. Recording is off until you press Start.">
       {status === 'recording' ? `■ Stop ${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}` : status === 'saving' ? 'Saving…' : '● Start recording'}
