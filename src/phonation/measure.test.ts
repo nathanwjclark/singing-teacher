@@ -36,3 +36,9 @@ test('strongly time-varying nonstationary signal is not a stable phonation refer
  const chirp=Float32Array.from({length:4096},(_,i)=>{const t=i/48000;return .1*Math.sin(2*Math.PI*(100*t+6000*t*t))});
  const result=await measurePhonation(chirp,48000,metadata);assert.equal(result.capabilities.measurement.status,'insufficient-quality');
 });
+
+test('unknown absolute evidence time stays null and invalid timestamps reject',async()=>{
+ const result=await measurePhonation(wave(),48000,{...metadata,evidenceAt:null});
+ assert.equal(result.evidenceAt,null);assert.equal(result.capabilities.measurement.evidenceAt,null);assert.equal(result.capabilities.measurement.status,'available');
+ await assert.rejects(measurePhonation(wave(),48000,{...metadata,evidenceAt:'invalid-date'}),/evidence time/);
+});

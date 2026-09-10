@@ -10,7 +10,7 @@ export async function measurePhonation(pcm: Float32Array, sampleRate: number, me
  const beginning = performance.now(), deadline = options.deadlineMs ?? 200;
  if (!Number.isFinite(deadline) || deadline <= 0 || deadline > 2000) throw Error('Deadline must be within0..2000ms');
  for (const key of ['observationId','sessionId','attemptId','artifactId','clockId'] as const) if (typeof metadata[key] !== 'string' || !metadata[key].trim()) throw Error('Explicit phonation identity/clock required');
- if (!Number.isFinite(Date.parse(metadata.evidenceAt)) || !Number.isSafeInteger(metadata.windowStartSample) || metadata.windowStartSample < 0) throw Error('Invalid evidence time/window offset');
+ if ((metadata.evidenceAt !== null && (typeof metadata.evidenceAt !== 'string' || !Number.isFinite(Date.parse(metadata.evidenceAt)))) || !Number.isSafeInteger(metadata.windowStartSample) || metadata.windowStartSample < 0) throw Error('Invalid evidence time/window offset');
  if (!Array.isArray(metadata.sourceHashes) || metadata.sourceHashes.some(h => !/^[a-f0-9]{64}$/.test(h))) throw Error('Invalid original source SHA256');
  if (!['human-observation','engine-generated','development-fixture'].includes(metadata.sourceKind)) throw Error('Explicit source kind required');
  if (metadata.syncUncertaintyMs !== null && (!Number.isFinite(metadata.syncUncertaintyMs) || metadata.syncUncertaintyMs < 0)) throw Error('Explicit nonnegative or unknown clock uncertainty required');
