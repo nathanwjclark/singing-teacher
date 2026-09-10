@@ -92,6 +92,10 @@ export function createLidarRoutes({repo,dataRoot,json}){
    let count=0;const chunks=[];for await(const chunk of req){count+=chunk.length;if(count>16000)throw Error('LiDAR declaration is too large');chunks.push(chunk);}
    const body=JSON.parse(Buffer.concat(chunks).toString('utf8'));
    if(busy){json(res,409,{error:'LiDAR processing is already running.'});return true;}
+   busy=true;let launched=false;
+   try{
+   // Reserve before any awaited preparation and reread the latest retry identity.
+   state=await read(currentFile)??{};
    if(url.pathname.endsWith('/import')){
     if(!body||Object.keys(body).length)throw Error('Import takes an empty JSON object.');busy=true;
     try{const result=await execute(python(),args('import'),options());json(res,200,{capture:JSON.parse(result.stdout)});}finally{busy=false;}return true;
@@ -104,7 +108,7 @@ export function createLidarRoutes({repo,dataRoot,json}){
     if(state.requestId===body.requestId&&!state.error&&await read(join(folder,'summary.json'))){json(res,200,{accepted:true,reused:true});return true;}
     if(intent&&!failure&&!await read(join(folder,'summary.json'))){
      if(state.fingerprint!==fingerprint){json(res,409,{error:'Retry the previous LiDAR declaration before starting a different fit.'});return true;}
-     await launch(state);json(res,202,{accepted:true,reused:true,fitId:state.fitId});return true;
+     await launch(state);launched=true;json(res,202,{accepted:true,reused:true,fitId:state.fitId});return true;
     }
    }
    const capture=await read(join(dataRoot,'lidar-current.json'));
@@ -112,8 +116,9 @@ export function createLidarRoutes({repo,dataRoot,json}){
    const currentModelId=await model();if(currentModelId!==body.expectedModelId)throw Error('Baseline model changed; refresh.');
    const fitId=randomUUID(),folder=join(dataRoot,'lidar-fits',fitId);await mkdir(folder,{recursive:true,mode:0o700});
    await writeFile(join(folder,'app-request.json'),JSON.stringify(body),{mode:0o600,flag:'wx'});
-   state={fitId,requestId:body.requestId,fingerprint,captureId:body.captureId,expectedModelId:body.expectedModelId};await launch(state);
+   state={fitId,requestId:body.requestId,fingerprint,captureId:body.captureId,expectedModelId:body.expectedModelId};await launch(state);launched=true;
    json(res,202,{accepted:true,fitId});return true;
+   }finally{if(!launched)busy=false;}
   }catch(error){const reason=(error.stderr??'').split('\n').findLast(line=>/^(ValueError|RuntimeError|FileNotFoundError):/.test(line));json(res,400,{error:reason||(!error.code?error.message:'LiDAR processing could not finish; originals and baseline were retained.')});return true;}
  };
 }

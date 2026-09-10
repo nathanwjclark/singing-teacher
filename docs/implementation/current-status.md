@@ -1,5 +1,10 @@
 # TractStar implementation status
 
+For the September 10 usage-recovery checkpoint, active A-owned visual/teaching
+work, preserved user changes and verification boundaries, see the
+[delivery audit](../coordination/2026-09-10-delivery-audit.md). That audit names
+separate integration branches; candidate work is not automatically merged main.
+
 This describes the integrated application including PR #10, the merged Tract Star branding, and the subsequent source/session connections. It distinguishes executable software from evidence that the
 scientific hypotheses are correct.
 
