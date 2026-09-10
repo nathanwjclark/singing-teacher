@@ -103,3 +103,73 @@ Pending separate acceptance: A's new PCM likelihood and KIT bridge, followed by 
 real service/commit/generation/evaluation replay. Actual phone capture, calibrated
 human reconstruction and human learning claims remain open independently of
 software integration passing.
+
+## Follow-up: implemented A PCM and KIT consumers
+
+Reviewed `pcm_inverse.py`/`extract_pcm.ts` in `codex/a-pcm-inverse` and
+`kit_science.ts`/`replay_kit_science.ts` in `codex/a-kit-forecast`. These are
+finite-candidate hypothesis ranking and an actual fitted-model interchange path;
+neither establishes general physiological identification.
+
+The PCM implementation calls B's real extractor, records extractor/contract code
+hashes, checks canonical quantities and window metadata, retains missing predicted
+features and compares the same finite control grid under fitted versus fixed
+anatomy. JA, F0 and scalar gain are explicit per-trial candidate controls. Feature
+scales define a coarse discrepancy score, explicitly not a calibrated likelihood.
+Candidate-only polyphase resampling to 48/96 kHz records its method, filter and
+SciPy version; observation samples are not silently resampled.
+
+Review found two PCM defects, fixed in `ecb72e6`: adding an unrelated source hash
+could bypass duplicate-interval detection, and the human extraction helper
+invented zero synchronization uncertainty. The corrected path detects repeated
+source hashes/artifact intervals independently of ancillary hashes, and preserves
+unknown human synchronization. The owner reports seven passing tests, including
+these regressions and the sample-rate path. Source artifact bytes are **not**
+verified by the scalar-record fitting API; its explicit
+`source_artifact_bytes_verified=false` remains an ingestion boundary. Only a
+verified producer-to-record chain can support a stronger source-integrity claim.
+
+The KIT replay starts with an actual joint-fit job, exports its matching native
+geometry and PCM, persists a public prediction commit, generates a later target
+from scoring-only anatomy, and calls B's independent evaluator. Only the two fitted
+anatomical dimensions are marked inferred; the remaining eleven are fixed.
+Prospective synthesis count is separated from prior fitting cost. The public
+human-only live ledger is not misused for this synthetic run. The owner reported
+six tests passing on the first implementation. The subsequent review correction
+`b927711` binds the complete canonical native provenance, including geometry basis
+and library, through the candidate source identity/hash and checks it at forecast
+time. Duplicate feature names are rejected before lookup. The same commit adds
+actual PCM-job hypothesis projection, requiring a retained scored candidate and
+matching full native geometry. Only physical dimensions varied in that candidate
+grid are marked inferred. The owner reports seven tests passing in 8.49 seconds
+on the updated handoff root, plus strict TypeScript and whitespace checks. No
+remaining blocker was found in these reviewed paths.
+
+## Canonical native geometry basis
+
+Independently assessed root fix `efb77c5`. A fresh JD3 instance contains detailed
+geometry not completely represented by its thirteen reported AnatomyParams;
+reapplying those numbers previously changed its spectrum. Canonicalizing through
+`set_anatomy(base_anatomy)` after caching the named poses, before exposing any
+forward output, makes forward generation and frozen/reapplied anatomy use one
+representational basis. This is the smallest coherent fix for a parameter-based
+model rather than a full speaker-file snapshot.
+
+The added provenance `geometry_basis=vtl-anatomy-params-reconstructed-v1` is a
+necessary compatibility break. Old detailed-JD3 exports must not be relabeled or
+accepted merely because their thirteen numbers match. Replay and downstream
+forecast validation must compare the bound native basis/library, not only anatomy
+numbers. Earlier default-forward results predate this basis; regenerating them is
+a new artifact, not an update to old evidence.
+
+Independent lightweight basis verification used the same `/a/` 512-bin transfer
+call before and after reapplying `engine.anatomy()`. The old `91d3380` integration
+worktree produced 0.8154007843 dB RMS difference across the returned bins and no
+basis declaration. The updated `codex/a-b-handoff` worktree produced **0.0 dB**
+difference and the declared reconstructed basis. This checks parameter reset
+consistency, not accuracy against a human vocal tract.
+
+Readiness: the reviewed PCM/KIT paths are suitable for the declared conditional
+synthetic/hypothesis workflow after root integration checks. Scalar-record source
+authenticity, model identifiability, microphone-response calibration and actual
+phone/human acceptance remain separate unresolved requirements.
