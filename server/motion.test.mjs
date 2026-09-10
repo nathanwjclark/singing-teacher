@@ -2,7 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import {createHash} from 'node:crypto';
-import {mkdtemp,rm,stat} from 'node:fs/promises';
+import {mkdtemp,rm,stat,mkdir,writeFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {createMotionRoutes} from './motion.mjs';
@@ -63,6 +63,9 @@ test('actual HTTP motion persistence preserves exact originals, unknown timing, 
   const analyze=body=>fetch(base+'/api/motion/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
   assert.equal((await analyze({...declaration,containsExternalExcitation:true})).status,400);
   assert.equal((await analyze(declaration)).status,503);
+  const analysisDir=join(dataRoot,'motion-analyses',saved.capture.id);await mkdir(analysisDir,{recursive:true});
+  await writeFile(join(analysisDir,'current.json'),JSON.stringify({analysisId:'earlier',requestId:'analysis',pose:'i',status:'failed',expectedModelId:null}));
+  assert.equal((await analyze(declaration)).status,409);
   assert.equal((await (await fetch(base+'/api/motion/status')).json()).capture.id,saved.capture.id);
  }finally{if(priorFfmpeg===undefined)delete process.env.SINGING_FFMPEG;else process.env.SINGING_FFMPEG=priorFfmpeg;if(server?.listening)await stop();await rm(dataRoot,{recursive:true,force:true});}
 });

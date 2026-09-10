@@ -61,6 +61,9 @@ export function createMotionRoutes({dataRoot,json,repo=join(import.meta.dirname,
    throw Error('Declare a saved capture, vowel and no external excitation.');
   await capture(body.captureId);
   const previous=await analysisStatus(body.captureId);
+  if(previous.requestId===body.requestId&&(previous.pose!==body.pose||previous.expectedModelId!==previous.currentModelId)){
+   json(res,409,{error:'This request ID belongs to a different vowel or baseline model. Start a new analysis request.'});return;
+  }
   if(previous.requestId===body.requestId&&previous.status==='succeeded'){json(res,200,{accepted:true,reused:true,analysisId:previous.analysisId});return;}
   if(analysisBusy||previous.status==='running'){json(res,409,{error:'An audio analysis is already running.'});return;}
   if(!previous.availability.available){json(res,503,{error:previous.availability.reason});return;}
