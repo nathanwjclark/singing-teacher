@@ -90,7 +90,10 @@ One nonblocking P2 finding was sent to the owner: `useScienceOutcome` returns
 early for a response belonging to an older model run, leaving the current run's
 display at `loading` indefinitely. Treat that response as `not-run` for the
 requested run; do not display the older outcome. Scoring remains usable because
-the button is not disabled by this status.
+the button is not disabled by this status. The owner subsequently implemented
+that exact correction; source inspection confirms the mismatched response now
+sets `{status: 'not-run'}` for the requested run. The owner is running the
+extended browser regression; this review does not claim that pending run passed.
 
 No TODO, FIXME, placeholder, dummy, fake or stub logic was found in these four
 production files. No orphaned preparation or scoring path was found. The change
