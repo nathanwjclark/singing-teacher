@@ -38,9 +38,12 @@ struct ContentView: View {
             }.disabled(capture.recording)
             Text("Frame your whole mouth in the front camera. Hold one comfortable pose and keep the phone steady; do not sweep around your mouth. Capture ends after ten seconds or when you press Stop.").font(.footnote)
             HStack {
-                Button("Start capture") { capture.start(pose: pose) }.disabled(!capture.ready || capture.recording || capture.exporting)
+                Button("Start capture") { capture.start(pose: pose) }.disabled(!capture.ready || capture.recording || capture.exporting || capture.retryAvailable)
                 Button("Stop") { capture.stop(reason: "user-stop") }.disabled(!capture.recording)
             }.buttonStyle(.borderedProminent)
+            if capture.retryAvailable {
+                Button("Retry saving capture") { capture.retryExport() }.disabled(capture.exporting)
+            }
             Button("Share latest private capture") { share = true }.disabled(capture.archiveURL == nil || capture.exporting || capture.recording)
             Text("Front camera + available TrueDepth, with optional microphone audio. Depth can be missing inside the mouth; hidden tissue is not scanned. Files stay on this phone until you share.").font(.caption).foregroundStyle(.secondary)
         }.padding().task { capture.requestCamera() }

@@ -11,6 +11,8 @@ final class DepthCapture: NSObject, ObservableObject, AVCaptureDataOutputSynchro
     @Published private(set) var recording = false
     @Published private(set) var exporting = false
     @Published private(set) var archiveURL: URL?
+    @Published private(set) var retryAvailable = false
+    private var pendingExport: (folder: URL, manifest: [String: Any], count: Int)?
     private let queue = DispatchQueue(label: "singing.depth.capture")
     private let video = AVCaptureVideoDataOutput()
     private let depth = AVCaptureDepthDataOutput()
@@ -149,7 +151,7 @@ final class DepthCapture: NSObject, ObservableObject, AVCaptureDataOutputSynchro
     }
     func start(pose: String) {
         queue.async {
-            guard self.configured, self.session.isRunning, !self.session.isInterrupted, self.folder == nil else { return }
+            guard self.configured, self.session.isRunning, !self.session.isInterrupted, self.folder == nil, self.pendingExport == nil else { return }
             do {
                 self.captureID = UUID().uuidString
                 let root = try FileManager.default.url(for: .documentDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
@@ -259,15 +261,31 @@ final class DepthCapture: NSObject, ObservableObject, AVCaptureDataOutputSynchro
         guard let current = folder else { return }
         folder = nil; timeout?.cancel(); timeout = nil
         DispatchQueue.main.async { self.recording = false; self.exporting = true; self.status = "Saving private capture…" }
+        let manifest: [String: Any] = ["schema_version": "singing-native-rgbd-1.0.0", "capture_id": captureID, "created_at": startedAt, "ended_at": ISO8601DateFormatter().string(from: Date()), "stop_reason": reason, "task": task, "capture_mode": "one-held-pose", "device": deviceDescription, "timebase": ["source": "AVCaptureDataOutputSynchronizer capture clock", "origin": origin.map { time($0) } as Any? ?? NSNull(), "host_clock_alignment": "not-measured", "absolute_sync_uncertainty_seconds": NSNull()], "filtering_requested": false, "audio": ["status": audioSamples.contains(where: { $0["artifact"] != nil }) ? "captured" : "missing", "reason": audioMissingReason.isEmpty ? (audioSamples.isEmpty ? "no-samples-delivered" : "see-per-sample-status") : audioMissingReason, "clock_relation": "AVCaptureSession presentation timestamps; physical synchronization error not measured", "sync_uncertainty_seconds": NSNull(), "samples": audioSamples], "geometry": ["interpretation": "visible-depth-samples-only", "hidden_surface": "not-measured", "world_pose": "not-measured", "head_pose": "not-measured", "measurement_noise": "not-calibrated"], "frames": frames]
+        pendingExport = (current, manifest, frames.count)
+        savePendingExport()
+    }
+    func retryExport() {
+        queue.async {
+            guard self.folder == nil, self.pendingExport != nil else { return }
+            self.savePendingExport()
+        }
+    }
+    private func savePendingExport() {
+        guard let pending = pendingExport else { return }
+        DispatchQueue.main.async { self.exporting = true; self.status = "Saving private capture…" }
+        let current = pending.folder
         do {
-            let manifest: [String: Any] = ["schema_version": "singing-native-rgbd-1.0.0", "capture_id": captureID, "created_at": startedAt, "ended_at": ISO8601DateFormatter().string(from: Date()), "stop_reason": reason, "task": task, "capture_mode": "one-held-pose", "device": deviceDescription, "timebase": ["source": "AVCaptureDataOutputSynchronizer capture clock", "origin": origin.map { time($0) } as Any? ?? NSNull(), "host_clock_alignment": "not-measured", "absolute_sync_uncertainty_seconds": NSNull()], "filtering_requested": false, "audio": ["status": audioSamples.contains(where: { $0["artifact"] != nil }) ? "captured" : "missing", "reason": audioMissingReason.isEmpty ? (audioSamples.isEmpty ? "no-samples-delivered" : "see-per-sample-status") : audioMissingReason, "clock_relation": "AVCaptureSession presentation timestamps; physical synchronization error not measured", "sync_uncertainty_seconds": NSNull(), "samples": audioSamples], "geometry": ["interpretation": "visible-depth-samples-only", "hidden_surface": "not-measured", "world_pose": "not-measured", "head_pose": "not-measured", "measurement_noise": "not-calibrated"], "frames": frames]
-            let data = try JSONSerialization.data(withJSONObject: manifest, options: [.prettyPrinted, .sortedKeys])
+            let data = try JSONSerialization.data(withJSONObject: pending.manifest, options: [.prettyPrinted, .sortedKeys])
             try data.write(to: current.appendingPathComponent("manifest.json"), options: [.atomic, .completeFileProtection])
             let archive = current.appendingPathExtension("zip")
+            // Replace only this failed capture's partial ZIP; raw files remain intact.
+            if FileManager.default.fileExists(atPath: archive.path) { try FileManager.default.removeItem(at: archive) }
             try CaptureZip.create(folder: current, destination: archive)
             try (archive as NSURL).setResourceValue(true, forKey: .isExcludedFromBackupKey)
-            DispatchQueue.main.async { self.exporting = false; self.archiveURL = archive; self.status = "Saved \(self.frames.count) callbacks. Share when ready. Depth validity still needs review." }
-        } catch { DispatchQueue.main.async { self.exporting = false; self.status = "Capture files retained locally; export failed: \(error.localizedDescription)" } }
+            pendingExport = nil
+            DispatchQueue.main.async { self.exporting = false; self.retryAvailable = false; self.archiveURL = archive; self.status = "Saved \(pending.count) callbacks. Share when ready. Depth validity still needs review." }
+        } catch { DispatchQueue.main.async { self.exporting = false; self.retryAvailable = true; self.status = "Capture files retained locally. Free storage or unlock the phone, then retry saving. Export failed: \(error.localizedDescription)" } }
     }
 }
 enum CaptureError: LocalizedError { case message(String); var errorDescription: String? { switch self { case .message(let text): return text } } }
