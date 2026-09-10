@@ -49,3 +49,95 @@ processing absence, capture synchronization or hidden anatomical accuracy.
 Physical G8/G9 acceptance still requires actual recorded probes and independent
 scoring. Software progress does not need to wait for those external inputs, but
 must preserve them as distinct unmet evidence requirements.
+
+## Core operator and inverse review
+
+Reviewed forward `e8d93bd`, forecast `dfd56c1` and inverse `8860edf` plus the
+owner's physical-calibration follow-up. No sign/unit/passivity blocker was found
+within the declared approximation. The mouth-to-glottis section recurrence uses
+`gamma=alpha+i*omega/c`, with rigid `-i Zc cot(kL)` and pressure-release
+`i Zc tan(kL)` lossless limits. The outgoing monopole phase uses `exp(-ikr)`;
+inward mouth flow contributes a negative outward monopole. Length/area conversion
+is cm→m and cm²→m² before pressure/volume-flow impedance evaluation. Low-ka oral
+support is masked, and open velum is rejected instead of dropping its branch.
+These are internally consistent software/model checks, not evidence that an
+unflanged pipe plus free monopoles reproduces a face/phone acoustic boundary.
+
+Independent verification:
+
+- Forward analytic/native tests: **4 passed in 0.49 s**. Includes uniform analytic
+  limits, subdivision invariance, matched load, nonuniform passivity, reciprocal
+  source/receiver placement, source scaling and actual native geometry/masks.
+- Forecast tests: **18 passed in 4.22 s**, using the integrated root module because
+  the isolated forecast worktree did not contain its separately owned forward
+  dependency. This resolves the initial isolated import failure without changing
+  code or bypassing dependency validation.
+- Inverse tests before the final provenance follow-up: **4 passed in 17.42 s**.
+  Includes actual joint/baseline calls, invalid-mask/timing/held-out rejection,
+  all-candidate unsupported prediction handling and direct-only confounding.
+
+### Physical source versus fixture calibration — corrected boundary
+
+The inverse initially accepted a `human-recording` or `physical-reference` source
+with `synthetic-fixture` calibration. That could make physical evidence appear
+included under invented instrument calibration. The owner added rejection unless
+physical-source calibration is `measured`. A regression changes only the source
+kind of the existing synthetic fixture and verifies exclusion. Calibration remains
+caller-attested, not authenticated; this guard prevents a known declaration
+contradiction, not forged metadata. The owner also excludes conditioning hashes
+(calibration/prior/timing) that alias fitted PCM or received probe evidence.
+
+### Inclusion, masks and budgets
+
+`included_in_fit` is recomputed from probe predictions contributing to complete
+scored candidates. A parsed usable record with no supported complete candidate
+is not marked included. Candidate-specific unsupported bands cannot become zeros
+or improve a score by selective omission: candidates must support every active
+observed band. Complex comparison requires bounded timing uncertainty; magnitude
+comparison does not authorize delay inference. Within-band residual averaging is
+explicitly not independent-bin likelihood. Joint and baseline have identical
+finite nuisance support, and both external evaluation and actual geometry calls
+are counted alongside PCM synthesis, with separate counters.
+
+### No-stubs, wiring and minimality
+
+No placeholder physics or fabricated response arrays were found in these modules.
+The external operator consumes the real native forty-section geometry, forecast
+calls that operator, and inverse calls both canonical PCM fitting and external
+prediction. The probe path does not reuse the glottal transfer as an external
+measurement. Existing NumPy, artifact and engine primitives are reused without a
+new physics dependency. Root owns durable service integration and the raw B
+extractor bridge; the latter needs its own review when available. Real calibration,
+playback/capture and G8/G9 acceptance remain distinct open gates.
+
+Final inverse boundary follow-up `b223dfa`: independently reran both affected
+mask/lineage and held-out/confounding tests; **2 passed in 14.60 s**. The prior
+four-test run plus this targeted follow-up covers the reviewed changes.
+
+## Raw-response bridge review (pending corrections)
+
+Read `9d3ebf3` `science/scripts/import_probe_science.ts`, B's actual raw importer,
+and Swift manifest producer. Two concrete issues were sent to the owner:
+
+1. **Private output modes:** new bridge directories/files used default filesystem
+   permissions, commonly 0755/0644, despite containing private response/configuration
+   evidence. Require explicit 0700 output directories and 0600 files; verify mode
+   bits, including nested B outputs or protection by their private parent.
+2. **Capture/configuration binding:** supplemental calibration and processing route
+   identifiers matched each other but not the original capture. Placement and
+   declared pose likewise lacked original-manifest binding. A mismatched route,
+   placement or pose could therefore be eligible. Require verified original
+   bindings (including an explicit exact-manifest mapping where schemas differ);
+   absent physical binding must remain captured but ineligible. Swift already
+   records route, level-check route signature, placement and pose.
+
+Otherwise the bridge reuses the actual B extractor and full response artifact,
+reverifies source/derived bytes, retains exact selected bin indices and units,
+keeps B's includedInFit flag immutable, and does not fabricate phase support.
+No final bridge acceptance is claimed until the two corrections are verified.
+
+Root's pending service/CLI diff was read: forecast dispatch opens its own native
+context, joint fitting uses the worker-owned context, and allowed/required
+parameters and snapshot model binding are wired. The one-shot CLI registry is
+explicitly local and not authorization over a shared session. Root's prior real
+service tests need not be repeated by this review without a relevant change.
