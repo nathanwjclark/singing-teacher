@@ -59,6 +59,7 @@ export function createAstraRoutes({dataRoot,json,provider,fetchImpl=fetch,callBu
         const result=await p.generateDecision({instructions,input:prompt,schema,signal:AbortSignal.timeout(90000)}),decision=result.decision;
         if(!decision||Object.keys(decision).sort().join(',')!=='action,cue,experimentId,explanation'||!['record','rest'].includes(decision.action)||!['cue','explanation'].every(k=>typeof decision[k]==='string'&&decision[k].trim().length>0&&decision[k].length<=2000)|| (decision.action==='rest'?decision.experimentId!==null:!options.some(r=>r.experiment.experiment_id===decision.experimentId)))throw failure('Astra returned an unsupported decision',502);
         receipt={...receipt,decision,provider:result.provider,model:result.model,usage:result.usage};await save(path,receipt);
+        if((await current()).runId!==context.runId)throw failure('Current voice fit changed while Astra was deciding');
         const refreshed=await stateFor(context.sessionId);if(refreshed.version!==state.version)throw failure('Session changed while Astra was deciding; request a new decision');
         let designId=null;
         if(decision.action==='record'){
