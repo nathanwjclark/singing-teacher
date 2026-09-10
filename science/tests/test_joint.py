@@ -41,6 +41,9 @@ def test_native_joint_budget_baseline_reset_and_no_leakage():
             assert set(model["best"]["trial_articulation"]) == {"a", "i"}
             assert model["identifiability"] == "not_established"
             assert model["residual_calls"] <= 120
+            assert 0 < model["global_residual_calls"] <= 60
+            assert any(c["phase"] == "global" for c in model["candidates"])
+            assert model["spectrum_calls"] == 2*model["residual_calls"]
         assert result["joint"]["best"]["objective"] < result["joint"]["best"]["initial_objective"]
         for model in (result["joint"], result["fixed_anatomy_baseline"]):
             best = model["best"]

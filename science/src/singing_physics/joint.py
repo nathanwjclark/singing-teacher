@@ -6,7 +6,7 @@ import hashlib
 import json
 
 import numpy as np
-from scipy.optimize import least_squares
+from scipy.optimize import differential_evolution, least_squares
 
 from .engine import Engine, finite
 
@@ -115,6 +115,7 @@ def fit_joint(engine: Engine, document, *, anatomy_bounds=None, articulation_bou
         candidates = []
         best = None
         first_objective = None
+        best_point = None
         rng = np.random.default_rng(seed)
         initial = [np.full(len(intervals), .5), *rng.uniform(.05, .95, (starts-1, len(intervals)))]
 
@@ -122,7 +123,7 @@ def fit_joint(engine: Engine, document, *, anatomy_bounds=None, articulation_bou
             pass
 
         def residual(x):
-            nonlocal calls, best, first_objective
+            nonlocal calls, best, first_objective, best_point
             if calls >= limit:
                 raise Exhausted
             calls += 1
@@ -146,10 +147,28 @@ def fit_joint(engine: Engine, document, *, anatomy_bounds=None, articulation_bou
                 first_objective = candidate["objective"]
             if best is None or candidate["objective"] < best["objective"]:
                 best = candidate
+                best_point = np.asarray(x).copy()
             return result
 
+        global_calls = 0
+        if budget_per_model >= 80:
+            limit = budget_per_model // 2
+            try:
+                differential_evolution(
+                    lambda x: float(np.sum(residual(x)**2)), [(0., 1.)]*len(intervals),
+                    seed=seed, popsize=6, maxiter=budget_per_model, tol=1e-8,
+                    polish=False, workers=1,
+                )
+                status = "global_converged"
+            except Exhausted:
+                status = "budget_exhausted"
+            global_calls = calls
+            candidates.append({**best, "termination": status, "start": -1,
+                               "phase": "global", "initial_objective": first_objective})
+            initial[0] = best_point.copy()
+        remaining = budget_per_model - global_calls
         for index, point in enumerate(initial):
-            limit = (index+1)*budget_per_model//starts
+            limit = global_calls + (index+1)*remaining//starts
             best = None
             first_objective = None
             try:
@@ -160,16 +179,16 @@ def fit_joint(engine: Engine, document, *, anatomy_bounds=None, articulation_bou
                 status = "budget_exhausted"
             if best is not None:
                 candidates.append({**best, "termination": status, "start": index,
-                                   "initial_objective": first_objective})
+                                   "phase": "local", "initial_objective": first_objective})
         candidates.sort(key=lambda c: c["objective"])
         near = [c for c in candidates if c["objective"] <= candidates[0]["objective"] + max(1., .05*candidates[0]["objective"])]
         spread = {k: float(np.ptp([c["anatomy"][k] for c in near])) for k in names}
         articulation_spread = {r["id"]: {k: float(np.ptp([c["trial_articulation"][r["id"]][k] for c in near]))
                                for k in db} for r in rows}
         return {"best": candidates[0], "candidates": candidates, "residual_calls": calls,
-                "spectrum_calls": calls * len(rows),
+                "spectrum_calls": calls * len(rows), "global_residual_calls": global_calls,
                 "near_optimal_articulation_spread": articulation_spread,
-                "diversity_assessment": "insufficient_multistart_evidence" if len(candidates) < 2 else "bounded_multistart_only",
+                "diversity_assessment": "insufficient_multistart_evidence" if starts < 2 else "bounded_multistart_only",
                 "near_optimal_anatomy_spread_cm": spread, "near_optimal_candidates": len(near),
                 "identifiability": "not_established", "spread_is_calibrated_posterior": False}
 
