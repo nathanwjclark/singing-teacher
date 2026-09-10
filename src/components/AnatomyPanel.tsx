@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { createModelHair } from '../lib/modelHair';
 import { createMuscleMotion } from '../lib/muscleMotion';
+import { createShoulderMotion } from '../lib/shoulderMotion';
 import type { BodyRegion, TrackingFrame } from '../types';
 import './AnatomyPanel.css';
 
@@ -56,8 +57,8 @@ export function AnatomyPanel({ frame, activeRegion = 'jaw', activeMuscles, demo 
       const damping = controls.enableDamping;
       controls.enableDamping = false;
       controls.update(); // Consume any remaining orbit momentum before restoring.
-      camera.position.set(0, 153.5, 72);
-      controls.target.set(0, 153.5, 0);
+      camera.position.set(0, 152.5, 76);
+      controls.target.set(0, 152.5, 0);
       controls.update();
       controls.enableDamping = damping;
     };
@@ -75,7 +76,10 @@ export function AnatomyPanel({ frame, activeRegion = 'jaw', activeMuscles, demo 
     const head = new THREE.Group();head.position.set(0,21,-1);torso.add(head);
     const jaw = new THREE.Group();jaw.position.set(0,5,1);head.add(jaw);
     const rigPivots = { torso: new THREE.Vector3(0,130,0), head: new THREE.Vector3(0,151,-1), jaw: new THREE.Vector3(0,156,0) };
-    const rigs = { torso, head, jaw };
+    const leftShoulder = new THREE.Group();leftShoulder.position.set(1, 10, 5);torso.add(leftShoulder);
+    const rightShoulder = new THREE.Group();rightShoulder.position.set(-1, 10, 5);torso.add(rightShoulder);
+    const shoulderPose = createShoulderMotion();
+    const rigs = { torso, head, jaw, leftShoulder, rightShoulder };
     const muscleMotion = createMuscleMotion(rigs);
     const meshes: AnatomyMesh[] = [];
     const decorative: THREE.Mesh[] = [];
@@ -109,6 +113,11 @@ export function AnatomyPanel({ frame, activeRegion = 'jaw', activeMuscles, demo 
         const material = new THREE.MeshStandardMaterial({color:part.kind==='bone'?0xe8dbc0:0xa56556,roughness:part.kind==='bone'?.68:.57,metalness:0,side:THREE.DoubleSide});
         const mesh = new THREE.Mesh(geometry,material);mesh.name=part.name;mesh.userData=part;
         rigs[part.rig].add(mesh);
+        if (part.kind === 'bone' && /^(Clavicle|Scapula|Humerus)[lr]$/.test(part.name)) {
+          const shoulder = part.name.endsWith('l') ? leftShoulder : rightShoulder;
+          mesh.geometry.translate(part.name.endsWith('l') ? -1 : 1, -10, -5);
+          shoulder.add(mesh);
+        }
         if(part.kind === 'muscle') muscleMotion.bind(mesh, part.rig);
         meshes.push(mesh);
       }
@@ -131,13 +140,25 @@ export function AnatomyPanel({ frame, activeRegion = 'jaw', activeMuscles, demo 
       const props=latest.current;const m=props.frame?.metrics;
       hair.visible=props.muscles;
       const simulation=props.demo&&!props.frame;
-      const shoulderRoll=bounded(m?.torsoLean ?? m?.shoulderTilt,-20,20)*radians;
+      // Shoulder tilt belongs to the independent shoulder joints. Torso roll
+      // comes from the hip/shoulder midline; do not apply shoulder tilt twice.
+      const shoulderRoll=bounded(m?.torsoLean,-20,20)*radians;
       const world = props.frame?.worldPose;
       const shoulderWidth = world?.[11] && world?.[12] ? Math.max(.15, Math.abs(world[11].x-world[12].x)) : .36;
-      const torsoYaw=THREE.MathUtils.clamp(Math.atan2(bounded(m?.shoulderDepth,-.5,.5),shoulderWidth),-.75,.75);
+      const hipsVisible=world?.[23]&&world?.[24]&&(world[23].visibility??1)>.65&&(world[24].visibility??1)>.65;
+      const hipWidth=hipsVisible?Math.max(.12,Math.abs(world[23].x-world[24].x)):shoulderWidth;
+      const torsoDepth=hipsVisible?(world[23].z??0)-(world[24].z??0):bounded(m?.shoulderDepth,-.5,.5);
+      const torsoYaw=THREE.MathUtils.clamp(Math.atan2(torsoDepth,hipWidth),-.75,.75);
       torso.rotation.z=THREE.MathUtils.lerp(torso.rotation.z,-shoulderRoll,.1);
       torso.rotation.y=THREE.MathUtils.lerp(torso.rotation.y,-torsoYaw,.1);
       torso.rotation.x=0;
+      const shoulderTargets=shoulderPose.update(props.frame,torso.rotation);
+      [leftShoulder,rightShoulder].forEach((shoulder,i)=>{
+        const side=i===0?1:-1;const target=shoulderTargets[i];
+        shoulder.rotation.z=THREE.MathUtils.lerp(shoulder.rotation.z,side*Math.atan2(target.lift,17),.18);
+        shoulder.rotation.y=THREE.MathUtils.lerp(shoulder.rotation.y,-side*Math.atan2(target.depth,17),.18);
+        shoulder.position.x=THREE.MathUtils.lerp(shoulder.position.x,side+target.spread*.35,.18);
+      });
       const yaw=bounded(m?.headYaw,-55,55)*radians+(simulation?Math.sin(time*.00032)*.075:0);
       head.rotation.y=THREE.MathUtils.lerp(head.rotation.y,-yaw-torso.rotation.y,.14);
       head.rotation.z=THREE.MathUtils.lerp(head.rotation.z,-bounded(m?.headTilt,-30,30)*radians-torso.rotation.z,.14);
@@ -156,7 +177,7 @@ export function AnatomyPanel({ frame, activeRegion = 'jaw', activeMuscles, demo 
           mesh.material.depthWrite=!mesh.material.transparent;mesh.material.needsUpdate=true;
         }
       }
-      muscleMotion.update();
+      muscleMotion.update(props.frame?.blendshapes);
       const blink=props.frame?.blendshapes;
       eyes.forEach((eye,i)=>{const value=blink?.[i===0?'eyeBlinkRight':'eyeBlinkLeft']??0;eye.scale.y=1-bounded(value,0,.95)*.8;});
       controls.update();renderer.render(scene,camera);
