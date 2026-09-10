@@ -194,3 +194,30 @@ def test_visible_geometry_requires_trial_correspondence_and_bounded_alignment(mo
         with pytest.raises(RuntimeError, match="native geometry failure"):
             fit_joint(engine, doc, budget_per_model=10, starts=1)
         assert engine.anatomy() == saved
+
+
+def test_visible_geometry_rejects_repeated_physical_frame_across_trials():
+    with Engine() as engine:
+        doc = visible_document(engine)
+        duplicate = deepcopy(doc["geometry_observations"][-1])
+        doc["geometry_observations"].append(duplicate)
+        with pytest.raises(ValueError, match="Duplicate visible geometry physical frame"):
+            fit_joint(engine, doc, budget_per_model=10, starts=1)
+        duplicate["trial_id"] = "i"
+        doc["observations"][1].update(timebase_id="session-clock", timestamp_seconds=2.010,
+                                       sync_uncertainty_seconds=.001)
+        with pytest.raises(ValueError, match="Duplicate visible geometry physical frame"):
+            fit_joint(engine, doc, budget_per_model=10, starts=1)
+        duplicate["timestamp_seconds"] = 2.005
+        result = fit_joint(engine, doc, budget_per_model=10, starts=1)
+        assert result["visible_geometry_measurement_count"] == 2
+        assert result["geometry_calls"] == 2*result["residual_calls"]
+
+
+def test_held_out_evidence_cannot_be_relabelled_as_calibration_geometry():
+    with Engine() as engine:
+        doc = visible_document(engine)
+        doc["observations"].append({"id": doc["geometry_observations"][-1]["evidence_id"],
+                                    "split": "held_out", "magnitude_db": "unread"})
+        with pytest.raises(ValueError, match="excluded held-out evidence"):
+            fit_joint(engine, doc, budget_per_model=10, starts=1)

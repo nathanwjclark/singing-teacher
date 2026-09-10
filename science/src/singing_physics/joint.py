@@ -68,6 +68,7 @@ def fit_joint(engine: Engine, document, *, anatomy_bounds=None, articulation_bou
         ids.append(row["id"])
     if len(set(ids)) != len(ids):
         raise ValueError("Duplicate trial id")
+    excluded_ids = {r["id"] for r in observations if r["split"] == "held_out"}
     rows = [r for r in observations if r["split"] == "calibration"]
     if any(not isinstance(r.get("pose"), str) for r in rows):
         raise ValueError("Calibration pose must be a string")
@@ -92,6 +93,7 @@ def fit_joint(engine: Engine, document, *, anatomy_bounds=None, articulation_bou
         raise ValueError("spectral_sigma_db must be positive")
     geometry = []
     visible_geometry = []
+    visible_frame_ids = set()
     by_id = {row["id"]: row for row in rows}
     geometry_input = doc.get("geometry_observations", [])
     if not isinstance(geometry_input, list):
@@ -107,12 +109,18 @@ def fit_joint(engine: Engine, document, *, anatomy_bounds=None, articulation_bou
             for field in ("trial_id", "evidence_id", "timebase_id", "correspondence_id", "uncertainty_scope"):
                 if not isinstance(g.get(field), str) or not g[field].strip():
                     raise ValueError(f"Visible geometry requires {field}")
+            if g["evidence_id"] in excluded_ids:
+                raise ValueError("Visible geometry references excluded held-out evidence")
             if g["trial_id"] not in by_id:
                 raise ValueError("Visible geometry must reference a calibration trial")
             row = by_id[g["trial_id"]]
             if row.get("timebase_id") != g["timebase_id"]:
                 raise ValueError("Visible geometry timebase does not match trial")
             measured_t = finite(g.get("timestamp_seconds"), "geometry timestamp")
+            frame_identity = (g["evidence_id"], g["timebase_id"], measured_t, g["operator_id"])
+            if frame_identity in visible_frame_ids:
+                raise ValueError("Duplicate visible geometry physical frame")
+            visible_frame_ids.add(frame_identity)
             trial_t = finite(row.get("timestamp_seconds"), "trial timestamp")
             measured_sync = finite(g.get("sync_uncertainty_seconds"), "geometry sync bound")
             trial_sync = finite(row.get("sync_uncertainty_seconds"), "trial sync bound")
