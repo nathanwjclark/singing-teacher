@@ -98,10 +98,10 @@ the installed package science/src/singing_physics/control/:
 
 | Ticket | Agent / branch | Exclusive new files | Status |
 |---|---|---|---|
-| MOT-01 control | a_forward / codex/a-control | science/src/singing_physics/control/; science/tests/test_control.py; science/CONTROL.md | running |
-| MOT-02 visible motion | a_geometry / codex/a-motion | observations/geometry/motion.py; science/tests/test_motion.py; science/MOTION.md | running |
-| MOT-02 dynamic inverse | a_inverse / codex/a-dynamic | science/src/singing_physics/dynamic.py; science/tests/test_dynamic.py; science/DYNAMIC.md | running |
-| Control-aware PRED-01 | a_prediction / codex/a-control-forecast | science/src/singing_physics/control_forecast.py; science/tests/test_control_forecast.py; science/CONTROL_FORECAST.md | running |
+| MOT-01 control | a_forward / codex/a-control | science/src/singing_physics/control/; science/tests/test_control.py; science/CONTROL.md | A reviewed; queued for B integration |
+| MOT-02 visible motion | a_geometry / codex/a-motion | observations/geometry/motion.py; science/tests/test_motion.py; science/MOTION.md | A reviewed; queued for B integration |
+| MOT-02 dynamic inverse | a_inverse / codex/a-dynamic | science/src/singing_physics/dynamic.py; science/tests/test_dynamic.py; science/DYNAMIC.md | A reviewed; queued for B integration |
+| Control-aware PRED-01 | a_prediction / codex/a-control-forecast | science/src/singing_physics/control_forecast.py; science/tests/test_control_forecast.py; science/CONTROL_FORECAST.md | A reviewed; queued for B integration |
 
 A's independent reviewer challenges head-motion confounds, failed-execution
 selection bias, inferred versus observed controls and post-outcome leakage.
@@ -109,3 +109,52 @@ B retains CUE-01, LEARN-01 and the public CueAttempt/MotionObservation/ControlPr
 contracts. G6 requires actual repeated motion evidence; G7 requires reviewed cues,
 learner attempts and independent recall/transfer scoring. Synthetic motion/control
 tests cannot substitute for these participant gates.
+
+## Revision 6 executable handoff
+
+MOT-01 and the synthetic MOT-02 path are implemented. Motion is reconstructed in
+an independently supplied head frame; missing observations remain missing. Dynamic
+fits keep shared anatomy distinct from per-frame inferred articulation. One
+predeclared target frame per independent attempt enters a model-bound empirical
+control profile, retaining failures and missing execution mass. Forecasts integrate
+native physics over that support. Post-capture conditioning writes a separate
+artifact and cannot alter the prospective bytes.
+
+```sh
+PYTHONPATH=.:science/src science/.venv/bin/python science/scripts/replay_motion_control.py science/artifacts/motion-replay --budget 20
+```
+
+This generates nine genuine native spectra and calibrated mathematical depth
+fixtures, then runs dynamic reconstruction, control fitting, prospective forecasting,
+a later synthetic target measurement, conditional forecasting and unchanged replay
+through the real job service. Source truth is isolated and every attempt retains
+its identity. See science/MOTION_REPLAY.md for the exact evidence limitations.
+
+Review regressions reject duplicated measurements/repetitions, moving-landmark
+head references, cross-model control pooling, nested held-out depth aliases and
+rehashed conditional artifacts with inconsistent model/evidence lineage.
+
+B still owns the reviewed cue library and actual acquisition/learning protocol.
+G6/G7 have **not** passed on human evidence. Public KIT-01 schemas and AUD-01's
+canonical microphone features remain outstanding inputs for A's next adapter and
+measured-audio work. Requests are posted on PR #1/#3; no response artifacts have
+been received in this Lead A session.
+
+## Final Lead A verification for this handoff
+
+- 132 Python tests passed with warnings treated as errors (152.39 seconds).
+- Fresh certified native build: 21/21 C++ tests passed.
+- The native anatomy patch previously passed all 21 AddressSanitizer tests;
+  subsequent integrations did not change that native source.
+- Both standalone replay commands completed on the assembled integration branch.
+- Final motion replay used nine generated frames and three independent control
+  attempts; the prospective artifact remained byte-identical after target observation.
+- Markdown link and whitespace checks passed. No participant recordings were used.
+
+Known scientific failures remain recorded: incomplete anatomy/articulation
+identifiability, anatomy drift under omitted geometry/capture perturbations, no
+calibrated anatomical posterior, and no established human reconstruction or
+learning efficacy. These are research/acceptance limitations, not passing tests.
+No public KIT-01/AUD-01 artifact or actual phone capture arrived during this session.
+The next A work is the B-contract/audio adapter and real multimodal acceptance once
+those concrete inputs are available; B owns repository release integration.

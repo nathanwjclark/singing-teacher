@@ -104,6 +104,10 @@ fixed by the anatomy patch; broader file ingestion needs further hardening.
   source-defined lip observation operator.
 - [Forecasts](PREDICTION.md), [jobs](SERVICE.md) and [replay](REPLAY.md): runnable fit to
   frozen prediction through real native subprocesses.
+- [Motion](MOTION.md), [dynamic fitting](DYNAMIC.md), [control profiles](CONTROL.md)
+  and [control-aware forecasts](CONTROL_FORECAST.md): revision 6 modules with explicit
+  failed/unknown execution, lineage and uncertainty.
+- [Motion/control replay](MOTION_REPLAY.md): the complete synthetic revision 6 job flow.
 - [Mismatch challenge](MISMATCH.md): fixed-budget perturbations and observed anatomy drift.
 
 Run the integrated synthetic handoff with:

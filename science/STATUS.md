@@ -11,12 +11,17 @@ parallel expansion is now implemented and reviewed in PR #3:
 | Forecast | Content-addressed frozen candidates -> actual native transfer predictions |
 | Service | Real spawned jobs, idempotency, replay, stale-model rejection, cancellation and watchdog |
 | Cross-module replay | Native observations -> fitting job -> frozen model -> prediction job -> identical bytes |
+| Motion/control | Head-registered trajectories -> dynamic fit -> model-bound empirical control profile |
+| Control-aware replay | Prospective native mixture -> later synthetic measurement -> separate conditional forecast |
 
-The assembled suite passed 78 tests with `-W error`, and a fresh native build
-passed all 21 C++ tests. The native anatomy patch also passed the 21-test
+The final assembled revision 6 suite passed **132 tests** with `-W error`
+(152.39 seconds), and a fresh native build passed all **21 C++ tests**. The native anatomy patch also passed the 21-test
 AddressSanitizer suite during the foundation milestone; subsequent changes are
 Python integrations around the same native source. Duplicate geometry and held-out relabeling regressions are included. Revision 6
-dynamic motion/control extensions are now being integrated as a separate stage.
+dynamic motion/control extensions are included in that final suite. The standalone
+revision 6 replay also completed: nine frames, three independent control attempts,
+a prospective artifact, a later synthetic observation and a separate conditional
+artifact with unchanged prospective replay bytes.
 
 See [JOINT_INFERENCE.md](JOINT_INFERENCE.md) for improved but still ambiguous joint
 recovery and [MISMATCH.md](MISMATCH.md) for all three fixed-budget perturbation
