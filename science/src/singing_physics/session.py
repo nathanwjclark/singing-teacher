@@ -69,8 +69,12 @@ class SessionController:
         previous = '0'*64
         events=[]
         for version, body, digest in db.execute('SELECT version,body,digest FROM events WHERE session=? ORDER BY version',(self.session_id,)):
+            # _append stores exactly canonical(event), so verify those original
+            # bytes without serializing every historical state a second time.
+            if hashlib.sha256(body.encode()).hexdigest()!=digest:
+                raise RuntimeError('Session ledger integrity failure')
             event=json.loads(body)
-            if version!=state['version']+1 or _hash(event)!=digest or event['previous_sha256']!=previous or event['session_id']!=self.session_id or event['state']['version']!=version:
+            if version!=state['version']+1 or event['previous_sha256']!=previous or event['session_id']!=self.session_id or event['state']['version']!=version:
                 raise RuntimeError('Session ledger integrity failure')
             state=event['state']; previous=digest; events.append({**event,'sha256':digest})
         return state,previous,events
@@ -82,11 +86,11 @@ class SessionController:
                'details':details,'state':deepcopy(state)}
         db.execute('INSERT INTO events VALUES(?,?,?,?)',(self.session_id,state['version'],canonical(event),_hash(event)))
 
-    def _dispatch(self):
+    def _dispatch(self, *, ledger=False):
         # Persisted intent precedes this side effect. The stable key recovers a crash
         # after JobService submission but before the job ID was recorded here.
         with self._db() as db:
-            state,_,_=self._read(db)
+            state,digest,events=self._read(db)
             model=state['snapshot']['model_id'] if state['snapshot'] else 'session-unfitted:'+_hash(self.session_id)
             self.service.register_model(self.session_id,model)
             pending=state['pending']
@@ -103,7 +107,9 @@ class SessionController:
                         for design in state['designs'].values():
                             if design['status']=='outcome_pending': design['status']='failed'
                 self._append(db,state,'job_dispatched',{'job_id':pending.get('job_id')})
-            return deepcopy(state)
+                if ledger:state,digest,events=self._read(db)
+            # Parsed state/events are detached request-local objects already.
+            return (state,digest,events) if ledger else state
 
     def execute(self, command):
         if not isinstance(command,dict) or len(canonical(command).encode())>2_000_000:
@@ -112,10 +118,8 @@ class SessionController:
         if action in ('state','replay'):
             if set(command)!={'action'}:
                 raise ValueError('Unexpected read parameters')
-            self._dispatch()
-            with self._db() as db:
-                state,digest,events=self._read(db)
-                return {'state':state,'ledger_sha256':digest, **({'events':events} if action=='replay' else {})}
+            state,digest,events=self._dispatch(ledger=True)
+            return {'state':state,'ledger_sha256':digest, **({'events':events} if action=='replay' else {})}
         command_id=_id(command.get('command_id'))
         fields={'register_model':{'snapshot'},'ingest_calibration':{'document'},'search':{'parameters'},'fit_probe':{'parameters'},'fit_lidar':{'parameters'},
             'select_experiment':{'source_design_id','design_id','target_observation_id','experiment_id','selection_reason'},
