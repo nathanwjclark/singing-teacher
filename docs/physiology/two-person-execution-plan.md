@@ -1,6 +1,6 @@
 # Parallel-agent execution plan
 
-Companion to revision 6 of the physiological acoustic moonshot specification. Two humans remain accountable, each coordinating as many bounded Astra tasks as the dependency graph supports. This is an implementation plan, not evidence that the application or anatomical recovery works. There are no fixed hackathon time estimates.
+Companion to revision 7 of the physiological acoustic moonshot specification. Two humans remain accountable, each coordinating as many bounded Astra tasks as the dependency graph supports. This is an implementation plan, not evidence that the application or anatomical recovery works. There are no fixed hackathon time estimates.
 
 Optimize for the earliest integrated, independently evaluated physiological inference experiment. Launch an agent only when its inputs, owned files and acceptance experiment are concrete. Additional capacity should remove a demonstrated bottleneck or challenge a scientific assumption. Unlimited agents do not imply unlimited simultaneous edits or benchmark compute.
 
@@ -59,7 +59,7 @@ B's acquisition agent owns microphone, RGB and depth together, preserving a shar
 
 The available iPhone 13 Pro Max and iPhone 15 Pro remain the hardware targets. Start with one-phone synchronized capture; retain CAP-01/02, FUSE-01 and DEPTH-01/02 from the capture addendum. Sensor limitations remain measured outcomes, not reasons to silently remove depth from the work queue.
 
-### Embodied learning extensions (revision 6)
+### Embodied learning extensions (revision 7)
 
 The [embodied learning and motion plan](embodied-learning-and-motion-plan.md) is part of this execution plan. Add two independent agent lanes: B owns CUE-01 in experiment/cues/, apps/web/coach/ and tests/cues/; A owns MOT-01 in science/control/ and tests/science/control/. Narrow the existing experiment orchestration owner to workflow/tool execution outside experiment/cues/, and the visualization owner to web files outside apps/web/coach/. The existing capture, geometry and inverse owners implement MOT-02 within their modules; the evaluator owns LEARN-01 in evaluation/learning/. No shared file has two writers.
 
@@ -151,7 +151,7 @@ Next consumer and dependency unblocked:
 
 Agent starter instruction:
 
-> Read revision 6, the lane assignment and shared contracts. You are not alone in this repository. Modify only your assigned files in your own worktree; do not revert others' changes or edit shared interfaces without their owner. Implement the bounded deliverable with real producers and explicit failure behavior. Separate research hypotheses, synthetic evidence and human observations. Run the acceptance experiment and report its actual result, including failure. Return a small commit, runnable commands, artifact provenance, contract version and remaining blockers. Do not expand scope, fabricate fitted anatomy or merge your own work.
+> Read revision 7, the lane assignment and shared contracts. You are not alone in this repository. Modify only your assigned files in your own worktree; do not revert others' changes or edit shared interfaces without their owner. Implement the bounded deliverable with real producers and explicit failure behavior. Separate research hypotheses, synthetic evidence and human observations. Run the acceptance experiment and report its actual result, including failure. Return a small commit, runnable commands, artifact provenance, contract version and remaining blockers. Do not expand scope, fabricate fitted anatomy or merge your own work.
 
 ## 8. Human checklists
 
@@ -180,3 +180,9 @@ Agent starter instruction:
 - [ ] Dispatch CUE-01 and LEARN-01; obtain cue review and demonstrate G6/G7 with actual evidence.
 
 Both humans resolve cross-lane decisions in a short repository decision record, with affected contracts/tasks and migration owner. Preserve physiological inference, real evidence and independent scoring when reducing scope; reduce conversation polish, accounts, large-scale scraping and elaborate visual effects first. Anatomical recovery remains a hypothesis to test, not a completion claim inferred from agent output.
+
+## Active acoustic probing integration (revision 7)
+
+The [active probing addendum](active-acoustic-probing-plan.md) adds PROBE-01/02/05/06 to B and PROBE-03/04 to A. B coordinates native playback/capture, dedicated response DSP, schema changes and runtime Astra orchestration; A builds the external-drive operator and joint fit/service adapter. Existing owners retain shared files. Capture, response contracts/DSP and physics can progress in parallel; inverse/UI integration consumes their real artifacts. One-phone G8/G9 is the first complete path, independent of optional second-phone nasal support.
+
+These tasks are initial app implementation, not a standalone research spike. Add the exact-drive/received-media and calibration contracts to KIT's controlled extension process. Allocate available visual-polish capacity to this capture/DSP integration, preserving the existing A/B publication and verified-recording handoff. See the addendum for each ticket's acceptance; no agent is dispatched by this plan.
