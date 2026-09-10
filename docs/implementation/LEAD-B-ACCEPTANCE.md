@@ -49,3 +49,5 @@ Native depth export inspection is available as `python3 scripts/review-native-de
 ## Native acquisition implementation
 
 `apps/ios/SingingDepth/SingingDepth.xcodeproj` now provides explicit held-pose RGB/TrueDepth capture and optional raw microphone PCM with original timestamps/format metadata. The unsigned iPhoneOS build and ZIP integrity check passed. No compatible device was connected, so real capture, permission-loss, audio continuity, depth coverage and synchronization accuracy remain unverified. See [native capture instructions](../../apps/ios/README.md).
+
+The native acquisition → KIT bridge is `scripts/import-native-capture.ts` ([instructions](NATIVE-KIT-IMPORT.md)). It validates original RGB/depth/PCM bytes, camera calibration and source timestamps and produces a dashboard-importable observation. Source clocks retain unknown cross-clock alignment; raw native calibration is not silently treated as rectified or validated absolute-depth evidence. Three focused import fixtures and a dedicated script typecheck passed.
