@@ -9,7 +9,7 @@ export interface ScientificResult {
 export interface ScienceStatus {status:string;runId?:string;error?:string;result?:ScientificResult}
 export interface OutcomeStatus {
  status:string;runId?:string;outcomeId?:string;error?:string;
- result?:{status:string;scientificStatus:string|null;modelUpdated:boolean;modelId?:string;sessionId?:string;jobId?:string;workerStatus?:string;scores?:Array<{hypothesis_id:string;standardized_rms:number}>;missingReason?:string|null;retainedHypotheses?:number|null;previousHypotheses?:number|null;reasons?:string[];error?:string;source?:string;anatomyValidated:false};
+ result?:{sourceCaptureId?:string;sourceManifestSha256?:string;status:string;scientificStatus:string|null;modelUpdated:boolean;modelId?:string;sessionId?:string;jobId?:string;workerStatus?:string;scores?:Array<{hypothesis_id:string;standardized_rms:number}>;missingReason?:string|null;retainedHypotheses?:number|null;previousHypotheses?:number|null;reasons?:string[];error?:string;source?:string;anatomyValidated:false};
 }
 export async function scienceAction(path:string,body?:unknown){
  const response=await fetch('/api/science/'+path,{method:'POST',...(body===undefined?{}:{headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})});

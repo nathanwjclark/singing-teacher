@@ -1,0 +1,34 @@
+import {test,expect} from '@playwright/test';
+import {createHash} from 'node:crypto';
+
+test('Studio pull confirmation starts hidden processor and applies verified model diff',async({page})=>{
+ const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
+ const capture='00000000-0000-4000-8000-000000000002';
+ const receipt={name:`capture-${capture}.zip`,captureId:capture,sha256:'a'.repeat(64),bytes:1234,receivedAt:'2026-09-10T18:00:00Z',verification:'native-rgbd-verified',audioChunks:10,frames:30,message:'Software fixture: simulated USB receipt',reused:false};
+ const contours={airway:[[0,0],[1,0],[1,1]],tongue:[[0,0],[1,0],[0,1]],outlines:[]};
+ const diff=JSON.stringify({schemaVersion:'native-space-diff-1',anatomy:{length:1.1},referenceAnatomy:{length:1},articulation:{JA:{applied:-3,requested:-3}},referenceArticulation:{JA:{applied:-3,requested:-3}},candidate:contours,reference:contours});
+ const result={runId:'ui-capture',sourceCaptureId:capture,modelId:'model-fixture',nativeCalls:6,calibrationWindows:2,fitDiscrepancy:2,baselineDiscrepancy:3,anatomy:{length:1.1},referenceAnatomy:{length:1},jobs:[],forecast:{rankings:[],selected_experiment_id:null},files:{'space-diff.json':{sha256:createHash('sha256').update(diff).digest('hex'),byteLength:Buffer.byteLength(diff)}}};
+ let stage='not-run',pulled=false;let declarations:unknown[]=[];
+ await page.route('**/api/native-captures/latest',r=>r.fulfill({json:{receipt:pulled?receipt:null}}));
+ await page.route('**/api/native-captures/pull',r=>{pulled=true;return r.fulfill({json:{receipt}})});
+ await page.route('**/api/science/status',r=>r.fulfill({json:{status:stage,...(stage==='not-run'?{}:{runId:'ui-capture'}),...(stage==='succeeded'?{result}:{})}}));
+ await page.route('**/api/science/outcome',r=>r.fulfill({json:{status:'not-run'}}));
+ await page.route('**/api/science/use-latest-capture',r=>{declarations.push(r.request().postDataJSON());return r.fulfill({json:{prepared:true,captureId:capture}})});
+ await page.route('**/api/science/run',r=>{stage='running';return r.fulfill({json:{status:'running',runId:'ui-capture'}})});
+ await page.route('**/api/science/asset?**',r=>r.fulfill({contentType:'application/json',body:diff}));
+ await page.goto('/');
+ await page.evaluate(()=>{window.addEventListener('singing:show-model',()=>document.documentElement.dataset.modelReady='yes')});
+ await page.getByRole('button',{name:'Pull iPhone',exact:true}).click();
+ await expect(page.getByRole('button',{name:'Fit and show model changes'})).toBeDisabled();
+ await page.getByLabel(/I recorded a comfortable sustained/).check();
+ await page.getByRole('button',{name:'Fit and show model changes'}).click();
+ await expect(page.locator('.native-pull-button .capture-spinner')).toBeVisible();
+ await expect(page.locator('.capture-progress-label')).toContainText(/Fitting|Verifying/);
+ await expect(page.getByRole('button',{name:'Studio',exact:true})).toHaveAttribute('aria-pressed','true');
+ stage='succeeded';
+ await expect(page.locator('.model-adjustment-controls summary')).toHaveText('Model applied',{timeout:10000});
+ await expect(page.locator('html')).toHaveAttribute('data-model-ready','yes');
+ await expect(page.locator('.native-pull-button .capture-spinner')).toHaveCount(0);
+ expect(declarations).toEqual([{purpose:'calibration',pose:'a',contains_external_excitation:false}]);
+ expect(errors).toEqual([]);
+});
