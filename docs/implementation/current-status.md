@@ -59,7 +59,11 @@ require device evidence. Depth and visible tongue measurements do not expose
 hidden cavities or internal musculature. These limitations constrain scientific
 claims; they do not mean the numerical engine or connected app is absent.
 
-Motion exports currently support recorded 2D trajectory review. They cannot be
+Motion recordings support recorded 2D trajectory review and app-side retention of
+the original JSON and hash-bound companion video. Saving is available from the
+normal capture/replay controls; saved download links survive reload. Gaps, failed
+attempt markers and unknown synchronization remain explicit. This evidence is
+not automatically included in a physical fit. They cannot be
 converted into the existing synthetic direct-transfer dynamic fitter's input:
 depth, rigid alignment, synchronization and the acoustic quantity differ. A
 real-media dynamic inference consumer is additional modeling work, not a missing
