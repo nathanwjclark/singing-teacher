@@ -31,3 +31,9 @@ PYTHONPATH=.:science/src science/.venv/bin/python -m pytest science/tests/test_m
 ```
 
 **BLOCKED for measured-device acceptance:** B must supply synchronized depth and independent rigid head-pose observations, calibration/error estimates and repeatable visible-region annotations from actual gesture/return trials. Current evidence proves the numerical transformation and adapter on synthetic inputs, not human tracking accuracy or achievable anatomical limits.
+
+## Evidence-integrity review correction
+
+Repeated-attempt aggregation rejects reuse of any physical depth evidence ID or frame ID across attempts, even when an attempt was copied and renamed. Distinct attempt labels alone do not establish independent repetitions. The tracking fixtures now use distinct evidence/frame identities for separate acquisitions. Head registration also rejects moving landmark correspondence IDs as rigid references, in addition to landmark names. Acquisition must still issue truthful immutable evidence identities, and a human/calibration protocol must establish that declared references are physically rigid; renaming an identifier cannot prove rigidity. These guards prevent known identifier reuse, not forged provenance.
+
+16 motion tests pass including cloned/renamed attempt rejection and moving-correspondence reference rejection.

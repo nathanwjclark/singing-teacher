@@ -16,6 +16,12 @@ def make_frame(index, pixel=1, *, transform=None, depth_missing=False, landmarks
         head_pose_rigid_reference_ids=("rigid-calibration-target",))
 
 
+def unique_attempt_frames(frames, prefix):
+    return [replace(frame, frame_id=f"{prefix}-{frame.frame_id}",
+                    depth_frame=replace(frame.depth_frame, evidence_id=f"{prefix}-{frame.depth_frame.evidence_id}"))
+            for frame in frames]
+
+
 def analyze(frames, **changes):
     kwargs = dict(attempt_id="attempt-1", cue_id="comfortable-vowel", cue_version="1", context_id="context-1",
                   context={"vowel": "a"}, split="calibration", expected_correspondence={"lip": "lip-region-v1"})
@@ -45,11 +51,11 @@ def test_missing_occluded_or_inconsistent_region_never_fills_excursion(middle):
 
 
 def test_gap_splits_segments_and_repeat_variability_keeps_failed_attempts():
-    gap = analyze([make_frame(0), make_frame(1, pixel=2), make_frame(9, pixel=4)])
+    gap = analyze(unique_attempt_frames([make_frame(0), make_frame(1, pixel=2), make_frame(9, pixel=4)], "gap"))
     assert gap["landmark_summaries"]["lip"]["observed_excursion_m"] is None
     assert gap["landmark_summaries"]["lip"]["segments"][0]["observed_excursion_m"] == pytest.approx(.005)
     first = analyze([make_frame(0), make_frame(1, pixel=3)], outcome="completed")
-    second = analyze([make_frame(0), make_frame(1, pixel=2)], attempt_id="attempt-2", outcome="unsuccessful")
+    second = analyze(unique_attempt_frames([make_frame(0), make_frame(1, pixel=2)], "repeat"), attempt_id="attempt-2", outcome="unsuccessful")
     gap["attempt_id"] = "attempt-3"
     stats = repeat_variability([first, second, gap], "lip")
     assert stats["sample_sd_m"] == pytest.approx(np.std([.01, .005], ddof=1))
@@ -95,3 +101,21 @@ def test_repeated_depth_is_not_relabelled_as_fresh_motion_evidence():
     second = replace(make_frame(1), depth_frame=replace(make_frame(1).depth_frame, evidence_id="depth-0"))
     with pytest.raises(ValueError, match="repeated depth"):
         analyze([make_frame(0), second])
+
+
+def test_renamed_attempt_cannot_duplicate_physical_evidence_for_repeatability():
+    from copy import deepcopy
+    first = analyze([make_frame(0), make_frame(1, pixel=3)])
+    copied = deepcopy(first)
+    copied["attempt_id"] = "renamed-attempt"
+    with pytest.raises(ValueError, match="reused physical"):
+        repeat_variability([first, copied], "lip")
+    for row in copied["frames"]:
+        row["id"] = "renamed-" + row["id"]
+    with pytest.raises(ValueError, match="reused physical"):
+        repeat_variability([first, copied], "lip")
+
+
+def test_moving_correspondence_id_cannot_be_rigid_head_reference():
+    with pytest.raises(ValueError, match="moving landmarks"):
+        analyze([replace(make_frame(0), head_pose_rigid_reference_ids=("lip-region-v1",))])

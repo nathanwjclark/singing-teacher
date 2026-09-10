@@ -93,7 +93,7 @@ def analyze_motion(frames, *, attempt_id, cue_id, cue_version, context_id, conte
                 raise ValueError("head pose requires declared rigid references independent of moving landmarks")
             for reference in frame.head_pose_rigid_reference_ids:
                 _identifier(reference, "head pose rigid reference")
-                if reference in expected_correspondence:
+                if reference in expected_correspondence or reference in expected_correspondence.values():
                     raise ValueError("moving landmarks cannot be head pose references")
         row = {"id": frame.frame_id, "timestamp_seconds": surface.timestamp_seconds,
                "timebase_id": timebase, "sync_uncertainty_seconds": surface.sync_uncertainty_seconds,
@@ -193,6 +193,14 @@ def repeat_variability(attempts, landmark):
     ids = [a["attempt_id"] for a in attempts]
     if len(set(ids)) != len(ids):
         raise ValueError("duplicate attempt_id")
+    seen_evidence = set()
+    seen_frames = set()
+    for attempt in attempts:
+        for frame in attempt["frames"]:
+            if frame["evidence_id"] in seen_evidence or frame["id"] in seen_frames:
+                raise ValueError("reused physical frame or depth evidence is not an independent repetition")
+            seen_evidence.add(frame["evidence_id"])
+            seen_frames.add(frame["id"])
     values, excluded = [], []
     for attempt in attempts:
         summary = attempt["landmark_summaries"].get(landmark)
