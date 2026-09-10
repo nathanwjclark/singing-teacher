@@ -20,9 +20,18 @@ export async function scienceAction(path:string,body?:unknown){
  return data;
 }
 export const scienceAsset=(run:string,name:string)=>`/api/science/asset?run=${encodeURIComponent(run)}&name=${encodeURIComponent(name)}`;
+/** Historical/partial receipts remain retained server-side but cannot drive a fitted-model UI. */
+export function readableScienceStatus(value: ScienceStatus): ScienceStatus {
+ const r=value.result;
+ if(r&&(!r.files||!Array.isArray(r.jobs)||!Number.isFinite(r.fitDiscrepancy)||!r.anatomy||!r.referenceAnatomy||!Array.isArray(r.forecast?.rankings))) {
+  const {result: omitted,...status}=value;void omitted;
+  return {...status,status:'unavailable',error:'The retained model receipt is incomplete. Its original evidence is preserved; a complete fit is required for model controls.'};
+ }
+ return value;
+}
 export function useScienceStatus(refreshKey=0){
  const [state,setState]=useState<ScienceStatus>({status:'loading'});
- useEffect(()=>{let active=true;let timer:ReturnType<typeof setTimeout>;const refresh=async()=>{try{const r=await fetch('/api/science/status',{cache:'no-store'});if(!r.ok)throw Error('Local scientific service unavailable');const s=await r.json();if(active)setState(previous=>JSON.stringify(previous)===JSON.stringify(s)?previous:s)}catch{if(active)setState({status:'unavailable'})}finally{if(active)timer=setTimeout(()=>void refresh(),3000)}};void refresh();return()=>{active=false;clearTimeout(timer)}},[refreshKey]);
+ useEffect(()=>{let active=true;let timer:ReturnType<typeof setTimeout>;const refresh=async()=>{try{const r=await fetch('/api/science/status',{cache:'no-store'});if(!r.ok)throw Error('Local scientific service unavailable');const s=readableScienceStatus(await r.json());if(active)setState(previous=>JSON.stringify(previous)===JSON.stringify(s)?previous:s)}catch{if(active)setState({status:'unavailable'})}finally{if(active)timer=setTimeout(()=>void refresh(),3000)}};void refresh();return()=>{active=false;clearTimeout(timer)}},[refreshKey]);
  return state;
 }
 export function useScienceOutcome(runId:string|undefined,refreshKey=0){
@@ -41,7 +50,7 @@ export function useScienceOutcome(runId:string|undefined,refreshKey=0){
  return runId&&entry.runId===runId?entry.state:{status:runId?'loading':'not-run'} as OutcomeStatus;
 }
 export async function verifiedScienceAsset(result:ScientificResult,name:string){
- const expected=result.files[name];if(!expected)throw Error('No bound model artifact');
+ const expected=result.files?.[name];if(!expected)throw Error('No bound model artifact');
  const response=await fetch(scienceAsset(result.runId,name),{cache:'no-store'});if(!response.ok)throw Error('Model artifact unavailable');
  const bytes=await response.arrayBuffer();const hash=[...new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))].map(v=>v.toString(16).padStart(2,'0')).join('');
  if(bytes.byteLength!==expected.byteLength||hash!==expected.sha256)throw Error('Model artifact hash/size mismatch');return bytes;

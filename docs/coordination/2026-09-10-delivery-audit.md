@@ -6,7 +6,31 @@ completed agent verification after the usage interruption. The earlier
 [recovery ledger](lead-a-recovery.md) remains historical: its statements assigning
 all future runtime/UI work to B no longer describe the expanded A-owned scope.
 
-## Delivered software and evidence
+## Release follow-through
+
+PR #19 is merged at `6e0dab5`. Its final actual LiDAR browser check passed
+in 11.6 seconds and source-bank recovery passed in 48.7 seconds. Final review
+added bounded geometry retry receipts, stale unsubmitted-intent recovery and
+concurrent-request exclusion. Eleven LiDAR recovery tests and four route tests
+passed. Completed export retries reuse their identity; adoption is not repeated.
+
+PR #20 assembles both subsequent lanes in `codex/learning-integration`, including
+verified visual context/export receipts and the complete teaching mount. The
+combined build/typecheck/lint and 28 integration tests passed; another 22
+recovery/HTTP Python checks and 12 visual numerical/session/runner checks passed.
+Native teaching browser acceptance passed in 11.6 seconds: actual HTTP geometry,
+explicit matched A/B synthesis playback, recorded numerical outcome, historical
+comparison, both named educational mechanisms, reduced motion and mobile layout.
+The seeded decision used no paid model call. Combined native/full-App smoke also passed in 18.9 seconds: the real native
+teaching flow and the complete App Experiments teaching mount were checked; the tables below preserve the earlier recovery checkpoint.
+
+Root reviewed content against primary references and corrected the cricothyroid
+illustration's attachment motion. The 101-position browser regression checks
+elongation and attachment coincidence. This is engineering/content review, not
+external specialist certification. Source and visual scores remain conditional;
+no human anatomical-identification or teaching-efficacy claim follows.
+
+## Earlier recovered software and evidence
 
 | Work | Concrete receipt | Verification / integration disposition |
 |---|---|---|

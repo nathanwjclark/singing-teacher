@@ -47,7 +47,7 @@ export function ScientificModelPanel({onPreview}:{onPreview:()=>void}){
   let active=true;
   void (async()=>{
    try{
-    if(r.files['space-diff.json']){
+    if(r.files?.['space-diff.json']){
      setGeometryStatus('Verifying model geometry…');setCaptureProgress({stage:'geometry',label:'Preparing model changes…'});
      const diff=parseSpaceDiff(await verifiedScienceAsset(r,'space-diff.json'));if(!active)return;
      setModelAdjustments({runId:r.runId,diff,showDiff:true,jawPreview:false});setGeometryStatus('Model comparison applied to the live movement map and inside view.');

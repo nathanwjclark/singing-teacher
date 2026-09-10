@@ -13,8 +13,8 @@ export function ModelAdjustmentControls(){
  return <details className="model-adjustment-controls"><summary>{applied?'Model applied':'Model adjustments'}</summary><div>
   <strong>Native geometry → live overlay</strong>
   <p>Apply the fitted vocal-tract hypothesis to the blue cast. Head and tongue motion stay live.</p>
-  <button onClick={()=>void apply()} disabled={busy||!result?.files['space-diff.json']}>{busy?'Verifying…':applied?'Apply latest model':'Apply model geometry'}</button>
-  {!result?.files['space-diff.json']&&<p>Run the model in Experiments to create its reference comparison.</p>}
+  <button onClick={()=>void apply()} disabled={busy||!result?.files?.['space-diff.json']}>{busy?'Verifying…':applied?'Apply latest model':'Apply model geometry'}</button>
+  {!result?.files?.['space-diff.json']&&<p>Run the model in Experiments to create its reference comparison.</p>}
   {applied&&<><button onClick={()=>setModelAdjustments(null)}>Clear model</button><label><input type="checkbox" checked={applied.showDiff} onChange={e=>setModelAdjustments({...applied,showDiff:e.target.checked})}/>Green added / red removed space</label>
   <label><input type="checkbox" checked={applied.jawPreview} onChange={e=>setModelAdjustments({...applied,jawPreview:e.target.checked})}/>Preview declared jaw pose ({applied.diff.articulation.JA.applied}°)</label>
   <p>Jaw preview moves the jaw and attached muscles in both views. This angle was fixed during fitting; it was not estimated from your voice.</p>
