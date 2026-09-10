@@ -91,7 +91,7 @@ def test_duplicate_source_interval_and_predicted_clipping_are_not_silent():
     with Engine() as engine:
         doc, candidates = fixture(engine)
         duplicate = deepcopy(doc)
-        duplicate['trials'][1]['measurement']['provenance']['sourceHashes'] = duplicate['trials'][0]['measurement']['provenance']['sourceHashes']
+        duplicate['trials'][1]['measurement']['provenance']['sourceHashes'] = duplicate['trials'][0]['measurement']['provenance']['sourceHashes'] + ['f'*64]
         with pytest.raises(ValueError, match='Duplicate source audio interval'):
             fit_pcm(engine, duplicate, candidates=candidates, node_binary=NODE)
         clipped = deepcopy(candidates[1])
@@ -100,3 +100,38 @@ def test_duplicate_source_interval_and_predicted_clipping_are_not_silent():
         assert result['actual_synthesis_calls'] == 4
         assert result['joint']['best'] is None
         assert result['joint']['candidates'][0]['missing_features'][0]['reason'] == 'predicted_pcm_clipping'
+
+
+@pytest.mark.parametrize('rate,size', [(48000, 4096), (96000, 8192)])
+def test_observed_rate_resampling_uses_exact_canonical_window(rate, size):
+    from singing_physics.pcm_inverse import resample_native_pcm
+    with Engine() as engine:
+        anatomy = {'hard_palate_length': 4.2, 'pharynx_length': 7.0}
+        control = {'JA': -2., 'f0_hz': 180., 'gain': .8}
+        engine.set_anatomy(anatomy)
+        native = engine.synthesize('a', {'JA': -2.}, f0_hz=180., duration_s=.25)
+        audio, transform = resample_native_pcm(native, engine.sample_rate, rate)
+        assert len(audio) == round(.25*rate)
+        start = rate//10
+        record = extract_pcm(audio[start:start+size]*.8, rate, measurement_id='rate-measurement',
+            observation_id='rate-observation', artifact_id='rate-artifact', start_ms=100., node_binary=NODE)['measurement']
+        doc = {'schema_version': '0.1.0', 'kind': 'canonical_pcm_observations', 'trials': [{
+            'id': 'rate-trial', 'pose': 'a', 'measurement': record, 'sample_rate_hz': rate,
+            'frame_start_sample': start, 'frame_size': size, 'duration_s': .25}]}
+        candidate = {'candidate_id': 'rate-candidate', 'anatomy': anatomy, 'trials': {'rate-trial': control}}
+        fit = fit_pcm(engine, doc, candidates=[candidate], max_synthesis_calls=2, node_binary=NODE)
+        best = fit['joint']['best']
+        assert best['weighted_mean_square_discrepancy'] == 0
+        assert best['predictions'][0]['resampling'] == transform
+        assert transform['observations_resampled'] is False
+        bad = deepcopy(doc); bad['trials'][0]['frame_size'] //= 2
+        with pytest.raises(ValueError, match='audioFrameSize'):
+            fit_pcm(engine, bad, candidates=[candidate], node_binary=NODE)
+
+
+def test_human_pcm_receipt_does_not_invent_capture_synchronization():
+    frame = .1*np.sin(2*np.pi*180*np.arange(4096)/44100)
+    record = extract_pcm(frame, 44100, measurement_id='human-frame', observation_id='recording',
+                         artifact_id='recording-pcm', source_kind='human-observation', node_binary=NODE)['measurement']
+    assert record['timebase']['syncUncertaintyMs'] is None
+    assert record['timebase']['referenceClockId'] is None

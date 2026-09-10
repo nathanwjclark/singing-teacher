@@ -19,10 +19,14 @@ The measurement must be a real canonical `audio-measurement` contract object,
 method `pcm-blackman-power-yin/1.1.0`, with its original source artifact hashes and
 observation/artifact IDs. Source IDs, sample interval, units, finite measurements,
 null/missing reasons and quality flags are validated. Duplicate source windows
-are rejected. Only native 44100 Hz, canonical 4096-sample frames are currently
-supported: unsupported rates fail explicitly, with no silent resampling. The
-window starts at `frame_start_sample / 44100` in the source recording; synthesis
-uses exactly that relative interval. Invalid/clipped/low-SNR observations fail.
+are rejected. Observation rates 44100, 48000 and 96000 Hz are supported. Canonical frame sizes
+are obtained directly from B’s `audioFrameSize`, not a duplicate implementation:
+4096, 4096 and 8192 samples respectively. The window starts at
+`frame_start_sample / sample_rate_hz` in the source recording. Only synthesized
+PCM is resampled from native 44100 Hz with `scipy.signal.resample_poly`, integer
+up/down ratios, Kaiser beta 5 and constant padding. Observed audio is never
+resampled. Every prediction records transform parameters and SciPy version;
+unsupported rates and mismatched intervals are rejected. Invalid/clipped/low-SNR observations fail.
 At least three nonmissing descriptors per trial are required.
 
 Each finite candidate supplies `candidate_id`, `anatomy` overrides and `trials`, a
@@ -63,7 +67,8 @@ PYTHONPATH=science/src science/.venv/bin/python -m pytest science/tests/test_pcm
 PYTHONPATH=science/src science/.venv/bin/python science/scripts/pcm_fit_demo.py --output science/artifacts/pcm-fit-demo-v1
 ```
 
-Four tests passed. The genuine native demonstration used 12 fit synthesis calls
+Seven targeted tests passed, including exact 48/96 kHz comparisons, window
+mismatch, cloned evidence with extra hashes, and unknown human timing. The genuine native demonstration used 12 fit synthesis calls
 (6 per model), plus 2 calibration and 2 post-selection held-out synthesis calls.
 Candidate 1 scored 0 weighted discrepancy versus 18.820782 for the best fixed
 anatomy baseline. All five nonmissing held-out descriptor errors were zero.
@@ -78,3 +83,15 @@ Explicit digital gain in the development fixture was increased (i:16, held-out
 e:32) to exercise a valid extraction path. These adjustments preclude calling this
 a fresh untouched scientific benchmark. The separate joint-transfer challenge
 retains its own failures and scientific conclusions.
+
+Replays preserve genuine B extraction `createdAt` receipts, so those timestamps
+differ on each extraction. Compare source PCM hashes, feature values, selected
+candidates and scores rather than byte-equality of newly generated measurement
+receipts. Input observation hashes and candidate-grid hashes remain stable for
+identical input documents. Human `extract_pcm` timing describes a local decoded
+PCM sample-index interval with unknown capture synchronization; it never asserts
+alignment to camera/depth clocks. The ingestion layer owns actual clock binding.
+
+Source-window deduplication checks both artifact ID and every overlapping source
+hash independently of ancillary hashes. Ambiguous shared provenance hashes may
+therefore be conservatively rejected; they cannot increase effective sample size.

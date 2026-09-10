@@ -7,11 +7,14 @@ from __future__ import annotations
 from copy import deepcopy
 import hashlib
 import json
+import math
 from pathlib import Path
 import shutil
 import subprocess
 
 import numpy as np
+import scipy
+from scipy.signal import resample_poly
 
 from .engine import Engine, finite
 
@@ -48,8 +51,24 @@ def extract_pcm(audio, sample_rate_hz, *, measurement_id, observation_id, artifa
         'metadata': {'id': measurement_id, 'observationId': observation_id, 'artifactId': artifact_id,
             'startMs': start_ms, 'sourceKind': source_kind,
             'timebase': {'clockId': observation_id+'-samples', 'origin': 'session-start', 'unit': 'ms',
-                'syncUncertaintyMs': 0, 'referenceClockId': None, 'offsetToReferenceMs': None},
+                'syncUncertaintyMs': 0 if source_kind == 'engine-generated' else None, 'referenceClockId': None, 'offsetToReferenceMs': None},
             'qualityFlags': ['not-microphone-calibrated'] if source_kind == 'engine-generated' else []}}, node_binary)
+
+
+def resample_native_pcm(audio, native_rate, target_rate):
+    """Resample only generated PCM; preserve observed recording samples untouched."""
+    if type(native_rate) is not int or native_rate != 44100 or type(target_rate) is not int or target_rate not in (44100, 48000, 96000):
+        raise ValueError('Supported PCM rates are native 44100 and observed 44100/48000/96000 Hz')
+    values = np.asarray(audio, dtype=float)
+    if values.ndim != 1 or not len(values) or not np.isfinite(values).all():
+        raise ValueError('Resampling requires finite mono PCM')
+    divisor = math.gcd(native_rate, target_rate)
+    up, down = target_rate//divisor, native_rate//divisor
+    result = values.copy() if up == down else resample_poly(values, up, down, window=('kaiser', 5.0), padtype='constant')
+    return result, {'source_rate_hz': native_rate, 'target_rate_hz': target_rate,
+        'up': up, 'down': down, 'method': 'identity' if up == down else 'scipy.signal.resample_poly',
+        'window': ['kaiser', 5.0] if up != down else None, 'padtype': 'constant' if up != down else None,
+        'scipy_version': scipy.__version__, 'observations_resampled': False}
 
 
 def _features(record):
@@ -110,31 +129,37 @@ def fit_pcm(engine: Engine, document, *, candidates, max_synthesis_calls=128, no
         if not isinstance(trial['id'], str) or not trial['id'].strip() or trial['pose'] not in engine.poses:
             raise ValueError('Invalid trial ID or pose')
         ids.append(trial['id'])
-        if trial['sample_rate_hz'] != engine.sample_rate or type(trial['sample_rate_hz']) is not int:
-            raise ValueError('Current PCM profile requires native 44100 Hz; resampling is unsupported')
-        if type(trial['frame_size']) is not int or trial['frame_size'] != 4096:
-            raise ValueError('44100 Hz canonical frame requires 4096 samples')
+        if type(trial['sample_rate_hz']) is not int or trial['sample_rate_hz'] not in (44100, 48000, 96000):
+            raise ValueError('Supported observation rates are 44100, 48000 and 96000 Hz')
+        if type(trial['frame_size']) is not int or not 256 <= trial['frame_size'] <= 32768:
+            raise ValueError('Invalid canonical frame size')
         start = trial['frame_start_sample']
         duration = finite(trial['duration_s'], 'duration_s')
-        if type(start) is not int or start < 0 or not .1 <= duration <= 5 or start+4096 > round(duration*engine.sample_rate):
+        if type(start) is not int or start < 0 or not .1 <= duration <= 5 or start+trial['frame_size'] > round(duration*trial['sample_rate_hz']):
             raise ValueError('PCM frame lies outside synthesis duration')
         record = trial['measurement']
         evidence_ids.append(record.get('id') if isinstance(record, dict) else None)
     if len(set(ids)) != len(ids) or len(set(evidence_ids)) != len(evidence_ids):
         raise ValueError('Duplicate trial or measurement ID')
-    extractor = _bridge({'operation': 'validate', 'records': [t['measurement'] for t in trials]}, node_binary)
+    extractor = _bridge({'operation': 'validate', 'records': [t['measurement'] for t in trials],
+        'sampleRates': sorted({t['sample_rate_hz'] for t in trials})}, node_binary)
+    frame_sizes = {p['sampleRate']: p['frameSize'] for p in extractor['audioProfiles']}
     intervals = set()
     for trial in trials:
         record = trial['measurement']
         window = record['window']
-        if not np.isclose(window['endMs']-window['startMs'], 4096/engine.sample_rate*1000, rtol=0, atol=1e-6):
+        if trial['frame_size'] != frame_sizes[trial['sample_rate_hz']]:
+            raise ValueError('Frame size does not match canonical audioFrameSize for sample rate')
+        if not np.isclose(window['endMs']-window['startMs'], trial['frame_size']/trial['sample_rate_hz']*1000, rtol=0, atol=1e-6):
             raise ValueError('Canonical observation window length mismatch')
-        if not np.isclose(window['startMs'], trial['frame_start_sample']/engine.sample_rate*1000, rtol=0, atol=1e-6):
+        if not np.isclose(window['startMs'], trial['frame_start_sample']/trial['sample_rate_hz']*1000, rtol=0, atol=1e-6):
             raise ValueError('Canonical observation window offset mismatch')
-        interval = (tuple(sorted(record['provenance']['sourceHashes'])), window['startMs'], window['endMs'])
-        if interval in intervals:
+        interval_keys = {('hash', digest, window['startMs'], window['endMs'])
+                         for digest in record['provenance']['sourceHashes']}
+        interval_keys.add(('artifact', record['artifactId'], window['startMs'], window['endMs']))
+        if intervals.intersection(interval_keys):
             raise ValueError('Duplicate source audio interval')
-        intervals.add(interval)
+        intervals.update(interval_keys)
         targets[trial['id']] = _features(record)
         if sum(m['value'] is not None for m in targets[trial['id']].values()) < 3:
             raise ValueError('Insufficient observed canonical descriptors')
@@ -173,17 +198,18 @@ def fit_pcm(engine: Engine, document, *, candidates, max_synthesis_calls=128, no
                     calls += 1
                     pcm = engine.synthesize(trial['pose'], {'JA': control['JA']},
                         f0_hz=control['f0_hz'], duration_s=trial['duration_s'])
+                    pcm, resampling = resample_native_pcm(pcm, engine.sample_rate, trial['sample_rate_hz'])
                     start = trial['frame_start_sample']
-                    frame = pcm[start:start+4096]*control['gain']
-                    canonical = extract_pcm(frame, engine.sample_rate,
+                    frame = pcm[start:start+trial['frame_size']]*control['gain']
+                    canonical = extract_pcm(frame, trial['sample_rate_hz'],
                         measurement_id=f'{model}-{candidate["candidate_id"]}-{trial["id"]}',
                         observation_id=trial['id'], artifact_id='native-pcm',
-                        start_ms=start/engine.sample_rate*1000, node_binary=node_binary)
+                        start_ms=start/trial['sample_rate_hz']*1000, node_binary=node_binary)
                     if any(canonical[k] != extractor[k] for k in ('extractorSha256', 'contractsSha256', 'extractorVersion', 'contractVersion')):
                         raise RuntimeError('Canonical extractor changed during fitting')
                     if 'clipping' in canonical['measurement']['quality']['flags']:
                         missing.append({'trial_id': trial['id'], 'reason': 'predicted_pcm_clipping'})
-                        predictions.append({'trial_id': trial['id'], 'canonical': canonical, 'controls': control})
+                        predictions.append({'trial_id': trial['id'], 'canonical': canonical, 'controls': control, 'resampling': resampling})
                         continue
                     predicted = _features(canonical['measurement'])
                     for name, target in targets[trial['id']].items():
@@ -196,7 +222,7 @@ def fit_pcm(engine: Engine, document, *, candidates, max_synthesis_calls=128, no
                         scale = max(FEATURES[name][1], target['uncertainty'] or 0.)
                         residuals.append((value-target['value'])/scale)
                     predictions.append({'trial_id': trial['id'], 'canonical': canonical,
-                        'controls': control, 'applied_articulation': engine.pose(trial['pose'], {'JA': control['JA']})[1]})
+                        'controls': control, 'resampling': resampling, 'applied_articulation': engine.pose(trial['pose'], {'JA': control['JA']})[1]})
                 rows.append({'candidate_id': candidate['candidate_id'], 'anatomy': engine.anatomy(),
                     'status': 'missing_predicted_features' if missing else 'scored',
                     'weighted_mean_square_discrepancy': None if missing else float(np.mean(np.square(residuals))),

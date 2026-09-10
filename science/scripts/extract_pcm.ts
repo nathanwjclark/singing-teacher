@@ -20,7 +20,8 @@ if (input.operation === 'validate') {
     if (!check.valid) throw Error(check.errors.join('; '));
     if (record.kind !== 'audio-measurement') throw Error('Expected audio-measurement');
   }
-  process.stdout.write(JSON.stringify({ ...provenance, valid: true }));
+  if (!Array.isArray(input.sampleRates) || input.sampleRates.some((rate: unknown) => typeof rate !== 'number')) throw Error('Expected sample rates');
+  process.stdout.write(JSON.stringify({ ...provenance, valid: true, audioProfiles: input.sampleRates.map((rate: number) => ({sampleRate: rate, frameSize: audioFrameSize(rate)})) }));
 } else if (input.operation === 'extract') {
   if (!Array.isArray(input.pcm) || input.pcm.some((v: unknown) => typeof v !== 'number' || !Number.isFinite(v))) throw Error('Expected finite numeric PCM');
   if (input.pcm.length !== audioFrameSize(input.sampleRate)) throw Error('PCM must use canonical audioFrameSize');
