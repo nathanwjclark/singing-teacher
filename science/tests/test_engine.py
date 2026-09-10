@@ -206,3 +206,27 @@ def test_failed_lip_export_cleans_temporary_files(tmp_path, monkeypatch):
         with pytest.raises(RuntimeError, match='lip marker export failed'):
             e.lip_markers('a')
         assert list(tmp_path.iterdir()) == []
+
+
+def test_native_mesh_export_is_repeatable_valid_and_tracks_articulation(tmp_path):
+    with Engine() as e:
+        e.set_anatomy({'hard_palate_length': 4.3})
+        record = e.export(tmp_path/'first', articulation={'LD': .5}, duration_s=.1)
+        e.export(tmp_path/'repeat', articulation={'LD': .5}, duration_s=.1)
+        e.export(tmp_path/'changed', articulation={'LD': 1.5}, duration_s=.1)
+        mesh = (tmp_path/'first/tract0.obj').read_bytes()
+        assert mesh == (tmp_path/'repeat/tract0.obj').read_bytes()
+        assert mesh != (tmp_path/'changed/tract0.obj').read_bytes()
+        metadata = json.loads((tmp_path/'first/surface-mesh.json').read_text())
+        assert metadata == record['surface_mesh']
+        assert metadata['coordinate_unit'] == 'cm'
+        assert metadata['vertex_count'] > 100 and metadata['triangle_count'] > 100
+        assert metadata['kind'] == 'model_derived_template_conditional_surface_mesh_not_scan'
+        for name in ('tract0.obj', 'tract0.mtl', 'tract-ema.txt', 'surface-mesh.json'):
+            assert digest(tmp_path/'first'/name) == record['files'][name]
+        files = {name: (tmp_path/'first'/name).read_bytes() for name in ('tract0.obj', 'tract0.mtl')}
+        for corrupted in (b'v nan 0 0\n', mesh.replace(b'mtllib tract0.mtl', b'mtllib absent.mtl'),
+                          mesh + b'\nf 999999//1 1//1 1//1\n'):
+            with pytest.raises(RuntimeError, match='Invalid native OBJ'):
+                e._mesh_metadata({**files, 'tract0.obj': corrupted})
+        assert {'native_outer_lip_markers', 'native_surface_mesh_obj'} <= set(e.capabilities()['supports'])

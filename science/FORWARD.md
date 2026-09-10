@@ -70,3 +70,23 @@ Current anatomy is preserved. A measured constraint is valid only with an
 explicit corresponding outer-lip annotation protocol and model-discrepancy
 uncertainty. This is a visible-surface observation operator, not evidence that
 external lip distance determines internal anatomy.
+
+## Genuine 3D surface export for VIS-01
+
+Forward bundles now include native `tract0.obj`, its referenced `tract0.mtl`, the
+matching static-frame `tract-ema.txt`, and `surface-mesh.json`. Every file is
+hashed in the existing manifest. Mesh metadata is also included in the manifest.
+The adapter preserves the exact files emitted by the pinned native
+`VocalTract::saveAsObjFile(saveBothSides=true)` implementation; it does not derive
+3D shape from spectral features. The OBJ contains triangle faces and normals,
+with coordinates in **centimeters** in the VTL model frame (multiply by 0.01 for
+meters). Material colors/transparency are native rendering defaults, not measured
+tissue properties. The mesh is labeled model-derived and template-conditional,
+not a scan; no watertightness claim is made.
+
+Export validates finite vertices/normals, nonempty triangles with valid indices,
+and the companion material reference before publishing the bundle. It retains
+SVG, audio, transfer and tube geometry. The tested mesh is repeatable for fixed
+controls and changes with articulation. Capability names are
+`native_surface_mesh_obj` and `native_outer_lip_markers`; these do not advertise
+generic depth fusion or human anatomical reconstruction.

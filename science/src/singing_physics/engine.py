@@ -239,7 +239,7 @@ class Engine:
                                         "role": "global_geometry"} for n, u, lo, hi in ANATOMY],
                 "articulation_parameters": self._param_info("vtlGetTractParamInfo", self.tract_count),
                 "source_parameters": self.source_info, "poses": sorted(self.poses),
-                "supports": ["forward_audio", "sagittal_svg", "tube_area_function", "shared_anatomy_synthetic_transfer_fit"],
+                "supports": ["forward_audio", "sagittal_svg", "tube_area_function", "shared_anatomy_synthetic_transfer_fit", "native_outer_lip_markers", "native_surface_mesh_obj"],
                 "unsupported": ["human_audio_inverse_fit", "depth_fusion", "nasal_outlet_occlusion", "tissue_mechanics_recovery", "calibrated_posterior"]}
 
     def synthesize(self, pose, articulation=None, f0_hz=160., duration_s=.4):
@@ -293,6 +293,55 @@ class Engine:
                 "tongue_side_elevation_parameter": "TS3", "anatomy": self.anatomy(),
                 "pose": pose, "articulation": pose_record}
 
+    def _native_surface_files(self, params):
+        """Read exact native static-frame files; never synthesize a mesh in Python."""
+        source = (ct.c_double * self.glottis_count)(*(p["default"] for p in self.source_info))
+        surfaces = (ct.c_int * 2)(4, 5)
+        vertices = (ct.c_int * 2)(89, 89)
+        with tempfile.TemporaryDirectory(prefix="singing-lip-markers-") as temporary:
+            self._check(self.lib.vtlTractSequenceToEmaAndMesh(
+                params, source, self.tract_count, self.glottis_count, 1, 2,
+                surfaces, vertices, temporary.encode(), b"tract"), "lip marker export")
+            root = Path(temporary)
+            return {"tract-ema.txt": (root / "tract-ema.txt").read_bytes(),
+                    "tract0.obj": (root / "tract-meshes/tract0.obj").read_bytes(),
+                    "tract0.mtl": (root / "tract-meshes/tract0.mtl").read_bytes()}
+
+    @staticmethod
+    def _mesh_metadata(files):
+        vertices, normals, faces, materials = [], [], [], []
+        try:
+            for line in files["tract0.obj"].decode("utf-8").splitlines():
+                parts = line.split()
+                if not parts:
+                    continue
+                if parts[0] == "v":
+                    vertices.append([float(x) for x in parts[1:]])
+                elif parts[0] == "vn":
+                    normals.append([float(x) for x in parts[1:]])
+                elif parts[0] == "f":
+                    faces.append([tuple(int(x) for x in token.split("//")) for token in parts[1:]])
+                elif parts[0] == "mtllib":
+                    materials.append(parts[1:])
+            for vectors in (vertices, normals):
+                array = np.array(vectors)
+                if array.ndim != 2 or array.shape[1] != 3 or not len(array) or not np.isfinite(array).all():
+                    raise ValueError("invalid vertex or normal vectors")
+            if not faces or any(len(face) != 3 or any(len(pair) != 2 or not 1 <= pair[0] <= len(vertices)
+                    or not 1 <= pair[1] <= len(normals) for pair in face) for face in faces):
+                raise ValueError("invalid triangle indices")
+            if materials != [["tract0.mtl"]] or b"newmtl " not in files["tract0.mtl"]:
+                raise ValueError("missing native material definitions")
+        except (ValueError, UnicodeError) as exc:
+            raise RuntimeError("Invalid native OBJ mesh") from exc
+        return {"kind": "model_derived_template_conditional_surface_mesh_not_scan",
+                "format": "Wavefront OBJ", "file": "tract0.obj", "material_file": "tract0.mtl",
+                "coordinate_unit": "cm", "meters_per_coordinate_unit": .01,
+                "coordinate_frame": "vtl_model", "vertex_count": len(vertices),
+                "triangle_count": len(faces), "normal_count": len(normals),
+                "source": "VocalTract::saveAsObjFile(saveBothSides=true)",
+                "limitations": ["Not measured or reconstructed human anatomy", "Not validated as watertight"]}
+
     def lip_markers(self, pose, articulation=None):
         """Native outer-lip surface markers in model coordinates, not aperture edges.
 
@@ -300,14 +349,7 @@ class Engine:
         The upstream exporter also writes a mesh; both temporary outputs are removed.
         """
         params, controls = self.pose(pose, articulation)
-        source = (ct.c_double * self.glottis_count)(*(p["default"] for p in self.source_info))
-        surfaces = (ct.c_int * 2)(4, 5)
-        vertices = (ct.c_int * 2)(89, 89)
-        with tempfile.TemporaryDirectory(prefix="singing-lip-markers-") as temporary:
-            self._check(self.lib.vtlTractSequenceToEmaAndMesh(
-                params, source, self.tract_count, self.glottis_count, 1, 2,
-                surfaces, vertices, temporary.encode(), b"lips"), "lip marker export")
-            raw = (Path(temporary) / "lips-ema.txt").read_bytes()
+        raw = self._native_surface_files(params)["tract-ema.txt"]
         lines = raw.decode("utf-8").splitlines()
         expected = "time(s) UPPER LIP_89-x[cm] UPPER LIP_89-y[cm] UPPER LIP_89-z[cm] LOWER LIP_89-x[cm] LOWER LIP_89-y[cm] LOWER LIP_89-z[cm]"
         if len(lines) != 2 or " ".join(lines[0].split()) != expected:
@@ -356,6 +398,8 @@ class Engine:
         params, pose_record = self.pose(pose, articulation)
         frequency, db, phase = self.spectrum(pose, articulation)
         geometry = self.geometry(pose, articulation)
+        surface_files = self._native_surface_files(params)
+        surface_mesh = self._mesh_metadata(surface_files)
         output.mkdir(parents=True)
         try:
             wavfile.write(output / "audio.wav", self.sample_rate, audio.astype(np.float32))
@@ -363,11 +407,14 @@ class Engine:
             write_json(output / "transfer.json", {"frequency_hz": frequency.tolist(), "magnitude_db": db.tolist(), "phase_rad": phase.tolist(),
                                                   "kind": "simulator_transfer_function_not_measured_audio"})
             write_json(output / "geometry.json", geometry)
+            for name, raw in surface_files.items():
+                (output / name).write_bytes(raw)
+            write_json(output / "surface-mesh.json", surface_mesh)
             record = {"schema_version": "0.1.0", "kind": "synthetic_forward_export", "anatomy": applied, "pose": pose,
                       "articulation": pose_record, "f0_hz": f0_hz, "duration_s": len(audio)/self.sample_rate,
                       "sample_rate_hz": self.sample_rate, "peak_absolute_amplitude": float(np.max(np.abs(audio))),
                       "source": "geometric glottis with a pressure ramp; not inferred tissue mechanics",
-                      "provenance": self.provenance, "files": {p.name: digest(p) for p in sorted(output.iterdir())}}
+                      "surface_mesh": surface_mesh, "provenance": self.provenance, "files": {p.name: digest(p) for p in sorted(output.iterdir())}}
             write_json(output / "manifest.json", record)
         except BaseException:
             # No valid manifest means the caller must not treat a partial export as complete.
