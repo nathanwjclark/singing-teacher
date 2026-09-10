@@ -28,6 +28,12 @@ search. Strict NodeNext TypeScript passes. See
 Explicit type-import changes alter the canonical extractor source hashes; rebuild
 derived evidence rather than reuse receipts from the earlier source revision.
 
+The assembled full Python regression run passed **308 tests in 253.10 seconds**
+with warnings treated as errors. That run collected before the final profile
+regression was added; the final four-test session suite was also run separately
+and passed in 15.14 seconds. The four final singing-import tests passed in 2.85
+seconds against the integrated controller, and strict NodeNext checks passed.
+
 ## Revision 8 continuation
 
 Final assembled verification: **286 Python tests passed with warnings treated as
