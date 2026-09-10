@@ -166,7 +166,7 @@ final class AcousticProbe: ObservableObject {
                 let offset = host.map { (AVAudioTime.seconds(forHostTime: scheduled) - AVAudioTime.seconds(forHostTime: $0))*sr }
                 let segments: [[String: Any]] = (0..<3).map { i in
                     let start = Int(sr*(0.5+Double(i)*1.5))
-                    return ["driveStartSample": start, "receivedStartSample": offset.map { Int($0.rounded())+start } as Any? ?? NSNull(), "sampleCount": Int(sr), "repetition": i]
+                    return ["driveStartSample": start, "receivedStartSample": offset.map { Int($0.rounded())+start } as Any? ?? NSNull(), "sampleCount": Int(sr*1.5), "repetition": i]
                 }
                 try checkedSource.write(to: folder.appendingPathComponent("level-check.json"), options: [.atomic,.completeFileProtection])
                 var discontinuities: [[String: Any]] = []
