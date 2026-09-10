@@ -65,7 +65,7 @@ export function detectVisibleTongue(pixels: Uint8ClampedArray, width: number, he
     lateral:Math.max(-1,Math.min(1,(tipX-(minX+maxX)/2)/(mouthWidth*.5))),
     lift:Math.max(0,Math.min(1,1-(y-minY)/(maxY-minY))),
     extension:Math.max(0,Math.min(1,(tipY-maxY)/(mouthWidth*.45))),
-    elevation:Math.max(-1,Math.min(1,((minY+maxY)/2-y)/(mouthWidth*.35))),
+    elevation:Math.max(-1,Math.min(1,(maxY-tipY)/(mouthWidth*.35))),
     tip:{x:tipX/width,y:tipY/height},visibleFraction:fraction,outline};
 }
 
