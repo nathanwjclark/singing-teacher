@@ -22,6 +22,8 @@ def prepare(data_root, purpose, pose, contains_external_excitation):
         if current.get('status') != 'succeeded' or not re.fullmatch(r'[A-Za-z0-9_-]+',run_id):
             raise ValueError('A completed model run is required before recording its outcome')
         summary = _json((root/'science-runs'/run_id/'summary.json').read_bytes())
+        if (root/'science-runs'/run_id/'astra-rest.json').exists():
+            raise ValueError('Astra selected rest. Request a new recording decision before preparing another capture')
         try:
             active = _json((root/'science-runs'/run_id/'astra-current.json').read_bytes())
         except FileNotFoundError:

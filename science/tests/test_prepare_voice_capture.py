@@ -52,6 +52,10 @@ def test_outcome_requires_frozen_selected_pose(tmp_path):
     c=json.loads((tmp_path/'science-outcome-input.json').read_text())
     assert (c['design_id'],c['experiment_id'],c['observation_id'])==('design-2','exp-2','target-2')
     assert (run/'summary.json').read_bytes()==original
+    (run/'astra-rest.json').write_text(json.dumps({'sessionId':'session','decisionId':'rest','createdAt':'2026-09-10T12:00:00Z'}))
+    with pytest.raises(ValueError,match='selected rest'):prepare(tmp_path,'outcome','e',False)
+    (run/'astra-rest.json').unlink()
+    assert prepare(tmp_path,'outcome','e',False)['prepared']
 
 
 def test_invalid_claims_probe_receipt_and_archive_hash_rejected(tmp_path):

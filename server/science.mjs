@@ -5,12 +5,20 @@ import {spawn} from 'node:child_process';
 
 const files=new Set(['space-diff.json','tract0.obj','tract0.mtl','tract.svg','geometry.json','manifest.json','fit.json','forecast.json','summary.json']);
 const types={obj:'text/plain',mtl:'text/plain',svg:'image/svg+xml',json:'application/json'};
+async function restDecision(runDirectory,sessionId){
+  let rest;
+  try{rest=JSON.parse(await readFile(resolve(runDirectory,'astra-rest.json'),'utf8'))}catch(error){if(error.code==='ENOENT')return null;throw error}
+  if(rest.sessionId!==sessionId||!rest.decisionId||!Number.isFinite(Date.parse(rest.createdAt)))throw new Error('Rest decision lineage is invalid');
+  return rest;
+}
 async function activeResult(runDirectory){
   const original=JSON.parse(await readFile(resolve(runDirectory,'summary.json'),'utf8'));
+  const rest=await restDecision(runDirectory,original.sessionId);
+  const resting=rest?{restDecision:rest,recordingAllowed:false,recordingMessage:'Astra selected rest. Request a new recording decision before preparing or scoring another capture.'}:{};
   let active;
-  try{active=JSON.parse(await readFile(resolve(runDirectory,'astra-current.json'),'utf8'))}catch(error){if(error.code==='ENOENT')return original;throw error}
+  try{active=JSON.parse(await readFile(resolve(runDirectory,'astra-current.json'),'utf8'))}catch(error){if(error.code==='ENOENT')return {...original,...resting};throw error}
   if(active.sessionId!==original.sessionId||!active.modelId||!active.designId||active.forecast?.design_id!==active.designId||!active.forecast?.target_observation_id||!active.forecast?.selected_experiment_id)throw new Error('Active experiment lineage is invalid');
-  return {...original,geometryModelId:original.modelId,modelId:active.modelId,designId:active.designId,sessionVersion:active.sessionVersion,forecast:active.forecast,decisionId:active.decisionId};
+  return {...original,geometryModelId:original.modelId,modelId:active.modelId,designId:active.designId,sessionVersion:active.sessionVersion,forecast:active.forecast,decisionId:active.decisionId,...resting};
 }
 export function scienceRoutes({repo,dataRoot,json}) {
   let running=null,starting=false;
@@ -74,6 +82,7 @@ export function scienceRoutes({repo,dataRoot,json}) {
         json(res,200,previous);return true;
       }
       if(running||starting){json(res,409,{error:'A scientific job is already running'});return true}
+      if(active.restDecision){json(res,409,{error:active.recordingMessage});return true}
       if(url.search||Number(req.headers['content-length']||0)>0||req.headers['transfer-encoding']){json(res,400,{error:'This action takes no parameters'});return true}
       if(!process.env.SCIENCE_URL||!process.env.SCIENCE_TOKEN){json(res,409,{error:'Start the shared worker with npm run science:local'});return true}
       starting=true;try{

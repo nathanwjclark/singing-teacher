@@ -32,6 +32,14 @@ test('active decisions retain geometry provenance and reject stale prepared capt
       assert.equal((await call('outcome')).body.status,'not-run');
     }
     assert.equal(await readFile(join(dataRoot,'science-runs/run-test/summary.json'),'utf8'),original);
+    await put('science-runs/run-test/astra-rest.json',{sessionId:'s',decisionId:'rest-1',createdAt:new Date().toISOString()});
+    const resting=await call('status');
+    assert.equal(resting.body.result.recordingAllowed,false);
+    assert.equal(resting.body.result.restDecision.decisionId,'rest-1');
+    assert.equal((await call('outcome','POST')).status,409);
+    assert.match(result.body.error,/selected rest/);
+    await rm(join(dataRoot,'science-runs/run-test/astra-rest.json'));
+    assert.equal((await call('status')).body.result.restDecision,undefined);
     await put('science-runs/run-test/astra-current.json',{sessionId:'wrong',modelId:'m',designId:'d',forecast:forecast(3)});
     assert.equal((await call('status')).body.status,'failed');
   }finally{
