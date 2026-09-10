@@ -64,8 +64,10 @@ test('retained native LiDAR geometry applies and survives a rejected duplicate s
  expect(stale.status()).toBe(400);
  await page.reload();await page.getByRole('button',{name:'Experiments',exact:true}).click();
  await expect(panel.getByRole('button',{name:'Apply depth-ranked model preview'})).toBeVisible();
+ await expect(canvas).toBeVisible({timeout:20000});
  await page.setViewportSize({width:390,height:844});
  const bounds=await panel.boundingBox();expect(bounds!.x).toBeGreaterThanOrEqual(0);expect(bounds!.x+bounds!.width).toBeLessThanOrEqual(391);
+ expect(await panel.evaluate(element=>element.scrollWidth-element.clientWidth)).toBeLessThanOrEqual(1);
  await panel.scrollIntoViewIfNeeded();await panel.screenshot({path:test.info().outputPath('lidar-rejected-mobile.png')});
  expect(errors).toEqual([]);
 });
