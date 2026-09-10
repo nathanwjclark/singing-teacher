@@ -293,7 +293,7 @@ export function AudioPanel({ demo = false, autoStart = false }: AudioPanelProps)
             <div className="audio-axis audio-time-axis"><span>−25 s</span><span>now</span></div>
           </article>
           <article className="audio-history-card audio-history-card--tone">
-            <div className="audio-chart-title"><h3 title="Waveform periodicity: higher means a more regularly repeating signal, not better singing."><i />Periodicity</h3><strong>{readout(metrics.periodicity, 2)} <small>0–1</small></strong></div>
+            <div className="audio-chart-title"><h3 title="Waveform periodicity: higher means a more regularly repeating signal, not better singing."><i />Tone <span>PERIODICITY</span></h3><strong>{readout(metrics.periodicity, 2)} <small>0–1</small></strong></div>
             <div className="audio-history-surface"><div className="audio-y-axis"><span>1</span><span>0</span></div><canvas ref={toneCanvas} role="img" aria-label="Trailing 25 seconds of waveform periodicity. Higher values mean a more regularly repeating waveform, not better singing." /></div>
             <div className="audio-axis audio-time-axis"><span>−25 s</span><span>now</span></div>
           </article>

@@ -6,7 +6,7 @@ import type { RecentTip } from '../lib/recentTips';
 
 export function useRecentTips(frame: TrackingFrame | null, scope: string) {
   const latest = useRef(frame);
-  const [state, setState] = useState<{scope:string; rows:RecentTip[]; now:number}>({scope, rows:[], now:Date.now()});
+  const [state, setState] = useState<{scope:string; rows:RecentTip[]; now:number}> (() => ({scope, rows:[], now:Date.now()}));
   useEffect(() => { latest.current = frame; }, [frame]);
   useEffect(() => {
     let rows: RecentTip[] = [];
