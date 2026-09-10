@@ -1,6 +1,7 @@
 import { FaceLandmarker, FilesetResolver, PoseLandmarker } from '@mediapipe/tasks-vision';
 import type { Landmark, TrackingFrame } from '../types';
 import { depthMetrics } from './depth';
+import { createTrackingStabilizer } from './trackingStability';
 
 interface Mat { delete(): void; copyTo(destination: Mat): void }
 interface OpenCV {
@@ -76,7 +77,7 @@ export async function createVisionEngine(): Promise<VisionEngine> {
   let depthHistory: number[] = [];
   let baselineDistance: number | undefined;
   let recentDistance: number | undefined;
-  let frameCount = 0;
+  const stabilizer = createTrackingStabilizer();
   let closed = false;
   return {
     process(video, timestamp) {
@@ -85,11 +86,9 @@ export async function createVisionEngine(): Promise<VisionEngine> {
       const landmarks = faceResult.faceLandmarks[0] ?? [];
       const faceTransform = faceResult.facialTransformationMatrixes[0]?.data;
       const blendshapes = Object.fromEntries((faceResult.faceBlendshapes[0]?.categories ?? []).map(category => [category.categoryName, category.score]));
-      if (frameCount++ % 2 === 0) {
-        const poseResult = pose.detectForVideo(video, timestamp);
-        cachedPose = poseResult.landmarks[0] ?? [];
-        cachedWorldPose = poseResult.worldLandmarks[0] ?? [];
-      }
+      const poseResult = pose.detectForVideo(video, timestamp);
+      cachedPose = stabilizer.pose(poseResult.landmarks[0] ?? [], timestamp);
+      cachedWorldPose = stabilizer.worldPose(poseResult.worldLandmarks[0] ?? [], timestamp);
       context.drawImage(video, 0, 0, canvas.width, canvas.height);
       const rgba = cv.imread(canvas);
       const gray = new cv.Mat();
@@ -119,7 +118,7 @@ export async function createVisionEngine(): Promise<VisionEngine> {
         depth.distanceCm = recentDistance;
         if (baselineDistance !== undefined) depth.relativeDepth = recentDistance / baselineDistance;
       } else { recentDistance = undefined; depthHistory = []; }
-      return { face: landmarks, pose: cachedPose, worldPose: cachedWorldPose, faceTransform, blendshapes, timestamp, metrics: { mouthOpen, headTilt: tilt(landmarks[33], landmarks[263]), shoulderTilt: tilt(cachedPose[11], cachedPose[12]), brightness, motion, ...depth } };
+      return { face: landmarks, pose: cachedPose, worldPose: cachedWorldPose, faceTransform, blendshapes, timestamp, metrics: stabilizer.metrics({ mouthOpen, headTilt: tilt(landmarks[33], landmarks[263]), shoulderTilt: tilt(cachedPose[11], cachedPose[12]), brightness, motion, ...depth }, timestamp, landmarks.length > 0) };
     },
     calibrate() { if (closed || recentDistance === undefined || depthHistory.length < 5) return false; baselineDistance = recentDistance; return true; },
     close() { if (!closed) { closed = true; face.close(); pose.close(); previous.delete(); } },
@@ -146,12 +145,14 @@ export function drawTracking(context: CanvasRenderingContext2D, frame: TrackingF
   lines(frame.face, FaceLandmarker.FACE_LANDMARKS_LIPS, '#d2ff96');
   lines(frame.face, [...FaceLandmarker.FACE_LANDMARKS_LEFT_EYE, ...FaceLandmarker.FACE_LANDMARKS_RIGHT_EYE, ...FaceLandmarker.FACE_LANDMARKS_LEFT_EYEBROW, ...FaceLandmarker.FACE_LANDMARKS_RIGHT_EYEBROW], '#b3e4ceaa');
   lines(frame.face, [...FaceLandmarker.FACE_LANDMARKS_LEFT_IRIS, ...FaceLandmarker.FACE_LANDMARKS_RIGHT_IRIS], '#9de4ff');
-  lines(frame.pose, PoseLandmarker.POSE_CONNECTIONS, '#c5fc9399');
+  // The face model already supplies stable eyes, nose and mouth. Body-model
+  // facial points are a coarser estimate and should not compete with that mesh.
+  lines(frame.pose, PoseLandmarker.POSE_CONNECTIONS.filter(edge => edge.start >= 11 && edge.end >= 11), '#c5fc9399');
   context.fillStyle = '#d2ff96';
   for (const point of frame.face) {
     context.beginPath(); context.arc(point.x * width, point.y * height, .8, 0, Math.PI * 2); context.fill();
   }
-  for (const point of frame.pose) {
+  for (const point of frame.pose.slice(11)) {
     if ((point.visibility ?? 0) < .5) continue;
     context.beginPath(); context.arc(point.x * width, point.y * height, 2.5, 0, Math.PI * 2); context.fill();
   }
