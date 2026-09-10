@@ -96,7 +96,7 @@ def run(root,phase,output):
         skews=[-.2,0.,.2] if len(hypotheses)<=2 else [-.2,.2] if len(hypotheses)<=4 else [0.]
         candidates=[{'candidate_id':f'source-{i}-{j}','anatomy':h['anatomy'],'trials':{trial['id']:{'JA':-3.,'F0':pitch,'PR':8000.,'PS':ps,'gain':4.}}} for i,h in enumerate(hypotheses) for j,ps in enumerate(skews)]
         command={'action':'fit_source','parameters':{'document':{'schema_version':'phonation-fit-1','trials':[trial]},'candidates':candidates,'max_synthesis_calls':3*len(candidates),'timeout_s':90.}}
-        binding={'source_import_sha256':summary['sourceImportSha256'],'source_assumptions':'Measured acoustic pitch; prescribed JA=-3, PR=8000 and gain=4. PS alternatives are simulator hypotheses, not observed execution or closure.'}
+        binding={'source_import_sha256':summary['sourceImportSha256'],'source_skew_support':skews,'source_assumptions':'Measured acoustic pitch; prescribed JA=-3, PR=8000 and gain=4. '+('PS alternatives are simulator hypotheses, not observed execution or closure.' if len(skews)>1 else 'PS is fixed at zero to cover all retained anatomy within the compute budget; this fit cannot distinguish source-shape alternatives.')}
     elif phase=='forecast':
         model=state.get('source_model')
         if not model or model['baseline_model_id']!=baseline:raise ValueError('Fit a source model for the current anatomy first')

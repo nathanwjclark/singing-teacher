@@ -1,7 +1,6 @@
 # TractStar implementation status
 
-This describes the integrated application at revision `7d33e79`, including the
-merged PR #10 work. It distinguishes executable software from evidence that the
+This describes the integrated application including PR #10, the merged Tract Star branding, and the subsequent source/session connections. It distinguishes executable software from evidence that the
 scientific hypotheses are correct.
 
 ## Available app flow
@@ -15,8 +14,12 @@ scientific hypotheses are correct.
   and successor model. Server-side credentials and finite call limits apply.
 - Personal cue memory saves subjective sensations against actual recorded
   attempts and links matching Astra decisions. It does not convert sensations
-  into physiological measurements. The separate cue-learning protocol remains
-  available for recall and transfer experiments.
+  into physiological measurements. Saved cues can enter the existing reviewed
+  recall/transfer protocol with their original lineage; unprompted phases hide
+  adjacent assistance as well as the protocol's own cue.
+- Session export downloads authoritative server history, IDs and artifact hashes.
+  Raw media and credentials are explicitly omitted; retained originals are needed
+  for a complete numerical rerun. Missing receipts remain visible as omissions.
 - Live camera/audio views, optional private neural tongue tracking, and optional
   phonation measurements report their own availability and limitations.
 
@@ -42,9 +45,12 @@ verified prospective decisions, scored outcomes, successor-model context and
 replay without duplicate calls. Browser checks exercise app orchestration;
 they do not establish physiological accuracy or coaching efficacy.
 
-Optional source/tract research fitting exists, but its isolated aggregate
-executor and application session adoption are **in progress**. The baseline
-source assumptions remain explicit until that integration is verified. See
+Optional source/tract fitting, isolated aggregate execution, atomic session adoption,
+committed forecasts and later scoring now traverse the actual native app path.
+The source result is separate from baseline anatomy. Actual source candidates and
+scores reach Astra's decision context; scoring may explicitly retain the source
+model. Enable the server capability once with `PHONATION_SOURCE_ENABLED=1` and use
+the app's opt-in controls. See
 [phonation status](PHONATION-STATUS.md) for the independently gated capabilities.
 
 Human anatomical recovery, individualized tissue mechanics and teaching benefit
@@ -52,3 +58,9 @@ remain unvalidated. Physical phone acquisition and acoustic-probe calibration
 require device evidence. Depth and visible tongue measurements do not expose
 hidden cavities or internal musculature. These limitations constrain scientific
 claims; they do not mean the numerical engine or connected app is absent.
+
+Motion exports currently support recorded 2D trajectory review. They cannot be
+converted into the existing synthetic direct-transfer dynamic fitter's input:
+depth, rigid alignment, synchronization and the acoustic quantity differ. A
+real-media dynamic inference consumer is additional modeling work, not a missing
+format conversion or a task that can be declared blocked solely on B.

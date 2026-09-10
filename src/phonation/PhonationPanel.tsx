@@ -53,7 +53,7 @@ export default function PhonationPanel({ audioStream }: { audioStream: MediaStre
       <button type="button" onClick={reset}>Reset reference / retry analysis</button>
     </>}
     <p role="status">{!enabled ? 'Disabled — existing coaching and scientific modeling continue.' : !audioStream ? 'Unavailable — start the app microphone to measure.' : !confirmed ? 'Confirm the reference context to begin.' : state ? `${state.status}: ${state.reason ?? 'Current acoustic measurement available.'}` : 'Starting optional analysis…'}</p>
-    <p className="phonation-capabilities">Live measurement: {state?.status ?? 'disabled'} · source inference: unsupported · acoustic comparison: {active?.cue ? 'available' : 'unavailable'}</p>
+    <p className="phonation-capabilities">Live measurement: {state?.status ?? 'disabled'} · live source inference: unsupported · acoustic comparison: {active?.cue ? 'available' : 'unavailable'}</p>
     {values && <dl>
       <div><dt>Pitch</dt><dd>{values.pitchHz.value?.toFixed(1) ?? 'Unavailable'} Hz</dd></div>
       <div><dt>Periodicity</dt><dd>{values.periodicity.value?.toFixed(3) ?? 'Unavailable'}</dd></div>

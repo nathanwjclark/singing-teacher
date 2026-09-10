@@ -66,6 +66,7 @@ export function SourceInferencePanel() {
         <div><dt>Fixed-source comparison</dt><dd>{number(object(object(fit.fixed_source).best).score)}</dd></div>
         <div><dt>Fixed-anatomy comparison</dt><dd>{number(object(object(fit.fixed_anatomy).best).score)}</dd></div></dl>
       <p>Actual synthesis calls: {text(fit.actual_synthesis_calls)}. Source model: {text(fit.source_model_version)}.</p>
+      {typeof fit.source_assumptions === 'string' && <p>{fit.source_assumptions}</p>}
       {alternatives.length > 0 && <details><summary>Competing source and tract hypotheses ({alternatives.length})</summary>
         <div className="source-inference-table"><table><thead><tr><th>Hypothesis</th><th>Status / discrepancy</th><th>Source and articulation controls</th><th>Tract parameters</th></tr></thead>
           <tbody>{alternatives.map((candidate, index) => <tr key={text(candidate.candidate_id, String(index))}><td>{text(candidate.candidate_id)}</td><td>{text(candidate.status)} · {number(candidate.score)}</td>

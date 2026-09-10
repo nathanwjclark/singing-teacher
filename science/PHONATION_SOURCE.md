@@ -2,9 +2,9 @@
 
 This additive module is scientifically executable and defaults off. It does not
 modify Engine.synthesize, baseline models, sessions, app startup or live coaching.
-The optional session lifecycle now uses isolated worker operations and separate
-source-model adoption; app enablement still requires its connected consumer to
-be verified.
+The optional session lifecycle uses isolated worker operations and separate
+source-model adoption. The app consumer is verified with actual native synthetic
+recordings through fit, forecast, later score and Astra context; see `SOURCE_RUNTIME.md`.
 Measurement-only phonation coaching can run independently.
 
 The pinned JD3 speaker XML selects **Geometric glottis**. The module verifies its

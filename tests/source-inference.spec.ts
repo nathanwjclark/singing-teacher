@@ -11,7 +11,7 @@ async function open(page:Page){
 test('optional source flow presents alternatives and requires frozen prediction confirmation before scoring',async({page})=>{
  const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));let state:Record<string,unknown>={...empty};const actions:string[]=[];let release!:()=>void;
  await page.route('**/api/source/status',r=>r.fulfill({json:state}));
- await page.route('**/api/source/analyze',async r=>{actions.push('analyze');expect(r.request().postDataJSON()).toEqual({});await new Promise<void>(resolve=>{release=resolve});state={...state,fit};await r.fulfill({status:202,json:{accepted:true}})});
+ await page.route('**/api/source/analyze',async r=>{actions.push('analyze');expect(r.request().postData()).toBeNull();await new Promise<void>(resolve=>{release=resolve});state={...state,fit};await r.fulfill({status:202,json:{accepted:true}})});
  await page.route('**/api/source/forecast',r=>{actions.push('forecast');state={...state,forecast:forecast()};return r.fulfill({status:202,json:{accepted:true}})});
  await page.route('**/api/source/score',r=>{actions.push('score');state={...state,score:{status:'succeeded',result:{status:'model_mismatch',score:4.2,model_updated:false}}};return r.fulfill({status:202,json:{accepted:true}})});
  await open(page);const panel=page.getByRole('region',{name:'Optional source and tract inference'});
