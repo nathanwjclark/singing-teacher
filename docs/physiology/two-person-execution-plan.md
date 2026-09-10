@@ -71,6 +71,10 @@ A reviews the separation of anatomy, articulation and learned control; B secures
 
 ## 4. Dependency-driven activation
 
+### Illustrated physiological coaching — A-owned
+
+The [visual teaching plan](visual-teaching-plan.md) assigns VIS-TEACH-01–05 entirely to A: mechanism content/review, anatomy illustrations and animations, model/forecast adapters, coaching UI, audio comparisons and independent verification. This is a feature-specific exception to the general B teaching/UI assignment. B has no new deliverable. Use existing recording and session interfaces; protect active shared-file writers. Educational, personalized geometry and acoustic/synthesis modes are separately gated, with text/static fallback and no core-release dependency. All new tickets begin as planned.
+
 ### Phonation and closure inference extension
 
 The [phonation and closure plan](phonation-and-closure-plan.md) adds PHON-01 through PHON-05, entirely owned by A. This is a feature-specific exception to the general lane table: A owns acoustic extraction, source/tract inference, existing-capture integration, coaching UI, orchestration, independent evaluation and release-ready integration. B has no phonation implementation, acquisition, review or acceptance assignment. Audio-derived closure estimates remain conditional hypotheses, never confirmed vocal-fold contact. The addendum defines deliverables, shared contracts and acceptance criteria; all new tickets start as planned.
