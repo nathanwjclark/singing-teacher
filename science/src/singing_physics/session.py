@@ -11,7 +11,7 @@ import sqlite3
 
 from .service import canonical
 from .prediction import Artifact, _encode, _timestamp
-from .pcm_design import _snapshot, SCHEMA
+from .pcm_design import _snapshot, SCHEMA, select_pcm_experiment
 from .pcm_inverse import _bridge, _features
 from .engine import ANATOMY, finite
 
@@ -115,6 +115,7 @@ class SessionController:
                 return {'state':state,'ledger_sha256':digest, **({'events':events} if action=='replay' else {})}
         command_id=_id(command.get('command_id'))
         fields={'register_model':{'snapshot'},'ingest_calibration':{'document'},'search':{'parameters'},
+            'select_experiment':{'source_design_id','design_id','target_observation_id','experiment_id','selection_reason'},
             'propose_design':{'parameters'},'collect_job':{'job_id'},'submit_outcome':{'design_id','parameters'},
             'record_attempt':{'design_id','attempt_id','status','reason'},'record_sensation':{'attempt_id','text'}}
         if action not in fields or set(command)!={'action','command_id','expected_version'}|fields[action]:
@@ -204,6 +205,19 @@ class SessionController:
             snapshot=Artifact(_encode(state['snapshot']))
             params.update(snapshot_json=snapshot.content.decode(),expected_digest=snapshot.sha256,generated_at=_now())
             self._launch(state,'design_pcm',params,c['command_id'])
+        elif action=='select_experiment':
+            if state['pending'] or not state['snapshot']:
+                raise ValueError('Selection requires current idle model')
+            source=state['designs'].get(c['source_design_id'])
+            if not source or source['status'] not in ('committed','unsupported'):
+                raise ValueError('Source forecast is not available for selection')
+            if c['design_id'] in state['designs'] or any(d['data']['target_observation_id']==c['target_observation_id'] for d in state['designs'].values()):
+                raise ValueError('Design or target already reserved')
+            snapshot=Artifact(_encode(state['snapshot'])); forecast=Artifact(_encode(source['data']))
+            selected=select_pcm_experiment(forecast,snapshot,expected_design_digest=forecast.sha256,
+                expected_snapshot_digest=snapshot.sha256,**{k:c[k] for k in ('design_id','target_observation_id','experiment_id','selection_reason')})
+            state['designs'][c['design_id']]={'data':selected.data,'committed_at':_now(),'status':'committed'}
+            source['status']='superseded'
         elif action=='submit_outcome':
             design=state['designs'].get(c['design_id'])
             if not design or design['status']!='committed' or design['data']['model_id']!=state['snapshot']['model_id']:

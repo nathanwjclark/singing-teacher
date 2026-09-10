@@ -197,3 +197,23 @@ def test_invalid_design_profile_rejected(changes):
     profile = {'sample_rate_hz': 48000, 'frame_start_sample': 4800, 'frame_size': 4096, 'duration_s': .25}
     with pytest.raises(ValueError):
         design(freeze(), profile={**profile, **changes})
+
+
+def test_explicit_forecast_choice_preserves_numerics_and_rejects_different_outcome():
+    from singing_physics.pcm_design import select_pcm_experiment
+    snapshot=freeze()
+    ranking=design(snapshot)
+    chosen=select_pcm_experiment(ranking,snapshot,expected_design_digest=ranking.sha256,
+        expected_snapshot_digest=snapshot.sha256,design_id='chosen',target_observation_id='chosen-target',
+        experiment_id='a-vowel',selection_reason='Declared test choice')
+    assert chosen.data['rankings']==ranking.data['rankings']
+    with pytest.raises(ValueError,match='explicitly committed'):
+        update(chosen,snapshot,observed_frame(snapshot),experiment_id='other',observation_id='chosen-target')
+    result=update(chosen,snapshot,observed_frame(snapshot),observation_id='chosen-target')
+    assert result.data['design_sha256']==chosen.sha256
+    bad=deepcopy(ranking.data);bad['rankings'][0]['predictions'][0]['features']=None
+    unsupported=Artifact(_encode(bad))
+    with pytest.raises(ValueError,match='complete'):
+        select_pcm_experiment(unsupported,snapshot,expected_design_digest=unsupported.sha256,
+            expected_snapshot_digest=snapshot.sha256,design_id='chosen',target_observation_id='new-target',
+            experiment_id='a-vowel',selection_reason='Test')

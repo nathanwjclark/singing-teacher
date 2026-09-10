@@ -231,12 +231,45 @@ def design_pcm(snapshot, *, expected_digest, design_id, target_observation_id, g
         'claim': 'Finite-support standardized descriptor separation, not information gain/posterior or human cue reliability'}))
 
 
+
+def select_pcm_experiment(design, snapshot, *, expected_design_digest, expected_snapshot_digest,
+                          design_id, target_observation_id, experiment_id, selection_reason):
+    """Commit a declared choice among complete forecasts without changing scores."""
+    frozen = _read(design, expected_design_digest, 'frozen_pcm_experiment_design')
+    data = _snapshot(snapshot, expected_snapshot_digest)
+    if frozen.get('hypothesis_snapshot_sha256') != snapshot.sha256 or any(frozen.get(k) != data[k] for k in ('model_id','provenance','evidence_ids','evidence_hashes')):
+        raise ValueError('Selection requires matching current forecast and snapshot')
+    for value, label in ((design_id,'design_id'),(target_observation_id,'target_observation_id'),(experiment_id,'experiment_id')):
+        _identity(value,label)
+    if design_id == frozen['design_id'] or target_observation_id == frozen['target_observation_id'] or target_observation_id in data['evidence_ids'] or target_observation_id+':canonical' in data['evidence_ids']:
+        raise ValueError('Selection requires fresh design and target identities')
+    if not isinstance(selection_reason,str) or not 1 <= len(selection_reason.strip()) <= 2000:
+        raise ValueError('A bounded selection reason is required')
+    rows = [r for r in frozen['rankings'] if r['experiment']['experiment_id']==experiment_id]
+    if len(rows)!=1 or len(rows[0]['predictions'])!=len(data['hypotheses']) or any(p.get('features') is None or p.get('missing_reason') is not None for p in rows[0]['predictions']):
+        raise ValueError('Selected experiment lacks complete numerical predictions')
+    now=_now()
+    if _timestamp(frozen['sealed_at']) > _timestamp(now):
+        raise ValueError('Source forecast is in the future')
+    return Artifact(_encode({**frozen,'design_id':design_id,'target_observation_id':target_observation_id,
+        'selected_experiment_id':experiment_id,'generated_at':now,'sealed_at':now,
+        'source_design_sha256':design.sha256,'source_design_id':frozen['design_id'],
+        'selection_policy':'explicit_choice_among_complete_numerical_forecasts',
+        'selection_reason':selection_reason,'additional_synthesis_calls':0,
+        'selection_scope':'Declared action choice, not verified execution or additional anatomical evidence'}))
+
+
 def update_pcm(design, snapshot, *, expected_design_digest, expected_snapshot_digest,
                experiment_id, observation_id, artifact_id, observed_at, pcm,
                sample_rate_hz=44100, frame_start_sample=4410, frame_size=4096, source_kind='engine-generated', node_binary=None):
     """Receive an actual frame, seal its receipt and update finite conditional support."""
     received_at = _now()
     frozen = _read(design, expected_design_digest, 'frozen_pcm_experiment_design')
+    if 'selection_policy' in frozen:
+        if frozen['selection_policy'] != 'explicit_choice_among_complete_numerical_forecasts' or frozen.get('selected_experiment_id') != experiment_id:
+            raise ValueError('Outcome differs from explicitly committed selection')
+        if not isinstance(frozen.get('source_design_sha256'),str) or re.fullmatch('[a-f0-9]{64}',frozen['source_design_sha256']) is None or not isinstance(frozen.get('selection_reason'),str) or not frozen['selection_reason'].strip():
+            raise ValueError('Invalid explicit selection lineage')
     data = _snapshot(snapshot, expected_snapshot_digest)
     if frozen.get('hypothesis_snapshot_sha256') != snapshot.sha256 or any(frozen.get(key) != data[key] for key in ('model_id', 'provenance', 'evidence_ids', 'evidence_hashes')):
         raise ValueError('Design/hypothesis model or evidence binding mismatch')

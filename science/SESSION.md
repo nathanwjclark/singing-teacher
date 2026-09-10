@@ -72,3 +72,22 @@ root/database and foreign-owned root are rejected, and SQL queries bind session
 IDs. This is local integrity detection, not cryptographic protection against a
 user who controls and rewrites the database and every hash. External source-byte
 authenticity and independent capture-time attestation remain outside this layer.
+
+Explicit orchestration can commit a choice from a current numerical forecast via
+`select_experiment`, with `source_design_id`, fresh `design_id`, fresh
+`target_observation_id`, `experiment_id`, and bounded `selection_reason` (plus the
+usual command ID/version). No job may be pending. The source must be committed or
+unsupported and belong to the current snapshot; every selected prediction must
+have complete features. The new design preserves all rankings, scores and native
+predictions, records its source digest and declared selection policy, and receives
+a fresh commit timestamp. The source becomes superseded. Outcomes must reference
+the new selected design/experiment/target; old or changed choices are rejected.
+
+A complete forecast with one hypothesis or insufficient separation can be chosen
+for a repeated observation. This does not manufacture anatomical evidence:
+`update_pcm` retains `no_design_separation` and the existing support when appropriate.
+After the outcome creates a successor model, submit a fresh `propose_design` job
+using the previous design's experiment list, feature scales, thresholds and native
+profile, then collect and explicitly select again. Old-model forecasts cannot be
+reused. Selection itself adds zero synthesis calls and carries no physiological
+claim about whether a user executed the declared controls.

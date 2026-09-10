@@ -114,3 +114,12 @@ kHz regressions synthesize a later waveform after sealing the design, use the
 canonical rate conversion, verify exact descriptor agreement and original frame
 hashes, and reject mismatched or altered profiles. These are synthetic physics
 integration checks, not human recording validation.
+
+`select_pcm_experiment` commits an explicit choice among an existing design's
+complete numerical forecasts. It validates both artifact digests and current
+snapshot binding, requires fresh design/target IDs and a bounded reason, and
+preserves all numerical forecasts unchanged. The artifact records source-design
+lineage, `selection_policy`, and `additional_synthesis_calls: 0`. This supports
+orchestrator-selected repeated actions without reclassifying single-hypothesis or
+nonseparating predictions. Outcomes of explicitly selected designs must match the
+committed experiment; the ordinary discrepancy/status logic remains unchanged.

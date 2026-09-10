@@ -185,3 +185,39 @@ def test_native_48k_calibration_profile_ingest_search_and_window_guards(tmp_path
             'max_synthesis_calls':6,'rounds':1,'seed':7})
         result=collect(controller,service)
         assert result['snapshot'] and result['jobs'][-1]['result']['actual_synthesis_calls']==6
+
+
+def test_explicit_selection_single_support_outcome_and_successor_round(tmp_path):
+    from singing_physics.pcm_design import freeze_pcm_hypotheses
+    with Engine() as engine: provenance=engine.provenance
+    snapshot=freeze_pcm_hypotheses(model_id='single',evidence_ids=['past'],evidence_hashes=['a'*64],
+        provenance=provenance,hypotheses=[{'hypothesis_id':'one','anatomy':{'hard_palate_length':4.2}}],frozen_at=now()).data
+    with JobService(tmp_path/'jobs') as service:
+        controller=SessionController(tmp_path/'sessions',service,'choices')
+        send(controller,'register_model',snapshot=snapshot)
+        send(controller,'propose_design',parameters=design_params('numerical','unselected-target'))
+        state=collect(controller,service)
+        assert state['designs']['numerical']['status']=='unsupported'
+        original=deepcopy(state['designs']['numerical']['data'])
+        fields=dict(source_design_id='numerical',design_id='chosen',target_observation_id='chosen-target',
+            experiment_id='a',selection_reason='Repeat supported vowel to assess model mismatch')
+        with pytest.raises(ValueError):send(controller,'select_experiment',**{**fields,'experiment_id':'invented'})
+        state=send(controller,'select_experiment',**fields)
+        chosen=state['designs']['chosen']['data']
+        assert state['designs']['numerical']['status']=='superseded'
+        assert chosen['rankings']==original['rankings'] and chosen['additional_synthesis_calls']==0
+        with Engine() as engine:
+            engine.set_anatomy(snapshot['hypotheses'][0]['anatomy'])
+            frame=(engine.synthesize('a',{'JA':-2.},f0_hz=180.,duration_s=.25)[4410:8506]*.8).tolist()
+        params=dict(experiment_id='a',observation_id='chosen-target',artifact_id='later',observed_at=now(),pcm=frame,source_kind='engine-generated')
+        with pytest.raises(ValueError):send(controller,'submit_outcome',design_id='numerical',parameters=params)
+        send(controller,'submit_outcome',design_id='chosen',parameters=params)
+        state=collect(controller,service)
+        assert state['jobs'][-1]['result']['status']=='no_design_separation'
+        assert len(state['snapshot']['hypotheses'])==1
+        assert state['snapshot']['model_id']!=snapshot['model_id']
+        with pytest.raises(ValueError):send(controller,'select_experiment',**{**fields,'design_id':'stale-choice','target_observation_id':'stale-target'})
+        send(controller,'propose_design',parameters=design_params('round-two','round-two-target'))
+        state=collect(controller,service)
+        state=send(controller,'select_experiment',**{**fields,'source_design_id':'round-two','design_id':'chosen-two','target_observation_id':'next-target'})
+        assert state['designs']['chosen-two']['data']['model_id']==state['snapshot']['model_id']
