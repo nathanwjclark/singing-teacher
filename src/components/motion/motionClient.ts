@@ -16,3 +16,22 @@ export async function importMotionCapture(record:Blob,media:Blob,filename:string
  return request('import',{method:'POST',body});
 }
 export const motionAssetUrl=(id:string,kind:'record'|'media')=>`/api/motion/${kind}?id=${encodeURIComponent(id)}`;
+export type MotionVowel='a'|'e'|'i'|'o'|'u';
+export interface MotionCandidateScore {candidate_id:string;status:string;weighted_mean_square_discrepancy:number|null;missing_features?:Array<{reason:string;feature?:string}>}
+export const rankMotionCandidates=(candidates:MotionCandidateScore[])=>[...candidates].sort((a,b)=>(a.weighted_mean_square_discrepancy??Infinity)-(b.weighted_mean_square_discrepancy??Infinity));
+export interface MotionAudioResult {
+ kind:'motion-pcm-fit-1';captureId:string;pose:MotionVowel;status:string;
+ windows:Array<{index:number;startSample:number;measurement:unknown;status:string;reason?:string|null;
+  fit?:{joint:{candidates:MotionCandidateScore[]}}|null}>;
+ modelId:string;sessionId:string;actualSynthesisCalls:number;visualSync:'unknown';modelUpdated:false;
+ hypothesisSubset:{selectedIds:string[];totalRetained:number;selection:string};assumptions:string[];
+}
+export interface MotionAnalysisStatus {
+ status:'not-run'|'running'|'succeeded'|'failed'|'interrupted';analysisId?:string;error?:string;
+ resultCurrent:boolean;currentModelId:string|null;
+ result?:MotionAudioResult|null;availability:{available:boolean;reason:string|null};
+}
+export const readMotionAnalysis=(captureId:string,signal?:AbortSignal):Promise<MotionAnalysisStatus>=>request('analysis?captureId='+encodeURIComponent(captureId),{signal});
+export const analyzeMotionAudio=(captureId:string,pose:MotionVowel,requestId:string):Promise<MotionAnalysisStatus>=>request('analyze',{
+ method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({requestId,captureId,pose,containsExternalExcitation:false})
+});

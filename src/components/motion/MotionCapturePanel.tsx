@@ -3,14 +3,34 @@ import type { TrackingFrame } from '../../types'
 import type { MotionObservation, MotionMarker } from '../../contracts/learning'
 import { validateLearningRecord } from '../../contracts/learning'
 import { motionSample, observedEnvelope, phaseAt, motionMediaBinding, verifyMotionMedia } from '../../capture/motion'
-import {importMotionCapture,readMotionStatus,motionAssetUrl} from './motionClient'
-import type {SavedMotionStatus} from './motionClient'
+import {importMotionCapture,readMotionStatus,motionAssetUrl,readMotionAnalysis,analyzeMotionAudio,rankMotionCandidates} from './motionClient'
+import type {SavedMotionStatus,MotionAnalysisStatus,MotionVowel} from './motionClient'
 import './MotionCapturePanel.css'
 const save=(blob:Blob,name:string)=>{const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
 export function MotionCapturePanel({frame,videoStream,audioStream}:{frame:TrackingFrame|null;videoStream?:MediaStream|null;audioStream?:MediaStream|null}){
  const [finalizing,setFinalizing]=useState(false),[verifying,setVerifying]=useState(false),[active,setActive]=useState(false),[elapsed,setElapsed]=useState(0),[record,setRecord]=useState<MotionObservation|null>(null),[index,setIndex]=useState(0),[media,setMedia]=useState<Blob|null>(null),[mediaUrl,setMediaUrl]=useState(''),[error,setError]=useState(''),[gesture,setGesture]=useState('Comfortable ah, then relax'),[context,setContext]=useState('seated; comfortable effort'),[count,setCount]=useState(0)
  const [recordBytes,setRecordBytes]=useState<Blob|null>(null),[saving,setSaving]=useState(false),[saved,setSaved]=useState<SavedMotionStatus|null>(null),[saveNotice,setSaveNotice]=useState('')
+ const [analysisPose,setAnalysisPose]=useState<MotionVowel>('a'),[confirmedAnalysis,setConfirmedAnalysis]=useState(''),[analysisStarting,setAnalysisStarting]=useState(false),[analysisRefresh,setAnalysisRefresh]=useState(0),[analysisError,setAnalysisError]=useState('');
+ const [analysisEntry,setAnalysisEntry]=useState<{captureId:string;value:MotionAnalysisStatus}|null>(null);
  const mounted=useRef(true), stopping=useRef(false), removeTrackListeners=useRef<()=>void>(()=>{}), importGeneration=useRef(0)
+ const analysisRequest=useRef<{key:string;id:string}|null>(null);
+ const captureId=saved?.capture?.id,analysis=analysisEntry?.captureId===captureId?analysisEntry?.value:null;
+ const analysisKey=captureId+':'+analysisPose,analysisBusy=analysisStarting||analysis?.status==='running';
+ useEffect(()=>{
+  if(!captureId)return;
+  const controller=new AbortController();let current=true,timer:ReturnType<typeof setTimeout>;
+  async function load(){try{const value=await readMotionAnalysis(captureId!,controller.signal);if(current){setAnalysisEntry({captureId:captureId!,value});setAnalysisError('');if(value.status==='running')timer=setTimeout(()=>void load(),2000)}}catch(cause){if(current)setAnalysisError(String(cause))}}
+  void load();return()=>{current=false;controller.abort();clearTimeout(timer)};
+ },[captureId,analysisRefresh]);
+ async function analyze(){
+  if(!captureId||analysisBusy||confirmedAnalysis!==analysisKey)return;
+  const key=analysisKey;
+  if(analysisRequest.current?.key!==key)analysisRequest.current={key,id:crypto.randomUUID()};
+  setAnalysisStarting(true);setAnalysisError('');
+  try{await analyzeMotionAudio(captureId,analysisPose,analysisRequest.current.id);if(mounted.current){setConfirmedAnalysis('');setAnalysisRefresh(value=>value+1)}}
+  catch(cause){if(mounted.current)setAnalysisError(String(cause))}
+  finally{if(mounted.current)setAnalysisStarting(false)}
+ }
  const draft=useRef<MotionObservation|null>(null),recorder=useRef<MediaRecorder|null>(null),player=useRef<HTMLVideoElement|null>(null)
  useEffect(()=>{let current=true;void readMotionStatus().then(value=>{if(current)setSaved(value)}).catch(cause=>{if(current)setSaveNotice(String(cause))});return()=>{current=false}},[])
  const finish=useCallback((stopped=false,note?:string)=>{
@@ -84,5 +104,20 @@ export function MotionCapturePanel({frame,videoStream,audioStream}:{frame:Tracki
  {record&&<div><button disabled={busy} onClick={exportCapture}>Export motion JSON + video</button><button disabled={busy||!media||!recordBytes} onClick={()=>void saveToApp()}>{saving?'Saving verified motion…':'Save motion to app'}</button><p>{record.samples.length} frames · {record.markers.filter(m=>m.type==='unsuccessful').length} reported unsuccessful attempts · {record.samples.filter(s=>s.gapBefore).length} timing gaps. Save to the app or export before leaving this page.</p>{record.media&&!record.media.sha256&&<p>Legacy motion JSON: video integrity was not recorded. Landmark replay is available; companion video cannot be verified.</p>}{mediaUrl&&<p>Companion video verified by SHA-256 and byte length.</p>}{mediaUrl&&<video ref={player} src={mediaUrl} controls playsInline onTimeUpdate={e=>{const t=e.currentTarget.currentTime*1000+(record.media?.startedAtMs??0);let i=record.samples.findIndex(s=>s.captureMs>=t);if(i<0)i=record.samples.length-1;if(i>=0)setIndex(i)}}/>}{record.samples.length>0&&<><label>Replay measured frame <input type="range" min="0" max={record.samples.length-1} value={index} onChange={e=>seek(Number(e.target.value))}/></label><p>{selected?.captureMs.toFixed(0)}ms · repetition {selected?.repetition} · {selected?.phase}{selected?.gapBefore?' · GAP BEFORE FRAME':''}</p><svg viewBox="-1 -1 2 2" role="img" aria-label="Head-relative visible landmark replay"><path d="M -1 0 H 1 M 0 -1 V 1" stroke="#425364" strokeWidth=".01"/>{selected?.points.filter(point=>point.headRelative).map(point=><g key={point.name}><circle cx={point.headRelative![0]} cy={point.headRelative![1]} r=".025" fill={point.name==='tongue_tip'?'#fb92ba':'#70e5d0'}/><text x={point.headRelative![0]+.03} y={point.headRelative![1]} fontSize=".055" fill="white">{point.name}</text></g>)}</svg><p>{selected?.points.map(point=>`${point.name}: ${point.reason??point.visibility}`).join(' · ')}</p></>}<details><summary>Timing and visibility markers</summary><ul>{record.markers.map((m,i)=><li key={i}>{(m.captureMs/1000).toFixed(2)}s · repeat {m.repetition} · {m.type} · {m.note} ({m.source})</li>)}</ul></details></div>}
  {saveNotice&&<p role="status">{saveNotice}</p>}
  {saved?.capture&&<div><h4>Latest motion saved in the app</h4><p>{saved.capture.sampleCount} frames · {saved.capture.timingGaps} timing gaps · {saved.capture.unsuccessfulMarkers} unsuccessful markers. Original JSON and media bytes verified.</p><p>Retained as visible 2D evidence; not included in a physical fit. Media synchronization uncertainty remains unknown.</p><a href={motionAssetUrl(saved.capture.id,'record')}>Download saved motion JSON</a> · <a href={motionAssetUrl(saved.capture.id,'media')}>Download saved video</a></div>}
+ {saved?.capture&&<fieldset><legend>Motion audio analysis</legend>
+ <p>Compare audio windows with the retained anatomy hypotheses using a declared vowel. This does not fit the visible 2D motion or infer synchronized depth, and does not change the baseline model.</p>
+ <label>Vowel recorded throughout the analyzed audio <select disabled={analysisBusy} value={analysisPose} onChange={event=>setAnalysisPose(event.target.value as MotionVowel)}><option value="a">a (ah)</option><option value="e">e (eh)</option><option value="i">i (ee)</option><option value="o">o (oh)</option><option value="u">u (oo)</option></select></label>
+ <label><input type="checkbox" checked={confirmedAnalysis===analysisKey} disabled={analysisBusy} onChange={event=>setConfirmedAnalysis(event.target.checked?analysisKey:'')}/> This saved audio contains my declared vowel with no external sound or played probe.</label>
+ <button type="button" onClick={()=>void analyze()} disabled={analysisBusy||confirmedAnalysis!==analysisKey||analysis?.availability.available===false}>{analysisBusy?'Analyzing saved audio…':'Analyze saved audio once'}</button>
+ <button type="button" disabled={analysisBusy} onClick={()=>setAnalysisRefresh(value=>value+1)}>Refresh audio analysis status</button>
+ {analysis&&<p role="status">Analysis: {analysis.status}. {analysis.availability.available?'':analysis.availability.reason}</p>}
+ {analysisError&&<p role="alert">{analysisError} Saved motion replay and downloads remain available.</p>}
+ {analysis?.error&&<p role="alert">{analysis.error}</p>}
+ {analysis?.result&&<div>{!analysis.resultCurrent&&<p><strong>Historical analysis:</strong> these results use an earlier model, not the current baseline {analysis.currentModelId||'(unavailable)'}.</p>}<p>Numerical result: {analysis.result.status} · declared vowel {analysis.result.pose} · {analysis.result.actualSynthesisCalls} synthesis calls. Baseline model unchanged; visual synchronization unknown.</p>
+ <p>Used {analysis.result.hypothesisSubset.selectedIds.length} of {analysis.result.hypothesisSubset.totalRetained} retained anatomy hypotheses. Selection: {analysis.result.hypothesisSubset.selection}.</p>
+ <details><summary>Model subset and fixed simulation assumptions</summary><p>Session: {analysis.result.sessionId} · Model: {analysis.result.modelId}</p><p>{analysis.result.hypothesisSubset.selectedIds.join(', ')}</p><ul>{analysis.result.assumptions.map((assumption,i)=><li key={i}>{assumption}</li>)}</ul></details>
+ {analysis.result.windows.map(window=><details key={window.index}><summary>Window {window.index+1} · sample {window.startSample} · {window.status}</summary>{window.reason&&<p>{window.reason}</p>}{window.fit?.joint.candidates.length?<table><thead><tr><th>Ranked hypothesis</th><th>Weighted mean-square discrepancy</th></tr></thead><tbody>{rankMotionCandidates(window.fit.joint.candidates).map(candidate=><tr key={candidate.candidate_id}><td>{candidate.candidate_id}</td><td>{candidate.weighted_mean_square_discrepancy==null?`Unavailable: ${candidate.status}. ${candidate.missing_features?.map(m=>m.reason).join('; ')||''}`:candidate.weighted_mean_square_discrepancy.toFixed(3)}</td></tr>)}</tbody></table>:<p>No numerical hypothesis scores are available for this window.</p>}</details>)}
+ </div>}
+ </fieldset>}
  <small>Eye-relative 2D coordinates remove approximate image translation, scale and roll. Yaw, perspective and reference movement can remain. These are uncalibrated visible estimates, not millimeters, internal muscle motion or anatomical limits. Media alignment uncertainty is unknown; this export cannot enter calibrated depth fitting.</small></section>
 }
