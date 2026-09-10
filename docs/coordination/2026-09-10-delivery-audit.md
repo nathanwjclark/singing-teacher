@@ -21,8 +21,8 @@ recovery/HTTP Python checks and 12 visual numerical/session/runner checks passed
 Native teaching browser acceptance passed in 11.6 seconds: actual HTTP geometry,
 explicit matched A/B synthesis playback, recorded numerical outcome, historical
 comparison, both named educational mechanisms, reduced motion and mobile layout.
-The seeded decision used no paid model call. Combined full-App smoke is the final
-release check; the tables below preserve the earlier recovery checkpoint.
+The seeded decision used no paid model call. Combined native/full-App smoke also passed in 18.9 seconds: the real native
+teaching flow and the complete App Experiments teaching mount were checked; the tables below preserve the earlier recovery checkpoint.
 
 Root reviewed content against primary references and corrected the cricothyroid
 illustration's attachment motion. The 101-position browser regression checks
