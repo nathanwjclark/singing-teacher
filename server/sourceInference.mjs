@@ -1,4 +1,4 @@
-import {readFile,writeFile,mkdir,rename} from 'node:fs/promises';
+import {readFile,writeFile,mkdir,rename,lstat} from 'node:fs/promises';
 import {resolve} from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {spawn} from 'node:child_process';
@@ -16,6 +16,8 @@ async function readContext({dataRoot,enabled=process.env.PHONATION_SOURCE_ENABLE
  const target=phases.forecast.result?.forecast?.target_id,authoritative=target?state?.source_forecasts?.[target]:null;
  phases.forecast.current=Boolean(authoritative?.status==='committed'&&authoritative?.source_model_id===state?.source_model?.model_id&&authoritative?.baseline_model_id===baselineModelId&&phases.forecast.result?.forecast?.status==='available');
  phases.forecast.authoritativeStatus=authoritative?.status||'unavailable';
+ let resting=false;try{await lstat(resolve(c.dir,'astra-rest.json'));resting=true;}catch(error){if(error.code!=='ENOENT')resting=true;}
+ if(resting){phases.forecast.current=false;phases.forecast.authoritativeStatus='rest';phases.forecast.reason='Astra selected rest; request a new recording decision before continuing';}
  return {enabled,runId:c.runId,sessionId:c.sessionId,running:false,...phases,baselineModelId,sourceModelId:state?.source_model?.model_id||null,sourceScoreCount:(state?.source_receipts||[]).filter(r=>r.operation==='score_phonation').length,baselinePreserved:true,interpretation:'Conditional source/tract acoustic comparison; not vocal-fold contact or closure measurement'};
 }
 export async function readSourceInferenceContext(options){const status=await readContext(options);if(!options.compact)return status;const {fit,forecast,score,...base}=status;const fitted=fit.result;return {...base,fit:{status:fit.status,reason:fit.reason,sourceModelVersion:fitted?.source_model_version,alternatives:fitted?Object.fromEntries(['joint','fixed_source','fixed_anatomy'].map(family=>[family,(fitted[family]?.candidates||[]).slice(0,8).map(row=>({candidateId:row.candidate_id,anatomy:row.anatomy,status:row.status,discrepancy:row.score,sourceControls:row.predictions?.[0]?.controls}))])):null},forecast:{status:forecast.status,current:forecast.current,reason:forecast.reason,targetId:forecast.result?.forecast?.target_id,pose:forecast.result?.pose,sourceControls:forecast.current?forecast.result?.forecast?.controls:null,descriptors:forecast.current?forecast.result?.forecast?.record?.descriptors:null},score:{status:score.status,reason:score.reason,discrepancy:score.result?.score,modelUpdated:score.result?.model_updated,forecastSha256:score.result?.forecast_sha256},supportedActionScope:'Optional source context may inform existing supported vowel actions; source parameters are not new physical actions or measured controls'};}
