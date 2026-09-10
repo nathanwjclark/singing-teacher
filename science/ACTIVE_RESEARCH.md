@@ -1,5 +1,10 @@
 # Active physiological inference continuation
 
+Revision 8 now prioritizes closing harness connections and preserving honest
+scores. The methods and negative experiments below are completed work; additional
+optimizer studies are deferred. External-probe integration is documented in
+[PROBE_INVERSE.md](PROBE_INVERSE.md) and [PROBE_PREDICTION.md](PROBE_PREDICTION.md).
+
 This continuation uses Lead B main `3d909d1`, including the private native-depth
 surface, temporal diagnostic and frozen visible tongue-patch experiment. Public KIT contracts and canonical PCM extraction
 remain B-owned. The scientific operations below are local, executable research

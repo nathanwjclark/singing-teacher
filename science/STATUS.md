@@ -1,5 +1,48 @@
 # Current Lead A integration status
 
+## Revision 8 continuation
+
+Final assembled verification: **286 Python tests passed with warnings treated as
+errors** (240.33 seconds), **8 KIT integration tests**, **5 probe bridge tests**,
+strict TypeScript checks for scientific adapters, build/lint, **24 focused B
+tests**, **6 coaching tests**, and **4 browser tests** passed. Python compilation
+and whitespace checks pass. The build retains its bundle-size advisory. No
+physical phone session or live runtime Astra invocation was performed by A.
+
+The current queue incorporates B main `703492f` and the research-harness finish
+plan `ab3e737`. See [ACTIVE_RESEARCH.md](ACTIVE_RESEARCH.md) for the connected
+PCM search/design/update loop and [the recovery ledger](../docs/coordination/lead-a-recovery.md)
+for reconciliation of interrupted agents and saved work. Positive reconstruction
+or learning outcomes are not implementation completion requirements.
+
+External-drive physics, immutable probe forecasts, joint singing/probe fitting
+and process-isolated CLI/service execution are now implemented. The source is a
+free external monopole with direct leakage and oral reradiation, not the glottal
+transfer function. See [ACOUSTIC_PROBE.md](ACOUSTIC_PROBE.md),
+[PROBE_INVERSE.md](PROBE_INVERSE.md) and [PROBE_PREDICTION.md](PROBE_PREDICTION.md).
+Native geometry and synthetic response tests exercise these paths. Physical
+calibration/authenticity remains distinct from software correctness.
+
+The [verified probe importer](PROBE_IMPORT.md) now runs B's original raw-media
+import/extractor and consumes its full response with explicit instrument, pose,
+placement, timing and processing evidence. A real software-fixture recording
+reaches the actual joint fitter in 12 operator calls; its large discrepancy is
+retained. Five bridge checks and strict TypeScript validation pass. The immutable
+B acquisition record remains separate from A's actual inclusion/result receipt.
+
+Visible and dynamic tongue handoffs now reject tongue-overlapping alignment
+annotations; missing optical-flow results remain failed frames. These diagnostics
+do not yet provide validated correspondence to the native anatomical surface.
+See [TONGUE_HANDOFF.md](TONGUE_HANDOFF.md) and
+[DYNAMIC_TONGUE_HANDOFF.md](DYNAMIC_TONGUE_HANDOFF.md).
+
+The active loop used 24 native synthesis calls and selected one remaining finite
+candidate with 2.45 mm palate error. The separate frozen robustness matrix found
+1 cm errors despite low residuals. These negative scientific results are preserved;
+they do not erase successful execution of the research harness.
+
+The evidence below records earlier milestones and is retained historically.
+
 Lead B's contracts, canonical PCM extractor, native acquisition/import and
 independent scoring are received through main `55ff619`. New consumers are in
 [PCM_INVERSE.md](PCM_INVERSE.md), [KIT_BRIDGE.md](KIT_BRIDGE.md),
