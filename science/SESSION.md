@@ -91,3 +91,26 @@ using the previous design's experiment list, feature scales, thresholds and nati
 profile, then collect and explicitly select again. Old-model forecasts cannot be
 reused. Selection itself adds zero synthesis calls and carries no physiological
 claim about whether a user executed the declared controls.
+
+`fit_probe` accepts `parameters` containing `probe_observations`, `candidates`,
+and optional `max_native_calls`, `pcm_weight`, `probe_weight`. It injects the
+session's stored PCM calibration and submits existing `fit_probe_pcm` through
+JobService. Candidates must supply full anatomies exactly matching current retained
+snapshot geometries and cover all of them; nuisance alternatives remain explicit.
+No new geometry or invented source/microphone calibration is introduced here.
+Previously incorporated raw probe IDs/hashes cannot be reused as new evidence.
+
+Collection of a usable joint result creates a new model ID, retaining every prior
+geometry and ordering scored geometries by joint discrepancy. Failed/unscored
+geometries remain support, not rejected anatomical possibilities. The snapshot
+retains all parent evidence and adds included probe, drive, calibration, timing
+and prior lineage plus the original joint-result digest. The complete result and
+adoption receipt remain in the session ledger. Old forecasts become stale; the
+next forecast must bind the new model. Unsupported or unscorable joint results
+remain visible with `session_adoption.status: no_usable_joint_probe_result` and
+leave the model unchanged. Successful adoption reports `ranked_retained_support`.
+
+This ranking uses original PCM calibration and newly supplied probe measurements.
+Later PCM outcomes are preserved in lineage/current support but are not rescored
+by this operator. Ranking is a finite discrepancy comparison, not a cumulative
+Bayesian posterior, likelihood calibration, or physiological identification.

@@ -114,7 +114,7 @@ class SessionController:
                 state,digest,events=self._read(db)
                 return {'state':state,'ledger_sha256':digest, **({'events':events} if action=='replay' else {})}
         command_id=_id(command.get('command_id'))
-        fields={'register_model':{'snapshot'},'ingest_calibration':{'document'},'search':{'parameters'},
+        fields={'register_model':{'snapshot'},'ingest_calibration':{'document'},'search':{'parameters'},'fit_probe':{'parameters'},
             'select_experiment':{'source_design_id','design_id','target_observation_id','experiment_id','selection_reason'},
             'propose_design':{'parameters'},'collect_job':{'job_id'},'submit_outcome':{'design_id','parameters'},
             'record_attempt':{'design_id','attempt_id','status','reason'},'record_sensation':{'attempt_id','text'}}
@@ -194,6 +194,39 @@ class SessionController:
                 raise ValueError('Invalid search parameters')
             params['observations']=state['calibration']
             self._launch(state,'search_pcm',params,c['command_id'])
+        elif action=='fit_probe':
+            if state['snapshot'] is None or state['calibration'] is None:
+                raise ValueError('Probe fitting requires current hypotheses and stored PCM calibration')
+            params=deepcopy(c['parameters'])
+            allowed={'probe_observations','candidates','max_native_calls','pcm_weight','probe_weight'}
+            if not isinstance(params,dict) or set(params)-allowed or not {'probe_observations','candidates'}<=set(params):
+                raise ValueError('Invalid probe fitting parameters')
+            snapshot=state['snapshot']; support={_hash(h['anatomy']) for h in snapshot['hypotheses']}
+            candidates=params['candidates']
+            if not isinstance(candidates,list) or not 1<=len(candidates)<=32:
+                raise ValueError('Require bounded retained probe candidates')
+            covered=set()
+            for candidate in candidates:
+                if not isinstance(candidate,dict) or not isinstance(candidate.get('anatomy'),dict):
+                    raise ValueError('Probe candidate requires full retained anatomy')
+                key=_hash(candidate['anatomy'])
+                if key not in support: raise ValueError('Probe candidate reintroduces unsupported anatomy')
+                covered.add(key)
+            if covered!=support: raise ValueError('Probe candidates must cover every retained geometry')
+            doc=params['probe_observations']
+            if not isinstance(doc,dict) or not isinstance(doc.get('trials'),list):
+                raise ValueError('Probe observation document required')
+            previous_ids=set(snapshot['evidence_ids']);previous_hashes=set(snapshot['evidence_hashes'])
+            for record in doc['trials']:
+                if not isinstance(record,dict): raise ValueError('Invalid probe record')
+                source=record.get('source',{})
+                if not isinstance(source,dict): raise ValueError('Probe source identity required')
+                ids={v for v in (record.get('id'),source.get('received_artifact_id'),source.get('drive_artifact_id')) if isinstance(v,str)}
+                hashes={v for v in (source.get('received_sha256'),source.get('drive_sha256')) if isinstance(v,str)}
+                if ids & previous_ids or hashes & previous_hashes:
+                    raise ValueError('Probe evidence overlaps existing model lineage')
+            params['observations']=state['calibration']
+            self._launch(state,'fit_probe_pcm',params,c['command_id'])
         elif action=='propose_design':
             if not state['snapshot']: raise ValueError('A frozen model is required')
             params=deepcopy(c['parameters'])
@@ -265,6 +298,46 @@ class SessionController:
                             'scope':'At most 32 unique scored geometries, ranked by search discrepancy; not posterior support',
                             'search_result_sha256':_hash(result),'scored_candidates_before_truncation':len(rows)}
                         artifact=Artifact(_encode(snapshot)); _snapshot(artifact,artifact.sha256); state['snapshot']=snapshot
+                elif operation=='fit_probe_pcm':
+                    included={r['id'] for r in result['probe_records'] if r['included_in_fit']}
+                    ranked=sorted([r for r in result['joint']['candidates'] if r['status']=='scored' and r['probe_discrepancy'] is not None],
+                        key=lambda r:(r['joint_discrepancy'],r['candidate_id']))
+                    if result['status']=='joint_probe_evidence_used' and ranked and included:
+                        parent=state['snapshot'];parent_digest=_hash(parent)
+                        by_geometry={_hash(h['anatomy']):h for h in parent['hypotheses']}
+                        ranked_keys=[]
+                        for row in ranked:
+                            key=_hash(row['anatomy'])
+                            if key not in by_geometry: raise ValueError('Probe result geometry differs from retained support')
+                            if key not in ranked_keys: ranked_keys.append(key)
+                        # Unscored hypotheses remain explicit support, never discarded as impossible.
+                        keys=ranked_keys+[k for k in by_geometry if k not in ranked_keys]
+                        ids=set(parent['evidence_ids']);hashes=set(parent['evidence_hashes'])
+                        for record in pending['request']['parameters']['probe_observations']['trials']:
+                            if record['id'] not in included: continue
+                            source=record['source'];ids.update([record['id'],source['received_artifact_id'],source['drive_artifact_id']])
+                            hashes.update([source['received_sha256'],source['drive_sha256']])
+                            for role in ('calibration','nuisance_prior','timing'):
+                                evidence=record.get(role,{})
+                                hashes.update(evidence.get('source_hashes',[]))
+                                for name in ('calibration_id','prior_id','evidence_id'):
+                                    if evidence.get(name): ids.add(evidence[name])
+                        now=_now(); result_digest=_hash(result)
+                        updated={**parent,'model_id':'probe-model:'+_hash([parent_digest,result_digest]),
+                            'parent_snapshot_sha256':parent_digest,'probe_fit_sha256':result_digest,
+                            'hypotheses':[by_geometry[k] for k in keys],'evidence_ids':sorted(ids),'evidence_hashes':sorted(hashes),
+                            'frozen_at':now,'sealed_at':now,'probe_ranking':[{'candidate_id':r['candidate_id'],
+                                'anatomy_sha256':_hash(r['anatomy']),'joint_discrepancy':r['joint_discrepancy'],
+                                'probe_discrepancy':r['probe_discrepancy']} for r in ranked],
+                            'probe_adoption_scope':'Ranking of retained geometries using original PCM calibration plus new probe; later PCM outcomes are not rescored; all geometry support retained'}
+                        artifact=Artifact(_encode(updated));_snapshot(artifact,artifact.sha256)
+                        state['snapshot']=updated
+                        for design in state['designs'].values():
+                            if design['status'] in ('committed','unsupported'): design['status']='stale'
+                        result['session_adoption']={'status':'ranked_retained_support','model_id':updated['model_id'],
+                            'parent_snapshot_sha256':parent_digest,'scoring_result_sha256':result_digest}
+                    else:
+                        result['session_adoption']={'status':'no_usable_joint_probe_result','model_unchanged':True}
                 elif operation=='design_pcm':
                     state['designs'][result['design_id']]={'data':result,'committed_at':_now(),'status':'committed' if result['selected_experiment_id'] is not None else 'unsupported'}
                 elif operation=='update_pcm':
