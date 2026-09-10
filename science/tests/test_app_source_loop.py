@@ -343,7 +343,10 @@ def test_optional_source_fit_forecast_later_capture_score_and_restart(tmp_path):
         absent.mkdir()
         restart(source_repo=absent)
         call('/api/source/forecast', False, expected=202)
-        wait_source(call, 'forecast', terminal='failed')
+        wait_source(call, 'forecast', terminal='unsupported')
+        unavailable = call('/api/source/status')['forecast']
+        assert 'policy changed' in unavailable['reason']
+        assert 'Historical receipts are retained' in unavailable['reason']
         preserved = call(session_path)['state']
         assert preserved['snapshot'] == baseline
         assert preserved['source_model'] == model
