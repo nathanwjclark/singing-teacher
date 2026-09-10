@@ -31,7 +31,7 @@ def _stats(residual):
         "median_absolute_deviation_m": float(np.median(np.abs(values-median)))}
 
 
-def assess_capture_targets(directory, annotation):
+def assess_capture_targets(directory, annotation, *, allow_rear_lidar=False):
     """Score independently supplied camera-plane/distance targets without fitting.
 
     Annotation thresholds and target geometry must be fixed independently of the
@@ -44,7 +44,7 @@ def assess_capture_targets(directory, annotation):
         raise ValueError("annotation must be finite JSON") from exc
     if not isinstance(spec, dict) or spec.get("schema_version") != "native-target-diagnostic-0.1.0":
         raise ValueError("unsupported target annotation schema")
-    capture = read_native_capture(directory)
+    capture = read_native_capture(directory, allow_rear_lidar=allow_rear_lidar)
     if spec.get("capture_id") != capture.capture_id or spec.get("manifest_sha256") != capture.manifest_sha256:
         raise ValueError("target annotation does not match the verified capture/manifest")
     limits = spec.get("tolerances", {})
@@ -147,8 +147,9 @@ if __name__ == "__main__":
     parser.add_argument("capture_directory")
     parser.add_argument("annotations", type=Path)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--allow-rear-lidar", action="store_true")
     args = parser.parse_args()
-    report = assess_capture_targets(args.capture_directory, json.loads(args.annotations.read_text()))
+    report = assess_capture_targets(args.capture_directory, json.loads(args.annotations.read_text()), allow_rear_lidar=args.allow_rear_lidar)
     descriptor = os.open(args.output, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     with os.fdopen(descriptor, "w") as output:
         json.dump(report, output, indent=2, allow_nan=False)

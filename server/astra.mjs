@@ -74,6 +74,11 @@ export function createAstraRoutes({dataRoot,json,provider,fetchImpl=fetch,callBu
         catch{prompt.phonation={measurement:{status:'unsupported',reason:'Optional phonation context unavailable'},inference:{status:'disabled'},coaching:{status:'disabled'},baselineScoring:'unchanged'};}
         try{const {readSourceInferenceContext}=await import('./sourceInference.mjs');prompt.sourceInference=await readSourceInferenceContext({dataRoot,compact:true});}
         catch{prompt.sourceInference={enabled:false,status:'unsupported',reason:'Optional source context unavailable',baselinePreserved:true};}
+        const lidarReceipt=await read(resolve(dataRoot,'native-pull-latest.json')).catch(()=>null);
+        prompt.lidar={previewEnabled:process.env.LIDAR_PREVIEW_ENABLED==='1',fusionEnabled:false,
+          status:process.env.LIDAR_PREVIEW_ENABLED==='1'?'optional-review-only':'disabled',
+          limitation:'Rear LiDAR is a separate dated surface scan. No registered geometry likelihood or new coaching action is enabled.',
+          latestTransfer:lidarReceipt?.sensor==='rear-lidar'&&lidarReceipt.verification==='native-rgbd-verified'?{captureId:lidarReceipt.captureId,receivedAt:lidarReceipt.receivedAt,archiveSha256:lidarReceipt.sha256,depthFrames:lidarReceipt.depthFrames,frames:lidarReceipt.frames}:null};
         prompt.motionAudio=await readMotionContext({dataRoot,sessionId:context.sessionId,modelId:state.snapshot.model_id});
         const dir=resolve(dataRoot,'astra-decisions',context.sessionId);await mkdir(dir,{recursive:true,mode:0o700});path=resolve(dir,input.requestId+'.json');receipt={requestId:input.requestId,sessionId:context.sessionId,runId:context.runId,modelId:state.snapshot.model_id,status:'running',goal:input.goal||'',createdAt:new Date().toISOString(),input:prompt,sessionVersion:state.version};await save(path,receipt);
         const result=await p.generateDecision({instructions,input:prompt,schema,signal:AbortSignal.timeout(90000)}),decision=result.decision;

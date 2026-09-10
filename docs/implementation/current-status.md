@@ -86,7 +86,7 @@ not enter the physical fitting objective.
   This is unimplemented software work, not blocked on Lane B. Acceptance must
   include fixed scoring/native versions, original exclusion, partial-bank
   failures, restart idempotency and second-round ranking provenance.
-- **Lead B, acquisition evidence:** collect real phone/depth/probe captures with
+- **Lead B, acquisition evidence (except A-owned rear LiDAR):** collect real phone/depth/probe captures with
   declared device calibration and timing uncertainty; complete native iOS build
   and device checks in an Xcode-capable environment.
 - **Both leads, scientific validation:** evaluate held-out human recordings and
@@ -110,3 +110,8 @@ Motion-analysis receipts now enter session exports only after original byte/hash
 verification and session/model binding. Astra receives bounded current-model
 motion evidence and optional temporal comparisons; unavailable or stale motion
 evidence does not block the existing decision flow. Raw media is not sent.
+
+The later [A-owned rear LiDAR plan](../physiology/optional-lidar-plan.md) is merged.
+Optional native scanning, sensor-aware ingestion and review gates are implemented
+with fusion off. See [LiDAR implementation status](LIDAR-STATUS.md) for exact
+partial scope and the blocked iOS SDK/device/reference acceptance checks.
