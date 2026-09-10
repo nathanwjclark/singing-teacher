@@ -85,3 +85,10 @@ test('Astra receives adopted depth ordering and distinguishes historical contrib
  s.state.snapshot.evidence_hashes=[];assert.equal(lidarContextFromState(s.state,{enabled:true}).status,'unavailable');
  assert.equal(lidarContextFromState({}, {enabled:false}).status,'disabled');
 });
+
+test('Astra receives optional visual context with explicit unchanged anatomy semantics',async t=>{
+ let visual;const app=await setup(t,{decide:async({input})=>{visual=input.visual;return {action:'rest',experimentId:null,cue:'Rest comfortably.',explanation:'No new measurement is available.'};}});
+ const response=await app.request({requestId:'visual-context'});
+ assert.equal(response.status,200);assert.equal(visual.modelUpdated,false);assert.deepEqual(visual.forecasts,[]);
+ assert.match(visual.interpretation,/not measured internal anatomy/);
+});

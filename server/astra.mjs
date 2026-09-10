@@ -1,4 +1,5 @@
 import {readMotionContext} from './motionContext.mjs';
+import {visualContextFromState} from './visualContext.mjs';
 import {lidarContextFromState} from './lidarContext.mjs';
 import {readFile, writeFile, mkdir, rename, readdir, unlink} from 'node:fs/promises';
 import {resolve} from 'node:path';
@@ -78,6 +79,7 @@ export function createAstraRoutes({dataRoot,json,provider,fetchImpl=fetch,callBu
         const lidarReceipt=await read(resolve(dataRoot,'native-pull-latest.json')).catch(()=>null);
         prompt.lidar={...lidarContextFromState(state),
           latestTransfer:lidarReceipt?.sensor==='rear-lidar'&&lidarReceipt.verification==='native-rgbd-verified'?{captureId:lidarReceipt.captureId,receivedAt:lidarReceipt.receivedAt,archiveSha256:lidarReceipt.sha256,depthFrames:lidarReceipt.depthFrames,frames:lidarReceipt.frames}:null};
+        prompt.visual=visualContextFromState(state);
         prompt.motionAudio=await readMotionContext({dataRoot,sessionId:context.sessionId,modelId:state.snapshot.model_id});
         const dir=resolve(dataRoot,'astra-decisions',context.sessionId);await mkdir(dir,{recursive:true,mode:0o700});path=resolve(dir,input.requestId+'.json');receipt={requestId:input.requestId,sessionId:context.sessionId,runId:context.runId,modelId:state.snapshot.model_id,status:'running',goal:input.goal||'',createdAt:new Date().toISOString(),input:prompt,sessionVersion:state.version};await save(path,receipt);
         const result=await p.generateDecision({instructions,input:prompt,schema,signal:AbortSignal.timeout(90000)}),decision=result.decision;
