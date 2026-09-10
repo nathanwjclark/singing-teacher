@@ -81,6 +81,8 @@ These waves describe prerequisites, not dates or mandatory group-wide barriers. 
 
 ### Wave 1: foundations and uncertainty removal
 
+The [optional rear LiDAR plan](optional-lidar-plan.md), LIDAR-01–05, is entirely A-owned: native capture, evidence contracts, sensor comparison, UI, geometry/fusion, independent review and integration. It adds no B task and no core-release dependency. Capture, preview and fusion are separately gated; missing or failed LiDAR preserves the existing TrueDepth/RGB/audio and coaching paths. Hardware/reference evidence is required to claim physical acceptance, but not to ship the baseline app.
+
 Start roughly six concrete tasks: KIT-01 contracts; PHY-01 engine; CAP-01 native capture; AUD-01 measurement definition/controlled tests; EVAL-01 scoring and leakage harness design; GEO-01 coordinate/measurement feasibility. Capture starts after the minimal bundle agreement; evaluation can specify scores before the engine is available, but cannot claim executable recovery results yet.
 
 A checks what anatomy and interventions the engine actually exposes. B obtains actual device-format logs and recordings. Both freeze the first calibration/held-out protocol. Return runnable evidence for capability claims instead of broad research summaries.
