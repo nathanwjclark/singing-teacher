@@ -47,6 +47,8 @@ export function SourceInferencePanel() {
   const alternatives = Array.isArray(joint.candidates) ? joint.candidates.map(object) : [];
   const forecast = object(status?.forecast?.result?.forecast);
   const scored = object(status?.score?.result);
+  const bank = Array.isArray(forecast.alternatives) ? forecast.alternatives.map(object) : [];
+  const ranked = Array.isArray(scored.alternatives) ? scored.alternatives.map(object) : [];
   const hasForecast = typeof forecast.target_id === 'string' && status?.forecast?.status === 'succeeded' && status.forecast.current === true && status.forecast.authoritativeStatus === 'committed' && forecast.status === 'available';
   const pose = text(status?.forecast?.result?.pose, 'a');
   const forecastKey = JSON.stringify([status?.sessionId,status?.runId,forecast.target_id,status?.forecast?.result?.sha256,forecast.sealed_at]);
@@ -78,15 +80,20 @@ export function SourceInferencePanel() {
     {status?.forecast && <p>Forecast: {status.forecast.status}. {status.forecast.reason}</p>}
     {hasForecast && <div className="source-inference-forecast"><h3>Prospective source experiment</h3>
       <p>A prediction was saved for a comfortable sustained {pose} vowel. Record a new attempt after the prediction, keeping the vowel, comfortable pitch and microphone placement consistent, then Pull iPhone.</p>
-      <p>Declared simulator controls: {parameters(forecast.controls)}. These conditions are assumptions; do not force your voice to match a source parameter.</p>
+      <p>{bank.length ? 'The frozen bank retains competing source and tract controls.' : `Declared simulator controls: ${parameters(forecast.controls)}.`} These conditions are assumptions; do not force your voice to match a source parameter.</p>
       <p>Prediction status: {text(forecast.status)}. Saved: {text(forecast.sealed_at)}.</p>
       <label><input type="checkbox" checked={confirmed} onChange={event => setConfirmedKey(event.target.checked ? forecastKey : null)} disabled={busy}/> The latest pulled capture is a new comfortable {pose} vowel attempt recorded after this prediction.</label>
       <button disabled={!ready || !confirmed} onClick={() => void run('score')}>Score later capture against source prediction</button>
     </div>}
+    {bank.length > 0 && <details><summary>Frozen competing predictions ({bank.length})</summary><p>Each row was committed before the later recording. Unavailable predictions remain visible and are not zero discrepancies.</p>
+      <div className="source-inference-table"><table><thead><tr><th>Family / candidate</th><th>Prediction status</th><th>Calibration discrepancy</th><th>Declared controls</th><th>Tract hypothesis</th></tr></thead><tbody>{bank.map((row,i)=><tr key={text(row.alternative_id,String(i))}><td>{text(row.family)} / {text(row.candidate_id)}</td><td>{text(row.status)} · {text(row.reason,'')}</td><td>{number(row.calibration_score)}</td><td>{parameters(row.controls)}</td><td>{parameters(row.anatomy)}</td></tr>)}</tbody></table></div>
+      <p>Fit identity: {text(forecast.fit_sha256)}. Bank coverage: {parameters(forecast.coverage)}.</p></details>}
     {!hasForecast && typeof forecast.target_id === 'string' && <p>This saved forecast is historical or unavailable for a new recording. Freeze a current supported prediction before continuing.</p>}
     {status?.score && <p>Scoring: {status.score.status}. {status.score.reason}</p>}
-    {Object.keys(scored).length > 0 && <div><p>Scientific result: {text(scored.status)}. {text(scored.reason, '')} Discrepancy: {number(scored.score)}.</p>
+    {Object.keys(scored).length > 0 && <div><p>Scientific result: {text(scored.status)}. {text(scored.reason, '')} {ranked.length ? 'Conditional ranking of the frozen alternatives follows.' : `Discrepancy: ${number(scored.score)}.`}</p>
+      {ranked.length > 0 && <div className="source-inference-table"><table><thead><tr><th>Family / candidate</th><th>Held-out status</th><th>Discrepancy</th><th>Calibration rank</th><th>Held-out rank</th><th>Rank change</th></tr></thead><tbody>{ranked.map((row,i)=><tr key={text(row.alternative_id,String(i))}><td>{text(row.family)} / {text(row.candidate_id)}</td><td>{text(row.status)} · {text(row.reason,'')}</td><td>{number(row.score)}</td><td>{text(row.calibration_rank)}</td><td>{text(row.heldout_rank)}</td><td>{text(row.rank_change)}</td></tr>)}</tbody></table><p>Ranks are conditional on the retained alternatives and declared recording assumptions. They do not identify vocal-fold closure or establish a unique anatomy.</p></div>}
       <p>{scored.model_updated === true ? 'The optional model was updated.' : 'No model update was applied; the baseline is retained.'}</p></div>}
+    {Boolean(scored.conditionalRanking) && <p>Conditional ranking: {text(object(scored.conditionalRanking).rankingId)} · version {text(object(scored.conditionalRanking).version)} · parent {text(object(scored.conditionalRanking).parentRankingId,'None')}. Bank: {text(object(scored.conditionalRanking).bankSha256)}.</p>}
     {status?.sessionId && <details><summary>Optional experiment lineage</summary><p>Session: {status.sessionId}<br/>Run: {status.runId}<br/>Prediction: {text(forecast.target_id)}<br/>Forecast hash: {text(status.forecast?.result?.sha256)}</p></details>}
   </section>;
 }

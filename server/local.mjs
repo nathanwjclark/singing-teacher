@@ -35,6 +35,9 @@ const handleSessionExport=createSessionExportRoutes({dataRoot,json});
 const handleMotion=createMotionRoutes({dataRoot,json});
 let handlePhonation;
 let handleSource;
+let handleLidar;
+try{const {createLidarRoutes}=await import('./lidar.mjs');handleLidar=createLidarRoutes({repo:resolve(import.meta.dirname,'..'),dataRoot,json});}
+catch{handleLidar=async(req,res,url)=>{if(!url.pathname.startsWith('/api/lidar/'))return false;json(res,req.method==='GET'?200:503,{enabled:false,running:false,reason:'Optional LiDAR module is unavailable',baselinePreserved:true});return true;};}
 try{const {createSourceInferenceRoutes}=await import('./sourceInference.mjs');handleSource=createSourceInferenceRoutes({repo:resolve(import.meta.dirname,'..'),dataRoot,json});}
 catch{handleSource=async(req,res,url)=>{if(!url.pathname.startsWith('/api/source/'))return false;json(res,req.method==='GET'?200:503,{enabled:false,running:false,reason:'Optional source module is unavailable',baselinePreserved:true});return true;};}
 try{const {createPhonationRoutes}=await import('./phonation.mjs');handlePhonation=createPhonationRoutes({repo:resolve(import.meta.dirname,'..'),dataRoot,json});}
@@ -55,6 +58,7 @@ const serverHandler=async(req,res)=>{try{
   if(await handleSessionExport(req,res,url))return;
   if(await handlePhonation(req,res,url))return;
   if(await handleSource(req,res,url))return;
+  if(await handleLidar(req,res,url))return;
   if(await handleMotion(req,res,url))return;
   if(await handleScience(req,res,url))return;
   if(await handleVoiceCapture(req,res,url))return;

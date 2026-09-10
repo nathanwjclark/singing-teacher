@@ -72,3 +72,16 @@ test('Astra receives bound current motion evidence and rejects altered or stale 
  assert.equal((await readMotionContext({dataRoot:s.root,sessionId:'other',modelId:'model-one'})).status,'unavailable');
  await put(`motion-captures/${id}/media`,'altered');assert.equal((await readMotionContext({dataRoot:s.root,sessionId:'session-one',modelId:'model-one'})).status,'unavailable');
 });
+
+test('Astra receives adopted depth ordering and distinguishes historical contribution',async t=>{
+ let context;const s=await setup(t,{decide:args=>{context=args.input.lidar;return {action:'rest',experimentId:null,cue:'Rest.',explanation:'Inspect depth-conditioned hypotheses.'}}});
+ const sha='a'.repeat(64),fusion={job_id:'depth-job',result_sha256:sha,source_evidence_id:'depth-frame',source_manifest_sha256:sha,source_kind:'development-fixture',baseline_model_id:'before-depth',scan_pose:'a',scan_JA_values:[-3],scan_JA_weights:[1],without_depth_order:['one'],with_depth_order:['one'],rankings:[{hypothesis_id:'one',depth_discrepancy:.1,predictions:[{JA_requested:-3,weight:1,distance_m:.025}]}]};
+ s.state.snapshot.lidar_fusion=fusion;s.state.snapshot.evidence_ids.push('depth-frame');s.state.snapshot.evidence_hashes=[sha];
+ s.state.lidar_fusions=[{status:'adopted',job_id:'depth-job',result_sha256:sha,model_id:'model-one',model_updated:true}];
+ assert.equal((await s.request({requestId:'depth-context'})).status,200);
+ assert.equal(context.rankingIsCurrent,true);assert.equal(context.rankings[0].predictions[0].distanceMeters,.025);assert.match(context.evidenceVerification,/at adoption/);
+ const {lidarContextFromState}=await import('./lidarContext.mjs');
+ s.state.snapshot.model_id='later-acoustic-model';assert.equal(lidarContextFromState(s.state,{enabled:true}).rankingIsCurrent,false);
+ s.state.snapshot.evidence_hashes=[];assert.equal(lidarContextFromState(s.state,{enabled:true}).status,'unavailable');
+ assert.equal(lidarContextFromState({}, {enabled:false}).status,'disabled');
+});

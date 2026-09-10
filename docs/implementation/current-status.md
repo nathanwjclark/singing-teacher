@@ -1,5 +1,10 @@
 # TractStar implementation status
 
+For the September 10 usage-recovery checkpoint, active A-owned visual/teaching
+work, preserved user changes and verification boundaries, see the
+[delivery audit](../coordination/2026-09-10-delivery-audit.md). That audit names
+separate integration branches; candidate work is not automatically merged main.
+
 This describes the integrated application including PR #10, the merged Tract Star branding, and the subsequent source/session connections. It distinguishes executable software from evidence that the
 scientific hypotheses are correct.
 
@@ -79,13 +84,11 @@ not enter the physical fitting objective.
   fixed-anatomy temporal comparison now reports heuristic path penalties and
   sensitivity over existing audio windows; it does not recover continuous
   motion or verified motor control. See [temporal comparisons](../../science/MOTION_PATH.md).
-- **Lead A, source forecast comparison:** extend the current best-candidate
-  forecast to a sealed, bounded bank of competing source/tract predictions.
-  Score the same new original against every frozen alternative, preserving
-  unsupported candidates; revise ranking separately from baseline anatomy.
-  This is unimplemented software work, not blocked on Lane B. Acceptance must
-  include fixed scoring/native versions, original exclusion, partial-bank
-  failures, restart idempotency and second-round ranking provenance.
+- **Lead A, source forecast comparison:** connected. Every bounded competing
+  source/tract prediction is frozen before the later recording, then scored
+  against one canonical original frame. Conditional ranking versions reach the
+  next round and Astra; unsupported alternatives stay visible. See
+  [matched source budgets](../../science/SOURCE_BANK_BUDGET.md).
 - **Lead B, acquisition evidence (except A-owned rear LiDAR):** collect real phone/depth/probe captures with
   declared device calibration and timing uncertainty; complete native iOS build
   and device checks in an Xcode-capable environment.
@@ -112,6 +115,19 @@ motion evidence and optional temporal comparisons; unavailable or stale motion
 evidence does not block the existing decision flow. Raw media is not sent.
 
 The later [A-owned rear LiDAR plan](../physiology/optional-lidar-plan.md) is merged.
-Optional native scanning, sensor-aware ingestion and review gates are implemented
-with fusion off. See [LiDAR implementation status](LIDAR-STATUS.md) for exact
-partial scope and the blocked iOS SDK/device/reference acceptance checks.
+Optional scanning, original-byte projection, experimental visible-lip likelihood,
+durable model adoption, native preview, Astra context and replay are connected.
+Enable fusion independently with `LIDAR_FUSION_ENABLED=1`. See
+[LiDAR implementation status](LIDAR-STATUS.md) for the supported operator, explicit
+uncertainty assumptions, bounded budgets and remaining iOS/device/reference checks.
+
+
+An offline [score recomputation adapter](../../science/SESSION_SCORE_RECOMPUTATION.md)
+can rerun one exported PCM update against a retained original frame and original
+controller replay. It reports numerical agreement separately from unverified
+legacy scoring-policy provenance; it does not fabricate missing media.
+
+The next visual likelihood lane is specified in
+[conditional visual observations](../physiology/conditional-visual-likelihood-plan.md).
+Its native-marker correspondence and camera/coordinate assumptions must be
+explicit; legacy MediaPipe lip names alone are not valid physical correspondence.

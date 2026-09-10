@@ -60,7 +60,7 @@ def _worker(root, job_id, parent_pid, timeout_s):
         params = request['parameters']
         if request['operation'] == 'evaluate_probe' and 'model_id' in request and json.loads(request['parameters']['forecast_json']).get('model_id') != request['model_id']:
             raise ValueError('Forecast model does not match job model')
-        if request['operation'] in {'fit_phonation', 'forecast_phonation', 'score_phonation'}:
+        if request['operation'] in {'fit_phonation', 'forecast_phonation', 'score_phonation', 'forecast_phonation_bank', 'score_phonation_bank'}:
             # Optional modules load only inside the bounded disposable worker.
             if params.get('enabled', False) is not True:
                 result = {'status': 'disabled', 'reason': 'Optional phonation source operations disabled', 'model_updated': False}
@@ -71,13 +71,19 @@ def _worker(root, job_id, parent_pid, timeout_s):
                     result = {'status': 'unsupported', 'reason': 'Optional phonation source module unavailable', 'model_updated': False}
                 else:
                     options = {k:v for k,v in params.items() if k != 'enabled'}
-                    if request['operation'] == 'score_phonation':
+                    if request['operation'] == 'score_phonation_bank':
+                        from .phonation import score_phonation_bank
+                        result = score_phonation_bank(**options)
+                    elif request['operation'] == 'score_phonation':
                         result = score_phonation_forecast(**options)
                     else:
                         with Engine() as engine:
                             if request['operation'] == 'fit_phonation':
                                 options['timeout_s'] = min(options.get('timeout_s', 60.), timeout_s)
                                 result = fit_phonation(engine, enabled=True, **options)
+                            elif request['operation'] == 'forecast_phonation_bank':
+                                from .phonation import forecast_phonation_bank
+                                result = forecast_phonation_bank(engine, **options)
                             else:
                                 result = forecast_phonation(engine, **options)
         elif request['operation'] == 'fit_control':
@@ -144,6 +150,9 @@ def _worker(root, job_id, parent_pid, timeout_s):
                 elif request['operation'] == 'search_pcm':
                     from .pcm_search import search_pcm
                     result = search_pcm(engine, params['observations'], **{k:v for k,v in params.items() if k != 'observations'})
+                elif request['operation'] == 'rank_lidar_hypotheses':
+                    from .lidar_fusion import rank_lidar_hypotheses
+                    result = rank_lidar_hypotheses(engine, **params)
                 elif request['operation'] == 'fit_probe_pcm':
                     from .probe_inverse import fit_probe_pcm
                     result = fit_probe_pcm(engine, params['observations'], params['probe_observations'],
@@ -243,9 +252,12 @@ class JobService:
         self._identity(idempotency_key, 'idempotency_key')
         if not isinstance(request, dict) or set(request) - {'operation', 'parameters', 'session_id', 'model_id'}:
             raise ValueError('Invalid local job request fields')
-        if request.get('operation') not in {'forward', 'fit_transfer', 'fit_joint', 'predict', 'fit_dynamic', 'fit_control', 'control_predict', 'condition_prediction', 'fit_frozen_control', 'rank_interventions', 'fit_pcm', 'search_pcm', 'design_pcm', 'update_pcm', 'fit_probe_pcm', 'predict_probe', 'evaluate_probe', 'fit_phonation', 'forecast_phonation', 'score_phonation'} or not isinstance(request.get('parameters'), dict):
+        if request.get('operation') not in {'forward', 'fit_transfer', 'fit_joint', 'predict', 'fit_dynamic', 'fit_control', 'control_predict', 'condition_prediction', 'fit_frozen_control', 'rank_interventions', 'fit_pcm', 'search_pcm', 'design_pcm', 'update_pcm', 'fit_probe_pcm', 'predict_probe', 'evaluate_probe', 'fit_phonation', 'forecast_phonation', 'score_phonation', 'rank_lidar_hypotheses', 'forecast_phonation_bank', 'score_phonation_bank'} or not isinstance(request.get('parameters'), dict):
             raise ValueError('Unsupported operation or missing parameters')
         allowed = {
+            'rank_lidar_hypotheses': {'snapshot','capture_directory','annotation','enabled','max_geometry_calls'},
+            'forecast_phonation_bank': {'fit_result','reference_trial_id','pose','controls','target_id','max_synthesis_calls','timeout_s','enabled'},
+            'score_phonation_bank': {'frozen','pcm','metadata','enabled'},
             'fit_phonation': {'document','candidates','max_synthesis_calls','enabled','timeout_s'},
             'forecast_phonation': {'fit_result','family','candidate_id','reference_trial_id','pose','controls','target_id','enabled'},
             'score_phonation': {'frozen','pcm','metadata','enabled'},
@@ -274,6 +286,9 @@ class JobService:
         if request['operation'] == 'predict' and not {'snapshot_json', 'expected_digest', 'prediction_id', 'target_evidence_id', 'generated_at', 'intervention'} <= set(request['parameters']):
             raise ValueError('Missing prediction parameters')
         required = {
+            'rank_lidar_hypotheses': {'snapshot','capture_directory','annotation'},
+            'forecast_phonation_bank': {'fit_result','reference_trial_id','pose','controls','target_id'},
+            'score_phonation_bank': {'frozen','pcm','metadata'},
             'fit_phonation': {'document','candidates'},
             'forecast_phonation': {'fit_result','family','candidate_id','reference_trial_id','pose','controls','target_id'},
             'score_phonation': {'frozen','pcm','metadata'},

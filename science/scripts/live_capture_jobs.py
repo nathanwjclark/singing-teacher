@@ -109,8 +109,8 @@ def pipeline(data, output, backend, session_id):
     """Run already imported canonical evidence through the authoritative session."""
     protocol={'selection':'Earliest two full-descriptor voiced windows; periodicity >= .85, dbfs > -60, pitch65..1000, no clipping/invalid/low-snr',
         'pose_assumption':'Prompted comfortable ah treated as a; phonetics not independently verified',
-        'anatomy_bounds':{'hard_palate_length':[3.8,5.1]},'gains':[1.,4.,16.],'JA':-3.,
-        'search_budget':36,'search_rounds':1,'seed':7,
+        'anatomy_bounds':{'hard_palate_length':[3.8,5.1],'lip_width':[.5,1.5]},'gains':[1.,4.,16.],'JA':-3.,
+        'search_budget':60,'search_rounds':1,'seed':7,
         'forecast_conditions':'Library a/e/i at JA=-3, F0=180Hz, gain=4; simulator conditions, not observed execution',
         'claim':'Conditional research hypotheses. No identified anatomy, microphone/room calibration, muscle tension or tissue mechanics.'}
     write_json(output/'protocol.json',protocol)
@@ -146,7 +146,7 @@ def pipeline(data, output, backend, session_id):
         raise ValueError('Live calibration requires a new session; existing ledger is preserved')
     command('ingest_calibration',document=document)
     state,fit=session_job('search',{'anatomy_bounds':protocol['anatomy_bounds'],'nuisance_profiles':nuisance,
-        'max_synthesis_calls':36,'rounds':1,'seed':7})
+        'max_synthesis_calls':protocol['search_budget'],'rounds':protocol['search_rounds'],'seed':protocol['seed']})
     write_json(output/'fit.json',fit)
     best=fit['joint']['best']
     if best is None or state['snapshot'] is None: raise ValueError('No scorable candidate; attempted hypotheses retained')

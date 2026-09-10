@@ -163,3 +163,25 @@ test('motion export binds actual originals and excludes foreign or altered evide
  await writeFile(join(root,`motion-captures/${id}/media`),'changed');await request(route);
  assert.equal(output.data.summary.motionAnalysisCount,0);assert.ok(output.data.missing.some(a=>a.source.includes('analysis-one')));
 });
+
+test('LiDAR export binds original archive and authoritative adoption, including rejected attempts',async t=>{
+ const {root,put}=await fixture(t),original=Buffer.from('synthetic archive transport fixture');
+ const sha=createHash('sha256').update(original).digest('hex');
+ await mkdir(join(root,'lidar-imports',sha),{recursive:true});await writeFile(join(root,'lidar-imports',sha,'original.zip'),original);
+ const declaration={sourceKind:'development-fixture'},dh=createHash('sha256').update(JSON.stringify(declaration)).digest('hex');
+ const scientific=replay(),result={status:'ranked',with_depth_order:['candidate'],rankings:[],annotation:{registration:{source_hashes:[dh]},correspondence:{source_hashes:[dh]}}};
+ const adoption={job_id:'depth-job',status:'adopted',model_updated:true,model_id:'updated-model'};
+ scientific.state.jobs.push({job_id:'depth-job',request:{operation:'rank_lidar_hypotheses'},result});scientific.state.lidar_fusions=[adoption];
+ await put('lidar-fits/fit-one/summary.json',{fitId:'fit-one',sessionId:'session-one',modelId:'updated-model',jobId:'depth-job',importId:sha,archiveSha256:sha,result,adoption});
+ await put('lidar-fits/fit-one/experimental-declaration.json',declaration);
+ let output;const route=createSessionExportRoutes({dataRoot:root,env,fetchImpl:async()=>Response.json(scientific),json:(_r,status,data)=>{output={status,data}}});
+ await request(route);assert.equal(output.status,200);assert.equal(output.data.summary.lidarFusionCount,1);
+ assert.equal(output.data.artifacts.find(a=>a.source==='lidar-fits/fit-one/summary.json').binding.originalBytesVerified,true);
+ assert.ok(output.data.artifacts.some(a=>a.source.endsWith('experimental-declaration.json')));
+ await put('lidar-fits/fit-one/experimental-declaration.json',{sourceKind:'tampered'});
+ await request(route);assert.ok(!output.data.artifacts.some(a=>a.source.endsWith('experimental-declaration.json')));assert.ok(output.data.missing.some(a=>a.source.endsWith('experimental-declaration.json')));
+ scientific.state.lidar_fusions[0]={...adoption,status:'rejected',model_updated:false};
+ await request(route);assert.ok(!output.data.artifacts.some(a=>a.binding?.role==='experimental-lidar-fusion'));
+ scientific.state.lidar_fusions=[adoption];await writeFile(join(root,'lidar-imports',sha,'original.zip'),'changed');
+ await request(route);assert.ok(output.data.missing.some(a=>a.source==='lidar-fits/fit-one/summary.json'));assert.ok(!output.data.artifacts.some(a=>a.binding?.role==='experimental-lidar-fusion'));
+});

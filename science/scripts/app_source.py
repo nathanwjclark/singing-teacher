@@ -26,6 +26,15 @@ def save(path,value):
     temporary=path.with_suffix('.tmp');temporary.write_text(json.dumps(value,allow_nan=False));temporary.chmod(0o600);temporary.replace(path)
 
 
+def source_candidates(hypotheses,trial_id,pitch):
+    if not 1<=len(hypotheses)<=8:raise ValueError('Optional source candidate budget cannot cover current anatomy support')
+    skews=[-.2,0.,.2] if len(hypotheses)<=2 else [-.2,.2]
+    candidates=[{'candidate_id':f'source-{i}-{j}','anatomy':h['anatomy'],
+        'trials':{trial_id:{'JA':-3.,'F0':pitch,'PR':8000.,'PS':ps,'gain':4.}}}
+        for i,h in enumerate(hypotheses) for j,ps in enumerate(skews)]
+    return candidates,skews
+
+
 def frame(import_dir,session_id,identity=None,evidence_at=None,rate=None,declared_pose=None):
     imported=load(import_dir/'native-pcm.json')
     for segment in imported['segments']:
@@ -92,11 +101,9 @@ def run(root,phase,output):
         trial,record=frame(imported,session_id,evidence_at=manifest.get('created_at'));pitch=record['descriptors']['pitchHz']['value']
         if pitch is None or not 65<=pitch<=600:raise ValueError('Observed pitch outside supported conditional source range')
         hypotheses=state['snapshot']['hypotheses']
-        if not 1<=len(hypotheses)<=8:raise ValueError('Optional source candidate budget cannot cover current anatomy support')
-        skews=[-.2,0.,.2] if len(hypotheses)<=2 else [-.2,.2] if len(hypotheses)<=4 else [0.]
-        candidates=[{'candidate_id':f'source-{i}-{j}','anatomy':h['anatomy'],'trials':{trial['id']:{'JA':-3.,'F0':pitch,'PR':8000.,'PS':ps,'gain':4.}}} for i,h in enumerate(hypotheses) for j,ps in enumerate(skews)]
+        candidates,skews=source_candidates(hypotheses,trial['id'],pitch)
         command={'action':'fit_source','parameters':{'document':{'schema_version':'phonation-fit-1','trials':[trial]},'candidates':candidates,'max_synthesis_calls':3*len(candidates),'timeout_s':90.}}
-        binding={'source_import_sha256':summary['sourceImportSha256'],'source_skew_support':skews,'source_assumptions':'Measured acoustic pitch; prescribed JA=-3, PR=8000 and gain=4. '+('PS alternatives are simulator hypotheses, not observed execution or closure.' if len(skews)>1 else 'PS is fixed at zero to cover all retained anatomy within the compute budget; this fit cannot distinguish source-shape alternatives.')}
+        binding={'source_import_sha256':summary['sourceImportSha256'],'source_skew_support':skews,'source_assumptions':'Measured acoustic pitch; prescribed JA=-3, PR=8000 and gain=4. Every retained anatomy has the same PS alternatives; these are simulator hypotheses, not observed execution or closure.'}
     elif phase=='forecast':
         model=state.get('source_model')
         if not model or model['baseline_model_id']!=baseline:raise ValueError('Fit a source model for the current anatomy first')
@@ -105,26 +112,46 @@ def run(root,phase,output):
         if pointer.exists():
             active=load(pointer);data=active['forecast'];chosen=next((r['experiment'] for r in data['rankings'] if r['experiment']['experiment_id']==data['selected_experiment_id']),None)
             if active['modelId']==baseline and chosen:pose=chosen['pose']
-        command={'action':'forecast_source','parameters':{'family':'joint','candidate_id':best['candidate_id'],'reference_trial_id':reference['trial_id'],'pose':pose,'controls':{k:reference['controls'][k] for k in ('JA','F0','PR','gain')},'target_id':identity}}
-        binding={'sourceModelId':model['model_id'],'pose':pose,'instruction':f'Record a comfortable sustained {pose} vowel. Keep pitch and microphone position similar; stop for discomfort.','source_assumptions':'Conditional source simulation; execution controls are not measured physiology.'}
+        command={'action':'forecast_source_bank','parameters':{'reference_trial_id':reference['trial_id'],'pose':pose,'controls':{k:reference['controls'][k] for k in ('JA','F0','PR','gain')},'target_id':identity,'max_synthesis_calls':48,'timeout_s':90.}}
+        ranking=next((r for r in reversed(state.get('source_rankings',[])) if r['source_model_id']==model['model_id'] and r['baseline_model_id']==baseline),None)
+        binding={'sourceModelId':model['model_id'],'pose':pose,'rankingParentId':ranking['ranking_id'] if ranking else None,
+            'rankingParentVersion':ranking['version'] if ranking else 0,'instruction':f'Record a comfortable sustained {pose} vowel. Keep pitch and microphone position similar; stop for discomfort.','source_assumptions':'Every bounded source/tract and ablation alternative is frozen before this capture. Conditional simulator ranking is separate from baseline anatomy; execution controls are not measured physiology.'}
     elif phase=='score':
         forecasts=[(k,v) for k,v in state.get('source_forecasts',{}).items() if v['status']=='committed' and v['baseline_model_id']==baseline]
         if not forecasts:raise ValueError('Commit a current source forecast before recording')
         target,frozen=forecasts[-1];forecast=frozen['artifact']['forecast'];pose=forecast.get('pose')
         if pose not in ('a','e','i','o','u'):raise ValueError('Frozen source forecast lacks a supported vowel declaration')
-        rate=forecast['record']['window']['sampleRateHz'];trial,binding=capture(root,output,session_id,target,frozen['committed_at'],rate,summary['source'],pose)
-        command={'action':'score_source','forecast_id':target,'pcm':trial['pcm'],'metadata':trial['metadata']};binding['forecastId']=target
+        bank=forecast.get('kind')=='frozen-phonation-bank-1'
+        rate=forecast['profile']['sampleRateHz'] if bank else forecast['record']['window']['sampleRateHz']
+        trial,binding=capture(root,output,session_id,target,frozen['committed_at'],rate,summary['source'],pose)
+        command={'action':'score_source_bank' if bank else 'score_source','forecast_id':target,'pcm':trial['pcm'],'metadata':trial['metadata']};binding['forecastId']=target
+        if bank:binding['bankSha256']=frozen['artifact']['sha256']
     else:raise ValueError('Unknown source operation')
     if not existing:
         command.update(command_id=identity,expected_version=state['version']);save(intent_path,{'command':command,'binding':binding,'baselineModelId':baseline})
+    operation={'fit_source':'fit_phonation','forecast_source':'forecast_phonation','score_source':'score_phonation',
+        'forecast_source_bank':'forecast_phonation_bank','score_source_bank':'score_phonation_bank'}[command['action']]
+    def publish(result,state,job):
+        if result is None:
+            save(output/'failure-receipt.json',{'status':'failed','jobId':job.get('job_id'),'commandKey':job.get('key'),
+                'operation':operation,'baselineModelId':baseline,'sessionId':session_id,
+                'workerStatus':job.get('status'),'reason':job.get('error') or 'Optional source worker returned no result',
+                'baselinePreserved':True,'retryRequiresNewAttempt':True})
+            raise ValueError('Optional source worker failed; baseline retained; retry creates a new explicit attempt')
+        ranking=next((r for r in reversed(state.get('source_rankings',[])) if r['forecast_id']==binding.get('forecastId')),None)
+        lineage={'conditionalRanking':{'rankingId':ranking['ranking_id'],'parentRankingId':ranking['parent_ranking_id'],
+            'version':ranking['version'],'bankSha256':ranking['bank_sha256'],'sourceModelId':ranking['source_model_id'],
+            'baselineModelId':ranking['baseline_model_id']}} if ranking else {}
+        save(output/'result.json',{**result,**binding,**lineage,'baselineModelId':baseline,'sessionId':session_id,
+            'sourceModelId':state.get('source_model',{}).get('model_id'),'sessionVersion':state['version']})
     if not state.get('pending'):
-        done=next((j for j in state['jobs'] if j.get('request',{}).get('operation')=={'fit':'fit_phonation','forecast':'forecast_phonation','score':'score_phonation'}[phase] and j.get('key')== 'session:'+hashlib.sha256(json.dumps([session_id,identity],sort_keys=True,separators=(',',':')).encode()).hexdigest()),None)
+        done=next((j for j in state['jobs'] if j.get('request',{}).get('operation')==operation and j.get('key')== 'session:'+hashlib.sha256(json.dumps([session_id,identity],sort_keys=True,separators=(',',':')).encode()).hexdigest()),None)
         if done:
-            result=done.get('result');save(output/'result.json',{**result,**binding,'baselineModelId':baseline,'sessionId':session_id});return
+            publish(done.get('result'),state,done);return
         state=backend.execute(command)['state']
     pending=state['pending']
     expected_key='session:'+hashlib.sha256(json.dumps([session_id,identity],sort_keys=True,separators=(',',':')).encode()).hexdigest()
-    if pending['key']!=expected_key or pending['request']['operation']!={'fit':'fit_phonation','forecast':'forecast_phonation','score':'score_phonation'}[phase]:raise ValueError('Unrelated scientific job is running')
+    if pending['key']!=expected_key or pending['request']['operation']!=operation:raise ValueError('Unrelated scientific job is running')
     job=pending['job_id'];deadline=time.monotonic()+125
     while time.monotonic()<deadline:
         status=backend.status(job)
@@ -133,9 +160,7 @@ def run(root,phase,output):
     else:raise ValueError('Source job is still running; retry to recover')
     state=backend.execute({'action':'collect_job','command_id':identity+'-collect','expected_version':state['version'],'job_id':job})['state']
     completed=next(j for j in state['jobs'] if j['job_id']==job)
-    result=completed.get('result')
-    if result is None:raise ValueError('Optional source worker failed; baseline retained')
-    save(output/'result.json',{**result,**binding,'baselineModelId':baseline,'sessionId':session_id,'sourceModelId':state.get('source_model',{}).get('model_id'),'sessionVersion':state['version']})
+    publish(completed.get('result'),state,completed)
 
 
 if __name__=='__main__':

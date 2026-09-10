@@ -31,6 +31,7 @@ import CoachLearningPanel from './components/coach/CoachLearningPanel'
 import LearningMemoryPanel from './components/coach/LearningMemoryPanel'
 import PhonationPanel from './phonation/PhonationPanel'
 import { SourceInferencePanel } from './phonation/SourceInferencePanel'
+import { LidarFusionPanel } from './components/lidar/LidarFusionPanel'
 import SessionReplayPanel from './components/science/SessionReplayPanel'
 import { ScientificModelPanel } from './components/science/ScientificModelPanel'
 import { AstraCoachPanel } from './components/science/AstraCoachPanel'
@@ -202,6 +203,7 @@ function StudioApp() {
         <LearningMemoryPanel/>
         <PhonationPanel audioStream={audioStream}/>
         <SourceInferencePanel/>
+        <LidarFusionPanel/>
         <SessionReplayPanel/>
         <AcousticMappingPanel/>
         <MotionCapturePanel frame={!demo&&active?frame:null} videoStream={videoStream} audioStream={audioStream}/>

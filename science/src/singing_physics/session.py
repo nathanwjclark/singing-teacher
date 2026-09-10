@@ -69,8 +69,12 @@ class SessionController:
         previous = '0'*64
         events=[]
         for version, body, digest in db.execute('SELECT version,body,digest FROM events WHERE session=? ORDER BY version',(self.session_id,)):
+            # _append stores exactly canonical(event), so verify those original
+            # bytes without serializing every historical state a second time.
+            if hashlib.sha256(body.encode()).hexdigest()!=digest:
+                raise RuntimeError('Session ledger integrity failure')
             event=json.loads(body)
-            if version!=state['version']+1 or _hash(event)!=digest or event['previous_sha256']!=previous or event['session_id']!=self.session_id or event['state']['version']!=version:
+            if version!=state['version']+1 or event['previous_sha256']!=previous or event['session_id']!=self.session_id or event['state']['version']!=version:
                 raise RuntimeError('Session ledger integrity failure')
             state=event['state']; previous=digest; events.append({**event,'sha256':digest})
         return state,previous,events
@@ -82,11 +86,11 @@ class SessionController:
                'details':details,'state':deepcopy(state)}
         db.execute('INSERT INTO events VALUES(?,?,?,?)',(self.session_id,state['version'],canonical(event),_hash(event)))
 
-    def _dispatch(self):
+    def _dispatch(self, *, ledger=False):
         # Persisted intent precedes this side effect. The stable key recovers a crash
         # after JobService submission but before the job ID was recorded here.
         with self._db() as db:
-            state,_,_=self._read(db)
+            state,digest,events=self._read(db)
             model=state['snapshot']['model_id'] if state['snapshot'] else 'session-unfitted:'+_hash(self.session_id)
             self.service.register_model(self.session_id,model)
             pending=state['pending']
@@ -103,7 +107,9 @@ class SessionController:
                         for design in state['designs'].values():
                             if design['status']=='outcome_pending': design['status']='failed'
                 self._append(db,state,'job_dispatched',{'job_id':pending.get('job_id')})
-            return deepcopy(state)
+                if ledger:state,digest,events=self._read(db)
+            # Parsed state/events are detached request-local objects already.
+            return (state,digest,events) if ledger else state
 
     def execute(self, command):
         if not isinstance(command,dict) or len(canonical(command).encode())>2_000_000:
@@ -112,15 +118,13 @@ class SessionController:
         if action in ('state','replay'):
             if set(command)!={'action'}:
                 raise ValueError('Unexpected read parameters')
-            self._dispatch()
-            with self._db() as db:
-                state,digest,events=self._read(db)
-                return {'state':state,'ledger_sha256':digest, **({'events':events} if action=='replay' else {})}
+            state,digest,events=self._dispatch(ledger=True)
+            return {'state':state,'ledger_sha256':digest, **({'events':events} if action=='replay' else {})}
         command_id=_id(command.get('command_id'))
-        fields={'register_model':{'snapshot'},'ingest_calibration':{'document'},'search':{'parameters'},'fit_probe':{'parameters'},
+        fields={'register_model':{'snapshot'},'ingest_calibration':{'document'},'search':{'parameters'},'fit_probe':{'parameters'},'fit_lidar':{'parameters'},
             'select_experiment':{'source_design_id','design_id','target_observation_id','experiment_id','selection_reason'},
             'propose_design':{'parameters'},'collect_job':{'job_id'},'submit_outcome':{'design_id','parameters'},
-            'fit_source':{'parameters'},'forecast_source':{'parameters'},'score_source':{'forecast_id','pcm','metadata'},
+            'forecast_source_bank':{'parameters'},'score_source_bank':{'forecast_id','pcm','metadata'},'fit_source':{'parameters'},'forecast_source':{'parameters'},'score_source':{'forecast_id','pcm','metadata'},
             'record_attempt':{'design_id','attempt_id','status','reason'},'record_sensation':{'attempt_id','text'}}
         if action not in fields or set(command)!={'action','command_id','expected_version'}|fields[action]:
             raise ValueError('Unsupported session command fields')
@@ -146,7 +150,7 @@ class SessionController:
                           'key':'session:'+_hash([self.session_id,command_id]),'job_id':None,'base_model_id':model}
 
     def _apply(self,state,action,c):
-        if action in ('fit_source','forecast_source','score_source'):
+        if action in ('fit_source','forecast_source','score_source','forecast_source_bank','score_source_bank'):
             from .session_source import prepare
             operation,parameters,binding=prepare(state,action,c)
             self._launch(state,operation,parameters,c['command_id'])
@@ -203,6 +207,9 @@ class SessionController:
                 raise ValueError('Invalid search parameters')
             params['observations']=state['calibration']
             self._launch(state,'search_pcm',params,c['command_id'])
+        elif action=='fit_lidar':
+            from .session_lidar import prepare
+            self._launch(state,'rank_lidar_hypotheses',prepare(state,c['parameters']),c['command_id'])
         elif action=='fit_probe':
             if state['snapshot'] is None or state['calibration'] is None:
                 raise ValueError('Probe fitting requires current hypotheses and stored PCM calibration')
@@ -289,8 +296,11 @@ class SessionController:
                 raise ValueError('Job has not completed')
             result=self.service.result(c['job_id']) if status['status']=='succeeded' else None
             operation=pending['request']['operation']
-            if operation in ('fit_phonation','forecast_phonation','score_phonation'):
+            if operation in ('fit_phonation','forecast_phonation','score_phonation','forecast_phonation_bank','score_phonation_bank'):
                 from .session_source import collect
+                collect(state,pending,status['status'],result)
+            if operation=='rank_lidar_hypotheses':
+                from .session_lidar import collect
                 collect(state,pending,status['status'],result)
             if result is not None:
                 if operation=='search_pcm':
