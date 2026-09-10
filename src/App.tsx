@@ -19,6 +19,7 @@ import ExperimentDashboard from './components/experiments/ExperimentDashboard'
 import { ExperimentRunner } from './components/experiments/ExperimentRunner'
 import { AnatomyModes } from './components/anatomy/AnatomyModes'
 import { ReproducibilityPanel } from './components/experiments/ReproducibilityPanel'
+import { AcousticMappingPanel } from './components/experiments/AcousticMappingPanel'
 import { DepthProtocolPanel } from './components/experiments/DepthProtocolPanel'
 import { readExperimentLedger, subscribeExperimentLedger } from './experiment/ledger'
 import { evaluatePrediction } from './evaluation'
@@ -159,6 +160,7 @@ function StudioApp() {
       </main>
       <main className="research-workspace" style={tab==='experiments'?undefined:{display:'none'}}>
         <h2>Experiments and evidence</h2><p>{recordingNotice}</p>
+        <AcousticMappingPanel/>
         <MotionCapturePanel frame={!demo&&active?frame:null} videoStream={videoStream} audioStream={audioStream}/>
         <CoachLearningPanel videoStream={videoStream} audioStream={audioStream}/>
         <p>{observations.length} recorded observations · {measurements.length} measured audio windows</p>
