@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import {getModelAdjustments,useModelAdjustments} from '../science/modelAdjustments';
 import {createModelTractOverlay} from '../science/modelSpaceTexture';
 import { createTractOverlay } from './tractOverlay';
+import { createAtlasSurface } from '../../lib/atlasSurface';
 import { createOralOverlay } from './oralOverlay';
 import type { AnatomyMotionState } from '../../lib/anatomyState';
 import { ATLAS_WIDTH as W, ATLAS_HEIGHT as H, deformAtlasPoint, nativeTongueRig, referenceTongueRig } from '../../lib/atlasMotion';
@@ -28,32 +29,30 @@ export function AtlasCrossSection({ motion }: { motion: RefObject<AnatomyMotionS
     let disposed = false;
     renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
     renderer.setClearColor(0x172720, 0);
-    renderer.domElement.setAttribute('aria-label', 'Unified vocal tract and faded head and neck illustration; shared jaw, tongue and head motion');
+    renderer.domElement.setAttribute('aria-label', 'Unified vocal tract and faded head and neck illustration; independent tongue and airway layers with coordinated jaw and head motion');
     renderer.domElement.setAttribute('role', 'img');
     host.appendChild(renderer.domElement);
     const scene = new THREE.Scene();
     const camera = new THREE.OrthographicCamera(0, W, 0, -H, .1, 10);
     camera.position.z = 2;
-    const geometry = new THREE.PlaneGeometry(W, H, 96, 112);
-    const positions = geometry.getAttribute('position');
-    const rest = new Float32Array(positions.count * 2);
-    for (let i = 0; i < positions.count; i++) {
-      rest[i * 2] = positions.getX(i) + W / 2;
-      rest[i * 2 + 1] = H / 2 - positions.getY(i);
-    }
+    const plateSurface = createAtlasSurface('structure');
+    const airwaySurface = createAtlasSurface('structure');
+    const tongueSurface = createAtlasSurface('tongue');
     const material = new THREE.MeshBasicMaterial({ transparent: true, opacity: .2, side: THREE.DoubleSide, depthWrite: false });
-    const mesh = new THREE.Mesh(geometry, material);
+    const mesh = new THREE.Mesh(plateSurface.geometry, material);
     mesh.frustumCulled = false;
     scene.add(mesh);
-    let tractTexture = createTractOverlay();
     let appliedModel = getModelAdjustments();
     let tongueRig=appliedModel?nativeTongueRig(appliedModel.diff.reference.tongue):referenceTongueRig;
     let markerRig=appliedModel?nativeTongueRig(appliedModel.diff.candidate.tongue):referenceTongueRig;
-    if(appliedModel){tractTexture.dispose();tractTexture=createModelTractOverlay(appliedModel.diff,appliedModel.showDiff)}
-    const tractMaterial = new THREE.MeshBasicMaterial({ map: tractTexture, transparent: true, side: THREE.DoubleSide, depthWrite: false });
-    const tractMesh = new THREE.Mesh(geometry, tractMaterial);
-    tractMesh.frustumCulled = false; tractMesh.renderOrder = 1;
-    scene.add(tractMesh);
+    const layers = ([['airway', airwaySurface], ['tongue', tongueSurface]] as const).map(([part, surface], index) => {
+      const map = appliedModel ? createModelTractOverlay(appliedModel.diff, appliedModel.showDiff, part) : createTractOverlay(part);
+      const material = new THREE.MeshBasicMaterial({ map, transparent: true, side: THREE.DoubleSide, depthWrite: false });
+      const mesh = new THREE.Mesh(surface.geometry, material);
+      mesh.frustumCulled = false; mesh.renderOrder = 1 + index * .1;
+      scene.add(mesh);
+      return {part, surface, material};
+    });
     const oral = createOralOverlay(); scene.add(oral.group);
     const tipMarker=new THREE.Mesh(new THREE.CircleGeometry(7,20),new THREE.MeshBasicMaterial({color:0x75ffc1,depthTest:false}));tipMarker.renderOrder=5;scene.add(tipMarker);
     let texture: THREE.CanvasTexture | undefined;
@@ -91,20 +90,20 @@ export function AtlasCrossSection({ motion }: { motion: RefObject<AnatomyMotionS
       oral.update(state);
       const nextModel=getModelAdjustments();
       if(nextModel!==appliedModel){
-        appliedModel=nextModel;tractTexture.dispose();
+        appliedModel=nextModel;
         tongueRig=nextModel?nativeTongueRig(nextModel.diff.reference.tongue):referenceTongueRig;
         markerRig=nextModel?nativeTongueRig(nextModel.diff.candidate.tongue):referenceTongueRig;
-        tractTexture=nextModel?createModelTractOverlay(nextModel.diff,nextModel.showDiff):createTractOverlay();
-        tractMaterial.map=tractTexture;tractMaterial.needsUpdate=true;
+        for (const layer of layers) {
+          layer.material.map?.dispose();
+          layer.material.map=nextModel?createModelTractOverlay(nextModel.diff,nextModel.showDiff,layer.part):createTractOverlay(layer.part);
+          layer.material.needsUpdate=true;
+        }
       }
-      for (let i = 0; i < positions.count; i++) {
-        const [x, y] = deformAtlasPoint(rest[i * 2], rest[i * 2 + 1], state,tongueRig);
-        // Both plate and cast share these exact vertices, projection and motion.
-        positions.setXYZ(i, W - x, -y, 0);
-      }
+      plateSurface.update(state);
+      airwaySurface.update(state);
+      tongueSurface.update(state,tongueRig);
       const tip=deformAtlasPoint(markerRig.tipX,markerRig.tipY,state,tongueRig);tipMarker.position.set(W-tip[0],-tip[1],.1);tipMarker.visible=state.tongue.visible;
       host.dataset.tipPosition=JSON.stringify([W-tip[0],-tip[1]]);
-      positions.needsUpdate = true;
       renderer.render(scene, camera);
     });
     return () => {
@@ -112,7 +111,9 @@ export function AtlasCrossSection({ motion }: { motion: RefObject<AnatomyMotionS
       observer.disconnect(); renderer.setAnimationLoop(null);
       renderer.domElement.removeEventListener('webglcontextlost', lost);
       tipMarker.geometry.dispose();tipMarker.material.dispose();
-      oral.dispose(); geometry.dispose(); material.dispose(); tractMaterial.dispose(); tractTexture.dispose(); texture?.dispose(); renderer.dispose();
+      oral.dispose(); plateSurface.dispose(); material.dispose();
+      for (const layer of layers) { layer.surface.dispose(); layer.material.map?.dispose(); layer.material.dispose(); }
+      texture?.dispose(); renderer.dispose();
       renderer.domElement.remove();
     };
   }, [motion]);

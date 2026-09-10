@@ -3,17 +3,27 @@
 After the existing local app/worker and iPhone connection setup, ordinary voice
 experiments do not require backend commands, configuration files or session hashes.
 
-1. Record a comfortable sustained **ah** in the native iPhone app and save it.
-2. In the desktop app, click **Pull iPhone**, open **Experiments**, confirm the
-   recording contains the stated vowel without played probes, then click
-   **Fit latest iPhone capture**.
-3. The app verifies and prepares the original archive, fits the physical
-   hypotheses and commits the selected forecast. It retrieves the result itself.
-4. Follow the displayed vowel instruction, save a new native recording, and click
-   **Pull iPhone** again. Confirm this is the new attempt and click
-   **Score latest iPhone capture**.
-5. The app shows the numerical errors, scientific result, retained hypotheses and
-   model lineage. Poor agreement or a stopped attempt is not presented as success.
+1. Open the desktop app. Record a comfortable sustained **ah** in Singing Depth
+   on the connected iPhone and stop/save it. Keep the phone unlocked.
+2. Click **Pull iPhone** in the desktop header. Its popover shows the verified
+   capture and audio count. Confirm that this recording is the stated vowel with
+   no played probe, then click **Fit and show model changes**. This declaration
+   is necessary: a tongue-video capture is not automatically labeled singing.
+3. The header spinner covers archive verification, modeling and geometry
+   verification, even while the Studio is visible. Results arrive automatically.
+   The app verifies the bound `space-diff.json` hash and applies the fitted/reference
+   comparison to the live movement map and inside view. Failures open Experiments
+   with the reason and do not apply an unverified overlay.
+4. For a later prospective trial, follow the frozen vowel instruction, save a new
+   recording, then pull again. In the popover choose **Score frozen prediction**,
+   confirm that vowel, and click **Score and update model**. A new initial fit is
+   also available and is the default; an existing older model does not force
+   scoring. Experiments retains the more detailed fit/score controls.
+5. The app shows numerical errors and retained model lineage. Outcome updates
+   currently change the retained candidate set, not the exported geometry pair.
+   The display says so; it never presents the original geometry as a newly
+   reconstructed post-outcome surface. Poor agreement or stopped attempts remain
+   explicit outcomes.
 
 Preparation uses the original ordinary `capture-*.zip` archive already copied by
 the USB feature. Linked session and probe archives are rejected with an explicit
@@ -47,3 +57,28 @@ or failed state rather than inventing completion.
 Live Astra selection/coaching and the physical-device demonstration remain
 separate integration work. These controls execute the supported numerical
 experiment; they do not claim a live Astra call or validated anatomy.
+
+## Browser integration events
+
+Successful USB receipt publication emits `singing:native-capture` with the receipt.
+Completed numerical results emit `singing:science-result` with `kind` (`fit` or
+`outcome`), `runId`, `resultId`, `sourceCaptureId` and `result`. Events refresh views;
+server-persisted receipts and summaries remain authoritative after a reload.
+`singing:show-science` opens detailed progress/errors and `singing:show-model`
+returns to live Studio after a verified new fit. New immutable outcome summaries
+include the source capture ID and native manifest hash, including rejected outcomes.
+Historical summaries lacking those fields remain unchanged.
+
+The four focused browser checks include a simulated USB receipt through the
+Studio-mounted hidden processor, spinner and hash-bound diff application. They
+verify orchestration, not a physical-phone recording or anatomy accuracy.
+
+## Private local launcher
+
+After the existing trusted HTTPS setup, run `npm run science:private` on the Mac.
+This starts both the persistent numerical worker and private HTTPS app, with the
+desktop at `http://127.0.0.1:5173`. Use a new initial fit before later scoring;
+sessions from temporary development workers are not imported automatically.
+Astra reads `OPENAI_API_KEY` from the server environment or the configured private
+`.env` file and sends only derived model evidence through the Responses API. Its
+review stays attached to that capture until a different capture is pulled.

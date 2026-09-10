@@ -108,6 +108,13 @@ def _run(run_directory, source, output, config_path, timeout_s, node_binary):
     backend = HTTPBackend(os.environ.get('SCIENCE_URL',''), os.environ.get('SCIENCE_TOKEN',''), session_id)
     inputs = {'run_directory':str(run_directory),'source_directory':str(source),'run_summary_sha256':sha(summary_raw),
               'configuration_sha256':sha(config_raw),'native_sources':sources(source),'session_id':session_id}
+    native_manifest = read(source / 'manifest.json')
+    if sha(native_manifest) != inputs['native_sources']['manifest.json']:
+        raise ValueError('Source manifest changed during lineage capture')
+    source_capture_id = json.loads(native_manifest).get('capture_id')
+    def retain_result(value):
+        return finish(output, {**value, 'sourceCaptureId': source_capture_id,
+                               'sourceManifestSha256': inputs['native_sources']['manifest.json']})
     seal(output / 'inputs.json', inputs)
     if (output / 'completed.json').exists():
         completed = json.loads(read(output / 'completed.json'))
@@ -148,7 +155,7 @@ def _run(run_directory, source, output, config_path, timeout_s, node_binary):
     prepared = json.loads(read(output/'prepared.json')); command = prepared['command']
     if command is None:
         seal(output/'replay.json',backend.execute({'action':'replay'}))
-        return finish(output, {'status':'ineligible','sessionId':session_id,'runId':summary.get('runId'),'reasons':prepared['receipt']['reasons'],'submitted':False})
+        return retain_result({'status':'ineligible','sessionId':session_id,'runId':summary.get('runId'),'reasons':prepared['receipt']['reasons'],'submitted':False})
     # Retrying this exact durable command is safe even if its earlier HTTP response was lost.
     state = backend.execute(command)['state']
     operation_key = 'session:' + sha(encode([session_id,command['command_id']]))
@@ -158,7 +165,7 @@ def _run(run_directory, source, output, config_path, timeout_s, node_binary):
     job = matching[0]
     if not job.get('job_id'):
         seal(output/'replay.json',backend.execute({'action':'replay'}))
-        return finish(output,{'status':'failed','sessionId':session_id,'runId':summary.get('runId'),'error':job.get('error'),'submitted':True})
+        return retain_result({'status':'failed','sessionId':session_id,'runId':summary.get('runId'),'error':job.get('error'),'submitted':True})
     job_id = job['job_id']; seal(output/'job.json',{'job_id':job_id,'command_id':command['command_id']})
     deadline = time.monotonic()+timeout_s
     while True:
@@ -192,7 +199,7 @@ def _run(run_directory, source, output, config_path, timeout_s, node_binary):
     disposition = authoritative[0]
     applied = disposition.get('status') == 'succeeded' and disposition.get('result') is not None
     if applied and disposition['result'] != result: raise ValueError('Collected result differs from worker result')
-    return finish(output,{'status':disposition['status'],'sessionId':session_id,'runId':summary.get('runId'),'jobId':job_id,
+    return retain_result({'status':disposition['status'],'sessionId':session_id,'runId':summary.get('runId'),'jobId':job_id,
         'designId':command['design_id'],'observationId':command['parameters']['observation_id'],'submitted':True,
         'scientificStatus':result.get('status') if applied else None,'modelUpdated':applied,
         'scores':result.get('scores',[]) if applied else [],

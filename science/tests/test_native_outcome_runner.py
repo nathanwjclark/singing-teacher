@@ -107,6 +107,8 @@ def test_actual_http_update_resumes_lost_submit_response_and_completed_replay(tm
         assert first['scores']==(raw_result['scores'] if interruption!='stopped' else [])
         assert first['previousHypotheses']==2
         assert first['retainedHypotheses']==(len(raw_result['updated_snapshot']['hypotheses']) if interruption!='stopped' else None)
+        assert first['sourceCaptureId']=='later-native-software-fixture'
+        assert first['sourceManifestSha256']==hashlib.sha256((source/'manifest.json').read_bytes()).hexdigest()
         second=runner.run(run,source,out,config);assert second==first
         replay=json.loads((out/'replay.json').read_text())
         assert len([j for j in replay['state']['jobs'] if j['request']['operation']=='update_pcm'])==1
