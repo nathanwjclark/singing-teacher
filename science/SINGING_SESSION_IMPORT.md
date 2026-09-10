@@ -30,11 +30,11 @@ The hash above must be supplied from the original file, not copied literally. Al
 
 Declare `evidence_kind:"development-fixture"` for generated test data. Physical recordings require their actual provenance; package consistency does not authenticate a phone. Explicit probe/excitation metadata is rejected, and the caller must declare that ordinary recordings contain no external excitation. This is a provenance boundary, not an audio-content detector. Unknown room response and source behavior remain model limitations.
 
-Outputs under a fresh0700 directory (files0600):
+Outputs under a fresh 0700 directory (files 0600):
 
 - `native-pcm/`: canonical records and verified derived PCM with original-chunk lineage.
 - `singing-observations.json`: selected usable `canonical_pcm_observations`, with exact unchanged measurements.
-- `singing-fit-params.json`: `{observations,candidates,max_synthesis_calls}` for `fit_pcm`; null when any selected window is ineligible. Budget is capped at640 and covers candidates and equal-compute fixed-anatomy baseline.
+- `singing-fit-params.json`: `{observations,candidates,max_synthesis_calls}` for `fit_pcm`; null when any selected window is ineligible. Budget is capped at 640 and covers candidates and equal-compute fixed-anatomy baseline.
 - `singing-session-command.json`: `{action:"ingest_calibration",command_id,expected_version,document}` when every selection is usable and `expected_session_version` is supplied. It does not execute the command or automatically launch search.
 - `singing-import-receipt.json` and original configuration bytes: all selections, exclusions, source bindings, cuts and uncertainty. No actual fit is claimed by the receipt.
 
@@ -49,8 +49,8 @@ node --experimental-strip-types --test science/scripts/import_singing_session.te
 
 Executed **4 tests passed**. A newly written original synthetic native bundle traversed original-byte validation, canonical extraction and the actual native PCM fitter: **4 synthesis calls, two scored candidates**. This is a software integration result, not human singing/anatomy validation. Tests also cover duplicate intervals, clipping, unavailable starts, private modes, fresh outputs, source-config mismatch, corrupt bytes and external-probe rejection. The test constructs its original PCM bundle directly and uses no prior test fixture factories or alternate extractor.
 
-Strict TypeScript with bundler resolution passed. NodeNext checking requires explicit extensions in the existing `audio.ts` / `audioCalibration.ts` reciprocal type imports; the integration owner is fixing those dependencies. Native Node execution of the four tests passes because type imports are erased.
+Strict TypeScript with bundler and NodeNext resolution passed in the assembled integration. The reciprocal type imports in `audio.ts` and `audioCalibration.ts` now use explicit extensions. This changes their source hashes; regenerate source-bound derived artifacts instead of reusing earlier extractor receipts.
 
 Session ingestion requires the controller revision supporting canonical 44.1/48/96kHz observation profiles. It preserves the measured profile; design/forecast profile restrictions are separate. A command ID is required whenever an expected session version is configured.
 
-The final regression also executed the emitted48kHz/.3s command through the actual `SessionController` + `JobService`, retained exact calibration, reached version1 and replayed the identical command without incrementing version. It used the controller owner's expanded-profile implementation in `a-session`; no resampling or new timing was invented by the importer.
+The final regression also executed the emitted 48 kHz / 0.3 s command through the actual `SessionController` + `JobService`, retained exact calibration, reached version 1 and replayed the identical command without incrementing version. No resampling or new timing was invented by the importer.

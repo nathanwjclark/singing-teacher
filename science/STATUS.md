@@ -19,6 +19,15 @@ shutdown closed both listener ports. These are new-path checks, separate from th
 prior full-suite checkpoint below. Actual phone capture and live Astra invocation
 still require B's device/runtime integration.
 
+Review then identified and fixed importer command identity, synthesis-budget and
+recording-profile mismatches. Four singing adapter tests now include original
+48 kHz recording → canonical extraction → real fit and versioned session ingestion
+with idempotent replay. Four final session tests pass, including actual 48 kHz
+search. Strict NodeNext TypeScript passes. See
+[SESSION_HARNESS_REVIEW.md](SESSION_HARNESS_REVIEW.md) for independent review.
+Explicit type-import changes alter the canonical extractor source hashes; rebuild
+derived evidence rather than reuse receipts from the earlier source revision.
+
 ## Revision 8 continuation
 
 Final assembled verification: **286 Python tests passed with warnings treated as
