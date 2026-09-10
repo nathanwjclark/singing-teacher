@@ -31,7 +31,7 @@ if (input.operation === 'validate') {
   waveform.forEach((v, i) => raw.writeFloatLE(v, i * 4));
   const measurement = extractAudioMeasurement(waveform, input.sampleRate, {
     ...input.metadata, sourceHashes: [digest(raw)],
-    qualityFlags: [...(input.metadata.qualityFlags ?? []), ...(waveform.some(v => Math.abs(v) >= 1) ? ['clipping'] : [])],
+    qualityFlags: [...(input.metadata.qualityFlags ?? []), ...(waveform.some(v => Math.abs(v) >= .995) ? ['clipping'] : [])],
   });
   const check = validateRecord(measurement);
   if (!check.valid) throw Error(check.errors.join('; '));
