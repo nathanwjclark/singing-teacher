@@ -34,7 +34,7 @@ def source_capability(engine):
     family_valid=selected==['Geometric glottis'] and digest(speaker)==engine.provenance['speaker_sha256']
     missing=[name for name,limits in required.items() if name not in info or info[name]['min']>limits[0] or info[name]['max']<limits[1]]
     return {'status':'unsupported' if missing or not family_valid else 'available','reason':('unsupported_source_family' if not family_valid else 'unsupported_native_controls:'+','.join(missing)) if missing or not family_valid else None,
-        'source_model_version':SOURCE_VERSION,'source_model_family':'prescribed geometric glottis',
+        'source_model_version':SOURCE_VERSION,'source_adapter_sha256':digest(Path(__file__)),'source_model_family':'prescribed geometric glottis',
         'native_controls':deepcopy(engine.source_info),'native_controls_sha256':_hash(engine.source_info),
         'supported_control_bounds':deepcopy(BOUNDS),'source_hypothesis_parameter':'PS','fixed_controls':dict(FIXED),'native_provenance':deepcopy(engine.provenance),
         'closure_contact_inference':False}
@@ -238,14 +238,16 @@ def forecast_phonation(engine,fit_result,*,family,candidate_id,reference_trial_i
     try:
         engine.set_anatomy(rows[0]['anatomy'])
         audio,native=synthesize_phonation(engine,pose=pose,**{k:control[k] for k in ('JA','F0','PR','PS')})
-        frame,conversion=_frame(audio,44100);frame=frame*control['gain']
+        rate=refs[0]['record']['window']['sampleRateHz']
+        frame,conversion=_frame(audio,rate);frame=frame*control['gain']
         sha=hashlib.sha256(frame.astype('<f4').tobytes()).hexdigest()
-        record=measure_phonation(frame,44100,_metadata('forecast:'+target_id,44100,sha,'engine-generated'))
+        record=measure_phonation(frame,rate,_metadata('forecast:'+target_id,rate,sha,'engine-generated'))
     finally:engine.set_anatomy(saved)
     result={'kind':'frozen-phonation-forecast-1','fit_sha256':_hash(fitted),'family':family,'candidate_id':candidate_id,
-        'target_id':target_id,'reference_trial_id':reference_trial_id,'record':record,'controls':control,
+        'target_id':target_id,'reference_trial_id':reference_trial_id,'pose':pose,'record':record,'controls':control,
         'native_state':native,'anatomy':rows[0]['anatomy'],'extractor_signature':fitted['extractor_signature'],
         'excluded_frame_hashes':fitted['evidence_frame_hashes'],'sealed_at':datetime.now(timezone.utc).isoformat(),
+        'scoring_policy':{'version':'phonation-score-1','features':deepcopy(FEATURES),'source_model_version':SOURCE_VERSION,'source_adapter_sha256':digest(Path(__file__))},
         'actual_synthesis_calls':1,'status':'available' if _features(record) is not None else 'insufficient-quality',
         'scope':'Known executed control assumption; raw acoustic slope is not glottal tilt or contact'}
     return {'forecast':result,'sha256':_hash(result)}
@@ -255,6 +257,9 @@ def score_phonation_forecast(frozen,pcm,metadata):
     if not isinstance(frozen,dict) or set(frozen)!={'forecast','sha256'} or _hash(frozen['forecast'])!=frozen['sha256']:
         raise ValueError('Frozen phonation forecast hash mismatch')
     forecast=frozen['forecast']
+    policy={'version':'phonation-score-1','features':FEATURES,'source_model_version':SOURCE_VERSION,'source_adapter_sha256':digest(Path(__file__))}
+    if _hash(forecast.get('scoring_policy'))!=_hash(policy):
+        return {**_status('unsupported','Frozen source scoring policy unavailable or changed'),'score':None,'model_updated':False}
     if forecast.get('kind')!='frozen-phonation-forecast-1' or metadata.get('observationId')!=forecast['target_id']:raise ValueError('Wrong heldout target')
     observed_at=datetime.fromisoformat(metadata['evidenceAt'])
     if observed_at.tzinfo is None or not datetime.fromisoformat(forecast['sealed_at'])<observed_at<=datetime.now(timezone.utc):raise ValueError('Heldout observation must follow forecast')
@@ -264,7 +269,10 @@ def score_phonation_forecast(frozen,pcm,metadata):
         compatible=False
     if not compatible:
         return {**_status('unsupported','Frozen extractor unavailable or changed'),'model_updated':False,'score':None}
-    observed=measure_phonation(pcm,44100,metadata)
+    window=forecast['record']['window']
+    if metadata.get('windowStartSample')!=window['startSample'] or len(pcm)!=window['sampleCount']:
+        raise ValueError('Source scoring frame differs from frozen native profile')
+    observed=measure_phonation(pcm,window['sampleRateHz'],metadata)
     if observed['frameSha256'] in forecast['excluded_frame_hashes']:raise ValueError('Calibration frame reused as heldout')
     score=_score(forecast['record'],observed)
     return {**_status('available' if score is not None else 'insufficient-quality','Conditional heldout discrepancy'),
