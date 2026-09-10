@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import {getModelAdjustments,useModelAdjustments} from '../science/modelAdjustments';
 import {createModelTractOverlay} from '../science/modelSpaceTexture';
 import { createTractOverlay } from './tractOverlay';
+import { createOralOverlay } from './oralOverlay';
 import type { AnatomyMotionState } from '../../lib/anatomyState';
 import { ATLAS_WIDTH as W, ATLAS_HEIGHT as H, deformAtlasPoint, nativeTongueRig, referenceTongueRig } from '../../lib/atlasMotion';
 
@@ -53,6 +54,7 @@ export function AtlasCrossSection({ motion }: { motion: RefObject<AnatomyMotionS
     const tractMesh = new THREE.Mesh(geometry, tractMaterial);
     tractMesh.frustumCulled = false; tractMesh.renderOrder = 1;
     scene.add(tractMesh);
+    const oral = createOralOverlay(); scene.add(oral.group);
     const tipMarker=new THREE.Mesh(new THREE.CircleGeometry(7,20),new THREE.MeshBasicMaterial({color:0x75ffc1,depthTest:false}));tipMarker.renderOrder=5;scene.add(tipMarker);
     let texture: THREE.CanvasTexture | undefined;
     const image = new Image();
@@ -86,6 +88,7 @@ export function AtlasCrossSection({ motion }: { motion: RefObject<AnatomyMotionS
     renderer.setAnimationLoop(() => {
       if (!texture) return;
       const state = motion.current;
+      oral.update(state);
       const nextModel=getModelAdjustments();
       if(nextModel!==appliedModel){
         appliedModel=nextModel;tractTexture.dispose();
@@ -109,7 +112,7 @@ export function AtlasCrossSection({ motion }: { motion: RefObject<AnatomyMotionS
       observer.disconnect(); renderer.setAnimationLoop(null);
       renderer.domElement.removeEventListener('webglcontextlost', lost);
       tipMarker.geometry.dispose();tipMarker.material.dispose();
-      geometry.dispose(); material.dispose(); tractMaterial.dispose(); tractTexture.dispose(); texture?.dispose(); renderer.dispose();
+      oral.dispose(); geometry.dispose(); material.dispose(); tractMaterial.dispose(); tractTexture.dispose(); texture?.dispose(); renderer.dispose();
       renderer.domElement.remove();
     };
   }, [motion]);
