@@ -2,6 +2,9 @@
 from __future__ import annotations
 
 import argparse
+import base64
+import hashlib
+import stat
 import hmac
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
@@ -71,6 +74,36 @@ class ScientificHTTPServer(ThreadingHTTPServer):
         except BaseException:
             self.jobs.close()
             raise
+
+    def exports(self, identity):
+        result = self.jobs.result(identity)
+        if result.get('kind') != 'synthetic_forward_export':
+            raise ValueError('Geometry exports require a completed forward job')
+        destination = self.jobs.root / 'artifacts' / identity
+        manifest_raw = (destination / 'manifest.json').read_bytes()
+        if hashlib.sha256(manifest_raw).hexdigest() != self.jobs.status(identity)['manifest_hash']:
+            raise RuntimeError('Artifact manifest integrity failure')
+        manifest = json.loads(manifest_raw)
+        names = ('tract0.obj', 'tract0.mtl', 'tract.svg', 'geometry.json', 'manifest.json')
+        files, total = {}, 0
+        for name in names:
+            path = destination / 'forward' / name
+            expected = manifest['files'].get('forward/'+name)
+            if not isinstance(expected, str):
+                raise RuntimeError('Forward export missing from verified artifact manifest')
+            descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+            with os.fdopen(descriptor, 'rb') as handle:
+                info = os.fstat(handle.fileno())
+                if not stat.S_ISREG(info.st_mode) or total + info.st_size > 16*1024*1024:
+                    raise OverflowError('Forward exports exceed response bound')
+                raw = handle.read(info.st_size+1)
+            actual = hashlib.sha256(raw).hexdigest()
+            if len(raw) != info.st_size or actual != expected:
+                raise RuntimeError('Forward export integrity failure')
+            total += len(raw)
+            files[name] = {'base64': base64.b64encode(raw).decode('ascii'),
+                           'byteLength': len(raw), 'sha256': actual}
+        return {'job_id': identity, 'files': files}
 
     def server_close(self):
         super().server_close()
@@ -176,11 +209,13 @@ class Handler(BaseHTTPRequestHandler):
                     controller = SessionController(self.server.jobs.root / 'sessions', self.server.jobs, identity)
                     result = controller.execute(command)
                 self._respond(200, result); return
-            match = re.fullmatch(r'/jobs/([a-f0-9]{32})(?:/(result|cancel))?', path.path)
+            match = re.fullmatch(r'/jobs/([a-f0-9]{32})(?:/(result|cancel|exports))?', path.path)
             if match:
                 identity, operation = match.groups()
                 if method == 'GET' and operation is None:
                     self._respond(200, self.server.jobs.status(identity)); return
+                if method == 'GET' and operation == 'exports':
+                    self._respond(200, self.server.exports(identity)); return
                 if method == 'GET' and operation == 'result':
                     self._respond(200, self.server.jobs.result(identity)); return
                 if method == 'POST' and operation == 'cancel':
