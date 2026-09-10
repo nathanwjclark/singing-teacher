@@ -1,12 +1,12 @@
 # Personal Vocal Physiology and Acoustics
 
-**Moonshot implementation specification - revision 5, September 10, 2026.**
+**Moonshot implementation specification - revision 6, September 10, 2026.**
 
 ## 1. Research objective and change of direction
 
 Build a system that attempts to infer a person's internal vocal anatomy, dynamic articulation, and eventually vocal-fold mechanics from ordinary audiovisual observations plus actively selected vocal experiments. The resulting personal physical model must generate sound, explain multiple observations with shared anatomy, and predict the consequences of interventions. Singing coaching is the downstream application of that model.
 
-This plan supersedes the current remote repository architecture and scope; existing code is optional reusable material. Revision 5 expands the two-person ownership into parallel agent lanes, runnable integration contracts, dependency-driven activation and independent scientific evaluation. It retains the integrated iPhone depth work and physiological reconstruction objective.
+This plan supersedes the current remote repository architecture and scope; existing code is optional reusable material. Revision 6 adds embodied cue-based teaching, dynamic movement mapping and a separate model of learned motor control to the parallel-agent design. It retains the integrated iPhone depth work and physiological reconstruction objective.
 
 This revision supersedes the earlier recommendation to make empirical cue personalization the main product. Failure to recover physiology is an acceptable research outcome. A cue recommendation engine is not a substitute deliverable. Scientific uncertainty determines what we test and how we interpret the result; it does not remove the moonshot from scope.
 
@@ -145,6 +145,18 @@ The nasal branch is scientifically motivated: singing studies have combined airf
 Define two different prediction tasks. A **prospective task prediction** integrates over how the person may execute a cue, using only information available before recording. A **conditional acoustic prediction** may use measured post-intervention visible movement but must freeze anatomy and exclude that trial's acoustic features from fitting. Report them separately. Fitting the held-out sound's articulators to that same sound is reconstruction, not prospective prediction.
 
 Every action record includes an intended manipulation, permissible variation, expected visible compliance, task/pitch/level context, repetitions, rest/stop rules and a predicted observable distribution. Use matched repeat trials and counterbalanced order where feasible. Manual protocol notes can report deviations. Acquire independent baseline repeats to estimate noise before declaring a small spectral change informative.
+
+### Embodied cues and dynamic mapping
+
+The teacher must translate physical hypotheses into familiar actions that a singer can discover, feel, recall and transfer into singing. Examples include a reviewed duck-like sound for a twang-like contrast, a gentle plaintive imitation, noticing comfortable side-rib/back movement, and ordinary vowel/yawn-like/tongue gestures during mapping. These are candidate ways to elicit behavior, not commands that guarantee a specific hidden movement. Yawn-sigh has a clinical facilitating role; neither that precedent nor acoustic twang findings validates every mnemonic or a one-to-one anatomical interpretation.[^embodied-asha][^twang]
+
+The complete [embodied learning and motion addendum](embodied-learning-and-motion-plan.md), also included in the PDF, defines cue review, learner sensation reports, dynamic capture, motor-control inference and transfer testing. Coughing is retained as a specialist-review candidate rather than an automated exercise; comfortable attempts replace forced maximal inhalation or tongue extension. Self-touch does not verify individual muscle activation, and a cry-like sound does not prove measured laryngeal tilt.[^nidcd]
+
+Extend the physical hierarchy with a separate cue-conditioned control profile: observed comfortable envelope, repeatability, timing, context and voluntary recall. Stable anatomy, current articulation, learned control and subjective sensations remain distinct. Never infer an anatomical limit from one failed cue. PRED-01 integrates uncertainty about cue execution; actual measured movement belongs only in separately labeled conditional predictions after capture.
+
+During mapping, record neutral-to-gesture-to-return trajectories with synchronized RGB/depth/audio, head-pose registration and per-frame visibility. Visible soft-palate motion can be estimated only when consistently observed and calibrated; missing depth is not a zero excursion. Report observed movement rather than claiming full physiological range. Multiple moving poses must not be fused as a rigid static cavity. Hidden movement remains an inference target with explicit uncertainty.
+
+Add CUE-01 (B: reviewed cue library and embodied teaching), MOT-01 (A: motor-control model), MOT-02 (B capture/A fusion: dynamic mapping) and LEARN-01 (B: independent recall/transfer evaluation). These extend the prototype now. Later coaching-efficacy studies remain separate from demonstrating a working teaching loop. Acceptance adds G6 repeated dynamic mapping and G7 a measured goal -> cue -> sensation -> recall -> phrase-transfer cycle; synthetic runs cannot establish human learning.
 
 ## 7. Learning a population prior from video and other data
 
@@ -347,11 +359,11 @@ Predeclare parameter-specific tolerances according to measurement resolution and
 
 **Following phase, mechanics and fuller 3D inference.** Add self-oscillating source/tissue models, coupled dynamics and more expressive geometry. Run identifiability and mismatch tests before attributing fitted constants to physical tissues. Gate: independent evidence for each new physical interpretation, not just lower acoustic error.
 
-**Coaching product after sufficient model evidence.** Use simulated interventions to guide comfortable practice, then evaluate learning, retention and usability. The production roadmap adds identity/access controls, deletion, device reliability, specialist-reviewed exercises, monitoring and model drift handling. A scientifically inconclusive model may remain a valuable open-source research tool without being advertised as an accurate personal physiological coach.
+**Broader coaching validation after the prototype embodied loop.** Use simulated interventions to guide comfortable practice, then evaluate learning, retention and usability. The production roadmap adds identity/access controls, deletion, device reliability, specialist-reviewed exercises, monitoring and model drift handling. A scientifically inconclusive model may remain a valuable open-source research tool without being advertised as an accurate personal physiological coach.
 
 ## 14. Decisions, remaining unknowns and deliverables
 
-The first dispatch establishes KIT-01 and launches the independent foundation tasks in section 11. PHY-01 and the synthetic recovery harness form the scientific critical path while native capture, measurement validation and evaluation design progress alongside them. Pin the engine and supported parameter subset, generate hidden test anatomies, and attempt reconstruction from simulated audiovisual tasks. This tests the coherence of the inverse loop while the experimental instrument is being validated.
+The first dispatch establishes KIT-01 and launches the independent foundation tasks in section 11, including cue-library/protocol design and synthetic motor-control design from the embodied addendum. PHY-01 and the synthetic recovery harness form the scientific critical path while native capture, measurement validation and evaluation design progress alongside them. Pin the engine and supported parameter subset, generate hidden test anatomies, and attempt reconstruction from simulated audiovisual tasks. This tests the coherence of the inverse loop while the experimental instrument is being validated.
 
 Critical unknowns are supported nasal outlet control, global morphology integration, runtime per candidate, correspondence between external and internal geometry, robustness to source/capture compensation, and recoverability of mechanics. Each has an explicit experiment or integration gate above. Lack of certainty is expected; hidden substitution of a simpler product is not.
 
@@ -393,3 +405,6 @@ The intended breakthrough is **recovering an individual's physical voice-generat
 [^iphone-depth]: Apple. iPhone 13 Pro Max and iPhone 15 Pro technical specifications. Accessed September 10, 2026. https://support.apple.com/en-us/111870 ; https://support.apple.com/en-us/111829
 [^depth-sync]: Apple. AVCaptureDataOutputSynchronizer and front TrueDepth capture timestamps. Accessed September 10, 2026. https://developer.apple.com/documentation/avfoundation/avcapturedataoutputsynchronizer ; https://developer.apple.com/documentation/arkit/arframe/captureddepthdata
 [^depth-filter]: Apple. Discover advancements in iOS camera capture: Depth, focus, and multitasking. WWDC22; depth filtering guidance. https://developer.apple.com/videos/play/wwdc2022/110429/
+
+[^embodied-asha]: American Speech-Language-Hearing Association. Voice Disorders; yawn-sigh and facilitating approaches. Accessed September 10, 2026. https://www.asha.org/practice-portal/clinical-topics/voice-disorders/
+[^twang]: Sundberg and Thalén. What is Twang? Journal of Voice, 2010. Single-performer acoustic/source study. https://pubmed.ncbi.nlm.nih.gov/20083379/
