@@ -1,0 +1,26 @@
+.experiment-dashboard { min-height: 0; overflow: auto; padding: 16px; color: #e8eff8; background: #0c1320; }
+.experiment-dashboard h2, .experiment-dashboard h3, .experiment-dashboard h4 { margin: 0 0 8px; }
+.experiment-dashboard p { color: #acbace; margin: 5px 0 12px; font-size: 13px; line-height: 1.5; }
+.experiment-dashboard-toolbar { display: flex; gap: 16px; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; }
+.experiment-dashboard-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.experiment-dashboard button { background: #203149; color: #e8eff8; border: 1px solid #405471; border-radius: 8px; padding: 8px 12px; cursor: pointer; }
+.experiment-dashboard button:disabled { opacity: .5; cursor: wait; }
+.experiment-dashboard button:focus-visible { outline: 2px solid #70ddd0; outline-offset: 2px; }
+.experiment-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 10px 0; }
+.experiment-summary > div { display: flex; flex-direction: column; gap: 5px; border: 1px solid #2a3c54; background: #142237; border-radius: 10px; padding: 13px; }
+.experiment-summary strong { font-size: 25px; font-variant-numeric: tabular-nums; }
+.experiment-summary span { font-size: 12px; color: #b8c6d9; }
+.experiment-dashboard-section { margin-top: 18px; padding-top: 14px; border-top: 1px solid #2a3c54; }
+.experiment-dashboard-notice { white-space: pre-wrap; padding: 10px; border: 1px solid #516b8c; border-radius: 8px; }
+.experiment-empty { padding: 18px; border: 1px dashed #405471; border-radius: 8px; color: #b8c6d9; font-size: 13px; }
+.experiment-comparison { background: #142237; padding: 12px; border-radius: 8px; margin: 10px 0; }
+.experiment-comparison ul { font-size: 12px; line-height: 1.5; color: #edc98e; padding-left: 20px; }
+.experiment-status { font-size: 11px; font-weight: 500; color: #edc98e; border: 1px solid currentColor; border-radius: 12px; padding: 2px 6px; margin-left: 7px; }
+.experiment-status.complete { color: #70ddd0; }
+.experiment-table-wrap { overflow-x: auto; }
+.experiment-dashboard table { width: 100%; border-collapse: collapse; font-size: 12px; text-align: left; }
+.experiment-dashboard th, .experiment-dashboard td { padding: 10px 8px; border-bottom: 1px solid #2a3c54; vertical-align: top; max-width: 340px; overflow-wrap: anywhere; }
+.experiment-dashboard th { color: #bacde5; font-weight: 600; }
+.experiment-dashboard td { font-variant-numeric: tabular-nums; }
+.experiment-dashboard small { display: block; color: #93a5bd; margin-top: 4px; }
+@media (max-width: 650px) { .experiment-dashboard { padding: 10px; } .experiment-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
