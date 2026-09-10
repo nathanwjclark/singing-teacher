@@ -98,6 +98,8 @@ def _parse_record(record):
     calibration, placement = record.get('calibration'), record.get('placement')
     if not isinstance(calibration, dict) or not isinstance(placement, dict):
         raise ValueError('Explicit calibration and placement required')
+    if source['kind'] != 'synthetic-fixture' and calibration.get('kind') != 'measured':
+        raise ValueError('physical_response_requires_measured_calibration')
     for key in ('calibration_id', 'route_id', 'placement_id'):
         _id(calibration.get(key))
     if not isinstance(calibration.get('source_hashes'), list) or not calibration['source_hashes']:
@@ -174,9 +176,22 @@ def fit_probe_pcm(engine: Engine, pcm_document, probe_document, *, candidates,
         raise ValueError('Require 1-16 probe records')
     pcm_ids, pcm_hashes = set(), set()
     for trial in pcm['trials']:
-        measurement = trial.get('measurement', {})
+        if not isinstance(trial, dict) or not isinstance(trial.get('measurement'), dict):
+            raise ValueError('Invalid canonical PCM trial')
+        measurement = trial['measurement']
+        provenance = measurement.get('provenance')
+        if not isinstance(provenance, dict):
+            raise ValueError('Missing canonical provenance')
+        if not isinstance(provenance.get('sourceHashes'), list) or not all(isinstance(h, str) for h in provenance['sourceHashes']):
+            raise ValueError('Invalid canonical source hashes')
+        if not isinstance(provenance.get('sourceIds'), list) or not all(isinstance(i, str) for i in provenance['sourceIds']):
+            raise ValueError('Invalid canonical source identities')
+        pcm_ids.update(provenance['sourceIds'])
         pcm_ids.update(x for x in (trial.get('id'), measurement.get('id'), measurement.get('artifactId'), measurement.get('observationId')) if isinstance(x, str))
         pcm_hashes.update(measurement.get('provenance', {}).get('sourceHashes', []))
+    response_hashes = {record['source']['received_sha256'] for record in probes['trials']
+                       if isinstance(record, dict) and isinstance(record.get('source'), dict)
+                       and isinstance(record['source'].get('received_sha256'), str)}
     excluded_ids, excluded_hashes = set(), set()
     for record in probes['trials']:
         if isinstance(record, dict) and record.get('split', 'calibration') != 'calibration':
@@ -203,6 +218,8 @@ def fit_probe_pcm(engine: Engine, pcm_document, probe_document, *, candidates,
             source = record['source']
             outputs = {identity, source['received_artifact_id']}
             conditioning_hashes = set(record['calibration']['source_hashes'] + record['nuisance_prior']['source_hashes'] + record['timing'].get('source_hashes', []))
+            if conditioning_hashes & (pcm_hashes | response_hashes):
+                raise ValueError('conditioning_source_aliases_fitted_response')
             if outputs & excluded_ids or ({source['received_sha256'], source['drive_sha256']} | conditioning_hashes) & excluded_hashes or source['drive_artifact_id'] in excluded_ids:
                 raise ValueError('calibration_aliases_excluded_probe_evidence')
             if outputs & (pcm_ids | received_ids | drive_ids) or source['received_sha256'] in pcm_hashes | received_hashes | drive_hashes:

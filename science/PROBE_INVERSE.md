@@ -40,7 +40,10 @@ The transformed response is gain × exp(-i2πf delay) × (direct_gain × direct 
 coupling_gain × signed mouth response). Calibration identity binds placement,
 calibration, prior, and scalar nuisance across records. Per-frequency fitting
 filters are not supported. Calibration or priors cannot cite their own received
-response as a source. Evidence IDs/hashes are conservatively exclusive across
+response as a source. Calibration, prior, and timing source hashes cannot cite any
+fitted PCM or received probe response. Physical-reference and human-recording
+responses require measured calibration; fixture calibration remains synthetic.
+Evidence IDs/hashes are conservatively exclusive across
 received probe records and singing PCM; repeated drive calibration is allowed.
 Held-out received identity/hashes are excluded from calibration and conditioning,
 without reading held-out numeric responses. Source bytes and physical provenance

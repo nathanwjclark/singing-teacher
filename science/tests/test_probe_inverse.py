@@ -85,6 +85,8 @@ def test_masks_timing_lineage_and_heldout_exclusion():
         pcm, probes, candidates=probe_fixture(engine)
         base=probes['trials'][0]
         for changes,reason in [({'channel':'nasal'},'unsupported_channel'),
+                ({'source':{**base['source'],'kind':'human-recording'}},'requires_measured'),
+                ({'nuisance_prior':{**base['nuisance_prior'],'source_hashes':pcm['trials'][0]['measurement']['provenance']['sourceHashes']}},'conditioning_source'),
                 ({'split':'held_out','frequency_hz':'not read'},'non_calibration'),
                 ({'timing':{'phase_verified':False,'uncertainty_s':None}},'finite'),
                 ({'valid_mask':[False]*3},'no_valid'),
@@ -122,3 +124,28 @@ def test_preflight_and_failed_native_prediction(monkeypatch):
         assert result['status']=='no_complete_joint_prediction'
         assert not result['probe_records'][0]['included_in_fit']
         assert engine.anatomy()==saved
+
+
+def test_excluded_source_alias_and_direct_only_confounding():
+    with Engine() as engine:
+        pcm,probes,candidates=probe_fixture(engine)
+        held=deepcopy(probes['trials'][0]); held.update(id='held',split='held_out',frequency_hz='unread')
+        probes['trials'].append(held)
+        result=fit_probe_pcm(engine,pcm,probes,candidates=candidates,max_native_calls=4,node_binary=NODE)
+        assert all(not r['included_in_fit'] for r in result['probe_records'])
+        assert 'excluded' in result['probe_records'][0]['reason']
+        probes['trials'].pop()
+        record=probes['trials'][0]
+        response=predict_external_probe(engine,pose='a',frequency_hz=record['frequency_hz'],
+            placement=record['placement'],calibration=record['calibration'],articulation={'JA':-2.})
+        record['response_real']=response['direct_response_real']
+        record['response_imag']=response['direct_response_imag']
+        # A separate analytic direct-only fixture has no anatomy-sensitive response.
+        encoded=json.dumps([record['response_real'],record['response_imag']]).encode()
+        record['source']['received_sha256']=hashlib.sha256(encoded).hexdigest()
+        record['nuisance_prior']['bounds']['coupling_gain']=[0.,0.]
+        for c in candidates:
+            c['probe_trials']['probe']['coupling_gain']=0.
+        result=fit_probe_pcm(engine,pcm,probes,candidates=candidates,max_native_calls=12,node_binary=NODE)
+        assert [r['probe_discrepancy'] for r in result['joint']['candidates']]==[0.,0.]
+        assert result['identifiability']=='not_established'
