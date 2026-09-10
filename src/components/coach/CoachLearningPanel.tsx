@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { CUE_LIBRARY, REVIEW_ONLY_CANDIDATES } from '../../experiment/cues/library.ts'
 import type { TeachingCue, LearningProtocol, LearningAttempt, LearningArm, LearningPhase } from '../../experiment/cues/types.ts'
 import { freezeLearningProtocol, evaluateLearning, compareLearning } from '../../evaluation/learning/index.ts'
@@ -15,7 +15,7 @@ const KEY='singing-teacher-learning-v1'
 type Saved={pendingAttempt?:LearningAttempt|null;protocol:LearningProtocol|null;protocolHistory?:LearningProtocol[];attempts:LearningAttempt[];mnemonics:Record<string,string>}
 function load():Saved{try{const raw=localStorage.getItem(KEY);if(raw){const parsed=JSON.parse(raw);if(Array.isArray(parsed.attempts)&&parsed.mnemonics&&typeof parsed.mnemonics==='object'){if(parsed.pendingAttempt){const pending=parsed.pendingAttempt as LearningAttempt;if(!parsed.attempts.some((a:LearningAttempt)=>a.id===pending.id))parsed.attempts.push({...pending,endedAt:pending.endedAt||new Date().toISOString(),outcome:'failed',failureReason:'Page closed before attempt/report was finalized; incomplete attempt retained'});parsed.pendingAttempt=null}return parsed}}}catch{/* Storage may be unavailable. */}return {protocol:null,attempts:[],mnemonics:{}}}
 function download(value:unknown){const url=URL.createObjectURL(new Blob([JSON.stringify(value,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='singing-learning-evidence.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
-export default function CoachLearningPanel({videoStream,audioStream}:{videoStream?:MediaStream|null;audioStream?:MediaStream|null}){
+export default function CoachLearningPanel({videoStream,audioStream,onAssistanceHiddenChange}:{videoStream?:MediaStream|null;audioStream?:MediaStream|null;onAssistanceHiddenChange?:(hidden:boolean)=>void}){
  const [saved,setSaved]=useState(load),[cue,setCue]=useState<TeachingCue>(CUE_LIBRARY[0]),[reviewer,setReviewer]=useState(''),[role,setRole]=useState(''),[reviewEvidence,setReviewEvidence]=useState('')
  const [target,setTarget]=useState('220'),[tolerance,setTolerance]=useState('50'),[context,setContext]=useState('ah · comfortable level · seated'),[phrase,setPhrase]=useState('Hello again'),[delay,setDelay]=useState('24')
  const [arm,setArm]=useState<LearningArm>(()=>{try{return localStorage.getItem(KEY+'-arm')==='variant'?'variant':'baseline'}catch{return 'baseline'}}),[phase,setPhase]=useState<LearningPhase>(()=>{try{const v=localStorage.getItem(KEY+'-phase');return v==='recall'||v==='transfer'||v==='retention'?v:'prompted'}catch{return 'prompted'}}),[confirmed,setConfirmed]=useState(false),[deviations,setDeviations]=useState(''),[words,setWords]=useState(''),[region,setRegion]=useState(''),[effort,setEffort]=useState(2),[confidence,setConfidence]=useState(3),[recognizable,setRecognizable]=useState(false),[mnemonic,setMnemonic]=useState(''),[discomfort,setDiscomfort]=useState(false)
@@ -23,6 +23,7 @@ export default function CoachLearningPanel({videoStream,audioStream}:{videoStrea
  const [sessionId]=useState(()=>crypto.randomUUID());const recorder=useRef<RecordingController|null>(null)
  const [memory,setMemory]=useState<LearningMemory|null>(null),[memoryId,setMemoryId]=useState(''),[memoryTask,setMemoryTask]=useState(false)
  const protocol=saved.protocol,hideAssistance=!!protocol&&phase!=='prompted'
+ useLayoutEffect(()=>{onAssistanceHiddenChange?.(hideAssistance)},[hideAssistance,onAssistanceHiddenChange])
  useEffect(()=>{try{localStorage.setItem(KEY,JSON.stringify(saved))}catch{queueMicrotask(()=>setNotice('Local storage is full or unavailable. Export your evidence before closing.'))}},[saved])
  useEffect(()=>{let current=true;if(protocol)void evaluateLearning(protocol,saved.attempts.filter(a=>a.protocolId===protocol.id)).then(value=>{if(current)setScores(value)});return()=>{current=false}},[protocol,saved.attempts])
  useEffect(()=>()=>{if(replay)URL.revokeObjectURL(replay.url)},[replay])
