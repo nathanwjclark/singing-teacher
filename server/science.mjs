@@ -34,13 +34,16 @@ export function scienceRoutes({repo,dataRoot,json}) {
       if(url.search||Number(req.headers['content-length']||0)>0||req.headers['transfer-encoding']){json(res,400,{error:'This action takes no parameters'});return true}
       starting=true;try{
       let config;try{config=JSON.parse(await readFile(resolve(dataRoot,'science-input.json'),'utf8'))}catch{json(res,409,{error:'No verified local voice capture configured'});return true}
+      if(config.evidenceKind!==undefined&&!['human-observation','development-fixture'].includes(config.evidenceKind)){json(res,400,{error:'Unknown configured voice evidence kind'});return true}
       const source=resolve(dataRoot,config.sourceDirectory||'');
       if(!source.startsWith(dataRoot+'/')){json(res,400,{error:'Voice source must remain in the private data directory'});return true}
       const runId='run-'+Date.now()+'-'+randomUUID().slice(0,8),output=resolve(dataRoot,'science-runs',runId);
       await mkdir(resolve(dataRoot,'science-runs'),{recursive:true,mode:0o700});
       const record={status:'running',runId,startedAt:new Date().toISOString()};await save(record);
       const python=process.env.SINGING_PYTHON||resolve(repo,'science/.venv/bin/python');
-      const child=spawn(python,[resolve(repo,'science/scripts/live_capture_jobs.py'),'--source',source,'--output',output],{cwd:repo,env:{...process.env,PYTHONPATH:repo+':'+resolve(repo,'science/src')},detached:true,stdio:['ignore','pipe','pipe']});running=child;
+      const args=[resolve(repo,'science/scripts/live_capture_jobs.py'),'--source',source,'--output',output];
+      if(config.evidenceKind==='development-fixture')args.push('--development-fixture');
+      const child=spawn(python,args,{cwd:repo,env:{...process.env,PYTHONPATH:repo+':'+resolve(repo,'science/src')},detached:true,stdio:['ignore','pipe','pipe']});running=child;
       let logs='',launchError=false;for(const stream of [child.stdout,child.stderr])stream.on('data',data=>{logs=(logs+data.toString()).slice(-100_000)});
       const timer=setTimeout(()=>{try{process.kill(-child.pid,'SIGTERM')}catch{/* exited */}},570_000);timer.unref();
       child.once('error',()=>{launchError=true});

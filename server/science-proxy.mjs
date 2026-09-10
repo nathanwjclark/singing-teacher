@@ -28,7 +28,7 @@ export function createScienceProxy({url, token, timeoutMs = 30_000, fetchImpl = 
       if (req.headers['sec-fetch-site'] && !['same-origin', 'none'].includes(req.headers['sec-fetch-site'])) return reply(res, 403, {error: 'Cross-site scientific access refused'});
     } catch { return reply(res, 403, {error: 'Invalid desktop origin'}); }
     const path = req.url.slice('/api/science'.length);
-    if (!/^\/(health|capabilities|models|jobs(?:\/[A-Za-z0-9_-]+(?:\/(?:result|cancel))?)?|sessions(?:\/[A-Za-z0-9_-]+(?:\/(?:commands|state|replay))?)?)$/.test(path)) return reply(res, 404, {error: 'Unknown scientific route'});
+    if (!/^\/(health|capabilities|models|jobs(?:\/[A-Za-z0-9_-]+(?:\/(?:result|cancel|exports))?)?|sessions(?:\/[A-Za-z0-9_-]+(?:\/(?:commands|state|replay))?)?)$/.test(path)) return reply(res, 404, {error: 'Unknown scientific route'});
     if (!['GET', 'POST'].includes(req.method)) return reply(res, 405, {error: 'Method not allowed'});
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);

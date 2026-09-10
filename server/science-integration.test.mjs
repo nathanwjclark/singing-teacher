@@ -24,6 +24,17 @@ test('desktop proxy executes native jobs and session commands without exposing t
     let ready=false;
     for(let i=0;i<100;i++){try{if((await call('/health')).status===200){ready=true;break}}catch{}await pause(100)}
     assert.ok(ready,'Scientific server did not become ready');
+    // B's app routes and A's worker routes must coexist under the same prefix.
+    assert.deepEqual((await call('/status')).data,{status:'not-run'});
+    const unconfiguredRun=await fetch(base+'/api/science/run',{method:'POST'});
+    assert.equal(unconfiguredRun.status,409);
+    assert.match((await unconfiguredRun.json()).error,/No verified local voice/);
+    const missingAsset=await fetch(base+'/api/science/asset?run=missing&name=geometry.json');
+    assert.equal(missingAsset.status,404);
+    assert.equal((await fetch(base+'/api/tongue-profile')).status,404);
+    const appStatus=await fetch(base+'/api/status').then(r=>r.json());
+    assert.equal(appStatus.scienceConfigured,true);
+    assert.equal(appStatus.scienceHealthPath,'/api/science/health');
     const created=await call('/jobs',{request:{operation:'forward',parameters:{pose:'a',duration_s:.1}},idempotency_key:'real-forward'});
     assert.equal(created.status,202,JSON.stringify(created.data));
     const id=created.data.id ?? created.data.job_id;
@@ -33,6 +44,9 @@ test('desktop proxy executes native jobs and session commands without exposing t
     assert.equal(state.data.status,'succeeded',JSON.stringify(state.data));
     const result=await call(`/jobs/${id}/result`);assert.equal(result.status,200);
     assert.ok(JSON.stringify(result.data).includes('sample_rate_hz'));
+    const exports=await call(`/jobs/${id}/exports`);assert.equal(exports.status,200);
+    assert.equal(exports.data.job_id,id);
+    assert.ok(exports.data.files['tract0.obj'].byteLength>0);
     const session=await call('/sessions/demo/state');assert.equal(session.status,200);
     const rejected=await call('/sessions/demo/commands',{action:'ingest_calibration',command_id:'bad',expected_version:999,document:{}});
     assert.equal(rejected.status,409);

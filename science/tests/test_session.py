@@ -59,6 +59,11 @@ def test_real_search_design_committed_outcome_restart_and_replay(tmp_path):
         with Engine() as engine:
             engine.set_anatomy(old['hypotheses'][0]['anatomy'])
             pcm=(engine.synthesize('a',{'JA':-2.},f0_hz=180.,duration_s=.25)[4410:8506]*.8).tolist()
+        with pytest.raises(ValueError,match='profile must match'):
+            send(controller,'submit_outcome',design_id='design',parameters={'experiment_id':'a','observation_id':'target',
+                'artifact_id':'new-audio','observed_at':now(),'pcm':pcm,'source_kind':'engine-generated',
+                'sample_rate_hz':48000})
+        assert controller.execute({'action':'state'})['state']['version']==state['version']
         send(controller,'submit_outcome',design_id='design',parameters={'experiment_id':'a','observation_id':'target',
             'artifact_id':'new-audio','observed_at':now(),'pcm':pcm,'source_kind':'engine-generated'})
         state=collect(controller,service)
