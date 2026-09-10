@@ -196,7 +196,7 @@ class SessionController:
         elif action=='propose_design':
             if not state['snapshot']: raise ValueError('A frozen model is required')
             params=deepcopy(c['parameters'])
-            if not isinstance(params,dict) or set(params)-{'design_id','target_observation_id','experiments','feature_scales','minimum_separation','max_synthesis_calls','retention_margin','maximum_discrepancy'}:
+            if not isinstance(params,dict) or set(params)-{'design_id','target_observation_id','experiments','feature_scales','minimum_separation','max_synthesis_calls','retention_margin','maximum_discrepancy','profile'}:
                 raise ValueError('Invalid design parameters')
             identity=_id(params.get('design_id')); target=_id(params.get('target_observation_id'))
             if identity in state['designs'] or any(d['data']['target_observation_id']==target for d in state['designs'].values()):
@@ -209,8 +209,13 @@ class SessionController:
             if not design or design['status']!='committed' or design['data']['model_id']!=state['snapshot']['model_id']:
                 raise ValueError('Outcome requires a current committed design')
             params=deepcopy(c['parameters'])
-            if not isinstance(params,dict) or set(params)-{'experiment_id','observation_id','artifact_id','observed_at','pcm','source_kind'} or not {'experiment_id','observation_id','artifact_id','observed_at','pcm','source_kind'}<=set(params):
+            if not isinstance(params,dict) or set(params)-{'experiment_id','observation_id','artifact_id','observed_at','pcm','source_kind','sample_rate_hz','frame_start_sample','frame_size'} or not {'experiment_id','observation_id','artifact_id','observed_at','pcm','source_kind'}<=set(params):
                 raise ValueError('Invalid outcome parameters')
+            for key in ('sample_rate_hz','frame_start_sample','frame_size'):
+                expected=design['data']['profile'][key]
+                if key in params and (type(params[key]) is not int or params[key]!=expected):
+                    raise ValueError('Outcome profile must match committed design')
+                params[key]=expected
             if params['observation_id']!=design['data']['target_observation_id'] or params['experiment_id']!=design['data']['selected_experiment_id']:
                 raise ValueError('Outcome must match committed selected experiment and target')
             if not _timestamp(design['committed_at']) < _timestamp(params['observed_at']) <= _timestamp(_now()):
