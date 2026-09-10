@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Mic, Square, AudioLines } from 'lucide-react';
 import { analyzeAudioFrame, serializeAudioMeasurement, pitchToNote, audioFrameSize, pitchStatus, livePitchMetrics, LIVE_PITCH_MIN_DBFS } from '../lib/audio';
+import type { VoiceActivity } from '../lib/voiceActivity';
 import type { AudioMetrics } from '../lib/audio';
 import { AmbientCalibrator } from '../lib/audioCalibration';
 import type { AudioCalibration } from '../lib/audioCalibration';
 import type { AudioMeasurement } from '../contracts';
 import './AudioPanel.css';
 
-export type AudioPanelProps = { demo?: boolean; autoStart?: boolean; externalStream?: MediaStream | null; onStream?: (stream: MediaStream | null) => void; onMeasurement?: (measurement: AudioMeasurement) => void };
+export type AudioPanelProps = { demo?: boolean; autoStart?: boolean; externalStream?: MediaStream | null; onStream?: (stream: MediaStream | null) => void; onMeasurement?: (measurement: AudioMeasurement) => void; onVoiceActivity?: (activity: VoiceActivity) => void };
 type AudioStatus = 'idle' | 'requesting' | 'live' | 'suspended' | 'error';
 type Point = AudioMetrics & { time: number };
 type Resources = { owned: boolean; clockId: string; startedMs: number; deviceKey: string; stream: MediaStream; context: AudioContext; source: MediaStreamAudioSourceNode; analyser: AnalyserNode };
@@ -86,15 +87,15 @@ function drawWave(canvas: HTMLCanvasElement | null, wave: Float32Array, active: 
   ctx.stroke();
 }
 
-export function AudioPanel({ demo = false, autoStart = false, externalStream = null, onStream, onMeasurement }: AudioPanelProps) {
+export function AudioPanel({ demo = false, autoStart = false, externalStream = null, onStream, onMeasurement, onVoiceActivity }: AudioPanelProps) {
   const [status, setStatus] = useState<AudioStatus>('idle');
   const [error, setError] = useState('');
   const [inputDescription, setInputDescription] = useState('');
   const [metrics, setMetrics] = useState<AudioMetrics>(EMPTY);
   const [calibration, setCalibration] = useState<AudioCalibration | null>(null);
   const calibrator = useRef(new AmbientCalibrator());
-  const callbacks = useRef({ onStream, onMeasurement });
-  useEffect(() => { callbacks.current = { onStream, onMeasurement }; }, [onStream, onMeasurement]);
+  const callbacks = useRef({ onStream, onMeasurement, onVoiceActivity });
+  useEffect(() => { callbacks.current = { onStream, onMeasurement, onVoiceActivity }; }, [onStream, onMeasurement, onVoiceActivity]);
   const [windowMs, setWindowMs] = useState(85);
   const resources = useRef<Resources | null>(null);
   const pendingContext = useRef<AudioContext | null>(null);
@@ -110,6 +111,7 @@ export function AudioPanel({ demo = false, autoStart = false, externalStream = n
 
   const release = useCallback(() => {
     requestId.current++;
+    callbacks.current.onVoiceActivity?.({voiced:false,at:performance.now()});
     const pending = pendingContext.current;
     pendingContext.current = null;
     if (pending && pending.state !== 'closed') void pending.close().catch(() => {});
@@ -247,6 +249,7 @@ export function AudioPanel({ demo = false, autoStart = false, externalStream = n
             try {
               const measured = analyzeAudioFrame(waveform.current, live.context.sampleRate);
               latest = livePitchMetrics(waveform.current, live.context.sampleRate, measured);
+              callbacks.current.onVoiceActivity?.({voiced:latest.pitchHz !== null && (latest.periodicity ?? 0) >= 0.72,at:ms});
               const deviceKey = JSON.stringify(live.stream.getAudioTracks().map(track => [track.id, track.getSettings()]));
               if (deviceKey !== live.deviceKey) { calibrator.current = new AmbientCalibrator(); live.deviceKey = deviceKey; }
               const ambient = calibrator.current.update(latest, waveform.current, ms);

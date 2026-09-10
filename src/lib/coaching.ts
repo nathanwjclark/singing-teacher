@@ -9,7 +9,7 @@ const score = (base: number, amount: number, threshold: number, scale: number) =
 /** Visual prompts only. Muscle IDs identify anatomical references, never measured activity.
  * Optional 3D metrics are omitted when unavailable; do not substitute zero for them.
  */
-export function getTips(frame: TrackingFrame | null, { limit = 3, uniqueRegions = true }: {limit?:number; uniqueRegions?:boolean} = {}): Tip[] {
+export function getTips(frame: TrackingFrame | null, { limit = 3, uniqueRegions = true, singing = true }: {limit?:number; uniqueRegions?:boolean; singing?:boolean} = {}): Tip[] {
   if (!frame) return [tip('start', 'Make room for your voice.', 'Start your camera, then bring your face and shoulders into view.', 'good', 'general', 0)];
   if (frame.face.length === 0) return [tip('find-face', 'Let’s find your face.', 'Face the camera in even light. Your cues will return when your face is visible.', 'adjust', 'general', 100)];
 
@@ -17,6 +17,8 @@ export function getTips(frame: TrackingFrame | null, { limit = 3, uniqueRegions 
   const tips: Tip[] = [];
   if (finite(m.brightness) && m.brightness < 45) return [tip('lighting', 'Bring a little light in.', 'Try a light in front of you so the camera can see your face clearly.', 'adjust', 'general', 100)];
   if (!finite(m.mouthOpen) || !finite(m.headTilt) || m.mouthOpen < 0) return [tip('measurement-unavailable', 'Find a clear view.', 'Face the camera and keep your face fully in frame while we look for reliable landmarks.', 'adjust', 'general', 100)];
+
+  if (!singing || m.mouthOpen <= 0.035) return [tip('no-singing', 'No singing detected', 'Sing a comfortable vowel to see live adjustments.', 'good', 'general', 0)];
 
   // Resolve framing before interpreting geometry near the edge of the image.
   const clipped = frame.face.some(point => point.x < 0.025 || point.x > 0.975 || point.y < 0.025 || point.y > 0.975);
@@ -35,7 +37,7 @@ export function getTips(frame: TrackingFrame | null, { limit = 3, uniqueRegions 
   // Face width and asymmetry are strongly distorted by head rotation.
   const frontal = yaw !== undefined && yaw < 15 && pitch !== undefined && pitch < 15;
   const mouthReliable = (yaw === undefined || yaw < 20) && (pitch === undefined || pitch < 20);
-  if (mouthReliable && m.mouthOpen < 0.12) {
+  if (mouthReliable && m.mouthOpen > 0.035 && m.mouthOpen < 0.12) {
     tips.push(tip('mouth-open', 'Give the vowel room.', 'On a sustained vowel, try a little more mouth opening—only as far as feels easy. A small opening is normal between phrases.', 'adjust', 'jaw', score(48, 0.12 - m.mouthOpen, 0, 100), ['Masseter', 'Digastric']));
   }
   if (Math.abs(m.headTilt) > 9) {
@@ -83,4 +85,37 @@ export function getTips(frame: TrackingFrame | null, { limit = 3, uniqueRegions 
     return true;
   }).slice(0, limit);
   return ranked.map((item, index) => ({ ...item, severity: index === 0 && item.region !== 'general' ? 'focus' : item.severity }));
+}
+
+/** A missing cue is not success: require a fresh, usable view and a measured
+ * change past the cue threshold. Call only while voice remains active. */
+export function resolvedTipIds(previous: TrackingFrame | null, current: TrackingFrame | null): Set<string> {
+  const resolved = new Set<string>();
+  if (!previous || !current || current.timestamp <= previous.timestamp) return resolved;
+  const cues = getTips(current, {limit:12,uniqueRegions:false});
+  if (cues.some(cue => ['start','find-face','lighting','measurement-unavailable','camera-close','camera-far','no-singing'].includes(cue.id))) return resolved;
+  const before = previous.metrics, after = current.metrics;
+  const changedBelow = (key: keyof typeof after, threshold: number, absolute = true) => {
+    const a = before[key], b = after[key];
+    if (!finite(a) || !finite(b)) return false;
+    const old = absolute ? Math.abs(a) : a, next = absolute ? Math.abs(b) : b;
+    return old > threshold && next <= threshold;
+  };
+  if (changedBelow('headTilt',9)) resolved.add('head-level');
+  if (changedBelow('headYaw',18)) resolved.add('head-turn');
+  if (changedBelow('headPitch',16)) resolved.add('head-pitch');
+  const frontal = finite(after.headYaw) && Math.abs(after.headYaw) < 15 && finite(after.headPitch) && Math.abs(after.headPitch) < 15;
+  const mouthReliable = (after.headYaw === undefined || Math.abs(after.headYaw) < 20) && (after.headPitch === undefined || Math.abs(after.headPitch) < 20);
+  if (mouthReliable && before.mouthOpen > 0.035 && before.mouthOpen < 0.12 && after.mouthOpen >= 0.12) resolved.add('mouth-open');
+  if (frontal && after.mouthOpen > 0.12) {
+    if (changedBelow('jawAsymmetry',0.18,false)) resolved.add('jaw-asymmetry');
+    if (changedBelow('lipWidth',0.88,false)) resolved.add('lip-spread');
+  }
+  if ([current.pose[11],current.pose[12]].every(visible)) {
+    if (changedBelow('shoulderTilt',7)) resolved.add('shoulder-level');
+    if (changedBelow('shoulderDepth',0.09)) resolved.add('shoulder-rotation');
+    if (frontal && finite(before.shoulderElevation) && before.shoulderElevation >= 0 && before.shoulderElevation < 0.2 && finite(after.shoulderElevation) && after.shoulderElevation >= 0.2) resolved.add('shoulder-elevation');
+    if ([current.pose[23],current.pose[24]].every(visible) && changedBelow('torsoLean',8)) resolved.add('torso-lean');
+  }
+  return resolved;
 }
