@@ -102,6 +102,33 @@ def test_duplicate_source_interval_and_predicted_clipping_are_not_silent():
         assert result['joint']['candidates'][0]['missing_features'][0]['reason'] == 'predicted_pcm_clipping'
 
 
+
+def without_created_at(value):
+    if isinstance(value, dict):
+        return {k: without_created_at(v) for k, v in value.items() if k != 'createdAt'}
+    if isinstance(value, list):
+        return [without_created_at(v) for v in value]
+    return value
+
+
+def test_gain_only_variants_share_one_waveform_without_changing_scores():
+    with Engine() as engine:
+        doc, candidates = fixture(engine)
+        base = candidates[1]
+        variants = [{**deepcopy(base), 'candidate_id': f'gain-{factor:g}',
+                     'trials': {pose: {**c, 'gain': c['gain']*factor} for pose, c in base['trials'].items()}}
+                    for factor in (1., .5, 2.)]
+        shared = fit_pcm(engine, doc, candidates=variants, max_synthesis_calls=4, node_binary=NODE)
+        # Two trials, one anatomy: one waveform per trial and model instead of one per gain.
+        assert shared['joint']['actual_synthesis_calls'] == shared['fixed_anatomy_baseline']['actual_synthesis_calls'] == 2
+        assert shared['joint']['evaluated_predictions'] == shared['fixed_anatomy_baseline']['evaluated_predictions'] == 6
+        separate = [fit_pcm(engine, doc, candidates=[variant], max_synthesis_calls=4, node_binary=NODE) for variant in variants]
+        assert sum(fit['actual_synthesis_calls'] for fit in separate) == 12
+        for model in ('joint', 'fixed_anatomy_baseline'):
+            assert without_created_at(shared[model]['candidates']) == [without_created_at(fit[model]['candidates'][0]) for fit in separate]
+        with pytest.raises(ValueError, match='equal-model synthesis budget'):
+            fit_pcm(engine, doc, candidates=variants, max_synthesis_calls=3, node_binary=NODE)
+
 @pytest.mark.parametrize('rate,size', [(48000, 4096), (96000, 8192)])
 def test_observed_rate_resampling_uses_exact_canonical_window(rate, size):
     from singing_physics.pcm_inverse import resample_native_pcm
