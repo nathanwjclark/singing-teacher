@@ -1,0 +1,16 @@
+{
+  "command": "PYTHONPATH=science/src science/.venv/bin/python evaluation/wave3/run.py --output /tmp/singing-wave3-independent-first",
+  "evidence_source": "development-fixture",
+  "executed_worktree_commit": "38a3e45",
+  "files": {
+    "first-calibration-rankings.json": "e44330dbd89bd151c794d37367787dcf1dbe9ca518ae81a5a805a1b5ff085809",
+    "first-prediction-bank.json": "14531394a6a9d074b12aa214a1f0a685fecb10dabb1d7237269f8f65bd134872",
+    "first-report.json": "99cf91df4bdab0c4c219b48cafd64334db888b1b9a2c35af94fbd66c6c8b0e2c"
+  },
+  "harness_commit": "b442c1e",
+  "harness_sha256": "193c6e459fb5c9c75991e70098556fc710db46cd74054279974d29e13e931744",
+  "production_spectral_commit": "8c68f602c70b06f949425e8ca69753b7a1dedf9d",
+  "protocol_commit": "761f8ef",
+  "reruns": 0,
+  "scientific_outcome": "inconclusive; no universal gain or anatomy recovery established"
+}
