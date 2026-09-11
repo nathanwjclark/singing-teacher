@@ -9,9 +9,9 @@ async function fixture(t){const root=await mkdtemp(join(tmpdir(),'source-state-'
 test('disabled source capability hides prior active results without deleting history',async t=>{const {root}=await fixture(t);const state=await readSourceInferenceContext({dataRoot:root,enabled:false});assert.equal(state.forecast.status,'disabled');assert.equal(state.forecast.result,undefined);});
 test('source policy changes invalidate fit and forecast cache while preserving historical receipts',async t=>{
  const {root,dir}=await fixture(t),repo=join(root,'repo');
- const names=['science/src/singing_physics/phonation.py','science/scripts/phonation_bridge.ts','src/phonation/measure.ts','src/phonation/types.ts','src/lib/audio.ts','src/contracts/example.ts'];
+ const names=['science/src/singing_physics/pcm_inverse.py','science/src/singing_physics/engine.py','science/src/singing_physics/phonation.py','science/scripts/phonation_bridge.ts','src/phonation/measure.ts','src/phonation/types.ts','src/lib/audio.ts','src/contracts/example.ts'];
  for(const name of names){const path=join(repo,name);await mkdir(join(path,'..'),{recursive:true});await writeFile(path,name);}
- const policy=await sourceRuntimePolicy(repo),saved={status:'succeeded',result:{baselineModelId:'model-one',capability:{source_adapter_sha256:policy.adapter},extractor_signature:policy.extractor}};
+ const policy=await sourceRuntimePolicy(repo),saved={status:'succeeded',result:{baselineModelId:'model-one',capability:{source_adapter_sha256:policy.adapter,source_adapter_dependencies:policy.dependencies},source_model_selection:policy.sourceModel,extractor_signature:policy.extractor}};
  await writeFile(join(dir,'source-fit.json'),JSON.stringify(saved));
  const previous=globalThis.fetch,url=process.env.SCIENCE_URL,token=process.env.SCIENCE_TOKEN;
  process.env.SCIENCE_URL='http://127.0.0.1:8766';process.env.SCIENCE_TOKEN='test';
