@@ -67,6 +67,8 @@ test('the selected spectral objective runs the real capture pipeline end to end'
  await expect.poll(async()=>(await (await request.get('/api/science/outcome')).json()).status,{timeout:180_000,intervals:[2000]}).toBe('succeeded');
  await page.getByRole('button',{name:'Experiments',exact:true}).click();
  await expect(panel.locator('.scientific-outcome')).toContainText('Scientific result:');
+ await expect(panel.locator('.scientific-outcome')).toContainText('Scored with: Multi-resolution spectrum (experimental)');
+ await expect(panel.locator('.scientific-outcome')).toContainText('Scoring code: same version that froze the forecast');
  const session=(await (await request.get(`/api/science/sessions/${result.sessionId}/state`)).json()).state;
  const update=[...session.jobs].reverse().find((job:{request:{operation:string}})=>job.request.operation==='update_pcm').result;
  expect(update.objective).toBe('multires-log-spectrum-v1');

@@ -7,7 +7,7 @@ import {LoaderCircle} from 'lucide-react';
 // Plain descriptions of the scoring objectives the local capture pipeline accepts.
 const OBJECTIVES:Record<string,string>={
  'canonical-coarse-v1':'Coarse descriptors (default): loudness, brightness, noisiness, pitch and periodicity of the voice window',
- 'multires-log-spectrum-v1':'Multi-resolution spectrum (experimental): spectral shape at three window lengths, pitch and periodicity, with bounded level and tilt adjustment',
+ 'multires-log-spectrum-v1':'Multi-resolution spectrum (experimental): spectral shape at three window lengths, pitch and periodicity; loudness differences up to ±24 dB and spectral tilt up to ±6 dB/octave are not scored',
 };
 export function ScientificModelPanel({onPreview}:{onPreview:()=>void}){
  const [refresh,setRefresh]=useState(0),[notice,setNotice]=useState(''),[starting,setStarting]=useState(false);
@@ -89,7 +89,7 @@ export function ScientificModelPanel({onPreview}:{onPreview:()=>void}){
  <div className="scientific-actions"><button onClick={()=>void run('outcome')} disabled={busy||!recordingAllowed||!outcomeConfirmed||state.status!=='succeeded'}>{outcome.status==='running'?'Scoring latest recording…':'Score latest iPhone capture'}</button><span>Outcome processing: {outcome.status}</span></div></>:<p>No separating experiment was selected. There is no committed next recording to score.</p>}
  {outcome.error&&<p role="alert">{outcome.error}</p>}
  {outcome.outcomeId&&['failed','interrupted'].includes(outcome.status)&&<p><button disabled={busy} onClick={()=>void run('outcome',true)}>Resume interrupted scoring</button> Retries the same prepared recording and retained outcome. No new capture is prepared.</p>}
- {outcome.result&&<div role="status"><p>Scientific result: <strong>{outcome.result.scientificStatus||outcome.result.status}</strong>. {outcome.result.modelUpdated?'The session model was updated from the recorded evidence.':'No model update was applied.'} This does not validate the inferred anatomy.</p>{outcome.result.modelUpdated&&<p>The retained candidate set was updated. The displayed geometry remains the original fitted/reference pair until a newly exported geometry artifact is available.</p>}
+ {outcome.result&&<div role="status"><p>Scientific result: <strong>{outcome.result.scientificStatus||outcome.result.status}</strong>. {outcome.result.modelUpdated?'The session model was updated from the recorded evidence.':'No model update was applied.'} This does not validate the inferred anatomy.</p>{outcome.result.objective&&<p>Scored with: {OBJECTIVES[outcome.result.objective]??outcome.result.objective}. Scoring code: {outcome.result.scorerPinStatus==='verified'?'same version that froze the forecast':'forecast predates version pinning; not verified'}.</p>}{outcome.result.modelUpdated&&<p>The retained candidate set was updated. The displayed geometry remains the original fitted/reference pair until a newly exported geometry artifact is available.</p>}
  {outcome.result.reasons?.length? <p>Recording could not be used: {outcome.result.reasons.join('; ')}</p>:null}
  {outcome.result.error&&<p>{outcome.result.error}</p>}
  {outcome.result.missingReason&&<p>Unavailable measurement: {outcome.result.missingReason}</p>}
