@@ -1,6 +1,7 @@
 import {test,expect} from '@playwright/test';
 import {readFile,writeFile} from 'node:fs/promises';
 import {join} from 'node:path';
+import {fitBaselineAndImportMotion} from './helpers/motion-fixture';
 
 // Real app and scientific worker (tests/motion-timeline.config.ts). The baseline is
 // fitted through the app from a generated native voice capture; the motion audio is
@@ -16,13 +17,7 @@ test('motion audio timeline shows the time course, gaps with reasons and ambiguo
  // The server has no provider credential, so Astra cannot make a paid call; no route is intercepted.
  expect((await (await request.get('/api/astra/status')).json()).provider.available).toBe(false);
 
- expect((await request.post('/api/science/use-latest-capture',{data:{purpose:'calibration',pose:'a',contains_external_excitation:false}})).ok()).toBe(true);
- expect((await request.post('/api/science/run')).status()).toBe(202);
- await expect.poll(async()=>(await (await request.get('/api/science/status')).json()).status,{timeout:240_000,intervals:[1000]}).toBe('succeeded');
-
- const record=await readFile(join(fixture!,'motion.json')),media=await readFile(join(fixture!,'motion.webm'));
- const imported=await request.post('/api/motion/import',{multipart:{record:{name:'motion.json',mimeType:'application/json',buffer:record},media:{name:'motion.webm',mimeType:'video/webm',buffer:media}}});
- expect(imported.ok()).toBe(true);const captureId=(await imported.json()).capture.id;
+ const {captureId}=await fitBaselineAndImportMotion(request,fixture!);
 
  await page.goto('/');await page.getByRole('button',{name:'Experiments',exact:true}).click();
  const group=page.locator('.motion-capture').getByRole('group',{name:'Motion audio analysis'});

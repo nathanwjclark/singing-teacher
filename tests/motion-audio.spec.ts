@@ -1,7 +1,7 @@
 import {test,expect,type Page} from '@playwright/test';
 import {createHash,randomUUID} from 'node:crypto';
-import {readFile} from 'node:fs/promises';
 import {join} from 'node:path';
+import {fitBaselineAndImportMotion} from './helpers/motion-fixture';
 async function syntheticMotion(page:Page){
  const bytes=Buffer.from(await page.evaluate(async()=>{
   const canvas=document.createElement('canvas');canvas.width=96;canvas.height=64;
@@ -43,12 +43,7 @@ test('optional decoder or missing baseline explains unavailability and retains s
 // Synthetic evidence only. No successful result or motion endpoint is intercepted.
 test('prepared native motion audio runs from declaration to actual scientific result',async({page,request})=>{
  test.skip(!nativeData,'Run with -c tests/motion-audio.config.ts');
- expect((await request.post('/api/science/use-latest-capture',{data:{purpose:'calibration',pose:'a',contains_external_excitation:false}})).ok()).toBe(true);
- expect((await request.post('/api/science/run')).status()).toBe(202);
- await expect.poll(async()=>(await (await request.get('/api/science/status')).json()).status,{timeout:240_000,intervals:[1000]}).toBe('succeeded');
- const record=await readFile(join(nativeData!,'fixture','motion.json')),media=await readFile(join(nativeData!,'fixture','motion.webm'));
- const imported=await request.post('/api/motion/import',{multipart:{record:{name:'motion.json',mimeType:'application/json',buffer:record},media:{name:'motion.webm',mimeType:'video/webm',buffer:media}}});expect(imported.ok()).toBe(true);
- const nativeCapture=(await imported.json()).capture.id;
+ const {captureId:nativeCapture,media}=await fitBaselineAndImportMotion(request,join(nativeData!,'fixture'));
  const panel=await open(page),group=panel.getByRole('group',{name:'Motion audio analysis'});const before=await request.get('/api/motion/analysis?captureId='+nativeCapture);expect((await before.json()).availability.available).toBe(true);
  const declaration=group.getByLabel('This saved audio contains my declared vowel with no external sound or played probe.'),button=group.getByRole('button',{name:'Analyze saved audio once'});
  await expect(button).toBeDisabled();await declaration.check();await expect(button).toBeEnabled();
