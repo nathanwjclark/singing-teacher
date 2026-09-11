@@ -95,6 +95,17 @@ def _worker(root, job_id, parent_pid, timeout_s):
                                 result = forecast_phonation_bank(engine, **options)
                             else:
                                 result = forecast_phonation(engine, **options)
+        elif request['operation'] in {'forecast_control_pcm', 'score_control_pcm'}:
+            from .control_pcm import forecast_control_pcm, score_control_pcm
+            if request['operation'] == 'forecast_control_pcm':
+                from .prediction import Artifact
+                options = {k:v for k,v in params.items() if k != 'snapshot_json'}
+                # Leave the forecast a margin inside the worker's hard deadline so it ends with explicit
+                # stopped rows ('incomplete') instead of being killed as a failed job.
+                options['timeout_s'] = min(options.get('timeout_s', 90.), max(1., timeout_s - 15.))
+                result = forecast_control_pcm(Artifact(params['snapshot_json'].encode()), **options)
+            else:
+                result = score_control_pcm(**params)
         elif request['operation'] == 'fit_control':
             from .control import fit_control_profile
             result = fit_control_profile(**params)
@@ -261,11 +272,13 @@ class JobService:
         self._identity(idempotency_key, 'idempotency_key')
         if not isinstance(request, dict) or set(request) - {'operation', 'parameters', 'session_id', 'model_id'}:
             raise ValueError('Invalid local job request fields')
-        if request.get('operation') not in {'forward', 'fit_transfer', 'fit_joint', 'predict', 'fit_dynamic', 'fit_control', 'control_predict', 'condition_prediction', 'fit_frozen_control', 'rank_interventions', 'fit_pcm', 'search_pcm', 'design_pcm', 'update_pcm', 'fit_probe_pcm', 'predict_probe', 'evaluate_probe', 'fit_phonation', 'forecast_phonation', 'score_phonation', 'rank_lidar_hypotheses', 'forecast_phonation_bank', 'score_phonation_bank','freeze_visual_forecast','score_visual_forecast'} or not isinstance(request.get('parameters'), dict):
+        if request.get('operation') not in {'forward', 'fit_transfer', 'fit_joint', 'predict', 'fit_dynamic', 'fit_control', 'control_predict', 'condition_prediction', 'fit_frozen_control', 'rank_interventions', 'fit_pcm', 'search_pcm', 'design_pcm', 'update_pcm', 'fit_probe_pcm', 'predict_probe', 'evaluate_probe', 'fit_phonation', 'forecast_phonation', 'score_phonation', 'rank_lidar_hypotheses', 'forecast_phonation_bank', 'score_phonation_bank','freeze_visual_forecast','score_visual_forecast','forecast_control_pcm','score_control_pcm'} or not isinstance(request.get('parameters'), dict):
             raise ValueError('Unsupported operation or missing parameters')
         allowed = {
             'freeze_visual_forecast': {'model_id','hypotheses','camera_candidates','calibration_frames','targets','coordinate_system','expected_provenance','calibration_tolerance_px','max_geometry_calls'},
             'score_visual_forecast': {'forecast','expected_digest','annotations'},
+            'forecast_control_pcm': {'snapshot_json','expected_digest','cue','context','controls','gain','target_id','history','profile','feature_scales','max_synthesis_calls','timeout_s'},
+            'score_control_pcm': {'frozen','pcm','metadata'},
             'rank_lidar_hypotheses': {'snapshot','capture_directory','annotation','enabled','max_geometry_calls'},
             'forecast_phonation_bank': {'fit_result','reference_trial_id','pose','controls','target_id','max_synthesis_calls','timeout_s','enabled'},
             'score_phonation_bank': {'frozen','pcm','metadata','enabled'},
@@ -299,6 +312,8 @@ class JobService:
         required = {
             'freeze_visual_forecast': {'model_id','hypotheses','camera_candidates','calibration_frames','targets','coordinate_system','expected_provenance'},
             'score_visual_forecast': {'forecast','expected_digest','annotations'},
+            'forecast_control_pcm': {'snapshot_json','expected_digest','cue','context','controls','gain','target_id','history'},
+            'score_control_pcm': {'frozen','pcm','metadata'},
             'rank_lidar_hypotheses': {'snapshot','capture_directory','annotation'},
             'forecast_phonation_bank': {'fit_result','reference_trial_id','pose','controls','target_id'},
             'score_phonation_bank': {'frozen','pcm','metadata'},
@@ -325,7 +340,7 @@ class JobService:
         for key in ('session_id', 'model_id'):
             if key in request:
                 self._identity(request[key], key)
-        if request['operation'] in {'predict', 'control_predict', 'condition_prediction', 'fit_frozen_control', 'rank_interventions', 'design_pcm', 'update_pcm', 'predict_probe'} and 'model_id' in request:
+        if request['operation'] in {'predict', 'control_predict', 'condition_prediction', 'fit_frozen_control', 'rank_interventions', 'design_pcm', 'update_pcm', 'predict_probe', 'forecast_control_pcm'} and 'model_id' in request:
             snapshot = json.loads(request['parameters']['snapshot_json'])
             if not isinstance(snapshot, dict) or snapshot.get('model_id') != request['model_id']:
                 raise ValueError('Prediction or inference model does not match job model')

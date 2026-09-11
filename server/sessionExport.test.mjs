@@ -247,3 +247,48 @@ test('exports the latest score recomputation only while its report matches the r
   assert.ok(!data.artifacts.some(a=>a.source.startsWith('replay-verifications/')));
   assert.ok(!data.missing.some(row=>row.source.startsWith('replay-verifications')));
 });
+
+test('binds cue-execution forecast, score and stop receipts to the ledger and the retained original capture',async t=>{
+ const {root,put}=await fixture(t),scientific=replay(),hash=x=>createHash('sha256').update(x).digest('hex');
+ const audio=Buffer.from('fictional-original-audio-bytes'),manifest=Buffer.from(JSON.stringify({capture_id:'fictional-control-capture',audio:{samples:[{artifact:{path:'audio.pcm.raw',sha256:hash(audio)}}]}}));
+ const manifestSha=hash(manifest),cue='Sing an easy, comfortable ah.';
+ const forecast={sha256:'c'.repeat(64),artifact:{kind:'frozen-control-pcm',target_id:'target',cue:{wording:cue}}};
+ const score={sha256:'d'.repeat(64),artifact:{kind:'scored-control-pcm',observation_hashes:[manifestSha,hash(audio)],control_support:{}}};
+ scientific.state.control_forecasts={target:{artifact:forecast,status:'scored',binding_id:'cue-one',baseline_model_id:'updated-model'},stopped:{artifact:forecast,status:'stopped',binding_id:'cue-one',baseline_model_id:'updated-model'}};
+ scientific.state.control_bindings={'cue-one':{cue:{wording:cue}}};
+ scientific.state.control_receipts=[{operation:'forecast_control_pcm',job_id:'forecast-job',forecast_id:'target',binding_id:'cue-one',status:'available',forecast_sha256:forecast.sha256,result:null},
+  {operation:'forecast_control_pcm',job_id:'rejected-job',forecast_id:'rejected',binding_id:'cue-one',status:'rejected',reason:'Control forecast did not retain every alternative of the declared binding',result:null},
+  {operation:'score_control_pcm',job_id:'score-job',forecast_id:'target',binding_id:'cue-one',status:'scored',result:score},
+  {operation:'record_control_attempt',forecast_id:'stopped',binding_id:'cue-one',status:'stopped',reason:'Stopped by the learner in the app before scoring',result:null}];
+ const base={sessionId:'session-one',bindingId:'cue-one',baselineModelId:'updated-model',modelUpdated:false,deliveredCue:cue};
+ const attempts='science-runs/run-one/control-attempts';
+ await put(`${attempts}/forecast-one/result.json`,{...base,phase:'forecast',status:'available',forecastId:'target',jobId:'forecast-job',result:forecast});
+ await put(`${attempts}/rejected-forecast/result.json`,{...base,phase:'forecast',status:'rejected',forecastId:'rejected',jobId:'rejected-job',result:null});
+ // Refused before any session command (no intent): nothing to export. Interrupted after one: not recorded.
+ await mkdir(join(root,attempts,'refused-early'),{recursive:true});
+ await put(`${attempts}/interrupted/intent.json`,{commands:[]});
+ await put(`${attempts}/score-one/result.json`,{...base,phase:'score',status:'scored',forecastId:'target',jobId:'score-job',result:score,source_manifest_sha256:manifestSha});
+ await mkdir(join(root,attempts,'score-one/original'),{recursive:true});
+ await writeFile(join(root,attempts,'score-one/original/manifest.json'),manifest);await writeFile(join(root,attempts,'score-one/original/audio.pcm.raw'),audio);
+ await put(`${attempts}/stop-one/result.json`,{...base,phase:'stop',status:'stopped',reason:'Stopped by the learner in the app before scoring',forecastId:'stopped'});
+ // A verbatim copy with its originals is still the same ledger receipt and must not export twice.
+ await put(`${attempts}/score-two/result.json`,{...base,phase:'score',status:'scored',forecastId:'target',jobId:'score-job',result:score,source_manifest_sha256:manifestSha});
+ await mkdir(join(root,attempts,'score-two/original'),{recursive:true});
+ await writeFile(join(root,attempts,'score-two/original/manifest.json'),manifest);await writeFile(join(root,attempts,'score-two/original/audio.pcm.raw'),audio);
+ await put(`${attempts}/forged-one/result.json`,{...base,phase:'score',status:'scored',forecastId:'target',jobId:'score-job',result:{...score,sha256:'e'.repeat(64)},source_manifest_sha256:manifestSha});
+ await put(`${attempts}/reworded-one/result.json`,{...base,deliveredCue:'A different wording.',phase:'forecast',status:'available',forecastId:'target',jobId:'forecast-job',result:forecast});
+ await put(`${attempts}/foreign-one/result.json`,{...base,sessionId:'other-session',phase:'forecast',status:'available',forecastId:'target',jobId:'forecast-job',result:forecast});
+ let output;const route=createSessionExportRoutes({dataRoot:root,env,json:(_r,status,data)=>{output={status,data};},fetchImpl:async()=>Response.json(scientific)});
+ await request(route);assert.equal(output.status,200);assert.equal(output.data.summary.controlScoreCount,1);
+ const roles=output.data.artifacts.filter(a=>a.binding?.role?.startsWith('cue-execution-')).map(a=>[a.binding.role,a.binding.originalBytesVerified,a.binding.modelUpdated]);
+ assert.deepEqual(roles.sort(),[['cue-execution-forecast',false,false],['cue-execution-forecast',false,false],['cue-execution-score',true,false],['cue-execution-stop',false,false]]);
+ assert.deepEqual(output.data.missing.find(r=>r.source===`${attempts}/interrupted/result.json`),{source:`${attempts}/interrupted/result.json`,reason:'Not recorded'});
+ assert.ok(!output.data.missing.some(r=>r.source.includes('refused-early')));
+ for(const name of ['score-two','forged-one','reworded-one'])assert.ok(output.data.missing.some(r=>r.source===`${attempts}/${name}/result.json`),name);
+ assert.ok(!output.data.artifacts.some(a=>a.source.includes('foreign-one')));
+ await writeFile(join(root,attempts,'score-one/original/audio.pcm.raw'),'changed');
+ await request(route);
+ assert.ok(output.data.missing.some(r=>r.source===`${attempts}/score-one/result.json`));
+ // Only the copy whose retained originals still verify remains bound.
+ assert.deepEqual(output.data.artifacts.filter(a=>a.binding?.role==='cue-execution-score').map(a=>a.source),[`${attempts}/score-two/result.json`]);
+});

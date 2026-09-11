@@ -160,6 +160,18 @@ noise/out-of-support cases could worsen. This result is preserved as a research
 boundary; Wave 3 work must not advertise universal improvement without a new
 held-out evaluation.
 
+Cue-execution learning is connected for Astra-delivered cues. Before an attempt,
+the app freezes the exact wording, the declared context and a five-alternative
+jaw-angle/pitch simulator bank for every retained anatomy; the later original
+recording is scored against every alternative. History matches per anatomy under
+one cue/context/bank/runtime key, so pruning hypotheses keeps it, and at least three
+matched attempts are needed before the next prediction leaves uniform. Astra can
+repeat a declared cue verbatim. Microphone residual calibration is reported
+separately and never changes the weights. The weights are descriptor affinities,
+not movement probabilities, and the evidence is synthetic only. See
+[cue-execution learning](../../science/CONTROL_PCM.md), including the ledger size
+limit that makes long sessions export without the replay.
+
 The spectral objective is selectable in the app's scientific model panel (the coarse objective stays the default) and runs through
 search, sealed forecast and update with pinned scoring code. A second frozen
 evaluation (three held-out vowels, equal native budgets, production scorer) is

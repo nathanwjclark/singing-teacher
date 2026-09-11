@@ -20,7 +20,7 @@ Sensations are explicitly subjective. They never overwrite anatomy. Movement agr
 - Four focused tests cover review requirement, protocol tampering, missing/unvoiced/context-invalid evidence, failed-attempt denominator, cue-free assistance exclusion and delayed separate-session retention.
 - Chrome smoke used a synthetic 220 Hz microphone stream through **actual MediaRecorder**, decode, independent scoring, persistence, replay and cue-free masking. Synthetic reviewer identity is fixture data only and was never added to the library.
 - **Human acceptance remains open:** real specialist approval of the exact wordings, followed by actual learner prompted/recall/transfer and later retention recordings. No G7 learning-improvement claim is made from fixtures.
-- **Scientific integration remains open:** supported movement-agreement scoring and cue selection from genuine prospective engine/control forecasts. Hidden muscle interpretations are not filled in to make the panel appear complete.
+- **Scientific integration is partial.** Cues that Astra delivers can now be frozen with their exact wording and context before an attempt, scored against a finite bank of simulator jaw-angle and pitch alternatives, and repeated verbatim; after three matched attempts the next frozen prediction is weighted by those attempts. See [cue-execution learning](../../science/CONTROL_PCM.md). The reviewed protocols in this panel are not yet connected to those banks, movement agreement remains `null`, and hidden muscle interpretations are not filled in. Evidence so far is synthetic.
 
 ## Sources
 

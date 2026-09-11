@@ -126,13 +126,20 @@ class SessionController:
                 try:
                     pending['job_id']=self.service.submit(pending['request'],idempotency_key=pending['key'])
                 except (ValueError, RuntimeError) as exc:
-                    state['jobs'].append({**pending,'status':'submission_failed','error':str(exc)})
+                    record={**pending,'status':'submission_failed','error':str(exc)}
+                    if pending.get('control_binding'):
+                        from .session_control import job_record
+                        record=job_record(record)
+                    state['jobs'].append(record)
                     state['pending']=None
                     if pending.get('visual_binding'):
                         from .session_visual import collect
                         collect(state,pending,'submission_failed',None)
                     if pending.get('source_binding'):
                         from .session_source import collect
+                        collect(state,pending,'submission_failed',None)
+                    if pending.get('control_binding'):
+                        from .session_control import collect
                         collect(state,pending,'submission_failed',None)
                     if pending['request']['operation']=='update_pcm':
                         for design in state['designs'].values():
@@ -150,12 +157,16 @@ class SessionController:
             if set(command)!={'action'}:
                 raise ValueError('Unexpected read parameters')
             state,digest,events=self._dispatch(ledger=True)
+            if state.get('control_receipts'):
+                from .session_control import verify_ledger
+                verify_ledger(state,events)
             return {'state':state,'ledger_sha256':digest, **({'events':events} if action=='replay' else {})}
         command_id=_id(command.get('command_id'))
         fields={'forecast_visual':{'forecast_id','parameters'},'score_visual':{'forecast_id','parameters'},'register_model':{'snapshot'},'ingest_calibration':{'document'},'search':{'parameters'},'fit_probe':{'parameters'},'fit_lidar':{'parameters'},
             'select_experiment':{'source_design_id','design_id','target_observation_id','experiment_id','selection_reason'},
             'propose_design':{'parameters'},'collect_job':{'job_id'},'submit_outcome':{'design_id','parameters'},
             'forecast_source_bank':{'parameters'},'score_source_bank':{'forecast_id','pcm','metadata'},'fit_source':{'parameters'},'forecast_source':{'parameters'},'score_source':{'forecast_id','pcm','metadata'},
+            'declare_control_binding':{'binding_id','binding'},'forecast_control':{'binding_id','target_id','parameters'},'score_control':{'forecast_id','pcm','metadata'},'record_control_attempt':{'forecast_id','status','reason'},
             'record_attempt':{'design_id','attempt_id','status','reason'},'record_sensation':{'attempt_id','text'}}
         if action not in fields or set(command)!={'action','command_id','expected_version'}|fields[action]:
             raise ValueError('Unsupported session command fields')
@@ -191,6 +202,13 @@ class SessionController:
             operation,parameters,binding=prepare(state,action,c)
             self._launch(state,operation,parameters,c['command_id'])
             state['pending']['source_binding']=binding
+        elif action in ('declare_control_binding','forecast_control','score_control','record_control_attempt'):
+            from .session_control import prepare
+            launch=prepare(state,action,c)
+            if launch:
+                operation,parameters,binding=launch
+                self._launch(state,operation,parameters,c['command_id'])
+                state['pending']['control_binding']=binding
         elif action=='register_model':
             if state['pending']:
                 raise ValueError('Collect outstanding job before registering a model')
@@ -341,6 +359,9 @@ class SessionController:
             if operation in ('freeze_visual_forecast','score_visual_forecast'):
                 from .session_visual import collect
                 collect(state,pending,status['status'],result)
+            if operation in ('forecast_control_pcm','score_control_pcm'):
+                from .session_control import collect
+                collect(state,pending,status['status'],result)
             if operation=='rank_lidar_hypotheses':
                 from .session_lidar import collect
                 collect(state,pending,status['status'],result)
@@ -417,7 +438,11 @@ class SessionController:
             if operation=='update_pcm':
                 state['attempts'].append({'attempt_id':pending['request']['parameters']['observation_id'],
                     'status':status['status'],'job_id':c['job_id'],'scientific_status':result.get('status') if result else None})
-            state['jobs'].append({**pending,'status':status['status'],'error':status.get('error'),'result':result})
+            record={**pending,'status':status['status'],'error':status.get('error'),'result':result}
+            if pending.get('control_binding'):
+                from .session_control import job_record
+                record=job_record(record)
+            state['jobs'].append(record)
             state['pending']=None
         elif action=='record_attempt':
             if c['status'] not in ('stopped','failed') or not isinstance(c['reason'],str) or not 1<=len(c['reason'])<=2000:
@@ -444,5 +469,8 @@ class SessionController:
             invalidate_stale(state)
         if state.get('source_model'):
             from .session_source import invalidate_stale
+            invalidate_stale(state)
+        if state.get('control_forecasts'):
+            from .session_control import invalidate_stale
             invalidate_stale(state)
         return {'command_id':c['command_id'],'input_sha256':_hash(c)}

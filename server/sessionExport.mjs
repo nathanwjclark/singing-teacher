@@ -243,6 +243,52 @@ export function createSessionExportRoutes({dataRoot, json, fetchImpl = fetch, en
           missing.push({source, reason: error.code === 'ENOENT' ? 'Completed score recomputation receipt or report is missing' : 'Latest score recomputation report is invalid, unbound to its receipt or exceeds the export size; excluded'});
         }
       }
+      const boundControl = new Set();
+      for (const attemptId of await folders(prefix + '/control-attempts')) {
+        const folder = `${prefix}/control-attempts/${attemptId}`, source = folder + '/result.json';
+        if (artifacts.length >= MAX_FILES) { missing.push({source, reason: 'Artifact count limit reached'}); break; }
+        let artifact;
+        try { artifact = await read(source); }
+        catch (error) {
+          if (error.code !== 'ENOENT') { missing.push({source, reason: 'Cue-execution receipt is unreadable or exceeds the export size; excluded'}); continue; }
+          // A refusal before any session command (no intent) changed nothing; an attempt that
+          // reached the session but saved no receipt is recorded as missing.
+          try { await read(folder + '/intent.json'); missing.push({source, reason: 'Not recorded'}); }
+          catch (intent) { if (intent.code !== 'ENOENT') missing.push({source, reason: 'Not recorded'}); }
+          continue;
+        }
+        try {
+          const result = artifact.data;
+          if (result.sessionId !== sessionId) continue;
+          const forecast = state?.control_forecasts?.[result.forecastId], binding = state?.control_bindings?.[result.bindingId];
+          const operation = {forecast: 'forecast_control_pcm', score: 'score_control_pcm', stop: 'record_control_attempt'}[result.phase];
+          const receipt = state?.control_receipts?.find(row => row.operation === operation && row.forecast_id === result.forecastId && (result.phase === 'stop' || row.job_id === result.jobId));
+          // A committed forecast binds to its sealed artifact; a rejected or failed one binds to its ledger receipt by job.
+          const bound = Boolean(receipt) && receipt.status === result.status && receipt.binding_id === result.bindingId
+            && (result.phase === 'forecast' ? (result.result ? isDeepStrictEqual(forecast?.artifact, result.result) : !receipt.forecast_sha256)
+              : result.phase === 'score' ? isDeepStrictEqual(receipt.result, result.result ?? null) : receipt.reason === result.reason);
+          const identity = result.phase + ':' + (result.jobId || result.forecastId);
+          if (!bound || !binding || boundControl.has(identity) || result.deliveredCue !== binding.cue.wording
+            || result.modelUpdated !== false || !knownModels.has(result.baselineModelId)) throw Error('Unbound or duplicate cue-execution receipt');
+          let originalBytesVerified = false;
+          if (result.phase === 'score' && result.result) {
+            // The retained original manifest and every audio file it lists must hash to values the scored receipt carries.
+            const directory = folder + '/original', hashes = result.result.artifact.observation_hashes;
+            const manifest = await read(`${directory}/manifest.json`), samples = manifest.data.audio?.samples || [];
+            if (manifest.sha256 !== result.source_manifest_sha256 || !hashes.includes(manifest.sha256) || !samples.length) throw Error('Changed original control capture');
+            for (const sample of samples) {
+              const path = sample.artifact?.path;
+              if (typeof path !== 'string' || !/^[A-Za-z0-9._-]{1,160}$/.test(path) || path.startsWith('.')) throw Error('Invalid original audio path');
+              const audio = await digestOriginal(`${directory}/${path}`, 64 * 1024 * 1024);
+              if (audio.sha256 !== sample.artifact.sha256 || !hashes.includes(audio.sha256)) throw Error('Changed original control audio');
+            }
+            originalBytesVerified = true;
+          }
+          boundControl.add(identity);
+          artifacts.push({...artifact, binding: {sessionId, modelId: result.baselineModelId, current: result.baselineModelId === state.snapshot?.model_id,
+            role: 'cue-execution-' + result.phase, bindingId: result.bindingId, originalBytesVerified, modelUpdated: false}});
+        } catch { missing.push({source, reason: 'Cue-execution receipt or original capture does not match the authoritative session; excluded'}); }
+      }
       const summary = {
         modelId: state?.snapshot?.model_id || null,
         sessionVersion: state?.version ?? null,
@@ -255,6 +301,7 @@ export function createSessionExportRoutes({dataRoot, json, fetchImpl = fetch, en
         sourceBankScoreCount: (state?.source_receipts || []).filter(row => row.operation === 'score_phonation_bank').length,
         visualResultCount: artifacts.filter(a => a.binding?.role === 'conditional-visual-annotation-holdout').length,
         motionAnalysisCount: artifacts.filter(a => a.binding?.role === 'conditional-motion-audio-analysis').length,
+        controlScoreCount: (state?.control_receipts || []).filter(row => row.operation === 'score_control_pcm' && row.result).length,
       };
       // Recheck the app pointer after asynchronous collection; never mix two active runs.
       const finalIndex = await read('science-current.json');

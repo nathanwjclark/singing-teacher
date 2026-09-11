@@ -100,3 +100,39 @@ test('optional teaching selection is exact, model-bound and backward compatible'
  const bad=await setup(t,{decide:()=>({action:'record',experimentId:'a',cue:'Sing a comfortable ah.',explanation:'Compare.',demonstrationId:'cricothyroid-pitch',cueId:'small-glide'})});
  assert.equal((await bad.request({requestId:'wrong-cue'})).status,502);assert.equal(bad.commands.length,0);
 });
+
+function cueBinding(vowel,wording){return {cue:{cue_id:'astra-delivered-cue',cue_version:'1',wording,wording_sha256:'0'.repeat(64),mode:'elicited'},
+ context:{capture_context_id:'native-usb-pcm',source_kind:'development-fixture',pitch_hz:180,vowel,level:'comfortable',posture:'not-instructed'},
+ controls:[{control_id:'reference',JA:-3,f0_hz:180},{control_id:'jaw-more-open',JA:-4,f0_hz:180}],gain:4,declared_at:'2026-09-11T00:00:0'+(vowel==='a'?0:1)+'+00:00'};}
+async function withBindings(t,decision){let seen;const s=await setup(t,{decide:args=>{seen=args;return decision;}});
+ s.state.control_bindings={'cue-a':cueBinding('a','Sing an easy ah.'),'cue-e':cueBinding('e','Sing an easy eh.')};s.state.control_forecasts={};s.state.control_receipts=[];
+ return {...s,seen:()=>seen};}
+test('Astra sees bound cue-execution context and a chosen binding delivers its frozen wording verbatim',async t=>{
+ const s=await withBindings(t,{action:'record',experimentId:'a',cue:'A paraphrase of the ah cue.',explanation:'Repeat the matched cue.',cueBindingId:'cue-a'});
+ const decided=await s.request({requestId:'repeat'});assert.equal(decided.status,200);
+ assert.equal(decided.data.decision.cue,'Sing an easy ah.');assert.equal(decided.data.providerCue,'A paraphrase of the ah cue.');assert.equal(decided.data.decision.cueBindingId,'cue-a');
+ const {schema,input}=s.seen();assert.deepEqual(schema.properties.cueBindingId.enum,[null,'cue-a','cue-e']);assert.ok(schema.required.includes('cueBindingId'));
+ assert.deepEqual(input.controlLearning.bindings.map(b=>[b.bindingId,b.deliveredCue]),[['cue-a','Sing an easy ah.'],['cue-e','Sing an easy eh.']]);
+ assert.equal(input.controlLearning.modelUpdated,false);assert.equal(input.controlLearning.minimumMatchedAttempts,3);assert.match(input.controlLearning.scope,/verbatim/);
+ const free=await withBindings(t,{action:'record',experimentId:'a',cue:'Try a new relaxed ah.',explanation:'New wording.',cueBindingId:null});
+ const fresh=await free.request({requestId:'free'});assert.equal(fresh.status,200);assert.equal(fresh.data.decision.cue,'Try a new relaxed ah.');assert.equal(fresh.data.providerCue,undefined);
+});
+test('cue bindings for another vowel, unknown bindings, rest bindings and missing binding fields are rejected',async t=>{
+ for(const decision of [{action:'record',experimentId:'a',cue:'eh',explanation:'wrong vowel',cueBindingId:'cue-e'},
+  {action:'record',experimentId:'a',cue:'ah',explanation:'unknown',cueBindingId:'cue-unknown'},
+  {action:'rest',experimentId:null,cue:'Rest.',explanation:'Rest now.',cueBindingId:'cue-a'},
+  {action:'record',experimentId:'a',cue:'ah',explanation:'missing field'}]){
+  const s=await withBindings(t,decision);const result=await s.request({requestId:'bad'});
+  assert.equal(result.status,502);assert.equal(s.commands.length,0);
+ }
+ const plain=await setup(t);await plain.request({requestId:'plain'});assert.equal(plain.commands.at(-1).action,'select_experiment');
+});
+test('the cue binding choice covers only bindings present in the bounded Astra context',async t=>{
+ const s=await withBindings(t,{action:'record',experimentId:'a',cue:'ah',explanation:'Repeat a binding dropped from context.',cueBindingId:'cue-0'});
+ const long='Sing an easy ah. '+'x'.repeat(400);
+ s.state.control_bindings=Object.fromEntries(Array.from({length:80},(_,i)=>['cue-'+i,{...cueBinding('a',long+i),declared_at:new Date(Date.UTC(2026,8,11,0,0,i)).toISOString()}]));
+ const result=await s.request({requestId:'dropped'});assert.equal(result.status,502);
+ const {schema,input}=s.seen(),visible=input.controlLearning.bindings.map(b=>b.bindingId);
+ assert.equal(input.controlLearning.truncated,true);assert.ok(!visible.includes('cue-0'));assert.ok(visible.includes('cue-79'));
+ assert.deepEqual(schema.properties.cueBindingId.enum,[null,...visible]);
+});
