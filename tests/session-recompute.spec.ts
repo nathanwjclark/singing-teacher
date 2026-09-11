@@ -57,7 +57,8 @@ test('a retained spectral recording is recomputed read-only through the real app
  await science.getByRole('button',{name:'Score latest iPhone capture'}).click();
  await expect.poll(async()=>(await (await request.get('/api/science/outcome')).json()).status,{timeout:180_000,intervals:[2000]}).toBe('succeeded');
  // Everything the recompute must leave untouched, captured after the last scientific action.
- const beforeFiles=await retained(),beforeReplay=await worker(request,result.sessionId);
+ // The worker's replay route is a recovery read, so it runs before the file snapshot.
+ const beforeReplay=await worker(request,result.sessionId),beforeFiles=await retained();
  const update=[...beforeReplay.state.jobs].reverse().find((job:{request:{operation:string}})=>job.request.operation==='update_pcm');
  expect(update.result.objective).toBe('multires-log-spectrum-v1');
  await experiments(page);
@@ -90,9 +91,9 @@ test('a retained spectral recording is recomputed read-only through the real app
  const downloaded=await readFile((await saved.path())!,'utf8');
  expect(JSON.parse(downloaded)).toEqual(report);expect(downloaded).not.toContain('"pcm"');
  // Read-only: the worker ledger, the historical forecast and every retained file are byte-identical.
+ expect(await retained()).toEqual(beforeFiles);
  expect(await worker(request,result.sessionId)).toEqual(beforeReplay);
  expect((await (await request.get('/api/science/status')).json()).result.forecast).toEqual(result.forecast);
- expect(await retained()).toEqual(beforeFiles);
  // The session export carries the bound report with the same separate counts.
  const exported=await (await request.get('/api/session-export')).json();
  const artifact=exported.artifacts.find((item:{binding?:{role:string}})=>item.binding?.role==='read-only-score-recomputation');
