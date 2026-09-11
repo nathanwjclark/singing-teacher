@@ -26,7 +26,7 @@ async function serve(t,options){
  const server=http.createServer(async(req,res)=>{if(!await routes(req,res,new URL(req.url,'http://localhost')))res.end();});server.listen(0,'127.0.0.1');await once(server,'listening');
  t.after(()=>new Promise(resolve=>server.close(resolve)));
  const base=`http://127.0.0.1:${server.address().port}/api/probe/`;
- async function call(action,body){const response=await fetch(base+action,{method:body?'POST':'GET',...(body?{headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{})});return {status:response.status,body:await response.json()};}
+ async function call(action,body){const response=await fetch(base+action,{method:body!==undefined?'POST':'GET',...(body!==undefined?{headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{})});return {status:response.status,body:await response.json()};}
  return {fixture,call,setups:()=>readdir(join(fixture.dataRoot,'probe-setups')).catch(()=>[])};
 }
 // A package that declares measured calibration, characterized processing and typed placement for a device capture.
@@ -67,7 +67,8 @@ test('actual route verifies original calibration, atomically saves setup and rei
 test('a human recording stays ineligible whether a declared-measured package arrives through setup or a private configuration',async t=>{
  const {fixture,call,setups}=await serve(t,device('human-recording'));
  assert.equal((await call('import',{requestId:'import-human'})).status,202);
- let status=await poll(call);assert.equal(status.setup.capture.provenance,'human-recording');assert.equal(status.import.eligible,false);
+ let status=await poll(call);assert.equal(status.setup.capture.provenance,'human-recording');assert.equal(status.import.eligible,false);assert.match(status.fitBlockedReason,/Human recordings cannot be fitted/);
+ assert.match((await call('setup',null)).body.error,/Probe import changed/);
  const refused=await call('setup',declaredMeasured(fixture,status.import.importId));
  assert.equal(refused.status,400);assert.equal(refused.body.error,`Calibration is not eligible: ${DECLARED_CALIBRATION_REASON}`);
  assert.deepEqual(await setups(),[]);await assert.rejects(readFile(join(fixture.dataRoot,'probe-setup-current.json')),{code:'ENOENT'});

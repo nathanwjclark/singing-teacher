@@ -79,6 +79,7 @@ test('browser freezes a probe setup per capture, analyzes after saving and keeps
   await expect(setup).toContainText('Capture: 32345678-1234-1234-1234-123456789abc · human-recording');
   await expect(setup.getByRole('note')).toContainText('A calibration package is declared, not measured');
   await expect(probe).toContainText('Review available; fitting prerequisite not met');
+  await expect(probe).toContainText('Before fitting: Human recordings cannot be fitted until calibration is derived from measurement recordings');
   await expect(setup.getByLabel('Calibration package JSON')).toHaveCount(0);
   await withinPhoneWidth(page,setup);await setup.screenshot({path:'test-results/probe-setup-human-mobile.png'});
   expect(failures).toEqual([]);
