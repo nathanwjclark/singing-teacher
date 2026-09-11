@@ -18,7 +18,7 @@ from urllib.request import Request, build_opener, ProxyHandler, HTTPRedirectHand
 
 from singing_physics.engine import digest, write_json
 from singing_physics.pcm_inverse import FEATURES
-from singing_physics.pcm_spectral import SPECTRAL_OBJECTIVE, extract_spectral, validate_observation
+from singing_physics.pcm_spectral import COARSE_OBJECTIVE, SPECTRAL_OBJECTIVE, objective_policy, extract_spectral, validate_observation
 from singing_physics.service import JobService, canonical
 from singing_physics.session import SessionController
 from science.scripts.model_space_diff import pair
@@ -142,12 +142,13 @@ def spectral_trials(data, output, trials):
         validate_observation(trial)
     return result
 
-def pipeline(data, output, backend, session_id):
+def pipeline(data, output, backend, session_id, *, objective=COARSE_OBJECTIVE):
     """Run already imported canonical evidence through the authoritative session."""
+    objective_policy(objective)
     protocol={'selection':'Earliest two full-descriptor voiced windows; periodicity >= .85, dbfs > -60, pitch65..1000, no clipping/invalid/low-snr',
         'pose_assumption':'Prompted comfortable ah treated as a; phonetics not independently verified',
         'anatomy_bounds':{'hard_palate_length':[3.8,5.1],'lip_width':[.5,1.5]},'gains':[1.,4.,16.],'JA':-3.,
-        'search_budget':60,'search_rounds':1,'seed':7,'objective':SPECTRAL_OBJECTIVE,
+        'search_budget':60,'search_rounds':1,'seed':7,'objective':objective,
         'spectral_nuisance':'Per-resolution shape normalization; separate bounded ±24 dB gain and ±6 dB/octave empirical tilt; no calibrated room response',
         'forecast_conditions':'Library a/e/i at JA=-3, F0=180Hz, gain=4; simulator conditions, not observed execution',
         'claim':'Conditional research hypotheses. No identified anatomy, microphone/room calibration, muscle tension or tissue mechanics.'}
@@ -159,7 +160,8 @@ def pipeline(data, output, backend, session_id):
             eligible.append(trial)
     trials=eligible[:2]
     if len(trials)<2: raise ValueError('No two eligible voice windows; import retained, no fitting performed')
-    trials=spectral_trials(data,output,trials)
+    if objective == SPECTRAL_OBJECTIVE:
+        trials=spectral_trials(data,output,trials)
     document={'schema_version':'0.1.0','kind':'canonical_pcm_observations','trials':trials}
     write_json(output/'observations.json',document)
     nuisance=[{'profile_id':f'gain-{gain:g}','trials':{t['id']:{'JA':-3.,'f0_hz':next(x['value'] for x in t['measurement']['measurements'] if x['name']=='pitchHz'),'gain':gain} for t in trials}} for gain in protocol['gains']]
@@ -288,7 +290,8 @@ def cancel_owned_jobs(backend,run_id):
     return report
 
 
-def run(source,output,*,development_fixture=False):
+def run(source,output,*,development_fixture=False,objective=COARSE_OBJECTIVE):
+    objective_policy(objective)
     output.mkdir(parents=True,exist_ok=False,mode=0o700)
     session_id='live-'+hashlib.sha256(str(output.resolve()).encode()).hexdigest()[:24]
     args=['node','--experimental-strip-types',str(ROOT/'science/scripts/import_native_pcm.ts'),str(source),str(output/'import'),'local-participant',session_id,'a']
@@ -297,7 +300,7 @@ def run(source,output,*,development_fixture=False):
     data=json.loads((output/'import/native-pcm.json').read_text())
     with backend_for(output,session_id) as backend:
         try:
-            summary=pipeline(data,output,backend,session_id)
+            summary=pipeline(data,output,backend,session_id,objective=objective)
         except BaseException as exc:
             report={'status':'interrupted','reason':str(exc),'time':now()}
             try: report['cleanup']=cancel_owned_jobs(backend,output.name)
@@ -321,10 +324,12 @@ def run(source,output,*,development_fixture=False):
 
 if __name__=='__main__':
     p=argparse.ArgumentParser(description=__doc__);p.add_argument('--source',type=Path,required=True);p.add_argument('--output',type=Path,required=True)
-    p.add_argument('--development-fixture',action='store_true');a=p.parse_args()
+    p.add_argument('--development-fixture',action='store_true')
+    p.add_argument('--objective',choices=[COARSE_OBJECTIVE,SPECTRAL_OBJECTIVE],default=COARSE_OBJECTIVE)
+    a=p.parse_args()
     try:
         with interruption_signals():
-            run(a.source.resolve(),a.output.resolve(),development_fixture=a.development_fixture)
+            run(a.source.resolve(),a.output.resolve(),development_fixture=a.development_fixture,objective=a.objective)
     except Exception as e:
         if a.output.exists():write_json(a.output/'failure.json',{'status':'failed','error':str(e),'time':now()})
         raise
