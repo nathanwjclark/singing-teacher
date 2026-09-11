@@ -6,6 +6,8 @@ import { defineConfig } from '@playwright/test';
 const port = 5190;
 export default defineConfig({
   testDir: './tests',
+  // A CI retry is reported as flaky rather than hidden; local runs never retry.
+  retries: process.env.CI ? 1 : 0,
   use: { baseURL: `http://127.0.0.1:${port}`, browserName: 'chromium', channel: 'chrome' },
   webServer: {
     command: 'rm -rf .local-e2e-data && npm run build && node server/local.mjs',
