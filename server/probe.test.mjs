@@ -4,6 +4,7 @@ import {mkdtemp,writeFile,readFile,rm,mkdir} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {Readable} from 'node:stream';
+import {execFileSync} from 'node:child_process';
 import {createProbeRoutes} from './probe.mjs';
 
 test('probe routes reject remote use and report interrupted work without fabricated acceptance',async()=>{
@@ -42,11 +43,36 @@ test('server restart automatically resumes saved fit folder and manual retry pre
   assert.equal(calls[0].at(-1),'original');assert.ok(calls[0].includes(folder));
   await call('/api/probe/status');assert.equal(calls.length,1);
   release();
-  for(let i=0;i<50&&JSON.parse(await readFile(join(dataRoot,'probe-current.json'))).running;i++)await new Promise(r=>setTimeout(r,5));
+  for(let i=0;i<1000&&JSON.parse(await readFile(join(dataRoot,'probe-current.json'))).running;i++)await new Promise(r=>setTimeout(r,5));
   await call('/api/probe/fit','POST',JSON.stringify({requestId:'retry',importId:'import',expectedModelId:'newer'}));
   assert.equal(reply.status,202);assert.equal(calls.length,2);
   assert.equal(calls[1].at(-1),'original');assert.ok(calls[1].includes(folder));
   release();
-  for(let i=0;i<50&&JSON.parse(await readFile(join(dataRoot,'probe-current.json'))).running;i++)await new Promise(r=>setTimeout(r,5));
+  for(let i=0;i<1000&&JSON.parse(await readFile(join(dataRoot,'probe-current.json'))).running;i++)await new Promise(r=>setTimeout(r,5));
+ }finally{await rm(dataRoot,{recursive:true,force:true});}
+});
+
+test('a job that finishes during a status request is reported busy, not idle with files read while it ran',async()=>{
+ const dataRoot=await mkdtemp(join(tmpdir(),'probe-finish-'));
+ try{
+  let reply,release;
+  const routes=createProbeRoutes({repo:process.cwd(),dataRoot,json:(_res,status,body)=>{reply={status,body};},
+   runProcess:()=>new Promise(resolve=>{release=resolve;})});
+  const call=async(path,method='GET',body='')=>{
+   const req=Readable.from(body?[body]:[]);req.method=method;req.socket={remoteAddress:'127.0.0.1'};req.headers={host:'localhost:5173'};
+   await routes(req,{},new URL(path,'http://localhost:5173'));return reply;
+  };
+  assert.equal((await call('/api/probe/import','POST',JSON.stringify({requestId:'first'}))).status,202);
+  // The status route reads science-current.json after the import files; a FIFO holds that read
+  // open until the job has finished and saved its state.
+  execFileSync('mkfifo',[join(dataRoot,'science-current.json')]);
+  const pending=call('/api/probe/status');
+  release();
+  for(let i=0;i<1000&&JSON.parse(await readFile(join(dataRoot,'probe-current.json'))).running;i++)await new Promise(r=>setTimeout(r,5));
+  await new Promise(r=>setTimeout(r,20));
+  await writeFile(join(dataRoot,'science-current.json'),'{}');
+  const status=await pending;
+  assert.equal(status.status,200);assert.equal(status.body.busy,true);assert.equal(status.body.canFit,false);
+  assert.equal(JSON.parse(await readFile(join(dataRoot,'probe-current.json'))).error,null);
  }finally{await rm(dataRoot,{recursive:true,force:true});}
 });

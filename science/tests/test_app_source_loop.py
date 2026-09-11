@@ -10,7 +10,6 @@ import hashlib
 import json
 import os
 from pathlib import Path
-import socket
 import subprocess
 import sys
 import threading
@@ -19,6 +18,7 @@ import urllib.error
 import urllib.request
 import zipfile
 
+from app_port import listening_port
 from singing_physics.engine import Engine
 from singing_physics.http_service import ScientificHTTPServer
 from singing_physics.phonation import synthesize_phonation
@@ -53,7 +53,7 @@ http.createServer(async(req,res)=>{try{const url=new URL(req.url,'http://localho
   for(const route of routes)if(await route(req,res,url))return;
   if(url.pathname.startsWith('/api/science/'))return proxy(req,res);
   json(res,404,{error:'No test route'});
-}catch(e){json(res,500,{error:e.message})}}).listen(Number(process.env.PORT),'127.0.0.1');
+}catch(e){json(res,500,{error:e.message})}}).listen(Number(process.env.PORT),'127.0.0.1',function(){console.log('App: http://127.0.0.1:'+this.address().port)});
 """
 
 
@@ -97,13 +97,11 @@ def app_runtime(tmp_path, bootstrap):
     root = Path(__file__).parents[2]
     data = tmp_path / 'app'
     data.mkdir(exist_ok=True)
-    with socket.socket() as sock:
-        sock.bind(('127.0.0.1', 0))
-        port = sock.getsockname()[1]
+    port = None
     with ScientificHTTPServer(tmp_path / 'worker', 't' * 48, port=0) as worker:
         thread = threading.Thread(target=worker.serve_forever, daemon=True)
         thread.start()
-        env = {**os.environ, 'PORT': str(port), 'LOCAL_DATA_DIR': str(data),
+        env = {**os.environ, 'PORT': '0', 'LOCAL_DATA_DIR': str(data),
             'SINGING_PYTHON': sys.executable,
             'SCIENCE_URL': f'http://127.0.0.1:{worker.server_port}',
             'SCIENCE_TOKEN': 't' * 48, 'PHONATION_SOURCE_ENABLED': '1'}
@@ -136,15 +134,17 @@ def app_runtime(tmp_path, bootstrap):
                     process.wait()
 
         def restart(enabled=True, source_repo=None):
-            nonlocal process
+            nonlocal process, port
             stop()
             env['PHONATION_SOURCE_ENABLED'] = '1' if enabled else '0'
             if source_repo is None:
                 env.pop('SOURCE_TEST_RUNNER_REPO', None)
             else:
                 env['SOURCE_TEST_RUNNER_REPO'] = str(source_repo)
+            offset = (tmp_path / 'app.log').stat().st_size
             process = subprocess.Popen(['node', '--input-type=module', '-e', bootstrap],
                 cwd=root, env=env, stdout=log, stderr=log)
+            port = listening_port(process, tmp_path / 'app.log', offset)
             for _ in range(100):
                 try:
                     call('/api/science/health')

@@ -1,6 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtemp,mkdir,writeFile,rm} from 'node:fs/promises';
+import {mkdtemp,mkdir,writeFile,readFile,rm,unlink,lstat,open} from 'node:fs/promises';
+import {execFileSync} from 'node:child_process';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {createAstraReviewRoutes} from './astraReview.mjs';
@@ -13,6 +14,9 @@ test('Review remains capture-bound; later outcomes preserve original fit provena
  }});
  const request=async(method='GET',remote='127.0.0.1')=>{await handler({method,socket:{remoteAddress:remote}},{},new URL('http://localhost/api/astra-review'));return result};
  const settle=()=>new Promise(resolve=>setTimeout(resolve,30));
+ // The route exposes no completion hook, so wait on observable state instead of a fixed
+ // sleep: a loaded runner can take longer than one settle() to finish a review.
+ const until=async check=>{for(let attempt=0;attempt<200;attempt++){if(await check())return;await settle()}throw Error('Timed out waiting for the review')};
  try{
   await mkdir(run,{recursive:true});await write(join(dir,'science-current.json'),{status:'succeeded',runId});
   await write(join(run,'summary.json'),{status:'succeeded',sourceCaptureId:'first',forecast:{rankings:[{predictions:[{canonical:{measurement:{measurements:[{name:'pitchHz',value:220,unit:'Hz'}]}}}]}]}});
@@ -23,8 +27,10 @@ test('Review remains capture-bound; later outcomes preserve original fit provena
   await write(join(dir,'native-pull-latest.json'),{captureId:'second',sha256:'two'});release();await settle();assert.equal((await request()).body.status,'waiting');
   await mkdir(join(run,'outcomes','outcome-test'),{recursive:true});await write(join(run,'outcome-current.json'),{status:'succeeded',outcomeId:'outcome-test'});
   await write(join(run,'outcomes','outcome-test','summary.json'),{status:'ineligible',sourceCaptureId:'second',modelUpdated:false,reasons:['Insufficient audio']});
-  assert.equal((await request()).body.status,'ready');release=null;await request('POST');while(!release)await settle();
-  assert.equal(JSON.parse(payload.input).sourceCaptureId,'first');assert.equal(JSON.parse(payload.input).scoredOutcome.sourceCaptureId,'second');release();await settle();
+  assert.equal((await request()).body.status,'ready');release=null;
+  // A POST that arrives while the superseded review is still finishing is answered without starting a new one.
+  await until(async()=>{if(!release)await request('POST');return release});
+  assert.equal(JSON.parse(payload.input).sourceCaptureId,'first');assert.equal(JSON.parse(payload.input).scoredOutcome.sourceCaptureId,'second');release();await until(async()=>(await request()).body.status!=='running');
   assert.equal((await request()).body.status,'complete');await write(join(dir,'native-pull-latest.json'),{captureId:'second',sha256:'two',receivedAt:'later'});assert.equal((await request()).body.status,'complete');await request('POST');assert.equal(calls,2);
  }finally{await rm(dir,{recursive:true,force:true})}
 });
@@ -45,5 +51,30 @@ test('Reset erases the review durably and wins against an in-flight completion',
   handler=make();assert.equal((await request()).body.status,'dismissed');assert.equal((await request()).body.canReview,false);
   await write(join(dir,'native-pull-latest.json'),{captureId:'first',sha256:'one',receivedAt:'later'});assert.equal((await request()).body.status,'dismissed');
   await write(join(dir,'native-pull-latest.json'),{captureId:'second',sha256:'two'});assert.equal((await request()).body.status,'waiting');await write(join(run,'summary.json'),{status:'succeeded',sourceCaptureId:'second'});assert.equal((await request()).body.status,'ready');
+ }finally{await rm(dir,{recursive:true,force:true})}
+});
+
+test('a review that finishes while its record is being read is reported running, not interrupted',async()=>{
+ const dir=await mkdtemp(join(tmpdir(),'astra-finish-test-'));const runId='run-finish';const run=join(dir,'science-runs',runId);
+ const write=(path,value)=>writeFile(path,JSON.stringify(value));let result,release;
+ const handler=createAstraReviewRoutes({dataRoot:dir,apiKey:()=>'test-key',json:(_,status,body)=>{result={status,body}},fetchApi:async()=>{
+   await new Promise(resolve=>{release=resolve});return {ok:true,json:async()=>({status:'completed',id:'response-finish',output:[{content:[{type:'output_text',text:'A conditional practice suggestion.'}]}]})};
+ }});
+ const request=async(method='GET')=>{await handler({method,socket:{remoteAddress:'127.0.0.1'}},{},new URL('http://localhost/api/astra-review'));return result};
+ try{
+  await mkdir(run,{recursive:true});await write(join(dir,'science-current.json'),{status:'succeeded',runId});
+  await write(join(run,'summary.json'),{status:'succeeded',sourceCaptureId:'first'});await write(join(dir,'native-pull-latest.json'),{captureId:'first',sha256:'one'});
+  await request('POST');for(let i=0;i<200&&!release;i++)await new Promise(r=>setTimeout(r,10));
+  const index=join(dir,'astra-review.json'),stale=await readFile(index,'utf8');
+  // Hold the view's read open on a FIFO while the review completes and saves its result.
+  await unlink(index);execFileSync('mkfifo',[index]);
+  const pending=request();const writer=await open(index,'w');
+  release();
+  for(let i=0;i<1000&&!(await lstat(index)).isFile();i++)await new Promise(r=>setTimeout(r,5));
+  assert.equal(JSON.parse(await readFile(index,'utf8')).status,'complete');
+  await new Promise(r=>setTimeout(r,20));
+  await writer.write(stale);await writer.close();
+  assert.equal((await pending).body.status,'running');
+  assert.equal((await request()).body.status,'complete');
  }finally{await rm(dir,{recursive:true,force:true})}
 });

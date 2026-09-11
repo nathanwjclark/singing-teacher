@@ -25,7 +25,7 @@ test('demo stops capture and shows ranked physical cues', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Your view' })).toBeVisible();
   await page.getByRole('button', { name: 'Demo', exact: true }).click();
   await expect(page.getByText('Give the vowel room.')).toBeVisible();
-  await expect(page.locator('.coaching-tips li')).toHaveCount(3);
+  await expect(page.locator('.coaching-tips li:not(.astra-review-card)')).toHaveCount(3);
   await expect(page.getByText('Demo · camera is off')).toBeVisible();
   await page.screenshot({ path: 'test-results/studio-desktop.png', fullPage: true });
   await page.getByRole('button', { name: 'Exit demo' }).click();

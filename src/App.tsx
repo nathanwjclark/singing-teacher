@@ -46,7 +46,7 @@ import './App.css'
 const demoFrame: TrackingFrame = {
   face: Array.from({ length: 478 }, () => ({ x: .5, y: .5 })),
   pose: Array.from({ length: 33 }, () => ({ x: .5, y: .5, visibility: 1 })),
-  metrics: { mouthOpen: .09, headTilt: 12, shoulderTilt: 9, brightness: 140, motion: .01 }, timestamp: 0,
+  metrics: { mouthOpen: .15, headTilt: 12, shoulderTilt: 9, brightness: 140, motion: .01 }, timestamp: 0,
 }
 
 const demoScenarios: { name: string; title: string; detail: string; metrics: Partial<Metrics> }[] = [

@@ -66,7 +66,7 @@ with tempfile.TemporaryDirectory() as temp:
   print('native-outcome-controller-update-replay-passed')
 `
  for (const rate of [44100,48000]) {
- const output = execFileSync(process.env.OUTCOME_PYTHON ?? 'python3', ['-c', script], { encoding: 'utf8', timeout: 90000, env: { ...process.env, OUTCOME_TEST_RATE: String(rate), OUTCOME_NODE: process.execPath, OUTCOME_SCRIPT: resolve('science/scripts/import_singing_outcome.ts') } })
+ const output = execFileSync(process.env.OUTCOME_PYTHON ?? resolve('science/.venv/bin/python'), ['-c', script], { encoding: 'utf8', timeout: 90000, env: { ...process.env, PYTHONPATH: [resolve('.'), resolve('science/src'), process.env.PYTHONPATH].filter(Boolean).join(':'), OUTCOME_TEST_RATE: String(rate), OUTCOME_NODE: process.execPath, OUTCOME_SCRIPT: resolve('science/scripts/import_singing_outcome.ts') } })
  assert.match(output, /native-outcome-controller-update-replay-passed/)
  console.log(`${rate}: ${output.trim()}`)
  }

@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdtemp, writeFile, readFile, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { createHash } from 'node:crypto'
 import { makeFixture } from '../../scripts/import-acoustic-probe.test.ts'
 import { importProbeScience } from './import_probe_science.ts'
@@ -105,7 +105,7 @@ with Engine() as e:
     assert result['identifiability'] == 'not_established'
     print(json.dumps({'status': result['status'], 'calls': result['actual_operator_calls'], 'probe_discrepancies': [r['probe_discrepancy'] for r in result['joint']['candidates']]}))
 `
-  const output = execFileSync(process.env.PROBE_PYTHON ?? 'python3', ['-c', code], { encoding: 'utf8', timeout: 60000, env: { ...process.env, PROBE_NODE: process.execPath, PROBE_BRIDGE_DOCUMENT: join(out, 'probe-science-document.json'), PROBE_FIXTURE_TEST: process.env.PROBE_FIXTURE_TEST ?? join(process.cwd(), 'science/tests/test_probe_inverse.py') } })
+  const output = execFileSync(process.env.PROBE_PYTHON ?? resolve('science/.venv/bin/python'), ['-c', code], { encoding: 'utf8', timeout: 60000, env: { ...process.env, PYTHONPATH: [resolve('.'), resolve('science/src'), process.env.PYTHONPATH].filter(Boolean).join(':'), PROBE_NODE: process.execPath, PROBE_BRIDGE_DOCUMENT: join(out, 'probe-science-document.json'), PROBE_FIXTURE_TEST: process.env.PROBE_FIXTURE_TEST ?? join(process.cwd(), 'science/tests/test_probe_inverse.py') } })
   assert.match(output, /joint_probe_evidence_used/)
   console.log(output.trim())
 })

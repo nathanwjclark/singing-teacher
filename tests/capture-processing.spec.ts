@@ -23,7 +23,7 @@ test('Studio pull confirmation starts hidden processor and applies verified mode
  await page.getByLabel(/I recorded a comfortable sustained/).check();
  await page.getByRole('button',{name:'Fit and show model changes'}).click();
  await expect(page.locator('.native-pull-button .capture-spinner')).toBeVisible();
- await expect(page.getByRole('status',{name:'Recording processing'})).toContainText(/Fitting|Verifying/);
+ await expect(page.getByRole('status',{name:'Recording processing'})).toContainText('Fitting');
  await expect(page.getByRole('button',{name:'Studio',exact:true})).toHaveAttribute('aria-pressed','true');
  stage='succeeded';
  await expect(page.locator('.model-adjustment-controls summary')).toHaveText('Model applied',{timeout:10000});

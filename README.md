@@ -38,13 +38,16 @@ Use a separate worktree and branch for each feature, as recorded in `AGENTS.md`.
 ## Development and checks
 
 ```sh
-npm run build       # TypeScript check + production build in dist/
+npm run build          # TypeScript check + production build in dist/
 npm run lint
-npm test            # Coaching edge cases and ranking
-npm run test:e2e     # Desktop demo, camera denial, mobile layout
+npm test               # All Node unit and server tests
+npm run test:science   # Python science suite; add `-- -n auto` to run in parallel
+npm run test:e2e       # Browser checks against the real local app server
 ```
 
-Browser tests use locally installed Google Chrome. In a CI environment, run `npx playwright install chrome` first. The ordinary browser tests do not require a webcam or model downloads. Real camera and face detection should also be checked manually before a release.
+`npm test`, `npm run test:science` and the browser checks need the one-time [Python/native setup](science/README.md#setup), because many server tests call the numerical worker. CI runs all five commands on every pull request.
+
+Browser tests use locally installed Google Chrome. Playwright builds the app and starts `server/local.mjs` on port 5190 with a throwaway `.local-e2e-data/` directory and no provider key, so a run never touches your captures or spends API credit. The ordinary browser tests do not require a webcam or model downloads. Five fixture-gated specs skip unless their prepared native evidence is supplied through environment variables. Real camera and face detection should also be checked manually before a release.
 
 `npm run preview -- --host 127.0.0.1` serves only the frontend. The connected scientific app requires its local Node server and Python/native worker; a static `dist/` deployment does not provide those features. Live Astra additionally requires `OPENAI_API_KEY` in the server environment or private `.env`, with finite call limits. Never put that key in browser code or commit it. Numerical fitting remains available without a paid model call. See [Astra integration and verified execution](docs/implementation/ASTRA-INTEGRATION.md).
 

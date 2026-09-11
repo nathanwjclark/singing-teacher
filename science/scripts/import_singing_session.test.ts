@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdtemp, mkdir, writeFile, readFile, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { createHash } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
 import { importSingingSession } from './import_singing_session.ts'
@@ -37,7 +37,7 @@ test('original PCM reaches actual fit and session ingestion payload without fixt
   assert.equal((await stat(out)).mode & 0o777, 0o700)
   assert.equal((await stat(join(out, 'singing-fit-params.json'))).mode & 0o777, 0o600)
   const code = `import json,os\nfrom singing_physics.engine import Engine\nfrom singing_physics.pcm_inverse import fit_pcm\np=json.load(open(os.environ['FIT_INPUT']))\nwith Engine() as e:\n r=fit_pcm(e,p['observations'],candidates=p['candidates'],max_synthesis_calls=p['max_synthesis_calls'],node_binary=os.environ['FIT_NODE'])\n assert r['actual_synthesis_calls']==4, r\n assert len(r['joint']['candidates'])==2\n print(json.dumps({'calls':r['actual_synthesis_calls'],'statuses':[x['status'] for x in r['joint']['candidates']]}))`
-  const output = execFileSync(process.env.SINGING_PYTHON ?? 'python3', ['-c', code], { encoding: 'utf8', timeout: 60000, env: { ...process.env, FIT_NODE: process.execPath, FIT_INPUT: join(out, 'singing-fit-params.json') } })
+  const output = execFileSync(process.env.SINGING_PYTHON ?? resolve('science/.venv/bin/python'), ['-c', code], { encoding: 'utf8', timeout: 60000, env: { ...process.env, PYTHONPATH: [resolve('.'), resolve('science/src'), process.env.PYTHONPATH].filter(Boolean).join(':'), FIT_NODE: process.execPath, FIT_INPUT: join(out, 'singing-fit-params.json') } })
   assert.match(output, /"calls": 4/); console.log(output.trim())
   const ingest = `import json,os,tempfile
 from singing_physics.session import SessionController
@@ -51,7 +51,7 @@ with tempfile.TemporaryDirectory() as root:
   assert result['state']['version']==1
   assert controller.execute(command)['state']['version']==1
   print('native48k-session-ingestion-replay-passed')`
-  const ingested = execFileSync(process.env.SINGING_PYTHON ?? 'python3', ['-c', ingest], { encoding: 'utf8', timeout: 60000, env: { ...process.env, SESSION_COMMAND: join(out, 'singing-session-command.json') } })
+  const ingested = execFileSync(process.env.SINGING_PYTHON ?? resolve('science/.venv/bin/python'), ['-c', ingest], { encoding: 'utf8', timeout: 60000, env: { ...process.env, PYTHONPATH: [resolve('.'), resolve('science/src'), process.env.PYTHONPATH].filter(Boolean).join(':'), SESSION_COMMAND: join(out, 'singing-session-command.json') } })
   assert.match(ingested, /ingestion-replay-passed/)
   console.log(ingested.trim())
   await assert.rejects(importSingingSession(f.capture, out, f.configPath), /EEXIST/)

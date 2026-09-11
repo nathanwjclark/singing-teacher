@@ -3,8 +3,15 @@
 `python science/scripts/live_capture_jobs.py --source PRIVATE_NATIVE_CAPTURE
 --output NEW_PRIVATE_RUN` verifies/imports captured LPCM, selects two eligible
 canonical voiced windows under a saved protocol, launches bounded anatomical
-search, freezes supported geometries, commits a prospective vowel design, then
+search, freezes supported geometries, freezes a prospective vowel design, then
 exports the selected model's native geometry and a same-pose reference comparison. It does not score a later outcome.
+The design is committed only when one declared experiment separates every retained
+hypothesis pair at the assumed threshold; otherwise it is frozen as `unsupported`,
+there is no recording decision, and a later capture cannot be scored until an
+experiment is selected explicitly. When all five current palate x lip support points
+score, the design is `unsupported`: experiment a separates its closest pair by 0.017
+standardized RMS (threshold 0.05), and e/i have no predictions for the narrow-lip
+points, whose synthesis is below the extractor's signal floor.
 
 When both `SCIENCE_URL` and `SCIENCE_TOKEN` are present, every numerical job and
 session command uses that existing authenticated worker. The URL must be literal

@@ -44,7 +44,7 @@ def main():
     (decisions/'fixture.json').write_text(json.dumps({'status':'succeeded','requestId':'fixture','createdAt':datetime.now(timezone.utc).isoformat(),'completedAt':datetime.now(timezone.utc).isoformat(),'sessionId':session_id,'runId':'run-test','modelId':'baseline','designId':'selected','provider':'seeded-software-fixture','model':'no-live-model-call','decision':{'action':'record','experimentId':'a','cue':'Sing a comfortable ah.','explanation':'Software fixture with a real committed numerical prediction.','demonstrationId':'tongue-jaw-vowels','cueId':None}}))
     token='browser-fixture-token-'+'a'*32;worker=ScientificHTTPServer(str(jobs),token,port=0)
     thread=threading.Thread(target=worker.serve_forever,daemon=True);thread.start()
-    app_port=port();env={**os.environ,'PORT':str(app_port),'HOST':'127.0.0.1','LOCAL_DATA_DIR':str(root),'SCIENCE_URL':f'http://127.0.0.1:{worker.server_port}','SCIENCE_TOKEN':token,'VISUAL_TEACHING_MODEL_ENABLED':'1','VISUAL_TEACHING_AUDIO_ENABLED':'1','OPENAI_ENV_FILE':str(root/'absent.env')}
+    app_port=port();env={**os.environ,'OPENAI_API_KEY':'','OPENAI_ENV_FILE':'/dev/null','PORT':str(app_port),'HOST':'127.0.0.1','LOCAL_DATA_DIR':str(root),'SCIENCE_URL':f'http://127.0.0.1:{worker.server_port}','SCIENCE_TOKEN':token,'VISUAL_TEACHING_MODEL_ENABLED':'1','VISUAL_TEACHING_AUDIO_ENABLED':'1','OPENAI_ENV_FILE':str(root/'absent.env')}
     app=subprocess.Popen(['node','server/local.mjs'],cwd=Path.cwd(),env=env,stdout=subprocess.DEVNULL,stderr=sys.stderr)
     print(json.dumps({'port':app_port}),flush=True)
     try:

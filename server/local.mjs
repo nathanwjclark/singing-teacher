@@ -110,7 +110,7 @@ const serverHandler=async(req,res)=>{try{
 }catch(error){json(res,error.status||500,{error:error.status?error.message:'Local request failed'});if(!error.status)console.error(error.message)}};
 await mkdir(dataRoot,{recursive:true});
 const server=process.env.HTTPS_CERT&&process.env.HTTPS_KEY?https.createServer({cert:await readFile(process.env.HTTPS_CERT),key:await readFile(process.env.HTTPS_KEY)},serverHandler):http.createServer(serverHandler);
-server.listen(port,host,()=>console.log(`Local singing teacher: ${process.env.HTTPS_CERT?'https':'http'}://${host}:${port}`));
+server.listen(port,host,()=>console.log(`Local singing teacher: ${process.env.HTTPS_CERT?'https':'http'}://${host}:${server.address().port}`));
 setInterval(()=>{for(const [id,s] of sessions)if(s.expiresAt<Date.now())sessions.delete(id)},60_000).unref();
 
 if(process.env.DESKTOP_PORT)http.createServer(serverHandler).listen(Number(process.env.DESKTOP_PORT),'127.0.0.1',()=>console.log(`Desktop: http://127.0.0.1:${process.env.DESKTOP_PORT}`));

@@ -22,9 +22,11 @@ export function createAstraReviewRoutes({dataRoot,json,envFile,fetchApi=fetch,ap
     return {receipt,captureKey,runId,summary,eligible,outcome:matchesOutcome?outcome:null,outcomeId:matchesOutcome?outcomeId:null};
   }
   async function view(){
-    const ctx=await context();let stored=await read(file);
+    // Sample the in-flight review before reading its record: one that finishes during the read
+    // leaves a stale 'running' record behind, which is still running, not interrupted.
+    const inFlight=pending,ctx=await context();let stored=await read(file);
     if(stored?.captureKey!==ctx.captureKey)stored=null;
-    if(stored?.status==='running'&&!pending)stored={...stored,status:'error',message:'Review was interrupted. Retry when ready.'};
+    if(stored?.status==='running'&&!inFlight&&!pending)stored={...stored,status:'error',message:'Review was interrupted. Retry when ready.'};
     let key=apiKey();
     if(!key&&process.loadEnvFile){for(const path of [envFile,resolve(dataRoot,'openai.env')].filter(Boolean)){try{process.loadEnvFile(path);key=apiKey();if(key)break}catch{/* Optional private configuration. */}}}
     return {ctx,key,state:stored||{status:!key?'missing-key':ctx.eligible?'ready':'waiting',message:!key?'Set OPENAI_API_KEY in the local server, configured .env, or private .local-data/openai.env.':ctx.eligible?'Model result ready for review.':'Waiting for the model result from the latest phone recording.',captureKey:ctx.captureKey,runId:ctx.runId},canReview:!!key&&ctx.eligible&&stored?.status!=='dismissed'&&!resettingCount};

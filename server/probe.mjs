@@ -36,8 +36,10 @@ export function createProbeRoutes({repo,dataRoot,json,runProcess=execute}) {
   try{local=['127.0.0.1','::1'].includes(remote)&&['localhost','127.0.0.1','[::1]'].includes(new URL(`http://${req.headers.host}`).hostname)&&(!req.headers.origin||new URL(req.headers.origin).host===req.headers.host);}catch{}
   if(!local){json(res,403,{error:'Use this Mac’s localhost page for private probe processing.'});return true;}
   try{
-   const state=await read(stateFile)??{};
-   if(state.running&&!busy){
+   // Sample busy before reading anything: a job that finishes during this request must not be
+   // reported idle alongside files read while it still ran, nor be mistaken for an interrupted one.
+   const running=busy,state=await read(stateFile)??{};
+   if(state.running&&!running&&!busy){
     if(state.operation==='fit'&&id.test(state.fitId??'')&&id.test(state.importId??'')&&typeof state.expectedModelId==='string'){
      await launch(state,true,join(dataRoot,'probe-fits',state.fitId));
     }else{state.running=false;state.error='Probe import was interrupted. Import again in the app; original artifacts were retained.';await save(state);}
@@ -50,11 +52,11 @@ export function createProbeRoutes({repo,dataRoot,json,runProcess=execute}) {
     const profile=await access(join(dataRoot,'probe-fit-profile.json')).then(()=>true).catch(()=>false);
     const resumable=state.fitId&&!fit&&await read(join(dataRoot,'probe-fits',state.fitId,'intent.json'));
     const fitBlockedReason=!imported?.eligible?'Import a probe with verified calibration first.':!currentModelId?'A current scientific model and worker are required.':!profile&&!resumable?'A declared private probe-fit-profile.json is required.':null;
-    json(res,200,{busy,import:imported,fit,measurement,currentModelId,canFit:!busy&&!fitBlockedReason,fitBlockedReason,error:state.error??null});return true;
+    json(res,200,{busy:running||busy,import:imported,fit,measurement,currentModelId,canFit:!running&&!busy&&!fitBlockedReason,fitBlockedReason,error:state.error??null});return true;
    }
    if(req.method!=='POST'||url.pathname.endsWith('/status')){json(res,405,{error:'Method not allowed'});return true;}
    let raw='';for await(const chunk of req){raw+=chunk;if(raw.length>4096)throw Error('Request too large');}
-   const body=JSON.parse(raw);const fitting=url.pathname.endsWith('/fit');
+   let body;try{body=JSON.parse(raw);}catch{throw Error('Invalid JSON request');}const fitting=url.pathname.endsWith('/fit');
    if(!id.test(body.requestId??'')||Object.keys(body).some(k=>!(fitting?['requestId','importId','expectedModelId']:['requestId']).includes(k)))throw Error('Invalid probe request');
    if(fitting&&(!id.test(body.importId??'')||typeof body.expectedModelId!=='string'||body.expectedModelId.length>256))throw Error('Invalid probe fit identity');
    if(busy){json(res,409,{error:'A probe operation is already running'});return true;}
@@ -72,6 +74,10 @@ export function createProbeRoutes({repo,dataRoot,json,runProcess=execute}) {
     ...(fitting?{fitId:operationId}:{importId:operationId,fitId:null})};
    await launch(next,fitting,folder);
    json(res,202,{accepted:true});return true;
-  }catch(error){json(res,400,{error:error instanceof SyntaxError?'Invalid JSON request':error.message});return true;}
+  }catch(error){
+   // A SyntaxError here comes from a saved probe file, never from the request body.
+   if(error instanceof SyntaxError){json(res,500,{error:'A saved probe file could not be read. Import the probe again; original artifacts were retained.'});return true;}
+   json(res,400,{error:error.message});return true;
+  }
  };
 }

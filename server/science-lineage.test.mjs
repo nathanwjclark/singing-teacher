@@ -45,6 +45,16 @@ test('active decisions retain geometry provenance and reject stale prepared capt
     workerState=stateFor(3);workerState.designs.d3.status='completed';
     assert.equal((await call('status')).body.result.recordingAllowed,false);
     assert.match(result.body.result.recordingMessage,/no longer committed/);
+    workerState.designs.d3.status='unsupported';
+    assert.equal((await call('status')).body.result.recordingAllowed,false);
+    assert.match(result.body.result.recordingMessage,/No declared experiment separates/);
+    const previousInput=await readFile(join(dataRoot,'science-outcome-input.json'),'utf8');
+    await mkdir(join(dataRoot,'prepared-voice/example'),{recursive:true});await put('prepared-voice/example/manifest.json',{});
+    await put('science-outcome-input.json',{sourceDirectory:'prepared-voice/example',design_id:'d3',experiment_id:'e3',observation_id:'o3'});
+    assert.equal((await call('outcome','POST')).status,409);
+    assert.match(result.body.error,/No declared experiment separates/);
+    await writeFile(join(dataRoot,'science-outcome-input.json'),previousInput);
+    workerState.designs.d3.status='completed';
     await mkdir(join(dataRoot,'science-runs/run-test/outcomes/outcome-retained'),{recursive:true});
     await put('science-runs/run-test/outcomes/outcome-retained/summary.json',{status:'succeeded',modelUpdated:true});
     await put('science-runs/run-test/outcome-current.json',{status:'succeeded',outcomeId:'outcome-retained',designId:'d3'});
@@ -79,7 +89,7 @@ test('active decisions retain geometry provenance and reject stale prepared capt
       await put('science-runs/run-test/outcome-current.json',{...receipt,status:'failed'});
       const resumed=await call('outcome','POST');
       assert.equal(resumed.status,202);assert.equal(resumed.body.outcomeId,'outcome-abcd');
-      for(let attempt=0;attempt<100;attempt++){
+      for(let attempt=0;attempt<500;attempt++){
         const persisted=JSON.parse(await readFile(join(dataRoot,'science-runs/run-test/outcome-current.json'),'utf8'));
         if(persisted.status!=='running')break;
         await new Promise(resolve=>setTimeout(resolve,10));

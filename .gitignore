@@ -35,3 +35,9 @@ dist-ssr
 .env
 .env.*
 !.env.example
+
+# Throwaway data for the browser-check server
+.local-e2e-data/
+
+# Python bytecode from tests that import scripts/*.py
+__pycache__/

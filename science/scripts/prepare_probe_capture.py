@@ -12,9 +12,15 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def write(path, value):
+    """Publish a new file whole: readers never see it empty or partly written."""
     raw = value if isinstance(value, bytes) else json.dumps(value, allow_nan=False).encode()
-    with os.fdopen(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), 'wb') as target:
+    pending = path.with_name(path.name + '.pending')
+    with os.fdopen(os.open(pending, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), 'wb') as target:
         target.write(raw)
+    try:
+        os.link(pending, path)  # Fails if path exists, as O_EXCL did.
+    finally:
+        os.unlink(pending)
 
 
 def prepare(data_root, output):

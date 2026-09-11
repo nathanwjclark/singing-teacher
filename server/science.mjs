@@ -22,6 +22,7 @@ async function verifyRecording(result,fetchImpl){
     if(!response.ok)throw new Error('Worker unavailable');
     const {state}=await response.json(),design=state?.designs?.[result.designId];
     if(!state?.snapshot||state.snapshot.model_id!==result.modelId||design?.data?.model_id!==state.snapshot.model_id)return blocked('This forecast belongs to an earlier model. Ask Astra for a new recording decision.');
+    if(design.status==='unsupported')return blocked('No declared experiment separates the current model hypotheses, so there is no recording decision. Ask Astra to choose an experiment.');
     if(design.status!=='committed'||design.data.selected_experiment_id!==result.forecast?.selected_experiment_id||design.data.target_observation_id!==result.forecast?.target_observation_id)return blocked('This recording experiment is no longer committed. Ask Astra for a new recording decision.');
     if(state.pending)return blocked('A scientific job is updating this session. Wait for its result before recording.');
     return {...result,recordingAllowed:true,forecastHistorical:false};
@@ -73,7 +74,9 @@ export function scienceRoutes({repo,dataRoot,json,fetchImpl=fetch}) {
       try{const profile=JSON.parse(await readFile(resolve(dataRoot,'tongue-review/live-tip-profile.json'),'utf8'));json(res,200,profile)}catch{json(res,404,{error:'No private tongue profile installed'})}return true;
     }
     if(url.pathname==='/api/science/status'&&req.method==='GET'){
-      const state=await status();if(state.status==='running'&&!running)state.status='interrupted';
+      // Sample the job before reading its record: a job that finishes during the read leaves a
+      // stale 'running' record behind, which is still running, not interrupted.
+      const activeJob=running,state=await status();if(state.status==='running'&&!activeJob&&!running)state.status='interrupted';
       if(state.status==='succeeded'&&state.runId){try{state.result=await activeResult(resolve(dataRoot,'science-runs',state.runId),fetchImpl)}catch{state.status='failed';state.error='Published result unavailable'}}
       json(res,200,state);return true;
     }
@@ -83,6 +86,7 @@ export function scienceRoutes({repo,dataRoot,json,fetchImpl=fetch}) {
       try{const data=await readFile(resolve(dataRoot,'science-runs',run,name));res.writeHead(200,{'Content-Type':types[name.split('.').at(-1)],'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'"});res.end(data)}catch{json(res,404,{error:'Artifact unavailable'})}return true;
     }
     if(url.pathname==='/api/science/outcome'&&['GET','POST'].includes(req.method)){
+      const activeJob=running;
       const current=await status();
       if(current.status!=='succeeded'||!/^run-[A-Za-z0-9-]+$/.test(current.runId||'')){json(res,409,{error:'A completed model run is required'});return true}
       const runDirectory=resolve(dataRoot,'science-runs',current.runId),outcomeIndex=resolve(runDirectory,'outcome-current.json');
@@ -90,7 +94,7 @@ export function scienceRoutes({repo,dataRoot,json,fetchImpl=fetch}) {
       let previous;try{previous=JSON.parse(await readFile(outcomeIndex,'utf8'))}catch{previous={status:'not-run'}}
       if(req.method==='GET'){
         if(previous.designId&&previous.designId!==active.designId){json(res,200,{status:'not-run',designId:active.designId});return true}
-        if(previous.status==='running'&&!running)previous.status='interrupted';
+        if(previous.status==='running'&&!activeJob&&!running)previous.status='interrupted';
         if(previous.status==='succeeded'){
           try{previous.result=JSON.parse(await readFile(resolve(runDirectory,'outcomes',previous.outcomeId,'summary.json'),'utf8'))}
           catch{previous.status='failed';previous.error='Outcome result unavailable'}
