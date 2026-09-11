@@ -34,9 +34,10 @@ Stages in a melody protocol:
 | Retention | Single target note, later session | Hidden | Single note (unchanged) |
 
 **Play reference** is disabled while recording, and **Start attempt recording** is disabled while the
-reference plays, so the reference cannot leak into a capture. Starting a recording or leaving the panel
-stops any playback. Playback that has not started within a second, or that the browser interrupts, is
-reported as a failure and its audio context is closed.
+reference plays, so the reference cannot leak into a capture. While it plays the button reads **Stop
+reference** and ends playback early; leaving the panel also stops it. Playback that has not started
+within a second, or that the browser interrupts, is reported as a failure and its audio context is
+closed.
 Protocols without a melody behave exactly as before; their scores have no `melody` field.
 
 ## Measurement (`anchored-note-changes/1`)
@@ -135,7 +136,8 @@ Sensation reports stay subjective.
   It drives the real app with a generated oscillator microphone through MediaRecorder, decoding and
   scoring: prompted melody (pass), single-note recall (pass), transfer with a 200 ms hum first (pass),
   a wrong second note (scored non-pass), a forgotten last note (failed), then export, reload, hidden
-  transfer assistance, reference playback (Start disabled while it plays), a refused repeated-note
+  transfer assistance, reference playback (Start disabled while it plays; Stop reference ends it and
+  re-enables Start), a refused repeated-note
   declaration and mobile width. It
   fails on any page error and on any console error other than the expected 503 from the routed Astra
   endpoint and the 409 answers for cue memory and session export when no model run exists.

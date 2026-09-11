@@ -49,9 +49,10 @@ test('generated microphone → MediaRecorder → decoded pitch → frozen melody
   await panel.getByLabel('Comfortable target Hz', { exact: true }).fill('196')
   await expect(panel.getByLabel('Declared melody')).toHaveText('G3 0.8 s → B3 0.8 s → A3 0.8 s → G3 0.8 s')
   await panel.getByLabel('Comfortable target Hz', { exact: true }).fill('220')
-  const setupReference = panel.getByRole('button', { name: /^(Play reference|Playing…)$/ })
-  await setupReference.click(); await expect(setupReference).toHaveText('Playing…'); await expect(setupReference).toBeDisabled()
-  await expect(setupReference).toHaveText('Play reference', { timeout: 10_000 }); await expect(setupReference).toBeEnabled()
+  // Reference playback that runs to its end hands the button back by itself.
+  const setupReference = panel.getByRole('button', { name: /^(Play reference|Stop reference)$/ })
+  await setupReference.click(); await expect(setupReference).toHaveText('Stop reference')
+  await expect(setupReference).toHaveText('Play reference', { timeout: 10_000 })
   await page.screenshot({ path: testInfo.outputPath('01-declare-melody.png'), fullPage: false })
   // Unsupported declaration: a repeated note cannot be located in the pitch track, so freezing is refused.
   await panel.getByLabel(/^Note 2 Hz/).fill('220')
@@ -75,12 +76,13 @@ test('generated microphone → MediaRecorder → decoded pitch → frozen melody
     await panel.getByRole('button', { name: 'Save attempt & sensation', exact: true }).click()
     await expect(panel).toContainText('Attempt retained')
   }
-  // The reference must never be recorded: Start is disabled while it plays.
+  // The reference must never be recorded: Start is disabled while it plays, and Stop reference ends it early.
   await panel.getByRole('checkbox', { name: /I will use the frozen context/ }).check()
-  const start = panel.getByRole('button', { name: 'Start attempt recording', exact: true }), practiceReference = practise.getByRole('button', { name: /^(Play reference|Playing…)$/ })
+  const start = panel.getByRole('button', { name: 'Start attempt recording', exact: true }), practiceReference = practise.getByRole('button', { name: /^(Play reference|Stop reference)$/ })
   await expect(start).toBeEnabled(); await practiceReference.click()
-  await expect(practiceReference).toHaveText('Playing…'); await expect(start).toBeDisabled()
-  await expect(practiceReference).toHaveText('Play reference', { timeout: 10_000 }); await expect(start).toBeEnabled()
+  await expect(practiceReference).toHaveText('Stop reference'); await expect(start).toBeDisabled()
+  await practiceReference.click()
+  await expect(practiceReference).toHaveText('Play reference', { timeout: 1_000 }); await expect(start).toBeEnabled()
   await capture(melody, async () => { await expect(practise.getByRole('button', { name: 'Play reference' })).toBeDisabled() })
   await page.screenshot({ path: testInfo.outputPath('02-prompted-melody.png'), fullPage: false })
   await panel.getByRole('combobox', { name: 'Stage', exact: true }).selectOption('recall')
