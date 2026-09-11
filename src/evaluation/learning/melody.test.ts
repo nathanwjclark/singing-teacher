@@ -1,13 +1,13 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { MELODY_HOP_MS, scoreMelody, validateMelody } from './melody.ts'
-import { evaluateLearning, freezeLearningProtocol } from './index.ts'
+import { MELODY_HOP_MS, mirexHit, scoreMelody, validateMelody } from './melody.ts'
+import { compareLearning, evaluateLearning, freezeLearningProtocol } from './index.ts'
 import { exportLearningInterchange, learningInstruction } from '../../experiment/cues/interchange.ts'
 import { CUE_LIBRARY } from '../../experiment/cues/library.ts'
 import type { LearningAttempt, LearningMelody, LearningPitchSample } from '../../experiment/cues/types.ts'
 
 // Synthetic pitch tracks (input data only): one sample every hop, centered at 10 + 20·i ms, content taken at the center.
-const melody: LearningMelody = { policy: 'anchored-note-changes/1', notes: [{hz:220,durationMs:1000},{hz:330,durationMs:1000},{hz:275,durationMs:1000}], rhythmToleranceMs:200, minimumNoteVoicedFraction:.5 }
+const melody: LearningMelody = { policy: 'anchored-note-changes/1', notes: [{hz:220,durationMs:1000},{hz:330,durationMs:1000},{hz:275,durationMs:1000}], rhythmToleranceMs:200, minimumNoteVoicedFraction:.5, maximumBreathMs:250, maximumLeadInVoicedMs:1000 }
 type Part = [hz: number | null, ms: number]
 function track(parts: Part[], { lead = 400, tail = 500 } = {}): LearningPitchSample[] {
   const timeline: Part[] = [[null,lead], ...parts, [null,tail]], total = timeline.reduce((sum,[,ms]) => sum+ms, 0), samples: LearningPitchSample[] = []
@@ -25,7 +25,8 @@ test('a correct performance passes with mir_eval frame metrics and per-note timi
   assert.equal(score.status, 'scored'); assert.equal(score.passed, true); assert.deepEqual(score.failures, [])
   assert.equal(score.anchor, 'note-1'); assert.equal(score.onsetMs, 400); assert.equal(score.errorCents, 0)
   assert.equal(score.transitionErrorMs, 0); assert.equal(score.offsetObserved, true); assert.equal(score.durationErrorMs, 0)
-  assert.deepEqual(score.frames, { referenceVoicedFrames: 150, referenceUnvoicedFrames: 25, rawPitchAccuracy: 1, rawChromaAccuracy: 1, voicingRecall: 1, voicingFalseAlarm: 0 })
+  assert.equal(score.leadInVoicedMs, 0)
+  assert.deepEqual(score.frames, { referenceVoicedFrames: 150, referenceUnvoicedFrames: 45, rawPitchAccuracy: 1, rawChromaAccuracy: 1, voicingRecall: 1, voicingFalseAlarm: 0 })
   assert.deepEqual(score.notes.map(n => [n.observedStartMs, n.voicedFraction]), [[0,1],[1000,1],[2000,1]])
 })
 
@@ -107,18 +108,45 @@ test('phrase ending at the end of audio: offset unknown is neither a failure nor
   assert.equal(censored.durationErrorMs, null); assert.equal(censored.observedDurationMs, 3000); assert.match(censored.reasons.join(), /Phrase end not observed/)
   const shortTail = scoreMelody(melody, track(sung(), { tail: 100 }), 50)
   assert.equal(shortTail.status, 'unusable'); assert.equal(shortTail.offsetObserved, false)
+  // Exclusion never depends on the outcome: a wrong note or an overlong phrase with no observed end is still excluded.
   const wrongAndCensored = scoreMelody(melody, track(sung([220,440,275]), { tail: 0 }), 50)
-  assert.equal(wrongAndCensored.status, 'scored'); assert.equal(wrongAndCensored.passed, false)
+  assert.equal(wrongAndCensored.status, 'unusable'); assert.match(wrongAndCensored.failures.join(), /Note 2: pitch error/)
   const stoppedMidPhrase = scoreMelody(melody, track(sung([220,330],[1000,600]), { tail: 0 }), 50)
   assert.equal(stoppedMidPhrase.status, 'unusable'); assert.equal(stoppedMidPhrase.notes[2].voicedFraction, null); assert.ok(stoppedMidPhrase.missingSamples > 0)
   const heldTooLong = scoreMelody(melody, track(sung(undefined,[1000,1000,1500]), { tail: 0 }), 50)
-  assert.equal(heldTooLong.status, 'scored'); assert.match(heldTooLong.failures.join(), /Phrase lasts at least 3500 ms/)
+  assert.equal(heldTooLong.status, 'unusable'); assert.equal(heldTooLong.observedDurationMs, 3500)
 })
 
-test('vibrato within the note does not break note location or the median pitch criterion', () => {
-  const vibrato = track(sung()).map(s => s.hz ? { ...s, hz: s.hz*2**(40*Math.sin(2*Math.PI*5.5*s.offsetMs/1000)/1200) } : s)
-  const score = scoreMelody(melody, vibrato, 50)
-  assert.equal(score.passed, true); assert.ok(score.errorCents! < 40); assert.ok(score.transitionErrorMs! <= 40)
+test('vibrato is scored by its centre: ±40, ±80 and ±100 cents around the target pass; an off-centre note fails', () => {
+  const vibrato = (extent: number, centre = 0) => track(sung()).map(s => s.hz ? { ...s, hz: s.hz*2**((centre+extent*Math.sin(2*Math.PI*5.5*s.offsetMs/1000))/1200) } : s)
+  for (const extent of [40, 80, 100]) {
+    const score = scoreMelody(melody, vibrato(extent), 50)
+    assert.equal(score.passed, true, `±${extent} cents`); assert.ok(score.errorCents! < 15, `±${extent}: ${score.errorCents}`); assert.ok(score.transitionErrorMs! <= 60)
+  }
+  const flat = scoreMelody(melody, vibrato(80, -60), 50)
+  assert.equal(flat.passed, false); assert.ok(flat.notes.every(n => Math.abs(n.errorCents!-60) < 15))
+})
+
+test('singing before note 1 is reported, counted as voicing false alarm and fails beyond the frozen bound', () => {
+  const hunting: Part[] = Array.from({ length: 6 }, (_,i) => [i % 2 ? 196 : 247, 500] as Part)
+  const hunted = scoreMelody(melody, track([...hunting, ...sung()]), 50)
+  assert.equal(hunted.status, 'scored'); assert.equal(hunted.passed, false); assert.equal(hunted.leadInVoicedMs, 3000)
+  assert.match(hunted.failures.join(), /3000 ms voiced before note 1 was held \(allowed 1000 ms\)/); assert.equal(hunted.frames!.voicingFalseAlarm, 150/195)
+  const retry = scoreMelody(melody, track([...sung([220,330,275].map(hz => hz*2**(200/1200))), [null,400], ...sung()]), 50)
+  assert.equal(retry.passed, false); assert.equal(retry.leadInVoicedMs, 3000)
+  const brief = scoreMelody(melody, track([[196,600], ...sung()]), 50)
+  assert.equal(brief.passed, true); assert.equal(brief.leadInVoicedMs, 600)
+})
+
+test('a breath inside the last note shorter than the frozen allowance keeps the phrase; a longer gap ends it', () => {
+  const breath = scoreMelody(melody, track([...sung([220,330],[1000,1000]), [275,400], [null,240], [275,360]]), 50)
+  assert.equal(breath.passed, true); assert.equal(breath.observedDurationMs, 3000); assert.ok(breath.notes[2].voicedFraction! < 1)
+  const gap = scoreMelody(melody, track([...sung([220,330],[1000,1000]), [275,400], [null,300], [275,300]]), 50)
+  assert.equal(gap.passed, false); assert.equal(gap.observedDurationMs, 2400); assert.match(gap.failures.join(), /Phrase lasts 2400 ms/)
+})
+
+test('raw pitch and chroma accuracy use mir_eval\'s strict 50-cent threshold', () => {
+  assert.equal(mirexHit(49.999), true); assert.equal(mirexHit(50), false); assert.equal(mirexHit(-50), false)
 })
 
 test('melody declarations reject unsupported repeated notes, range, malformed values and ambiguous tolerance', () => {
@@ -128,6 +156,10 @@ test('melody declarations reject unsupported repeated notes, range, malformed va
   assert.throws(() => validateMelody({ ...melody, rhythmToleranceMs: 50 }, 50), /100–500/)
   assert.throws(() => validateMelody({ ...melody, policy: 'fixed-tempo-onset/1' as LearningMelody['policy'] }, 50), /2–8 notes/)
   assert.throws(() => validateMelody(melody, 200), /at most half the smallest adjacent interval \(316 cents\)/)
+  // Semitones entered to 0.01 Hz land a few hundredths of a cent short of 100 and must be accepted.
+  for (const notes of [[{hz:261.63,durationMs:800},{hz:277.18,durationMs:800}],[{hz:220,durationMs:800},{hz:233.08,durationMs:800}]]) assert.doesNotThrow(() => validateMelody({ ...melody, notes }, 50))
+  assert.throws(() => validateMelody({ ...melody, notes: [{hz:220,durationMs:800},{hz:232.9,durationMs:800}] }, 50), /Adjacent notes/)
+  assert.throws(() => validateMelody({ ...melody, maximumBreathMs: 300 }, 50), /breaths of 0–250 ms/)
 })
 
 test('frozen melody: prompted and transfer score the melody, recall stays single note, statuses separate failure from exclusion, export keeps lineage', async () => {
@@ -141,6 +173,14 @@ test('frozen melody: prompted and transfer score the melody, recall stays single
   assert.deepEqual(scores.map(s => [s.status,s.passed]), [['scored',true],['scored',true],['scored',true],['failed',false],['scored',false],['excluded',false]])
   assert.equal(scores[0].melody?.passed, true); assert.equal(scores[1].melody, undefined); assert.equal(scores[1].errorCents, 0)
   assert.match(scores[3].reasons.join(), /Note 3 not sung/); assert.match(scores[5].reasons.join(), /No decoded pitch samples/)
+  // The single-note whole-recording voicing gate must not apply to melodic attempts.
+  const lateSilence = later('late-silence', 'transfer', track(sung([220],[1000]), { tail: 3000 }), 6), padded = later('padded', 'transfer', track(sung(), { lead: 4000, tail: 4000 }), 7)
+  const gated = await evaluateLearning(protocol, [practice, lateSilence, padded])
+  assert.deepEqual(gated.slice(1).map(s => [s.status,s.passed]), [['failed',false],['scored',true]]); assert.match(gated[1].reasons.join(), /Note 2 not sung/); assert.doesNotMatch(gated[1].reasons.join(), /Insufficient voiced audio/)
+  const censored = later('censored', 'transfer', track(sung(), { tail: 0 }), 8), variantPractice = { ...practice, id:'variant-practice', arm:'variant' as const, deliveredWording:protocol.cue.variant }
+  const perArm = [practice, variantPractice, censored, { ...censored, id:'censored-wrong', arm:'variant' as const, pitches:track(sung([220,440,275]), { tail: 0 }) }, { ...transfer, id:'variant-transfer', arm:'variant' as const }]
+  const transferRow = compareLearning(perArm, await evaluateLearning(protocol, perArm)).find(row => row.phase === 'transfer')!
+  assert.deepEqual(transferRow.arms.map(a => [a.arm,a.attempts,a.passed,a.excluded,a.endNotObserved]), [['baseline',1,0,1,1],['variant',2,1,1,1]])
   const stopped = await evaluateLearning(protocol, [practice, { ...forgot, outcome:'stopped', failureReason:'Stopped for discomfort / rest' }])
   assert.deepEqual(stopped[1].reasons, ['Stopped for discomfort / rest'])
   assert.match(learningInstruction(protocol,'baseline','transfer'), /from memory/); assert.doesNotMatch(learningInstruction(protocol,'baseline','transfer'), /220|330|275/)

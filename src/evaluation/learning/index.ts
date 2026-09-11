@@ -34,7 +34,7 @@ export async function evaluateLearning(protocol:LearningProtocol, attempts:Learn
     const melody=protocol.melody&&isMelodic(attempt.phase)?scoreMelody(protocol.melody,attempt.pitches,protocol.toleranceCents):undefined
     const validPitch=attempt.pitches.filter(p=>p.hz!==null&&Number.isFinite(p.hz)&&p.hz>0)
     if(melody?.status==='unusable')reasons.push(...melody.reasons)
-    else if(!melody&&validPitch.length<protocol.minimumVoicedWindows||validPitch.length/Math.max(1,attempt.pitches.length)<protocol.minimumVoicedFraction)reasons.push('Insufficient voiced audio')
+    else if(!melody&&(validPitch.length<protocol.minimumVoicedWindows||validPitch.length/Math.max(1,attempt.pitches.length)<protocol.minimumVoicedFraction))reasons.push('Insufficient voiced audio')
     const errors=validPitch.map(p=>Math.abs(1200*Math.log2(p.hz!/protocol.targetHz))).sort((a,b)=>a-b)
     const middle=Math.floor(errors.length/2)
     const errorCents=errors.length?(errors.length%2?errors[middle]:(errors[middle-1]+errors[middle])/2):null
@@ -46,7 +46,8 @@ export async function evaluateLearning(protocol:LearningProtocol, attempts:Learn
     return {attemptId:attempt.id,status:failed||incomplete?'failed':reasons.length?'excluded':'scored',reasons,errorCents:reasons.length?null:melody?melody.errorCents:errorCents,passed:!reasons.length&&(melody?melody.passed:errorCents!==null&&errorCents<=protocol.toleranceCents),movementAgreement:null,...(melody?{melody}:{})}
   })
 }
+/** Per stage and arm; endNotObserved counts melodic exclusions for an unobserved phrase end so differential exclusion between arms stays visible. */
 export function compareLearning(attempts:LearningAttempt[],scores:LearningScore[]){
   const phases:LearningPhase[]=['prompted','recall','transfer','retention']
-  return phases.map(phase=>({phase,arms:(['baseline','variant'] as LearningArm[]).map(arm=>{const group=attempts.filter(a=>a.phase===phase&&a.arm===arm);const results=group.map(a=>scores.find(s=>s.attemptId===a.id));return {arm,attempts:group.length,passed:results.filter(s=>s?.passed).length,failed:results.filter(s=>s?.status==='failed').length,excluded:results.filter(s=>s?.status==='excluded').length}})}))
+  return phases.map(phase=>({phase,arms:(['baseline','variant'] as LearningArm[]).map(arm=>{const group=attempts.filter(a=>a.phase===phase&&a.arm===arm);const results=group.map(a=>scores.find(s=>s.attemptId===a.id));return {arm,attempts:group.length,passed:results.filter(s=>s?.passed).length,failed:results.filter(s=>s?.status==='failed').length,excluded:results.filter(s=>s?.status==='excluded').length,endNotObserved:results.filter(s=>s?.status==='excluded'&&s.melody?.status==='unusable'&&s.melody.onsetMs!==null&&!s.melody.offsetObserved).length}})}))
 }
