@@ -13,7 +13,7 @@ PYTHONPATH=science/src python science/scripts/recompute_session_score.py \
   --output /path/to/new-recomputation-report
 ```
 
-The output directory must be new. The report and freshly recomputed update are private files. Exit 0 means the recomputed score agrees: `status` is `verified` (the design's scorer pin matches this runtime) or `legacy_version_unverified` (a coarse design sealed before pins existed). Exit 2 means `missing_artifacts`, `missing_media`, `invalid_evidence`, `version_mismatch` or `numerical_disagreement`. A disagreement is never reported as `verified`. The original session and native model state are not saved or altered.
+The output directory must be new. The report and freshly recomputed update are private files. Exit 0 means the recomputed score agrees: `status` is `verified` (the design's scorer pin matches this runtime) or `legacy_version_unverified` (a coarse design sealed before pins existed). Exit 2 means `missing_artifacts`, `missing_media`, `invalid_evidence`, `version_mismatch`, `runtime_unavailable` (Node, extractor or native engine cannot run here) or `numerical_disagreement`. A disagreement is never reported as `verified`. The original session and native model state are not saved or altered.
 
 ## Required originals and integrity boundary
 
@@ -49,10 +49,15 @@ It reuses the existing scorer and dependencies. REP-01 is only partially satisfi
 
 The Scientific session replay panel has **Recompute retained scores**. The local
 server (`server/sessionRecompute.mjs`, mounted in `server/local.mjs`) starts
-`scripts/app_recompute.py`, which captures one authoritative controller replay
-from the worker, checks its canonical event hash chain, and compares up to the
-latest 16 successful scoring operations. It never issues model commands or
-publishes numerical results back into the session. No API model calls or
+`scripts/app_recompute.py`, which reads one authoritative session ledger from the
+worker, checks its canonical event hash chain once, and compares up to the latest
+16 successful scoring operations. It reads through the worker's
+`GET /sessions/<id>/ledger` route (`session.read_ledger`): the session database
+opened read-only (`mode=ro`) in one deferred transaction. Unlike the `state` and
+`replay` session reads, that route never submits a pending job, appends
+`job_dispatched` or registers a model, so the ledger version, events and job
+database stay byte-identical. It never issues model commands or publishes
+numerical results back into the session. No API model calls or
 synthesis are performed.
 
 Supported comparisons:
@@ -75,18 +80,25 @@ job total:
 | matched | `verified`, `legacy_version_unverified` | The recomputed score agrees. `counts.policyVerified` and `counts.legacyVersionUnverified` split pinned from unpinned matches. |
 | failed | `numerical_disagreement`, `invalid_evidence` | The score differs, or the retained evidence is inconsistent (changed frame, digest or binding). |
 | unavailable | `missing_media`, `missing_artifacts` | The original score, frame or receipt is absent. Nothing stands in for it. |
-| unsupported | `version_mismatch`, `unsupported_operation` | The frozen scorer, pin, extractor or runtime differs from this process, or the job is a fit, freeze or synthesis rather than a score. |
+| unsupported | `version_mismatch`, `runtime_unavailable`, `unsupported_operation` | The frozen scorer, pin, extractor or native provenance differs from this process; this computer cannot run the scorer now (no Node, an extractor that fails its evidence-free validation call or times out, a native engine fault); or the job is a fit, freeze or synthesis rather than a score. |
 | skipped | `operation_limit`, `time_limit` | Outside this run's 16-operation or wall-time budget. |
 
-The run is bounded to 16 scoring operations, 240 seconds of admission time, one
-extraction per audio score, zero synthesis and zero geometry calls. The verifier
-leads its own process group; the server stops the group after 300 seconds and the
-verifier ends itself (SIGALRM) at the same deadline. Only one verifier runs at a
-time, also across server restarts: the running record stores the verifier pid and
-start time, and a restarted server reports the attempt as running while that pid
-exists within the deadline, then records its outcome. A private temporary numerical
-directory is removed after execution. Raw replay and PCM are not written into
-downloadable artifacts.
+The run is bounded to 16 scoring operations, one extraction per audio score, zero
+synthesis and zero geometry calls. The verifier arms SIGALRM for 290 seconds before
+its scientific imports and ends there. A scoring row makes at most three 30-second
+extractor calls, so rows start only during the first 190 seconds after process
+start (a 100-second reserve per row); later rows are `skipped` with `time_limit`
+and the report is still written. The verifier leads its own process group, and the
+server stops that group 300 seconds after spawn. It runs with only `PATH`, `HOME`,
+`TMPDIR`, `SCIENCE_URL`, `SCIENCE_TOKEN` and `PYTHONPATH`; provider keys are not
+passed on. It writes no temporary files of its own. Raw replay and PCM are not
+written into downloadable artifacts.
+
+Only one verifier runs at a time, also across server restarts. The running record
+stores the verifier pid, the kernel's start time for that pid (`ps -o lstart=`) and
+the spawn time. A restarted server reports the attempt as running while a process
+with that pid and start time exists within 300 seconds of spawn, then records its
+outcome. A reused pid has a different start time and is not mistaken for it.
 
 Private `replay-verifications/replay-<uuid>/` contains the request, a comparison
 report and a receipt binding the report's SHA-256 and byte length to the run,
@@ -95,10 +107,13 @@ an existing successful report. An interrupted attempt stays historical; a new
 button press creates a fresh attempt without editing the failed evidence. Report
 integrity is rechecked before display. The report download includes hashes,
 numerical comparisons, implementation policy, outcomes and limitations, without
-raw media or credentials. The session export includes the latest report for the
-same run and session as a `read-only-score-recomputation` artifact while it still
-matches its receipt; `binding.current` says whether it was computed against the
-exported ledger.
+raw media or credentials. Reports are capped at 8 MiB. The session export
+includes the latest report for the same run and session as a
+`read-only-score-recomputation` artifact while it still matches its receipt;
+`binding.current` says whether it was computed against the exported ledger. If the
+index names a completed attempt whose receipt or report is absent, changed or
+oversized, the export lists it under `missing`. Never having run a recompute is
+not missing evidence.
 
 Routes: `GET /api/session-recompute/status` and
 `POST /api/session-recompute/run` with `{requestId, maxOperations}`. `requestId` is
@@ -108,10 +123,12 @@ not complete session replay, original capture authenticity, anatomical accuracy 
 human learning effectiveness.
 
 Checks: `science/tests/test_app_recompute.py` (real controller jobs, real HTTP
-worker, spectral and coarse updates, and each outcome from a rehashed altered
-ledger), `server/sessionRecompute.test.mjs` (route, restart single flight, mount in
+worker, spectral and coarse updates, each outcome from a rehashed altered ledger,
+real runtime faults, the row admission window, and a ledger with a pending intent
+that the recompute leaves byte-identical), `server/sessionRecompute.test.mjs`
+(route, restart single flight, pid reuse, verifier environment, mount in
 `server/local.mjs`), `server/sessionExport.test.mjs`, and
 `tests/session-recompute.spec.ts` (run with `npx playwright test -c
-tests/session-recompute.config.ts`: real server and worker, spectral fit and
+tests/session-recompute.config.ts`, also run in CI: real server and worker, spectral fit and
 outcome, recompute from the panel, byte-identical retained files and ledger).
 Evidence source for all of these is `synthetic`; scientific outcome `untested`.
