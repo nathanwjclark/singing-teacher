@@ -8,6 +8,7 @@ from scipy.stats import qmc
 
 from .engine import Engine, finite
 from .pcm_inverse import _hash, fit_pcm
+from .pcm_spectral import COARSE_OBJECTIVE, objective_policy
 
 SUPPORTED_BOUNDS = {"hard_palate_length": (3.8, 5.1), "pharynx_length": (5.7, 7.4), "lip_width": (.5, 1.5)}
 
@@ -28,7 +29,7 @@ class _CountedEngine:
 
 
 def search_pcm(engine: Engine, document, *, anatomy_bounds, nuisance_profiles,
-               max_synthesis_calls=128, rounds=3, seed=1, node_binary=None):
+               max_synthesis_calls=128, rounds=3, seed=1, node_binary=None, objective=COARSE_OBJECTIVE):
     """Search a declared small parameter box without reading held-out data.
 
     All nuisance profiles are evaluated at every proposed anatomy. Each finite
@@ -39,6 +40,7 @@ def search_pcm(engine: Engine, document, *, anatomy_bounds, nuisance_profiles,
         raise ValueError("max_synthesis_calls must be an integer in 1-4096")
     if type(rounds) is not int or not 1 <= rounds <= 8 or type(seed) is not int or not 0 <= seed < 2**32:
         raise ValueError("rounds must be 1-8 and seed an unsigned 32-bit integer")
+    scoring_policy = objective_policy(objective)
     doc, profiles = deepcopy(document), deepcopy(nuisance_profiles)
     if not isinstance(doc, dict) or set(doc) != {"schema_version", "kind", "trials"} or doc.get("schema_version") != "0.1.0" or doc.get("kind") != "canonical_pcm_observations":
         raise ValueError("Only canonical PCM calibration observations are accepted; held-out records must stay separate")
@@ -143,12 +145,12 @@ def search_pcm(engine: Engine, document, *, anatomy_bounds, nuisance_profiles,
                 expected = 2*len(batch)*len(trials)
                 before = counted.calls
                 try:
-                    result = fit_pcm(counted, doc, candidates=candidates, max_synthesis_calls=expected, node_binary=node_binary)
+                    result = fit_pcm(counted, doc, candidates=candidates, max_synthesis_calls=expected, node_binary=node_binary, objective=objective)
                     if counted.calls-before != expected or result["actual_synthesis_calls"] != expected:
                         raise RuntimeError("Native call accounting mismatch")
                     if result["native_provenance"] != native_provenance:
                         raise RuntimeError("Native provenance changed during search")
-                    signature = _hash({"canonical": result["canonical_extractor"], "native": result["native_provenance"]})
+                    signature = _hash({"canonical": result["canonical_extractor"], "native": result["native_provenance"], "objective":result["scoring_policy"]})
                     if operator_signature is not None and signature != operator_signature:
                         raise RuntimeError("Scientific operator changed between search batches")
                     operator_signature, canonical = signature, result["canonical_extractor"]
@@ -208,7 +210,8 @@ def search_pcm(engine: Engine, document, *, anatomy_bounds, nuisance_profiles,
         "evidence_ids": [trial["measurement"]["id"] for trial in trials],
         "identifiability": "not_established", "evaluated_ranges_are_posterior": False,
         "finite_search_support_only": True,
-        "objective_interpretation": "canonical coarse-descriptor discrepancy; not calibrated likelihood",
+        "objective":objective, "scoring_policy":scoring_policy,
+        "objective_interpretation": "Versioned finite-candidate discrepancy; not calibrated likelihood",
         "baseline_interpretation": "same finite nuisance support; repeated baseline calls add no unique exploration",
         "unsupported": ["physiology_identification", "calibrated_posterior", "unknown_room_filter", "unknown_microphone_response"],
         "source_artifact_bytes_verified": False}
