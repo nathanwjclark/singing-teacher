@@ -62,14 +62,16 @@ export function createNeuralTongueTracker(){
    void network.infer(pixels,width,height).then(prediction=>{
     if(closed||epoch!==generation)return;
     failures=0;
+    // A result whose crop lies outside the image is not an observation, and not an abstention either.
+    const outside=()=>{current=arrived=undefined;diagnostic={state:'lost',capability,reason:'Tongue result lies outside the camera image · not used'+(capability==='region'?note:'')};};
     let observation:TongueObservation|undefined;
     if('box' in prediction){
-     if(prediction.box)observation=observationInFrame({trackingMode:'region',box:prediction.box,observedAt:timestamp,confidence:prediction.score},crop);
+     if(prediction.box&&!(observation=observationInFrame({trackingMode:'region',box:prediction.box,observedAt:timestamp,confidence:prediction.score},crop)))return outside();
      diagnostic={state:observation?'tracking':'lost',capability,reason:(observation?'Visible tongue region found · no tip or depth':'No visible tongue region found')+note,score:prediction.score};
     }else{
      const tip=neuralTipObservation(prediction,face,width,height,timestamp);
      if(tip&&reference){tip.lateral-=reference.x;tip.elevation=(tip.elevation??0)-reference.y;tip.extension=(tip.extension??0)-reference.z;}
-     observation=tip&&observationInFrame(tip,crop);
+     if(tip&&!(observation=observationInFrame(tip,crop)))return outside();
      diagnostic={state:tip?'tracking':'lost',capability,reason:tip?'Neural tip detected · depth is a learned estimate':'Neural model cannot identify a visible tip',score:prediction.visibility,margin:prediction.peak};
     }
     arrived={observation,observedAt:timestamp};

@@ -11,11 +11,15 @@ export function resultCurrent(result:{observedAt:number;arrivedAt:number},now:nu
 }
 
 /** Map a crop-normalized observation into frame coordinates with the crop its pixels came from.
- * Clamping removes float round-off at the image edge, so a box stays a valid [0,1] box. */
-export function observationInFrame(o:TongueObservation,crop:Crop):TongueObservation{
- const x=(v:number)=>unit(crop.x+v*crop.width),y=(v:number)=>unit(crop.y+v*crop.height);
- if(o.trackingMode==='region'){const [x1,y1,x2,y2]=o.box,box:[number,number,number,number]=[x(x1),y(y1),x(x2),y(y2)];return {...o,box};}
- return {...o,x:x(o.x),y:y(o.y),tip:o.tip?{...o.tip,x:x(o.tip.x),y:y(o.tip.y)}:undefined};
+ * Float round-off at the image edge is clamped; a point further outside the image (a crop that left the frame)
+ * or a box that collapses is not an observation, so the result is undefined. */
+export function observationInFrame(o:TongueObservation,crop:Crop):TongueObservation|undefined{
+ const inside=(v:number)=>Number.isFinite(v)&&v>=-1e-9&&v<=1+1e-9;
+ const values=o.trackingMode==='region'?[crop.x+o.box[0]*crop.width,crop.y+o.box[1]*crop.height,crop.x+o.box[2]*crop.width,crop.y+o.box[3]*crop.height]:[crop.x+o.x*crop.width,crop.y+o.y*crop.height,...(o.tip?[crop.x+o.tip.x*crop.width,crop.y+o.tip.y*crop.height]:[])];
+ if(!values.every(inside))return;
+ const [a,b,c,d]=values.map(unit);
+ if(o.trackingMode==='region')return c>a&&d>b?{...o,box:[a,b,c,d]}:undefined;
+ return {...o,x:a,y:b,tip:o.tip?{...o.tip,x:c,y:d}:undefined};
 }
 
 /** Express a frame box in a crop's normalized coordinates, clipped to that crop; undefined when they do not overlap. */

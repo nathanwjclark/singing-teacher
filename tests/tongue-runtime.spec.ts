@@ -75,6 +75,9 @@ test('real public detector: continuous region, independent review export, real-s
   for(const r of held)r.box.forEach((v,i)=>expect(v).toBeCloseTo(full[i],6));
   const mapped=[half.x+full[0]*half.width,half.y+full[1]*half.height,half.x+full[2]*half.width,half.y+full[3]*half.height];
   for(const r of fresh)r.box.forEach((v,i)=>expect(v).toBeCloseTo(mapped[i],6));
+  // A crop past the image edge (landmarks outside the frame): no box, no abstention, and the reason says why.
+  await run(w=>{w.crop={x:1.1,y:.2,width:.3,height:.3};});
+  await expect.poll(()=>run(w=>{const c=w.check();return !c.tongue&&c.diagnostic.abstained===false&&c.diagnostic.reason.startsWith('Tongue result lies outside the camera image · not used');}),{timeout:10000}).toBe(true);
   await run(w=>{w.crop={x:0,y:0,width:1,height:1};w.calibrate();});
   await expect.poll(()=>run(w=>{const t=w.check().tongue;return !!t&&(t.observedAt as number)>w.calibratedAt;}),{timeout:10000}).toBe(true);
 
