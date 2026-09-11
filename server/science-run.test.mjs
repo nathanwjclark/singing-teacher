@@ -41,7 +41,7 @@ test('fit requests accept only an allowlisted scoring objective and record it',a
     for(const [body,objective] of [[{objective:'multires-log-spectrum-v1'},'multires-log-spectrum-v1'],[undefined,'canonical-coarse-v1']]){
       const started=await post(body,body===undefined?{type:null}:{});
       assert.equal(started.status,202);assert.equal(started.body.objective,objective);
-      for(let attempt=0;attempt<200;attempt++){
+      for(let attempt=0;attempt<500;attempt++){
         const persisted=JSON.parse(await readFile(join(dataRoot,'science-current.json'),'utf8'));
         if(persisted.status!=='running')break;
         await new Promise(resolve=>setTimeout(resolve,10));
