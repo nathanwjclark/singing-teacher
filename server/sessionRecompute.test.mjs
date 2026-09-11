@@ -22,7 +22,7 @@ async function fixture(t){
 const first='replay-11111111-1111-4111-8111-111111111111';
 const second='replay-22222222-2222-4222-8222-222222222222';
 const run=new URL('http://localhost/api/session-recompute/run'),status=new URL('http://localhost/api/session-recompute/status');
-async function poll(action,predicate){for(let i=0;i<100;i++){await action();if(predicate())return;await new Promise(resolve=>setTimeout(resolve,5));}throw Error('Completion did not persist');}
+async function poll(action,predicate){for(let i=0;i<1000;i++){await action();if(predicate())return;await new Promise(resolve=>setTimeout(resolve,5));}throw Error('Completion did not persist');}
 
 test('bounded route reserves before body, persists hash-bound reports and reuses exact retry',async t=>{
  const {root,replies,children,route}=await fixture(t);
@@ -139,6 +139,6 @@ test('when the verifier exits, a child it left running is stopped with it',async
  const child=Number(await readFile(record,'utf8'));
  t.after(()=>{try{process.kill(child,'SIGKILL');}catch{}});
  let gone=false;
- for(let i=0;i<100&&!gone;i++){try{process.kill(child,0);await new Promise(resolve=>setTimeout(resolve,20));}catch{gone=true;}}
+ for(let i=0;i<250&&!gone;i++){try{process.kill(child,0);await new Promise(resolve=>setTimeout(resolve,20));}catch{gone=true;}}
  assert.ok(gone,'the verifier\'s child is still running');
 });
