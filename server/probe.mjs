@@ -53,7 +53,7 @@ export function createProbeRoutes({repo,dataRoot,json,runProcess=execute}) {
     const setup=await probeSetupStatus(dataRoot,state.importId).catch(()=>({setup:null,capture:null,legacyConfiguration:false,error:'Saved probe setup could not be verified. Reopen setup and verify the original evidence again.'}));
     const profile=imported?.setupId?true:await access(join(dataRoot,'probe-fit-profile.json')).then(()=>true).catch(()=>false);
     const resumable=state.fitId&&!fit&&await read(join(dataRoot,'probe-fits',state.fitId,'intent.json'));
-    const fitBlockedReason=!imported?.eligible?'Complete calibration setup and analyze the probe with verified calibration first.':!currentModelId?'A current scientific model and worker are required.':!profile&&!resumable?'Declare the probe placement and controls in Calibration setup.':null;
+    const fitBlockedReason=setup.capture?.provenance==='human-recording'?'Human recordings cannot be fitted until calibration is derived from measurement recordings; a declared calibration package is not enough.':!imported?.eligible?'Complete calibration setup and analyze the probe with verified calibration first.':!currentModelId?'A current scientific model and worker are required.':!profile&&!resumable?'Declare the probe placement and controls in Calibration setup.':null;
     json(res,200,{busy:running||busy,import:imported,fit,measurement,currentModelId,canFit:!running&&!busy&&!fitBlockedReason,fitBlockedReason,setup,error:state.error??null});return true;
    }
    if(req.method!=='POST'||url.pathname.endsWith('/status')){json(res,405,{error:'Method not allowed'});return true;}
@@ -64,7 +64,7 @@ export function createProbeRoutes({repo,dataRoot,json,runProcess=execute}) {
    if(configuring){
     if(busy){json(res,409,{error:'A probe operation is already running'});return true;}
     let body;try{body=JSON.parse(raw);}catch{throw Error('Invalid JSON request');}
-    if(body.importId!==state.importId)throw Error('Probe import changed; refresh calibration setup');
+    if(body?.importId!==state.importId)throw Error('Probe import changed; refresh calibration setup');
     busy=true;
     try{const setup=await saveProbeSetup({repo,dataRoot,body,runProcess});json(res,200,{saved:true,setup});}
     finally{busy=false;}
