@@ -88,6 +88,8 @@ test('real public detector: continuous region, independent review export, real-s
   await run(w=>{w.showGray();w.resume();});
   await expect.poll(()=>run(w=>{const c=w.check();if(!c.diagnostic.abstained)return false;w.hold();return c.diagnostic.capability;}),{timeout:20000}).toBe('region');
   await page.getByRole('button',{name:'Freeze frame & label tip'}).click();
+  await expect(page.getByText(/^Detection score: no region above threshold \(best 0\.\d\d, uncalibrated\)$/)).toBeVisible();
+  expect(await page.locator('body').innerText()).not.toContain('TongueSAM');
   const downloadPromise=page.waitForEvent('download');await page.getByRole('button',{name:'Export images + labels + predictions'}).click();
   const data=JSON.parse(await readFile((await(await downloadPromise).path())!,'utf8'));
   expect(data.samples).toHaveLength(2);

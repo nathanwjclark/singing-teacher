@@ -10,7 +10,7 @@ const steps = [
   { id: 'profile-left', title: 'Turn gently to one side', instruction: 'Slowly turn your head about 45 degrees. Keep your face in the frame so your cheek and jawline stay visible.' },
   { id: 'profile-right', title: 'Turn to the other side', instruction: 'Turn about 45 degrees the other way. Keep the phone still and let the tracking overlay settle.' },
   { id: 'mouth', title: 'Show the inside of your mouth', instruction: 'Face forward, move a little closer and comfortably open your mouth. Use bright light from in front of you. Do not strain.' },
-  { id: 'tongue', title: 'Show your tongue', instruction: 'With your mouth open, gently extend your tongue. Keep the tip visible. The pink outline shows the visible tongue estimate.' },
+  { id: 'tongue', title: 'Show your tongue', instruction: 'With your mouth open, gently extend your tongue. Keep the tip visible. A pink box marks the visible tongue region when one is found.' },
 ];
 
 export default function PhoneCapturePage() {

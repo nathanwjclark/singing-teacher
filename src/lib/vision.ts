@@ -83,7 +83,7 @@ export async function createVisionEngine(): Promise<VisionEngine> {
           tongueContext.drawImage(video,x*video.videoWidth,y*video.videoHeight,width*video.videoWidth,height*video.videoHeight,0,0,256,256);
           const localFace=landmarks.map(p=>({...p,x:(p.x-x)/width,y:(p.y-y)/height}));
           tongue=trackTongue(tongueContext.getImageData(0,0,256,256).data,256,256,localFace,timestamp,tongueSearch);
-          if(tongue)tongueStatus=tongue.trackingMode==='region'?'TongueSAM visible-region box · no tip or depth':'Neural tongue tip · estimated 3D';
+          if(tongue)tongueStatus=tongue.trackingMode==='region'?'Visible tongue region · no tip or depth':'Neural tongue tip · estimated 3D';
         } else trackTongue(new Uint8ClampedArray(0),0,0,[],timestamp);
       } else trackTongue(new Uint8ClampedArray(0),0,0,[],timestamp);
       const tongueDiagnostic=trackTongue.diagnostics();
