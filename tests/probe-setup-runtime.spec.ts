@@ -1,5 +1,5 @@
 import {test,expect,type Page} from '@playwright/test';
-import {mkdtemp,rm} from 'node:fs/promises';
+import {mkdtemp,rm,writeFile} from 'node:fs/promises';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {createProbeSetupFixture} from './helpers/probe-setup-fixture.mjs';
@@ -41,13 +41,13 @@ test('browser freezes a probe setup per capture, analyzes after saving and keeps
   for(const [key,label] of Object.entries(labels))for(let i=0;i<3;i++)await setup.getByRole('spinbutton',{name:`${label} ${'XYZ'[i]}`,exact:true}).fill(String(first.placement[key as keyof typeof labels][i]));
   await withinPhoneWidth(page,setup);await setup.screenshot({path:'test-results/probe-setup-form-mobile.png'});
   await page.setViewportSize({width:1280,height:900});
-  const save=setup.getByRole('button',{name:'Verify and save calibration setup'});
+  const save=setup.getByRole('button',{name:'Verify and save calibration setup'}),declare=setup.getByRole('checkbox',{name:/^I declare/});
   await expect(save).toBeDisabled();
   await setup.getByLabel('Original calibration evidence files').setInputFiles({name:'calibration-evidence.txt',mimeType:'text/plain',buffer:Buffer.from('incorrect original evidence')});
-  await setup.getByRole('checkbox').check();await save.click();
+  await declare.check();await save.click();
   await expect(setup.getByRole('alert')).toContainText('SHA-256');
   await setup.getByLabel('Original calibration evidence files').setInputFiles(join(first.root,'calibration-evidence.txt'));
-  await setup.getByRole('checkbox').check();await save.click();
+  await declare.check();await save.click();
   await expect(setup).toContainText('Calibration setup saved');
   // Saving starts the analysis itself; nobody presses Analyze again.
   await expect(probe).toContainText('Eligible for scientific fitting');expect(imports).toHaveLength(2);
@@ -65,18 +65,31 @@ test('browser freezes a probe setup per capture, analyzes after saving and keeps
   await fixture({captureId:'22345678-1234-1234-1234-123456789abc'});
   await probe.getByRole('button',{name:'Analyze latest probe'}).click();
   await expect(probe).toContainText('belongs to a different capture; each probe capture needs its own setup');
-  await expect(setup).toContainText(`The saved setup ${status.setup.setup.setupId} belongs to an earlier capture`);
+  await expect(setup).toContainText(`The saved setup ${status.setup.setup.setupId} was made for an earlier capture`);
+  // A package for another placement fills nothing in from the last setup.
+  const otherRig=structuredClone(first.calibration);otherRig.calibration.placement_id='other-rig';await writeFile(join(first.root,'other-rig.json'),JSON.stringify(otherRig));
+  await setup.getByLabel('Calibration package JSON').setInputFiles(join(first.root,'other-rig.json'));
+  await expect(setup).toContainText(`The last setup ${status.setup.setup.setupId} used placement fixture-placement; this package declares other-rig, so none of its values were filled in.`);
+  await expect(setup.getByRole('spinbutton',{name:'Loudspeaker position (m) X',exact:true})).toHaveValue('');await expect(setup.getByLabel('Declared jaw control')).toHaveValue('');
   await setup.getByLabel('Calibration package JSON').setInputFiles(join(first.root,'calibration-package.json'));
   for(const [key,label] of Object.entries(labels))for(let i=0;i<3;i++)await expect(setup.getByRole('spinbutton',{name:`${label} ${'XYZ'[i]}`,exact:true})).toHaveValue(String(first.placement[key as keyof typeof labels][i]));
-  await expect(setup.getByLabel('Declared jaw control')).toHaveValue('-3');await expect(setup.getByLabel('Coordinate frame',{exact:true})).toHaveValue('fixture-metres');
+  await expect(setup.getByLabel('Declared jaw control')).toHaveValue('-3');await expect(setup.getByLabel(/^Coordinate frame/)).toHaveValue('fixture-metres');
+  await expect(setup.getByRole('group',{name:`Loudspeaker position (m) · from setup ${status.setup.setup.setupId}`})).toBeVisible();
+  await expect(setup.locator('.probe-prefilled')).toHaveCount(2);
+  // The held-quiet pose belongs to the capture and is never copied from an earlier setup.
+  await expect(setup.getByLabel('Held-quiet pose',{exact:true})).toHaveValue('');await setup.getByLabel('Held-quiet pose',{exact:true}).fill('a');
   await setup.getByLabel('Original calibration evidence files').setInputFiles(join(first.root,'calibration-evidence.txt'));
-  await setup.getByRole('checkbox').check();await save.click();
+  await declare.check();await expect(save).toBeDisabled();
+  await setup.getByRole('checkbox',{name:/positions from setup/}).check();await expect(save).toBeDisabled();
+  await setup.getByRole('checkbox',{name:/controls from setup/}).check();
+  await withinPhoneWidth(page,setup);await setup.screenshot({path:'test-results/probe-setup-prefilled-mobile.png'});await page.setViewportSize({width:1280,height:900});
+  await save.click();
   await expect(probe).toContainText('Eligible for scientific fitting');expect(imports).toHaveLength(4);
 
-  // A human recording cannot be made eligible by any package, so the form is not offered.
-  await fixture({captureId:'32345678-1234-1234-1234-123456789abc',provenance:'human-recording'});
+  // An iPhone-shaped capture relabelled as a fixture is a human recording: no package can make it eligible, so no form.
+  await fixture({captureId:'32345678-1234-1234-1234-123456789abc',provenance:'software-fixture',route:{output:'Speaker'}});
   await probe.getByRole('button',{name:'Analyze latest probe'}).click();
-  await expect(setup).toContainText('Capture: 32345678-1234-1234-1234-123456789abc · human-recording');
+  await expect(setup).toContainText('Capture: 32345678-1234-1234-1234-123456789abc · human-recording. Its manifest says software-fixture, but its own fields do not support that label');
   await expect(setup.getByRole('note')).toContainText('A calibration package is declared, not measured');
   await expect(probe).toContainText('Review available; fitting prerequisite not met');
   await expect(probe).toContainText('Before fitting: Human recordings cannot be fitted until calibration is derived from measurement recordings');

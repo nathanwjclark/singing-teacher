@@ -23,10 +23,13 @@ server configuration edit is needed.
 
 Each capture needs its own setup: a setup binds one capture's manifest hash,
 held-quiet pose, placement and route. The panel says so before any input, reports
-when the saved setup belongs to an earlier capture, and fills in placement, pose
-and controls from the last saved setup (package values take precedence) so a new
-capture on the same rig only needs checking. The package and evidence files are
-uploaded again for each setup.
+when the saved setup was made for an earlier capture, and fills gaps from the
+last saved setup only when the package declares the same placement id (package
+values take precedence). Filled-in coordinates, coordinate frame and controls
+are marked "from setup <id>", and each filled-in group needs its own confirmation
+before saving. With a different placement id nothing is filled in, so one rig's
+positions are never saved under another rig's placement. The package and evidence
+files are uploaded again for each setup.
 
 **Human recordings are never made eligible by a setup.** A package's calibration
 arrays, `calibration.kind`, `processing.kind` and the typed placement are
@@ -36,9 +39,19 @@ is not measurement. The importer gate in `science/scripts/import_probe_science.t
 keeps every `human-recording` capture ineligible with the reason "Calibration is
 declared, not measured; no measured-calibration evidence was derived". Saving a
 setup for such a capture returns that reason, the legacy private configuration
-gets the same result, and the fitter rejects hand-built human-recording probe
-records. For a human capture the panel explains this and does not offer the form.
+gets the same result, and the fitter also rejects probe records marked as
+human recordings (it sees only the document it is given). For a human capture the panel explains this and does not offer the form.
 Software-fixture and physical-reference captures keep the calibrated path below.
+
+The source kind comes from the manifest's own fields, not only its `provenance`
+label. A manifest with any field only the iPhone recorder writes is treated as a
+human recording even if it says `software-fixture` or `physical-reference`, and a
+`software-fixture` label counts only with the fixture generator's marker. The
+panel shows when a label was overridden. Provenance is still self-declared: the
+manifest and pull receipt are unsigned, so an edited manifest without those fields
+is not caught. The recommended fix is for the USB pull to record the source device
+and archive hash in its own receipt, or for the iPhone to sign the manifest, with
+the importer checking that. See [the import specification](../../science/PROBE_IMPORT.md).
 
 The calibration package is measurement-workflow output, not a new estimate made
 by the app. It is JSON with `schema_version: "0.1.0"` and
@@ -69,8 +82,11 @@ accuracy or authenticity**.
 Each attempt is built in a private staging folder `probe-setups/.staging-<uuid>/`
 with the original package, original evidence, generated `configuration.json`,
 `profile.json` and canonical verification outputs. A failed attempt removes its
-staging folder, so it leaves no evidence copy behind; a staging folder left by a
-crash is removed before the next save. Only after a
+staging folder, so it leaves no evidence copy behind. Staging folders and pending
+pointer files older than ten minutes (verification is capped at 60 s) are crash
+leftovers and are removed before the next save; newer ones may belong to another
+server process and are left alone. A `probe-setups/<requestId>/` folder without a
+saved receipt is refused with a clear error rather than overwritten. Only after a
 successful verification is the folder renamed to `probe-setups/<requestId>/` and
 `probe-setup-current.json` published by atomic rename,
 whose SHA-256 binds `summary.json`. The receipt binds configuration, profile
@@ -115,7 +131,8 @@ retained archive. Session history and original artifacts remain intact.
 The setup route accepts request bodies up to 26 MB (the other probe routes 4 KB)
 and reads them as Buffer chunks with a running length. A max-size body is read
 and parsed in tens of milliseconds; the earlier string re-measurement took over
-six seconds on the event loop.
+six seconds on the event loop. A larger body is refused with 413 as soon as it
+passes the limit, without reading the rest.
 
 Verification: `PYTHONPATH=.:science/src python -m pytest
 science/tests/test_app_probe.py -q` runs ten tests: real B importer from original
