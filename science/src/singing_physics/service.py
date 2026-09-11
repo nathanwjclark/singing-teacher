@@ -100,7 +100,9 @@ def _worker(root, job_id, parent_pid, timeout_s):
             if request['operation'] == 'forecast_control_pcm':
                 from .prediction import Artifact
                 options = {k:v for k,v in params.items() if k != 'snapshot_json'}
-                options['timeout_s'] = min(options.get('timeout_s', 90.), timeout_s)
+                # Leave the forecast a margin inside the worker's hard deadline so it ends with explicit
+                # stopped rows ('incomplete') instead of being killed as a failed job.
+                options['timeout_s'] = min(options.get('timeout_s', 90.), max(1., timeout_s - 15.))
                 result = forecast_control_pcm(Artifact(params['snapshot_json'].encode()), **options)
             else:
                 result = score_control_pcm(**params)
