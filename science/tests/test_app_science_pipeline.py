@@ -4,7 +4,6 @@ import hashlib
 from datetime import datetime, timezone
 import os
 from pathlib import Path
-import socket
 import subprocess
 import sys
 import threading
@@ -13,6 +12,7 @@ import urllib.error
 import urllib.request
 import zipfile
 
+from app_port import listening_port
 from singing_physics.http_service import ScientificHTTPServer
 from test_live_capture_jobs import capture
 
@@ -35,14 +35,13 @@ def test_app_run_publishes_shared_session_and_verified_model(tmp_path):
         (data/'native-pull-latest.json').write_text(json.dumps({'name':archive.name,
             'bytes':archive.stat().st_size,'sha256':hashlib.sha256(archive.read_bytes()).hexdigest()}))
     publish_capture(source)
-    with socket.socket() as sock:
-        sock.bind(('127.0.0.1',0));port=sock.getsockname()[1]
     with ScientificHTTPServer(tmp_path/'worker','t'*48,port=0) as worker:
         thread=threading.Thread(target=worker.serve_forever,daemon=True);thread.start()
-        env={**os.environ,'PORT':str(port),'HOST':'127.0.0.1','LOCAL_DATA_DIR':str(data),
+        env={**os.environ,'PORT':'0','HOST':'127.0.0.1','LOCAL_DATA_DIR':str(data),
              'SINGING_PYTHON':sys.executable,'SCIENCE_URL':f'http://127.0.0.1:{worker.server_port}','SCIENCE_TOKEN':'t'*48}
         with (tmp_path/'app.log').open('w') as log:
             app=subprocess.Popen(['node','server/local.mjs'],cwd=root,env=env,stdout=log,stderr=log)
+            port=listening_port(app,tmp_path/'app.log')
             def call(path,post=False,body=None):
                 request=urllib.request.Request(f'http://127.0.0.1:{port}'+path,method='POST' if post else 'GET',
                     data=json.dumps(body).encode() if body is not None else None,

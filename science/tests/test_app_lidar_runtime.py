@@ -37,7 +37,7 @@ http.createServer(async(req,res)=>{try{const url=new URL(req.url,'http://localho
   for(const route of routes)if(await route(req,res,url))return;
   if(url.pathname.startsWith('/api/science/'))return proxy(req,res);
   json(res,404,{error:'No test route'});
-}catch(e){json(res,500,{error:e.message})}}).listen(Number(process.env.PORT),'127.0.0.1');
+}catch(e){json(res,500,{error:e.message})}}).listen(Number(process.env.PORT),'127.0.0.1',function(){console.log('App: http://127.0.0.1:'+this.address().port)});
 """
 
 
