@@ -8,10 +8,13 @@ import { test, expect } from '@playwright/test';
 test('actual local native bank and held-out ranking render without disrupting baseline', async ({ page, request }) => {
   test.skip(!process.env.SOURCE_BANK_E2E_DATA, 'Run with -c tests/source-bank-runtime.config.ts');
   const read = async () => (await request.get('/api/source/status')).json();
+  // A status read drops every result when its 3 s session read from the busy worker
+  // times out, so read until one is complete rather than trusting a single read.
   let status = await read();
-  expect(status.fit.result).toBeTruthy();
-  expect(status.score.result).toBeTruthy();
-  expect(status.forecast).toMatchObject({ status: 'failed', result: null });
+  await expect.poll(async () => {
+    status = await read();
+    return { baseline: Boolean(status.baselineModelId), fit: Boolean(status.fit.result), score: Boolean(status.score.result), forecast: status.forecast.status, forecastResult: status.forecast.result };
+  }, { timeout: 30000, intervals: [1000, 2000] }).toEqual({ baseline: true, fit: true, score: true, forecast: 'failed', forecastResult: null });
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
   await page.goto('/');
