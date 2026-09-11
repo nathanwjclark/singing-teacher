@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Camera, ScanFace, ShieldCheck } from 'lucide-react';
-import { createVisionEngine, drawTracking } from '../lib/vision';
+import { createVisionEngine } from '../lib/vision';
 import type { VisionEngine } from '../lib/vision';
 import type { TrackingFrame, TrackingStatus } from '../types';
 import './CameraPanel.css';
@@ -92,7 +92,7 @@ export default function CameraPanel({ active, onFrame, onStatus, onStream }: Pro
                 if (canvas.width !== video.videoWidth) canvas.width = video.videoWidth;
                 if (canvas.height !== video.videoHeight) canvas.height = video.videoHeight;
                 const context = canvas.getContext('2d');
-                if (context) drawTracking(context, frame, canvas.width, canvas.height);
+                if (context) engine.draw(context, frame, canvas.width, canvas.height);
               }
               const next = frame.face.length ? 'tracking' : 'no-face';
               if (currentStatus !== next) update(next);
