@@ -14,7 +14,7 @@ Outputs are `probe-science-document.json`, `probe-science-receipt.json`, the exa
 
 ## Required explicit configuration
 
-See `setupFixture()` in the test for a complete runnable synthetic example. JSON fields:
+See `setupFixture()` in `tests/helpers/probe-science-fixture.ts` for a complete runnable synthetic example. JSON fields:
 
 - `schema_version:"0.1.0"`, `kind:"probe_science_import_configuration"`, `trial_id`, `pose`, `pose_state:"held-quiet"`, `comparison:"complex"|"magnitude"`.
 - `selected_indices`: 2..512 strictly increasing indices into B's **full** response. Selection is supplied, never optimized on outcome. Calibration frequencies must exactly match selected frequencies. Masks are preserved, no interpolation or averaging occurs.

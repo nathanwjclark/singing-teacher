@@ -27,7 +27,7 @@ def node(code):
 def scenario(tmp_path_factory):
     out = tmp_path_factory.mktemp('probe-evaluation')
     config_path = out/'setup.json'
-    node(f"import {{setupFixture}} from './science/scripts/import_probe_science.test.ts'; import{{writeFile}}from'node:fs/promises';const f=await setupFixture();await writeFile({json.dumps(str(config_path))},JSON.stringify(f));")
+    node(f"import {{setupFixture}} from './tests/helpers/probe-science-fixture.ts'; import{{writeFile}}from'node:fs/promises';const f=await setupFixture();await writeFile({json.dumps(str(config_path))},JSON.stringify(f));")
     setup = json.loads(config_path.read_text()); config = setup['config']
     with Engine() as engine:
         provenance = engine.provenance

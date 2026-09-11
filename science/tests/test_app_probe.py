@@ -102,7 +102,7 @@ def test_original_probe_runs_joint_session_adoption(tmp_path, monkeypatch,crash_
     from test_session_probe import setup
     descriptor=tmp_path/'fixture.json'
     subprocess.run(['node','--experimental-strip-types','--input-type=module','-e',
-        "import {setupFixture} from './science/scripts/import_probe_science.test.ts'; import {writeFile} from 'node:fs/promises'; await writeFile(process.argv[1],JSON.stringify(await setupFixture()));",str(descriptor)],
+        "import {setupFixture} from './tests/helpers/probe-science-fixture.ts'; import {writeFile} from 'node:fs/promises'; await writeFile(process.argv[1],JSON.stringify(await setupFixture()));",str(descriptor)],
         cwd=ROOT,env={**os.environ,'PROBE_PYTHON':sys.executable},check=True,capture_output=True)
     fixture=json.loads(descriptor.read_text());root=tmp_path/'data';root.mkdir()
     config=fixture['config'];evidence=Path(fixture['root'])/'calibration-evidence.txt'
@@ -195,7 +195,7 @@ def test_fit_refuses_a_pulled_import_whose_receipt_was_lost_or_edited(tmp_path,c
     from science.scripts import run_probe_fit
     descriptor=tmp_path/'fixture.json'
     subprocess.run(['node','--experimental-strip-types','--input-type=module','-e',
-        "import {setupFixture} from './science/scripts/import_probe_science.test.ts'; import {writeFile} from 'node:fs/promises'; await writeFile(process.argv[1],JSON.stringify(await setupFixture()));",str(descriptor)],
+        "import {setupFixture} from './tests/helpers/probe-science-fixture.ts'; import {writeFile} from 'node:fs/promises'; await writeFile(process.argv[1],JSON.stringify(await setupFixture()));",str(descriptor)],
         cwd=ROOT,check=True,capture_output=True)
     fixture=json.loads(descriptor.read_text())
     try:
