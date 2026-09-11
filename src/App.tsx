@@ -1,5 +1,6 @@
 import {CaptureProcessingOverlay} from './components/science/CaptureProcessingOverlay';
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { Component, Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react'
+import type { ReactNode } from 'react'
 import { Activity, Camera, CircleHelp, MicVocal, Play, Square } from 'lucide-react'
 import CameraPanel from './components/CameraPanel'
 import AnatomyPanel from './components/AnatomyPanel'
@@ -11,38 +12,65 @@ import type { VoiceActivity } from './lib/voiceActivity'
 import { useRecentTips } from './hooks/useRecentTips'
 import type { Metrics, TrackingFrame, TrackingStatus } from './types'
 import PhonePairing from './components/phone/PhonePairing'
-import PhoneCapturePage from './components/phone/PhoneCapturePage'
 import { RecordingControls } from './components/recording/RecordingControls'
 import type { RecordingController } from './components/recording/RecordingControls'
 import type { FinishedRecording } from './lib/recording'
 import type { AudioMeasurement, ObservationBundle, CandidateAnatomy, ContractRecord } from './contracts'
 import { measureRecording } from './lib/recordingMeasurements'
 import ExperimentDashboard from './components/experiments/ExperimentDashboard'
-import { ExperimentRunner } from './components/experiments/ExperimentRunner'
 import { AnatomyModes } from './components/anatomy/AnatomyModes'
-import { ReproducibilityPanel } from './components/experiments/ReproducibilityPanel'
-import { AcousticMappingPanel } from './components/experiments/AcousticMappingPanel'
-import { DepthProtocolPanel } from './components/experiments/DepthProtocolPanel'
+// The lazy Experiments panels import their own styles too; importing them here as well keeps each
+// stylesheet at its original place in the one app stylesheet (vite.config.ts), before App.css.
+import './components/experiments/AcousticMappingPanel.css'
 import { readExperimentLedger, subscribeExperimentLedger } from './experiment/ledger'
 import { evaluatePrediction } from './evaluation'
 import type { PredictionCommit } from './contracts'
-import { MotionCapturePanel } from './components/motion/MotionCapturePanel'
+import './components/motion/MotionCapturePanel.css'
 import CoachLearningPanel from './components/coach/CoachLearningPanel'
-import LearningMemoryPanel from './components/coach/LearningMemoryPanel'
-import PhonationPanel from './phonation/PhonationPanel'
-import { SourceInferencePanel } from './phonation/SourceInferencePanel'
-import { ControlLearningPanel } from './experiment/control/ControlLearningPanel'
-import { LidarFusionPanel } from './components/lidar/LidarFusionPanel'
-import { VisualLikelihoodPanel } from './components/visual-likelihood/VisualLikelihoodPanel'
-import TeachingPanel from './teaching/TeachingPanel'
-import SessionReplayPanel from './components/science/SessionReplayPanel'
+import './components/coach/LearningMemoryPanel.css'
+import './phonation/PhonationPanel.css'
+import './phonation/SourceInferencePanel.css'
+import './experiment/control/ControlLearningPanel.css'
+import './components/lidar/LidarFusionPanel.css'
+import './components/visual-likelihood/VisualLikelihoodPanel.css'
+import './teaching/TeachingPanel.css'
+import './components/science/SessionReplayPanel.css'
 import { ScientificModelPanel } from './components/science/ScientificModelPanel'
-import { AstraCoachPanel } from './components/science/AstraCoachPanel'
+import './components/science/AstraCoachPanel.css'
 import { ScientificSideView } from './components/science/ScientificGeometry'
 import { NativePullButton } from './components/phone/NativePullButton'
 import {ModelAdjustmentControls} from './components/science/ModelAdjustmentControls'
 import {setModelAdjustments} from './components/science/modelAdjustments'
 import './App.css'
+
+// Panels shown only under Experiments load after the studio. They still mount at start-up (hidden), as before,
+// once their chunk arrives. Panels the studio depends on from its first render are imported statically instead:
+// - ScientificModelPanel runs the fit that the studio's Pull iPhone flow requests by window event.
+// - CoachLearningPanel hides the studio and its cues before the first paint during cue-free learning stages.
+// - ExperimentDashboard feeds engine candidates to the studio's Movement map and hosts the scoring setup;
+//   the three lazy panels inside it load alongside the others rather than after it.
+// A panel whose chunk fails to load, or that throws while rendering, shows a message in its own place and the
+// studio and other panels keep working. React logs the caught error to the console.
+class PanelBoundary extends Component<{children:ReactNode},{failed:boolean}>{
+  state={failed:false}
+  static getDerivedStateFromError(){return {failed:true}}
+  render(){return this.state.failed?<section><p role="alert" className="probe-error">This panel could not be shown. Reload the page to try again.</p></section>:this.props.children}
+}
+function panel<P extends object>(Panel:(props:P)=>ReactNode){return (props:P)=><PanelBoundary><Suspense fallback={null}><Panel {...props}/></Suspense></PanelBoundary>}
+const ExperimentRunner=panel(lazy(()=>import('./components/experiments/ExperimentRunner').then(m=>({default:m.ExperimentRunner}))))
+const ReproducibilityPanel=panel(lazy(()=>import('./components/experiments/ReproducibilityPanel').then(m=>({default:m.ReproducibilityPanel}))))
+const AcousticMappingPanel=panel(lazy(()=>import('./components/experiments/AcousticMappingPanel').then(m=>({default:m.AcousticMappingPanel}))))
+const DepthProtocolPanel=panel(lazy(()=>import('./components/experiments/DepthProtocolPanel').then(m=>({default:m.DepthProtocolPanel}))))
+const MotionCapturePanel=panel(lazy(()=>import('./components/motion/MotionCapturePanel').then(m=>({default:m.MotionCapturePanel}))))
+const LearningMemoryPanel=panel(lazy(()=>import('./components/coach/LearningMemoryPanel')))
+const PhonationPanel=panel(lazy(()=>import('./phonation/PhonationPanel')))
+const SourceInferencePanel=panel(lazy(()=>import('./phonation/SourceInferencePanel').then(m=>({default:m.SourceInferencePanel}))))
+const ControlLearningPanel=panel(lazy(()=>import('./experiment/control/ControlLearningPanel').then(m=>({default:m.ControlLearningPanel}))))
+const LidarFusionPanel=panel(lazy(()=>import('./components/lidar/LidarFusionPanel').then(m=>({default:m.LidarFusionPanel}))))
+const VisualLikelihoodPanel=panel(lazy(()=>import('./components/visual-likelihood/VisualLikelihoodPanel').then(m=>({default:m.VisualLikelihoodPanel}))))
+const TeachingPanel=panel(lazy(()=>import('./teaching/TeachingPanel')))
+const SessionReplayPanel=panel(lazy(()=>import('./components/science/SessionReplayPanel')))
+const AstraCoachPanel=panel(lazy(()=>import('./components/science/AstraCoachPanel').then(m=>({default:m.AstraCoachPanel}))))
 
 const demoFrame: TrackingFrame = {
   face: Array.from({ length: 478 }, () => ({ x: .5, y: .5 })),
@@ -59,7 +87,7 @@ const demoScenarios: { name: string; title: string; detail: string; metrics: Par
   { name: 'Lip shape', title: 'Let the vowel take shape.', detail: 'Explore visible lip shape without forcing a smile or a pucker.', metrics: { mouthOpen: .25, headTilt: 2, shoulderTilt: 2, lipWidth: 1.02, jawAsymmetry: .2 } },
 ]
 
-function StudioApp() {
+export default function StudioApp() {
   const [pairOpen,setPairOpen]=useState(false)
   const [tab,setTab]=useState<'studio'|'experiments'>('studio')
   const [learningRecall,setLearningRecall]=useState(false)
@@ -235,4 +263,3 @@ function StudioApp() {
     </div>
   )
 }
-export default function App(){return window.location.pathname==='/phone'?<PhoneCapturePage/>:<StudioApp/>}

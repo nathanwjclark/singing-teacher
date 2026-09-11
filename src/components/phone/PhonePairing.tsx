@@ -1,17 +1,21 @@
 import { useEffect, useRef, useState } from 'react';
-import QRCode from 'qrcode';
+import type { QRCodeToDataURLOptions } from 'qrcode';
 import { createPhonePeer, phoneRequest } from '../../lib/phonePeer';
+import { importFeature } from '../../lib/importFeature';
 import type { PhoneSession } from '../../lib/phonePeer';
 import './PhoneCapture.css';
+
+// The QR library loads with the first code the open dialog draws, not with the studio.
+const qrCode = async (text: string, options: QRCodeToDataURLOptions) => (await importFeature('The QR code generator', () => import('qrcode'))).toDataURL(text, options);
 
 type Props = { open: boolean; onClose: () => void; onMicrophoneStream: (stream: MediaStream | null) => void };
 export default function PhonePairing({ open, onClose, onMicrophoneStream }: Props) {
   const [session, setSession] = useState<PhoneSession | null>(null);
   const [baseUrl, setBaseUrl] = useState('');
   const [setup,setSetup]=useState<{url:string;qr:string;fingerprint:string}|null>(null);
-  useEffect(()=>{if(!open)return;let cancelled=false;void fetch('/api/status').then(r=>r.json()).then(async data=>{if(data.phoneBaseUrl&&!cancelled)setBaseUrl(data.phoneBaseUrl);if(data.phoneSetupUrl){const qr=await QRCode.toDataURL(data.phoneSetupUrl,{width:220,margin:3});if(!cancelled)setSetup({url:data.phoneSetupUrl,qr,fingerprint:data.certificateFingerprint})}}).catch(()=>{});return()=>{cancelled=true}},[open]);
-  const [qr, setQr] = useState('');
   const [status, setStatus] = useState('');
+  useEffect(()=>{if(!open)return;let cancelled=false;void fetch('/api/status').then(r=>r.json()).then(async data=>{if(data.phoneBaseUrl&&!cancelled)setBaseUrl(data.phoneBaseUrl);if(data.phoneSetupUrl){const qr=await qrCode(data.phoneSetupUrl,{width:220,margin:3}).catch(error=>{if(!cancelled)setStatus(`Could not draw the setup QR: ${error instanceof Error?error.message:String(error)}`);return '';});if(qr&&!cancelled)setSetup({url:data.phoneSetupUrl,qr,fingerprint:data.certificateFingerprint})}}).catch(()=>{});return()=>{cancelled=true}},[open]);
+  const [qr, setQr] = useState('');
   const [count, setCount] = useState(0);
   const [busy, setBusy] = useState(false);
   const callback = useRef(onMicrophoneStream);
@@ -37,7 +41,7 @@ export default function PhonePairing({ open, onClose, onMicrophoneStream }: Prop
       const next = await response.json();
       if (!response.ok) throw new Error(next.error ?? 'Pairing service is unavailable.');
       setSession(next);
-      setQr(next.secure ? await QRCode.toDataURL(next.pairUrl, { width: 280, margin: 3, errorCorrectionLevel: 'M' }) : '');
+      setQr(next.secure ? await qrCode(next.pairUrl, { width: 280, margin: 3, errorCorrectionLevel: 'M' }) : '');
       setStatus(next.secure ? 'Scan with your phone on the same network.' : next.connectionHint ?? 'Configure a trusted HTTPS address reachable from your phone.');
     } catch (error) { setStatus(error instanceof Error ? error.message : 'Could not create pairing link.'); }
     finally { setBusy(false); }
