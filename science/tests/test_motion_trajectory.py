@@ -61,11 +61,25 @@ def test_robust_pitch_anchors_ignore_a_single_octave_error():
     # At exactly ten windows the nearest-rank 10th percentile is the minimum, so an octave error
     # would become an anchor; below 11 windows only the median anchors the bank.
     assert pitch_anchors([90.]+[180.+i for i in range(9)])==([183.],'median only: fewer than 11 measured voiced windows')
-    # From 11 windows the octave error is excluded; 184 Hz lies within 50 cents of 180 Hz and merges.
-    assert pitch_anchors([90.]+[180.+i for i in range(10)])[0]==[180.,188.]
+    # From 11 windows the octave error is excluded; the three close percentiles merge into one anchor near the median.
+    assert pitch_anchors([90.]+[180.+i for i in range(10)])[0]==[184.]
     assert pitch_anchors([180.])[0]==[180.] and pitch_anchors([170.,190.])[0]==[170.]
-    # Percentile anchors within 50 cents of a lower kept anchor duplicate one bank and merge.
-    assert pitch_anchors([179.+i/10 for i in range(20)])[0]==[179.1]
+    # Percentile anchors within 50 cents duplicate one bank and merge.
+    assert pitch_anchors([179.+i/10 for i in range(20)])[0]==[179.9]
+
+
+def test_anchor_merging_never_drops_a_supported_window():
+    cents=lambda pitch,anchors:min(abs(1200*math.log2(pitch/a)) for a in anchors)
+    # 180 and 184 Hz anchors are 38 cents apart. Merging into the lower one would leave 194 Hz
+    # 130 cents from any anchor; the anchor nearer the median (184 Hz) keeps every window supported.
+    pitches=[180.]*5+[184.]*5+[194.]
+    anchors=pitch_anchors(pitches)[0]
+    assert anchors==[184.] and all(cents(p,anchors)<=MAX_PITCH_DISTANCE_CENTS for p in pitches)
+    assert cents(194.,[180.])>MAX_PITCH_DISTANCE_CENTS
+    # When neither anchor alone keeps 170 Hz and 194 Hz supported, both stay.
+    pitches=[170.]+[180.]*4+[184.]*5+[194.]
+    anchors=pitch_anchors(pitches)[0]
+    assert anchors==[180.,184.] and all(cents(p,anchors)<=MAX_PITCH_DISTANCE_CENTS for p in pitches)
 
 
 def test_window_scales_use_only_that_windows_uncertainty():

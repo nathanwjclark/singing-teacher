@@ -18,7 +18,7 @@ MAX_PITCH_DISTANCE_CENTS = 100.
 ANCHOR_PERCENTILES = (10, 50, 90)
 # Nearest-rank 10th/90th percentiles exclude the extremes only from 11 measured windows up.
 MIN_PERCENTILE_WINDOWS = 11
-# Anchors closer than half the 100-cent support duplicate one bank; only the lower is kept.
+# Anchors closer than half the 100-cent support duplicate one bank; they merge when coverage allows.
 ANCHOR_MERGE_CENTS = 50.
 # Rescoring always uses the coarse canonical descriptors (COARSE_OBJECTIVE, FEATURES), whatever the baseline fit used.
 SCALE_POLICY = ('per window: declared engineering scale, widened only by that window\'s own reported '
@@ -69,17 +69,33 @@ def pitch_anchors(pitches):
     From 11 measured windows: nearest-rank 10th, 50th and 90th percentiles, so a
     single octave error or other outlier cannot become an anchor. With fewer
     windows those percentiles would be the extremes, so only the median is used.
-    Anchors within 50 cents of a lower kept anchor are merged into it.
+    Two anchors within 50 cents duplicate one bank. They merge into whichever of
+    them lies nearer the median pitch they cover, and only if every window either
+    anchor supported stays within 100 cents of a remaining anchor.
     """
     ordered = sorted(pitches)
     rank = lambda p: ordered[max(0, math.ceil(p*len(ordered)/100)-1)]
     if len(ordered) < MIN_PERCENTILE_WINDOWS:
         return [rank(50)], f'median only: fewer than {MIN_PERCENTILE_WINDOWS} measured voiced windows'
-    anchors = []
-    for pitch in sorted({rank(p) for p in ANCHOR_PERCENTILES}):
-        if not anchors or 1200*math.log2(pitch/anchors[-1]) >= ANCHOR_MERGE_CENTS:
-            anchors.append(pitch)
-    return anchors, f'10th, 50th and 90th percentiles; anchors within {ANCHOR_MERGE_CENTS:g} cents merged'
+    cents = lambda pitch, anchor: abs(1200*math.log2(pitch/anchor))
+    covered = lambda anchors: [p for p in ordered if min(cents(p, a) for a in anchors) <= MAX_PITCH_DISTANCE_CENTS]
+    anchors, merged = sorted({rank(p) for p in ANCHOR_PERCENTILES}), True
+    while merged:
+        merged = False
+        for i, (low, high) in enumerate(zip(anchors, anchors[1:])):
+            if cents(high, low) >= ANCHOR_MERGE_CENTS:
+                continue
+            supported = covered(anchors)
+            local = [p for p in supported if min(cents(p, low), cents(p, high)) <= MAX_PITCH_DISTANCE_CENTS]
+            centre = local[(len(local)-1)//2]
+            for keep in sorted((low, high), key=lambda a: (cents(centre, a), a)):
+                trial = anchors[:i] + [keep] + anchors[i+2:]
+                if len(covered(trial)) == len(supported):
+                    anchors, merged = trial, True
+                    break
+            if merged:
+                break
+    return anchors, f'10th, 50th and 90th percentiles; anchors within {ANCHOR_MERGE_CENTS:g} cents merged only where every supported window stays supported'
 
 
 def window_scales(measurement):
@@ -119,7 +135,7 @@ def score_forward_bank(engine, windows, hypotheses, pose, sample_rate, frame_sta
     usable = [row for row in windows if row['status'] == 'measured']
     metadata = {'kind': VERSION, 'maxWindows': MAX_WINDOWS, 'maxSynthesisCalls': MAX_SYNTHESIS_CALLS,
         'pitchAnchorsHz': [], 'maxPitchDistanceCents': MAX_PITCH_DISTANCE_CENTS,
-        'pitchPolicy': 'from 11 measured voiced windows the nearest-rank 10th, 50th and 90th percentiles (anchors within 50 cents merged), otherwise the median only; each window uses its nearest anchor (lower on ties) only within 100 cents',
+        'pitchPolicy': 'from 11 measured voiced windows the nearest-rank 10th, 50th and 90th percentiles (anchors within 50 cents merged where coverage is kept), otherwise the median only; each window uses its nearest anchor (lower on ties) only within 100 cents',
         'pitchAnchorPolicy': None,
         'measurementPolicy': 'disjoint canonical frames on an evenly spaced recording-wide grid; no quality-based window selection',
         'interpretation': 'retrospective fixed-source candidate comparison; not a forecast or recovered movement',
