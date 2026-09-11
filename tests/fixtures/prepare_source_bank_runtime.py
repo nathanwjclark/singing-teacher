@@ -12,14 +12,16 @@ from pathlib import Path
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]/'science/tests'))
-from test_app_source_loop import BOOTSTRAP, app_runtime, wait_source, test_optional_source_fit_forecast_later_capture_score_and_restart as seed
+from test_app_source_loop import BOOTSTRAP, app_runtime, run_source_loop, wait_source
 
 # The worker starts its jobs with multiprocessing 'spawn', which re-imports this script.
 if __name__ == '__main__':
     root = Path(sys.argv[1]).resolve()
     root.mkdir(parents=True)
-    seed(root)
+    run_source_loop(root)
+    absent = root/'without-optional-source-runner'
+    absent.mkdir(exist_ok=True)
     with app_runtime(root, BOOTSTRAP) as (data, call, restart):
-        restart(source_repo=root/'without-optional-source-runner')
+        restart(source_repo=absent)
         call('/api/source/forecast', False, expected=202)
         wait_source(call, 'forecast', terminal='unsupported')

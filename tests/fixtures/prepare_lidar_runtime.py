@@ -11,10 +11,10 @@ from pathlib import Path
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]/'science/tests'))
-from test_app_lidar_runtime import test_original_rear_depth_changes_normal_native_model_through_app as seed
+from test_app_lidar_runtime import run_lidar_loop
 
 # The worker starts its jobs with multiprocessing 'spawn', which re-imports this script.
 if __name__ == '__main__':
     root = Path(sys.argv[1]).resolve()
     root.mkdir(parents=True)
-    seed(root)
+    run_lidar_loop(root)
