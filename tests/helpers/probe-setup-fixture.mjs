@@ -9,7 +9,7 @@ const hash=b=>createHash('sha256').update(b).digest('hex');
  * `manifest` overrides native manifest fields (for example provenance) before the archive is built. */
 export async function createProbeSetupFixture(root,{repo=process.cwd(),dataRoot=join(root,'private-data'),manifest={}}={}){
  const capture=join(root,'generated-capture');
- await execute(process.execPath,['--experimental-strip-types','--input-type=module','-e',"import {makeFixture} from './scripts/import-acoustic-probe.test.ts'; await makeFixture(process.argv[1]);",capture],{cwd:repo});
+ await execute(process.execPath,['--experimental-strip-types','--input-type=module','-e',"import {makeFixture} from './scripts/acoustic-probe-fixture.ts'; await makeFixture(process.argv[1]);",capture],{cwd:repo});
  const native={...JSON.parse(await readFile(join(capture,'manifest.json'))),captureId:'12345678-1234-1234-1234-123456789abc',...manifest};
  await writeFile(join(capture,'manifest.json'),JSON.stringify(native));
  await mkdir(join(dataRoot,'usb-imports'),{recursive:true});

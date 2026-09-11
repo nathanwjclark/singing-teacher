@@ -98,6 +98,9 @@ def _parse_record(record):
     calibration, placement = record.get('calibration'), record.get('placement')
     if not isinstance(calibration, dict) or not isinstance(placement, dict):
         raise ValueError('Explicit calibration and placement required')
+    if source.get('native_capture_fields', []) != []:
+        # The importer lists iPhone recorder fields found in the manifest; such a record is a human recording.
+        raise ValueError('native_capture_fields_mark_human_recording')
     if source['kind'] != 'synthetic-fixture' and calibration.get('kind') != 'measured':
         raise ValueError('physical_response_requires_measured_calibration')
     if source['kind'] == 'human-recording':

@@ -4,7 +4,7 @@ import { mkdtemp, writeFile, readFile, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { createHash } from 'node:crypto'
-import { makeFixture } from '../../scripts/import-acoustic-probe.test.ts'
+import { makeFixture } from '../../scripts/acoustic-probe-fixture.ts'
 import { importProbeScience, DECLARED_CALIBRATION_REASON } from './import_probe_science.ts'
 
 export async function setupFixture() {
@@ -110,6 +110,35 @@ test('reference-object and synthetic captures keep the existing calibrated impor
   assert.equal(r.receipt.eligible_for_fit, true); assert.equal(r.probe_document!.trials[0].source.kind, 'physical-reference')
   const synthetic = await setupFixture()
   assert.equal((await importProbeScience(synthetic.capture, join(synthetic.root, 'synthetic'), synthetic.configPath)).probe_document!.trials[0].source.kind, 'synthetic-fixture')
+})
+
+// An iPhone-shaped manifest (fields only the recorder writes) whose provenance string alone was edited.
+async function relabelled(fixture: Awaited<ReturnType<typeof setupFixture>>, provenance: string) {
+  const { capture, native, config, configPath } = fixture
+  Object.assign(native, { provenance, route: { output: 'Speaker' }, playbackSchedule: { hostTime: '1', hostClock: 'mach_absolute_time', actualAcousticStartVerified: false } })
+  native.calibration = { ...native.calibration, deviceResponseCalibrated: false }
+  await writeFile(join(capture, 'manifest.json'), JSON.stringify(native))
+  config.capture_binding.manifest_sha256 = createHash('sha256').update(await readFile(join(capture, 'manifest.json'))).digest('hex')
+  await writeFile(configPath, JSON.stringify(config))
+}
+
+test('relabelling an iPhone recording as a fixture or reference object does not make it eligible', async () => {
+  const synthetic = await setupFixture()
+  await relabelled(synthetic, 'software-fixture')
+  let r = await importProbeScience(synthetic.capture, join(synthetic.root, 'as-fixture'), synthetic.configPath)
+  assert.equal(r.receipt.eligible_for_fit, false); assert.equal(r.receipt.provenance, 'human-recording'); assert.equal(r.receipt.declared_provenance, 'software-fixture')
+  assert.equal(r.receipt.reasons[0], DECLARED_CALIBRATION_REASON); assert.match(r.receipt.reasons[1], /carries iPhone recorder fields \(route, playbackSchedule, calibration.deviceResponseCalibrated\)/)
+  assert.equal(r.measurement.provenance, 'human-recording')
+  const reference = await declaredMeasuredPackage('physical-reference')
+  await relabelled(reference, 'physical-reference')
+  r = await importProbeScience(reference.capture, join(reference.root, 'as-reference'), reference.configPath)
+  assert.equal(r.receipt.eligible_for_fit, false); assert.equal(r.probe_document, null); assert.match(r.receipt.reasons.join(), /Manifest says physical-reference but carries iPhone recorder fields/)
+  // A fixture label without the fixture generator's marker is not accepted either.
+  const unmarked = await setupFixture(); unmarked.native.calibration = {}
+  await writeFile(join(unmarked.capture, 'manifest.json'), JSON.stringify(unmarked.native))
+  unmarked.config.capture_binding.manifest_sha256 = createHash('sha256').update(await readFile(join(unmarked.capture, 'manifest.json'))).digest('hex'); await writeFile(unmarked.configPath, JSON.stringify(unmarked.config))
+  r = await importProbeScience(unmarked.capture, join(unmarked.root, 'unmarked'), unmarked.configPath)
+  assert.equal(r.receipt.eligible_for_fit, false); assert.match(r.receipt.reasons.join(), /lacks the software fixture generator's marker/)
 })
 
 // This test runs the genuine native consumer; the Python runtime must have science dependencies.
