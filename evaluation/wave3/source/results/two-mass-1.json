@@ -2,339 +2,1299 @@
   "f0": [
     {
       "candidate_id": "t0-geometric-0",
+      "comparison": "joint",
       "family": "geometric",
       "requested_f0_hz": 147.00983765491318,
       "simulated_f0_hz": 147.00338827942426,
-      "stage": "calibration:cal-a"
+      "stage": "calibration:cal-a",
+      "synthesized": true
     },
     {
       "candidate_id": "t0-geometric-0",
+      "comparison": "joint",
       "family": "geometric",
       "requested_f0_hz": 214.28770767407093,
       "simulated_f0_hz": 214.33144590275987,
-      "stage": "calibration:cal-u"
+      "stage": "calibration:cal-u",
+      "synthesized": true
     },
     {
       "candidate_id": "t0-geometric-1",
+      "comparison": "joint",
       "family": "geometric",
       "requested_f0_hz": 147.00983765491318,
       "simulated_f0_hz": 147.00225866347068,
-      "stage": "calibration:cal-a"
+      "stage": "calibration:cal-a",
+      "synthesized": true
     },
     {
       "candidate_id": "t0-geometric-1",
+      "comparison": "joint",
       "family": "geometric",
       "requested_f0_hz": 214.28770767407093,
       "simulated_f0_hz": 214.32502141483218,
-      "stage": "calibration:cal-u"
+      "stage": "calibration:cal-u",
+      "synthesized": true
     },
     {
       "candidate_id": "t0-geometric-2",
+      "comparison": "joint",
       "family": "geometric",
       "requested_f0_hz": 147.00983765491318,
       "simulated_f0_hz": 146.9998123851859,
-      "stage": "calibration:cal-a"
+      "stage": "calibration:cal-a",
+      "synthesized": true
     },
     {
       "candidate_id": "t0-geometric-2",
+      "comparison": "joint",
       "family": "geometric",
       "requested_f0_hz": 214.28770767407093,
       "simulated_f0_hz": 214.32922123495268,
-      "stage": "calibration:cal-u"
+      "stage": "calibration:cal-u",
+      "synthesized": true
     },
     {
       "candidate_id": "t1-geometric-0",
+      "comparison": "joint",
       "family": "geometric",
       "requested_f0_hz": 147.00983765491318,
       "simulated_f0_hz": 147.0034095981082,
-      "stage": "calibration:cal-a"
+      "stage": "calibration:cal-a",
+      "synthesized": true
     },
     {
       "candidate_id": "t1-geometric-0",
+      "comparison": "joint",
       "family": "geometric",
       "requested_f0_hz": 214.28770767407093,
       "simulated_f0_hz": null,
-      "stage": "calibration:cal-u"
+      "stage": "calibration:cal-u",
+      "synthesized": true
     },
     {
       "candidate_id": "t1-geometric-1",
+      "comparison": "joint",
       "family": "geometric",
       "requested_f0_hz": 147.00983765491318,
       "simulated_f0_hz": 147.0080220218445,
-      "stage": "calibration:cal-a"
+      "stage": "calibration:cal-a",
+      "synthesized": true
     },
     {
       "candidate_id": "t1-geometric-1",
+      "comparison": "joint",
       "family": "geometric",
       "requested_f0_hz": 214.28770767407093,
       "simulated_f0_hz": null,
-      "stage": "calibration:cal-u"
+      "stage": "calibration:cal-u",
+      "synthesized": true
     },
     {
       "candidate_id": "t1-geometric-2",
+      "comparison": "joint",
       "family": "geometric",
       "requested_f0_hz": 147.00983765491318,
       "simulated_f0_hz": 147.00214032631555,
-      "stage": "calibration:cal-a"
+      "stage": "calibration:cal-a",
+      "synthesized": true
     },
     {
       "candidate_id": "t1-geometric-2",
+      "comparison": "joint",
       "family": "geometric",
       "requested_f0_hz": 214.28770767407093,
       "simulated_f0_hz": null,
-      "stage": "calibration:cal-u"
+      "stage": "calibration:cal-u",
+      "synthesized": true
     },
     {
       "candidate_id": "t0-two_mass-0",
+      "comparison": "joint",
       "family": "two_mass",
       "requested_f0_hz": 147.00983765491318,
       "simulated_f0_hz": 146.02971895653803,
-      "stage": "calibration:cal-a"
+      "stage": "calibration:cal-a",
+      "synthesized": true
     },
     {
       "candidate_id": "t0-two_mass-0",
+      "comparison": "joint",
       "family": "two_mass",
       "requested_f0_hz": 214.28770767407093,
       "simulated_f0_hz": 220.2788008367061,
-      "stage": "calibration:cal-u"
+      "stage": "calibration:cal-u",
+      "synthesized": true
     },
     {
       "candidate_id": "t0-two_mass-1",
+      "comparison": "joint",
       "family": "two_mass",
       "requested_f0_hz": 147.00983765491318,
       "simulated_f0_hz": 135.7265366424761,
-      "stage": "calibration:cal-a"
+      "stage": "calibration:cal-a",
+      "synthesized": true
     },
     {
       "candidate_id": "t0-two_mass-1",
+      "comparison": "joint",
       "family": "two_mass",
       "requested_f0_hz": 214.28770767407093,
       "simulated_f0_hz": 196.73735399768782,
-      "stage": "calibration:cal-u"
+      "stage": "calibration:cal-u",
+      "synthesized": true
     },
     {
       "candidate_id": "t0-two_mass-2",
+      "comparison": "joint",
       "family": "two_mass",
       "requested_f0_hz": 147.00983765491318,
       "simulated_f0_hz": 135.4960117268975,
-      "stage": "calibration:cal-a"
+      "stage": "calibration:cal-a",
+      "synthesized": true
     },
     {
       "candidate_id": "t0-two_mass-2",
+      "comparison": "joint",
       "family": "two_mass",
       "requested_f0_hz": 214.28770767407093,
       "simulated_f0_hz": 202.61855354429375,
-      "stage": "calibration:cal-u"
+      "stage": "calibration:cal-u",
+      "synthesized": true
     },
     {
       "candidate_id": "t1-two_mass-0",
+      "comparison": "joint",
       "family": "two_mass",
       "requested_f0_hz": 147.00983765491318,
       "simulated_f0_hz": 136.81433722597953,
-      "stage": "calibration:cal-a"
+      "stage": "calibration:cal-a",
+      "synthesized": true
     },
     {
       "candidate_id": "t1-two_mass-0",
+      "comparison": "joint",
       "family": "two_mass",
       "requested_f0_hz": 214.28770767407093,
       "simulated_f0_hz": null,
-      "stage": "calibration:cal-u"
+      "stage": "calibration:cal-u",
+      "synthesized": true
     },
     {
       "candidate_id": "t1-two_mass-1",
+      "comparison": "joint",
       "family": "two_mass",
       "requested_f0_hz": 147.00983765491318,
       "simulated_f0_hz": 86.72850670815824,
-      "stage": "calibration:cal-a"
+      "stage": "calibration:cal-a",
+      "synthesized": true
     },
     {
       "candidate_id": "t1-two_mass-1",
+      "comparison": "joint",
       "family": "two_mass",
       "requested_f0_hz": 214.28770767407093,
       "simulated_f0_hz": null,
-      "stage": "calibration:cal-u"
+      "stage": "calibration:cal-u",
+      "synthesized": true
     },
     {
       "candidate_id": "t1-two_mass-2",
+      "comparison": "joint",
       "family": "two_mass",
       "requested_f0_hz": 147.00983765491318,
       "simulated_f0_hz": 126.10093531380663,
-      "stage": "calibration:cal-a"
+      "stage": "calibration:cal-a",
+      "synthesized": true
     },
     {
       "candidate_id": "t1-two_mass-2",
+      "comparison": "joint",
       "family": "two_mass",
       "requested_f0_hz": 214.28770767407093,
       "simulated_f0_hz": null,
-      "stage": "calibration:cal-u"
+      "stage": "calibration:cal-u",
+      "synthesized": true
     },
     {
       "candidate_id": "t0-geometric-0",
+      "comparison": "fixed_source",
+      "family": "geometric",
+      "requested_f0_hz": 147.00983765491318,
+      "simulated_f0_hz": 147.00225866347068,
+      "stage": "calibration:cal-a",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t0-geometric-0",
+      "comparison": "fixed_source",
+      "family": "geometric",
+      "requested_f0_hz": 214.28770767407093,
+      "simulated_f0_hz": 214.32502141483218,
+      "stage": "calibration:cal-u",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t0-geometric-1",
+      "comparison": "fixed_source",
+      "family": "geometric",
+      "requested_f0_hz": 147.00983765491318,
+      "simulated_f0_hz": 147.00225866347068,
+      "stage": "calibration:cal-a",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t0-geometric-1",
+      "comparison": "fixed_source",
+      "family": "geometric",
+      "requested_f0_hz": 214.28770767407093,
+      "simulated_f0_hz": 214.32502141483218,
+      "stage": "calibration:cal-u",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t0-geometric-2",
+      "comparison": "fixed_source",
+      "family": "geometric",
+      "requested_f0_hz": 147.00983765491318,
+      "simulated_f0_hz": 147.00225866347068,
+      "stage": "calibration:cal-a",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t0-geometric-2",
+      "comparison": "fixed_source",
+      "family": "geometric",
+      "requested_f0_hz": 214.28770767407093,
+      "simulated_f0_hz": 214.32502141483218,
+      "stage": "calibration:cal-u",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t1-geometric-0",
+      "comparison": "fixed_source",
+      "family": "geometric",
+      "requested_f0_hz": 147.00983765491318,
+      "simulated_f0_hz": 147.0080220218445,
+      "stage": "calibration:cal-a",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t1-geometric-0",
+      "comparison": "fixed_source",
+      "family": "geometric",
+      "requested_f0_hz": 214.28770767407093,
+      "simulated_f0_hz": null,
+      "stage": "calibration:cal-u",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t1-geometric-1",
+      "comparison": "fixed_source",
+      "family": "geometric",
+      "requested_f0_hz": 147.00983765491318,
+      "simulated_f0_hz": 147.0080220218445,
+      "stage": "calibration:cal-a",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t1-geometric-1",
+      "comparison": "fixed_source",
+      "family": "geometric",
+      "requested_f0_hz": 214.28770767407093,
+      "simulated_f0_hz": null,
+      "stage": "calibration:cal-u",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t1-geometric-2",
+      "comparison": "fixed_source",
+      "family": "geometric",
+      "requested_f0_hz": 147.00983765491318,
+      "simulated_f0_hz": 147.0080220218445,
+      "stage": "calibration:cal-a",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t1-geometric-2",
+      "comparison": "fixed_source",
+      "family": "geometric",
+      "requested_f0_hz": 214.28770767407093,
+      "simulated_f0_hz": null,
+      "stage": "calibration:cal-u",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t0-two_mass-0",
+      "comparison": "fixed_source",
+      "family": "two_mass",
+      "requested_f0_hz": 147.00983765491318,
+      "simulated_f0_hz": 141.38469722234464,
+      "stage": "calibration:cal-a",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t0-two_mass-0",
+      "comparison": "fixed_source",
+      "family": "two_mass",
+      "requested_f0_hz": 214.28770767407093,
+      "simulated_f0_hz": 209.80829742479932,
+      "stage": "calibration:cal-u",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t0-two_mass-1",
+      "comparison": "fixed_source",
+      "family": "two_mass",
+      "requested_f0_hz": 147.00983765491318,
+      "simulated_f0_hz": 141.38469722234464,
+      "stage": "calibration:cal-a",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t0-two_mass-1",
+      "comparison": "fixed_source",
+      "family": "two_mass",
+      "requested_f0_hz": 214.28770767407093,
+      "simulated_f0_hz": 209.80829742479932,
+      "stage": "calibration:cal-u",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t0-two_mass-2",
+      "comparison": "fixed_source",
+      "family": "two_mass",
+      "requested_f0_hz": 147.00983765491318,
+      "simulated_f0_hz": 141.38469722234464,
+      "stage": "calibration:cal-a",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t0-two_mass-2",
+      "comparison": "fixed_source",
+      "family": "two_mass",
+      "requested_f0_hz": 214.28770767407093,
+      "simulated_f0_hz": 209.80829742479932,
+      "stage": "calibration:cal-u",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t1-two_mass-0",
+      "comparison": "fixed_source",
+      "family": "two_mass",
+      "requested_f0_hz": 147.00983765491318,
+      "simulated_f0_hz": 130.4165386474049,
+      "stage": "calibration:cal-a",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t1-two_mass-0",
+      "comparison": "fixed_source",
+      "family": "two_mass",
+      "requested_f0_hz": 214.28770767407093,
+      "simulated_f0_hz": null,
+      "stage": "calibration:cal-u",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t1-two_mass-1",
+      "comparison": "fixed_source",
+      "family": "two_mass",
+      "requested_f0_hz": 147.00983765491318,
+      "simulated_f0_hz": 130.4165386474049,
+      "stage": "calibration:cal-a",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t1-two_mass-1",
+      "comparison": "fixed_source",
+      "family": "two_mass",
+      "requested_f0_hz": 214.28770767407093,
+      "simulated_f0_hz": null,
+      "stage": "calibration:cal-u",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t1-two_mass-2",
+      "comparison": "fixed_source",
+      "family": "two_mass",
+      "requested_f0_hz": 147.00983765491318,
+      "simulated_f0_hz": 130.4165386474049,
+      "stage": "calibration:cal-a",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t1-two_mass-2",
+      "comparison": "fixed_source",
+      "family": "two_mass",
+      "requested_f0_hz": 214.28770767407093,
+      "simulated_f0_hz": null,
+      "stage": "calibration:cal-u",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t0-geometric-0",
+      "comparison": "fixed_anatomy",
+      "family": "geometric",
+      "requested_f0_hz": 147.00983765491318,
+      "simulated_f0_hz": 147.0060269064319,
+      "stage": "calibration:cal-a",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t0-geometric-0",
+      "comparison": "fixed_anatomy",
+      "family": "geometric",
+      "requested_f0_hz": 214.28770767407093,
+      "simulated_f0_hz": 214.31296223449743,
+      "stage": "calibration:cal-u",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t0-geometric-1",
+      "comparison": "fixed_anatomy",
+      "family": "geometric",
+      "requested_f0_hz": 147.00983765491318,
+      "simulated_f0_hz": 147.0052369461621,
+      "stage": "calibration:cal-a",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t0-geometric-1",
+      "comparison": "fixed_anatomy",
+      "family": "geometric",
+      "requested_f0_hz": 214.28770767407093,
+      "simulated_f0_hz": 214.3134851394597,
+      "stage": "calibration:cal-u",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t0-geometric-2",
+      "comparison": "fixed_anatomy",
+      "family": "geometric",
+      "requested_f0_hz": 147.00983765491318,
+      "simulated_f0_hz": 147.00379364728704,
+      "stage": "calibration:cal-a",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t0-geometric-2",
+      "comparison": "fixed_anatomy",
+      "family": "geometric",
+      "requested_f0_hz": 214.28770767407093,
+      "simulated_f0_hz": 214.31934423478458,
+      "stage": "calibration:cal-u",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t1-geometric-0",
+      "comparison": "fixed_anatomy",
+      "family": "geometric",
+      "requested_f0_hz": 147.00983765491318,
+      "simulated_f0_hz": 147.0060269064319,
+      "stage": "calibration:cal-a",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t1-geometric-0",
+      "comparison": "fixed_anatomy",
+      "family": "geometric",
+      "requested_f0_hz": 214.28770767407093,
+      "simulated_f0_hz": 214.31296223449743,
+      "stage": "calibration:cal-u",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t1-geometric-1",
+      "comparison": "fixed_anatomy",
+      "family": "geometric",
+      "requested_f0_hz": 147.00983765491318,
+      "simulated_f0_hz": 147.0052369461621,
+      "stage": "calibration:cal-a",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t1-geometric-1",
+      "comparison": "fixed_anatomy",
+      "family": "geometric",
+      "requested_f0_hz": 214.28770767407093,
+      "simulated_f0_hz": 214.3134851394597,
+      "stage": "calibration:cal-u",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t1-geometric-2",
+      "comparison": "fixed_anatomy",
+      "family": "geometric",
+      "requested_f0_hz": 147.00983765491318,
+      "simulated_f0_hz": 147.00379364728704,
+      "stage": "calibration:cal-a",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t1-geometric-2",
+      "comparison": "fixed_anatomy",
+      "family": "geometric",
+      "requested_f0_hz": 214.28770767407093,
+      "simulated_f0_hz": 214.31934423478458,
+      "stage": "calibration:cal-u",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t0-two_mass-0",
+      "comparison": "fixed_anatomy",
+      "family": "two_mass",
+      "requested_f0_hz": 147.00983765491318,
+      "simulated_f0_hz": 144.30101182847923,
+      "stage": "calibration:cal-a",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t0-two_mass-0",
+      "comparison": "fixed_anatomy",
+      "family": "two_mass",
+      "requested_f0_hz": 214.28770767407093,
+      "simulated_f0_hz": 202.9826287538528,
+      "stage": "calibration:cal-u",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t0-two_mass-1",
+      "comparison": "fixed_anatomy",
+      "family": "two_mass",
+      "requested_f0_hz": 147.00983765491318,
+      "simulated_f0_hz": 133.67348707029032,
+      "stage": "calibration:cal-a",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t0-two_mass-1",
+      "comparison": "fixed_anatomy",
+      "family": "two_mass",
+      "requested_f0_hz": 214.28770767407093,
+      "simulated_f0_hz": 178.7202671478088,
+      "stage": "calibration:cal-u",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t0-two_mass-2",
+      "comparison": "fixed_anatomy",
+      "family": "two_mass",
+      "requested_f0_hz": 147.00983765491318,
+      "simulated_f0_hz": 134.73210409352077,
+      "stage": "calibration:cal-a",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t0-two_mass-2",
+      "comparison": "fixed_anatomy",
+      "family": "two_mass",
+      "requested_f0_hz": 214.28770767407093,
+      "simulated_f0_hz": 181.91068151128607,
+      "stage": "calibration:cal-u",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t1-two_mass-0",
+      "comparison": "fixed_anatomy",
+      "family": "two_mass",
+      "requested_f0_hz": 147.00983765491318,
+      "simulated_f0_hz": 144.30101182847923,
+      "stage": "calibration:cal-a",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t1-two_mass-0",
+      "comparison": "fixed_anatomy",
+      "family": "two_mass",
+      "requested_f0_hz": 214.28770767407093,
+      "simulated_f0_hz": 202.9826287538528,
+      "stage": "calibration:cal-u",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t1-two_mass-1",
+      "comparison": "fixed_anatomy",
+      "family": "two_mass",
+      "requested_f0_hz": 147.00983765491318,
+      "simulated_f0_hz": 133.67348707029032,
+      "stage": "calibration:cal-a",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t1-two_mass-1",
+      "comparison": "fixed_anatomy",
+      "family": "two_mass",
+      "requested_f0_hz": 214.28770767407093,
+      "simulated_f0_hz": 178.7202671478088,
+      "stage": "calibration:cal-u",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t1-two_mass-2",
+      "comparison": "fixed_anatomy",
+      "family": "two_mass",
+      "requested_f0_hz": 147.00983765491318,
+      "simulated_f0_hz": 134.73210409352077,
+      "stage": "calibration:cal-a",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t1-two_mass-2",
+      "comparison": "fixed_anatomy",
+      "family": "two_mass",
+      "requested_f0_hz": 214.28770767407093,
+      "simulated_f0_hz": 181.91068151128607,
+      "stage": "calibration:cal-u",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t0-geometric-0",
+      "comparison": "joint",
       "family": "geometric",
       "requested_f0_hz": 190.0,
       "simulated_f0_hz": 190.07036350058632,
-      "stage": "heldout:e"
+      "stage": "heldout:e",
+      "synthesized": true
     },
     {
       "candidate_id": "t0-geometric-1",
+      "comparison": "joint",
       "family": "geometric",
       "requested_f0_hz": 190.0,
       "simulated_f0_hz": 190.07507683522755,
-      "stage": "heldout:e"
+      "stage": "heldout:e",
+      "synthesized": true
     },
     {
       "candidate_id": "t0-geometric-2",
+      "comparison": "joint",
       "family": "geometric",
       "requested_f0_hz": 190.0,
       "simulated_f0_hz": 190.0807064827409,
-      "stage": "heldout:e"
+      "stage": "heldout:e",
+      "synthesized": true
     },
     {
       "candidate_id": "t1-geometric-0",
+      "comparison": "joint",
       "family": "geometric",
       "requested_f0_hz": null,
       "simulated_f0_hz": null,
-      "stage": "heldout:e"
+      "stage": "heldout:e",
+      "synthesized": false
     },
     {
       "candidate_id": "t1-geometric-1",
+      "comparison": "joint",
       "family": "geometric",
       "requested_f0_hz": null,
       "simulated_f0_hz": null,
-      "stage": "heldout:e"
+      "stage": "heldout:e",
+      "synthesized": false
     },
     {
       "candidate_id": "t1-geometric-2",
+      "comparison": "joint",
       "family": "geometric",
       "requested_f0_hz": null,
       "simulated_f0_hz": null,
-      "stage": "heldout:e"
+      "stage": "heldout:e",
+      "synthesized": false
     },
     {
       "candidate_id": "t0-two_mass-0",
+      "comparison": "joint",
       "family": "two_mass",
       "requested_f0_hz": 190.0,
       "simulated_f0_hz": 204.54612651989237,
-      "stage": "heldout:e"
+      "stage": "heldout:e",
+      "synthesized": true
     },
     {
       "candidate_id": "t0-two_mass-1",
+      "comparison": "joint",
       "family": "two_mass",
       "requested_f0_hz": 190.0,
       "simulated_f0_hz": 192.04963135403057,
-      "stage": "heldout:e"
+      "stage": "heldout:e",
+      "synthesized": true
     },
     {
       "candidate_id": "t0-two_mass-2",
+      "comparison": "joint",
       "family": "two_mass",
       "requested_f0_hz": 190.0,
       "simulated_f0_hz": 189.97019318023604,
-      "stage": "heldout:e"
+      "stage": "heldout:e",
+      "synthesized": true
     },
     {
       "candidate_id": "t1-two_mass-0",
+      "comparison": "joint",
       "family": "two_mass",
       "requested_f0_hz": null,
       "simulated_f0_hz": null,
-      "stage": "heldout:e"
+      "stage": "heldout:e",
+      "synthesized": false
     },
     {
       "candidate_id": "t1-two_mass-1",
+      "comparison": "joint",
       "family": "two_mass",
       "requested_f0_hz": null,
       "simulated_f0_hz": null,
-      "stage": "heldout:e"
+      "stage": "heldout:e",
+      "synthesized": false
     },
     {
       "candidate_id": "t1-two_mass-2",
+      "comparison": "joint",
       "family": "two_mass",
       "requested_f0_hz": null,
       "simulated_f0_hz": null,
-      "stage": "heldout:e"
+      "stage": "heldout:e",
+      "synthesized": false
     },
     {
       "candidate_id": "t0-geometric-0",
+      "comparison": "fixed_source",
       "family": "geometric",
       "requested_f0_hz": 190.0,
-      "simulated_f0_hz": 190.0351575129945,
-      "stage": "heldout:o"
+      "simulated_f0_hz": 190.07507683522755,
+      "stage": "heldout:e",
+      "synthesized": true
     },
     {
       "candidate_id": "t0-geometric-1",
+      "comparison": "fixed_source",
       "family": "geometric",
       "requested_f0_hz": 190.0,
-      "simulated_f0_hz": 190.03565084976356,
-      "stage": "heldout:o"
+      "simulated_f0_hz": 190.07507683522755,
+      "stage": "heldout:e",
+      "synthesized": true
     },
     {
       "candidate_id": "t0-geometric-2",
+      "comparison": "fixed_source",
       "family": "geometric",
       "requested_f0_hz": 190.0,
-      "simulated_f0_hz": 190.03512975321675,
-      "stage": "heldout:o"
+      "simulated_f0_hz": 190.07507683522755,
+      "stage": "heldout:e",
+      "synthesized": true
     },
     {
       "candidate_id": "t1-geometric-0",
+      "comparison": "fixed_source",
       "family": "geometric",
       "requested_f0_hz": null,
       "simulated_f0_hz": null,
-      "stage": "heldout:o"
+      "stage": "heldout:e",
+      "synthesized": false
     },
     {
       "candidate_id": "t1-geometric-1",
+      "comparison": "fixed_source",
       "family": "geometric",
       "requested_f0_hz": null,
       "simulated_f0_hz": null,
-      "stage": "heldout:o"
+      "stage": "heldout:e",
+      "synthesized": false
     },
     {
       "candidate_id": "t1-geometric-2",
+      "comparison": "fixed_source",
       "family": "geometric",
       "requested_f0_hz": null,
       "simulated_f0_hz": null,
-      "stage": "heldout:o"
+      "stage": "heldout:e",
+      "synthesized": false
     },
     {
       "candidate_id": "t0-two_mass-0",
+      "comparison": "fixed_source",
       "family": "two_mass",
       "requested_f0_hz": 190.0,
-      "simulated_f0_hz": 199.89272874148722,
-      "stage": "heldout:o"
+      "simulated_f0_hz": 194.1281138353374,
+      "stage": "heldout:e",
+      "synthesized": true
     },
     {
       "candidate_id": "t0-two_mass-1",
+      "comparison": "fixed_source",
       "family": "two_mass",
       "requested_f0_hz": 190.0,
-      "simulated_f0_hz": 178.84339052716908,
-      "stage": "heldout:o"
+      "simulated_f0_hz": 194.1281138353374,
+      "stage": "heldout:e",
+      "synthesized": true
     },
     {
       "candidate_id": "t0-two_mass-2",
+      "comparison": "fixed_source",
       "family": "two_mass",
       "requested_f0_hz": 190.0,
-      "simulated_f0_hz": 185.3931206333918,
-      "stage": "heldout:o"
+      "simulated_f0_hz": 194.1281138353374,
+      "stage": "heldout:e",
+      "synthesized": true
     },
     {
       "candidate_id": "t1-two_mass-0",
+      "comparison": "fixed_source",
       "family": "two_mass",
       "requested_f0_hz": null,
       "simulated_f0_hz": null,
-      "stage": "heldout:o"
+      "stage": "heldout:e",
+      "synthesized": false
     },
     {
       "candidate_id": "t1-two_mass-1",
+      "comparison": "fixed_source",
       "family": "two_mass",
       "requested_f0_hz": null,
       "simulated_f0_hz": null,
-      "stage": "heldout:o"
+      "stage": "heldout:e",
+      "synthesized": false
     },
     {
       "candidate_id": "t1-two_mass-2",
+      "comparison": "fixed_source",
       "family": "two_mass",
       "requested_f0_hz": null,
       "simulated_f0_hz": null,
-      "stage": "heldout:o"
+      "stage": "heldout:e",
+      "synthesized": false
+    },
+    {
+      "candidate_id": "t0-geometric-0",
+      "comparison": "fixed_anatomy",
+      "family": "geometric",
+      "requested_f0_hz": 190.0,
+      "simulated_f0_hz": 190.0898332716741,
+      "stage": "heldout:e",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t0-geometric-1",
+      "comparison": "fixed_anatomy",
+      "family": "geometric",
+      "requested_f0_hz": 190.0,
+      "simulated_f0_hz": 190.09380115601036,
+      "stage": "heldout:e",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t0-geometric-2",
+      "comparison": "fixed_anatomy",
+      "family": "geometric",
+      "requested_f0_hz": 190.0,
+      "simulated_f0_hz": 190.0999704972611,
+      "stage": "heldout:e",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t1-geometric-0",
+      "comparison": "fixed_anatomy",
+      "family": "geometric",
+      "requested_f0_hz": 190.0,
+      "simulated_f0_hz": 190.0898332716741,
+      "stage": "heldout:e",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t1-geometric-1",
+      "comparison": "fixed_anatomy",
+      "family": "geometric",
+      "requested_f0_hz": 190.0,
+      "simulated_f0_hz": 190.09380115601036,
+      "stage": "heldout:e",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t1-geometric-2",
+      "comparison": "fixed_anatomy",
+      "family": "geometric",
+      "requested_f0_hz": 190.0,
+      "simulated_f0_hz": 190.0999704972611,
+      "stage": "heldout:e",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t0-two_mass-0",
+      "comparison": "fixed_anatomy",
+      "family": "two_mass",
+      "requested_f0_hz": 190.0,
+      "simulated_f0_hz": 197.1863528968128,
+      "stage": "heldout:e",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t0-two_mass-1",
+      "comparison": "fixed_anatomy",
+      "family": "two_mass",
+      "requested_f0_hz": 190.0,
+      "simulated_f0_hz": 187.25880387947387,
+      "stage": "heldout:e",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t0-two_mass-2",
+      "comparison": "fixed_anatomy",
+      "family": "two_mass",
+      "requested_f0_hz": 190.0,
+      "simulated_f0_hz": 184.44307704970703,
+      "stage": "heldout:e",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t1-two_mass-0",
+      "comparison": "fixed_anatomy",
+      "family": "two_mass",
+      "requested_f0_hz": 190.0,
+      "simulated_f0_hz": 197.1863528968128,
+      "stage": "heldout:e",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t1-two_mass-1",
+      "comparison": "fixed_anatomy",
+      "family": "two_mass",
+      "requested_f0_hz": 190.0,
+      "simulated_f0_hz": 187.25880387947387,
+      "stage": "heldout:e",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t1-two_mass-2",
+      "comparison": "fixed_anatomy",
+      "family": "two_mass",
+      "requested_f0_hz": 190.0,
+      "simulated_f0_hz": 184.44307704970703,
+      "stage": "heldout:e",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t0-geometric-0",
+      "comparison": "joint",
+      "family": "geometric",
+      "requested_f0_hz": 190.0,
+      "simulated_f0_hz": 190.0351575129945,
+      "stage": "heldout:o",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t0-geometric-1",
+      "comparison": "joint",
+      "family": "geometric",
+      "requested_f0_hz": 190.0,
+      "simulated_f0_hz": 190.03565084976356,
+      "stage": "heldout:o",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t0-geometric-2",
+      "comparison": "joint",
+      "family": "geometric",
+      "requested_f0_hz": 190.0,
+      "simulated_f0_hz": 190.03512975321675,
+      "stage": "heldout:o",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t1-geometric-0",
+      "comparison": "joint",
+      "family": "geometric",
+      "requested_f0_hz": null,
+      "simulated_f0_hz": null,
+      "stage": "heldout:o",
+      "synthesized": false
+    },
+    {
+      "candidate_id": "t1-geometric-1",
+      "comparison": "joint",
+      "family": "geometric",
+      "requested_f0_hz": null,
+      "simulated_f0_hz": null,
+      "stage": "heldout:o",
+      "synthesized": false
+    },
+    {
+      "candidate_id": "t1-geometric-2",
+      "comparison": "joint",
+      "family": "geometric",
+      "requested_f0_hz": null,
+      "simulated_f0_hz": null,
+      "stage": "heldout:o",
+      "synthesized": false
+    },
+    {
+      "candidate_id": "t0-two_mass-0",
+      "comparison": "joint",
+      "family": "two_mass",
+      "requested_f0_hz": 190.0,
+      "simulated_f0_hz": 199.89272874148722,
+      "stage": "heldout:o",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t0-two_mass-1",
+      "comparison": "joint",
+      "family": "two_mass",
+      "requested_f0_hz": 190.0,
+      "simulated_f0_hz": 178.84339052716908,
+      "stage": "heldout:o",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t0-two_mass-2",
+      "comparison": "joint",
+      "family": "two_mass",
+      "requested_f0_hz": 190.0,
+      "simulated_f0_hz": 185.3931206333918,
+      "stage": "heldout:o",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t1-two_mass-0",
+      "comparison": "joint",
+      "family": "two_mass",
+      "requested_f0_hz": null,
+      "simulated_f0_hz": null,
+      "stage": "heldout:o",
+      "synthesized": false
+    },
+    {
+      "candidate_id": "t1-two_mass-1",
+      "comparison": "joint",
+      "family": "two_mass",
+      "requested_f0_hz": null,
+      "simulated_f0_hz": null,
+      "stage": "heldout:o",
+      "synthesized": false
+    },
+    {
+      "candidate_id": "t1-two_mass-2",
+      "comparison": "joint",
+      "family": "two_mass",
+      "requested_f0_hz": null,
+      "simulated_f0_hz": null,
+      "stage": "heldout:o",
+      "synthesized": false
+    },
+    {
+      "candidate_id": "t0-geometric-0",
+      "comparison": "fixed_source",
+      "family": "geometric",
+      "requested_f0_hz": 190.0,
+      "simulated_f0_hz": 190.03565084976356,
+      "stage": "heldout:o",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t0-geometric-1",
+      "comparison": "fixed_source",
+      "family": "geometric",
+      "requested_f0_hz": 190.0,
+      "simulated_f0_hz": 190.03565084976356,
+      "stage": "heldout:o",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t0-geometric-2",
+      "comparison": "fixed_source",
+      "family": "geometric",
+      "requested_f0_hz": 190.0,
+      "simulated_f0_hz": 190.03565084976356,
+      "stage": "heldout:o",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t1-geometric-0",
+      "comparison": "fixed_source",
+      "family": "geometric",
+      "requested_f0_hz": null,
+      "simulated_f0_hz": null,
+      "stage": "heldout:o",
+      "synthesized": false
+    },
+    {
+      "candidate_id": "t1-geometric-1",
+      "comparison": "fixed_source",
+      "family": "geometric",
+      "requested_f0_hz": null,
+      "simulated_f0_hz": null,
+      "stage": "heldout:o",
+      "synthesized": false
+    },
+    {
+      "candidate_id": "t1-geometric-2",
+      "comparison": "fixed_source",
+      "family": "geometric",
+      "requested_f0_hz": null,
+      "simulated_f0_hz": null,
+      "stage": "heldout:o",
+      "synthesized": false
+    },
+    {
+      "candidate_id": "t0-two_mass-0",
+      "comparison": "fixed_source",
+      "family": "two_mass",
+      "requested_f0_hz": 190.0,
+      "simulated_f0_hz": 189.6988604354091,
+      "stage": "heldout:o",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t0-two_mass-1",
+      "comparison": "fixed_source",
+      "family": "two_mass",
+      "requested_f0_hz": 190.0,
+      "simulated_f0_hz": 189.6988604354091,
+      "stage": "heldout:o",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t0-two_mass-2",
+      "comparison": "fixed_source",
+      "family": "two_mass",
+      "requested_f0_hz": 190.0,
+      "simulated_f0_hz": 189.6988604354091,
+      "stage": "heldout:o",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t1-two_mass-0",
+      "comparison": "fixed_source",
+      "family": "two_mass",
+      "requested_f0_hz": null,
+      "simulated_f0_hz": null,
+      "stage": "heldout:o",
+      "synthesized": false
+    },
+    {
+      "candidate_id": "t1-two_mass-1",
+      "comparison": "fixed_source",
+      "family": "two_mass",
+      "requested_f0_hz": null,
+      "simulated_f0_hz": null,
+      "stage": "heldout:o",
+      "synthesized": false
+    },
+    {
+      "candidate_id": "t1-two_mass-2",
+      "comparison": "fixed_source",
+      "family": "two_mass",
+      "requested_f0_hz": null,
+      "simulated_f0_hz": null,
+      "stage": "heldout:o",
+      "synthesized": false
+    },
+    {
+      "candidate_id": "t0-geometric-0",
+      "comparison": "fixed_anatomy",
+      "family": "geometric",
+      "requested_f0_hz": 190.0,
+      "simulated_f0_hz": 190.02735847255246,
+      "stage": "heldout:o",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t0-geometric-1",
+      "comparison": "fixed_anatomy",
+      "family": "geometric",
+      "requested_f0_hz": 190.0,
+      "simulated_f0_hz": 190.0277600589469,
+      "stage": "heldout:o",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t0-geometric-2",
+      "comparison": "fixed_anatomy",
+      "family": "geometric",
+      "requested_f0_hz": 190.0,
+      "simulated_f0_hz": 190.03346324711268,
+      "stage": "heldout:o",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t1-geometric-0",
+      "comparison": "fixed_anatomy",
+      "family": "geometric",
+      "requested_f0_hz": 190.0,
+      "simulated_f0_hz": 190.02735847255246,
+      "stage": "heldout:o",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t1-geometric-1",
+      "comparison": "fixed_anatomy",
+      "family": "geometric",
+      "requested_f0_hz": 190.0,
+      "simulated_f0_hz": 190.0277600589469,
+      "stage": "heldout:o",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t1-geometric-2",
+      "comparison": "fixed_anatomy",
+      "family": "geometric",
+      "requested_f0_hz": 190.0,
+      "simulated_f0_hz": 190.03346324711268,
+      "stage": "heldout:o",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t0-two_mass-0",
+      "comparison": "fixed_anatomy",
+      "family": "two_mass",
+      "requested_f0_hz": 190.0,
+      "simulated_f0_hz": 191.3651580448116,
+      "stage": "heldout:o",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t0-two_mass-1",
+      "comparison": "fixed_anatomy",
+      "family": "two_mass",
+      "requested_f0_hz": 190.0,
+      "simulated_f0_hz": 172.69492073404737,
+      "stage": "heldout:o",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t0-two_mass-2",
+      "comparison": "fixed_anatomy",
+      "family": "two_mass",
+      "requested_f0_hz": 190.0,
+      "simulated_f0_hz": 177.99218976347115,
+      "stage": "heldout:o",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t1-two_mass-0",
+      "comparison": "fixed_anatomy",
+      "family": "two_mass",
+      "requested_f0_hz": 190.0,
+      "simulated_f0_hz": 191.3651580448116,
+      "stage": "heldout:o",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t1-two_mass-1",
+      "comparison": "fixed_anatomy",
+      "family": "two_mass",
+      "requested_f0_hz": 190.0,
+      "simulated_f0_hz": 172.69492073404737,
+      "stage": "heldout:o",
+      "synthesized": true
+    },
+    {
+      "candidate_id": "t1-two_mass-2",
+      "comparison": "fixed_anatomy",
+      "family": "two_mass",
+      "requested_f0_hz": 190.0,
+      "simulated_f0_hz": 177.99218976347115,
+      "stage": "heldout:o",
+      "synthesized": true
     }
   ],
   "family": "two_mass",
@@ -345,81 +1305,348 @@
       "fixed_source": "t0-two_mass-0",
       "joint": "t0-geometric-0"
     },
-    "joint": [
+    "fixed_anatomy": [
       {
         "candidate_id": "t0-geometric-0",
-        "f0": [
+        "failures": [],
+        "predictions": [
           {
+            "descriptor_reasons": {},
             "requested_f0_hz": 147.00983765491318,
-            "simulated_f0_hz": 147.00338827942426,
+            "simulated_f0_hz": 147.0060269064319,
             "trial_id": "cal-a"
           },
           {
+            "descriptor_reasons": {},
             "requested_f0_hz": 214.28770767407093,
-            "simulated_f0_hz": 214.33144590275987,
+            "simulated_f0_hz": 214.31296223449743,
             "trial_id": "cal-u"
           }
         ],
-        "failures": [],
-        "score": 0.05514185349037964,
-        "score_excluding_pitch": 0.07352165689255075,
+        "score": 0.014960357580050336,
+        "score_excluding_pitch": 0.019946871642306147,
         "status": "scored"
       },
       {
         "candidate_id": "t0-geometric-1",
-        "f0": [
+        "failures": [],
+        "predictions": [
           {
+            "descriptor_reasons": {},
+            "requested_f0_hz": 147.00983765491318,
+            "simulated_f0_hz": 147.0052369461621,
+            "trial_id": "cal-a"
+          },
+          {
+            "descriptor_reasons": {},
+            "requested_f0_hz": 214.28770767407093,
+            "simulated_f0_hz": 214.3134851394597,
+            "trial_id": "cal-u"
+          }
+        ],
+        "score": 0.008944500042344247,
+        "score_excluding_pitch": 0.011925714371357796,
+        "status": "scored"
+      },
+      {
+        "candidate_id": "t0-geometric-2",
+        "failures": [],
+        "predictions": [
+          {
+            "descriptor_reasons": {},
+            "requested_f0_hz": 147.00983765491318,
+            "simulated_f0_hz": 147.00379364728704,
+            "trial_id": "cal-a"
+          },
+          {
+            "descriptor_reasons": {},
+            "requested_f0_hz": 214.28770767407093,
+            "simulated_f0_hz": 214.31934423478458,
+            "trial_id": "cal-u"
+          }
+        ],
+        "score": 0.022065001544899057,
+        "score_excluding_pitch": 0.029419569809031258,
+        "status": "scored"
+      },
+      {
+        "candidate_id": "t1-geometric-0",
+        "failures": [],
+        "predictions": [
+          {
+            "descriptor_reasons": {},
+            "requested_f0_hz": 147.00983765491318,
+            "simulated_f0_hz": 147.0060269064319,
+            "trial_id": "cal-a"
+          },
+          {
+            "descriptor_reasons": {},
+            "requested_f0_hz": 214.28770767407093,
+            "simulated_f0_hz": 214.31296223449743,
+            "trial_id": "cal-u"
+          }
+        ],
+        "score": 0.014960357580050336,
+        "score_excluding_pitch": 0.019946871642306147,
+        "status": "scored"
+      },
+      {
+        "candidate_id": "t1-geometric-1",
+        "failures": [],
+        "predictions": [
+          {
+            "descriptor_reasons": {},
+            "requested_f0_hz": 147.00983765491318,
+            "simulated_f0_hz": 147.0052369461621,
+            "trial_id": "cal-a"
+          },
+          {
+            "descriptor_reasons": {},
+            "requested_f0_hz": 214.28770767407093,
+            "simulated_f0_hz": 214.3134851394597,
+            "trial_id": "cal-u"
+          }
+        ],
+        "score": 0.008944500042344247,
+        "score_excluding_pitch": 0.011925714371357796,
+        "status": "scored"
+      },
+      {
+        "candidate_id": "t1-geometric-2",
+        "failures": [],
+        "predictions": [
+          {
+            "descriptor_reasons": {},
+            "requested_f0_hz": 147.00983765491318,
+            "simulated_f0_hz": 147.00379364728704,
+            "trial_id": "cal-a"
+          },
+          {
+            "descriptor_reasons": {},
+            "requested_f0_hz": 214.28770767407093,
+            "simulated_f0_hz": 214.31934423478458,
+            "trial_id": "cal-u"
+          }
+        ],
+        "score": 0.022065001544899057,
+        "score_excluding_pitch": 0.029419569809031258,
+        "status": "scored"
+      },
+      {
+        "candidate_id": "t0-two_mass-0",
+        "failures": [],
+        "predictions": [
+          {
+            "descriptor_reasons": {},
+            "requested_f0_hz": 147.00983765491318,
+            "simulated_f0_hz": 144.30101182847923,
+            "trial_id": "cal-a"
+          },
+          {
+            "descriptor_reasons": {},
+            "requested_f0_hz": 214.28770767407093,
+            "simulated_f0_hz": 202.9826287538528,
+            "trial_id": "cal-u"
+          }
+        ],
+        "score": 0.05258085501054897,
+        "score_excluding_pitch": 0.013798412201433602,
+        "status": "scored"
+      },
+      {
+        "candidate_id": "t0-two_mass-1",
+        "failures": [],
+        "predictions": [
+          {
+            "descriptor_reasons": {},
+            "requested_f0_hz": 147.00983765491318,
+            "simulated_f0_hz": 133.67348707029032,
+            "trial_id": "cal-a"
+          },
+          {
+            "descriptor_reasons": {},
+            "requested_f0_hz": 214.28770767407093,
+            "simulated_f0_hz": 178.7202671478088,
+            "trial_id": "cal-u"
+          }
+        ],
+        "score": 0.6577966883791051,
+        "score_excluding_pitch": 0.27585347096165536,
+        "status": "scored"
+      },
+      {
+        "candidate_id": "t0-two_mass-2",
+        "failures": [],
+        "predictions": [
+          {
+            "descriptor_reasons": {},
+            "requested_f0_hz": 147.00983765491318,
+            "simulated_f0_hz": 134.73210409352077,
+            "trial_id": "cal-a"
+          },
+          {
+            "descriptor_reasons": {},
+            "requested_f0_hz": 214.28770767407093,
+            "simulated_f0_hz": 181.91068151128607,
+            "trial_id": "cal-u"
+          }
+        ],
+        "score": 0.7151386630624523,
+        "score_excluding_pitch": 0.4539288155206879,
+        "status": "scored"
+      },
+      {
+        "candidate_id": "t1-two_mass-0",
+        "failures": [],
+        "predictions": [
+          {
+            "descriptor_reasons": {},
+            "requested_f0_hz": 147.00983765491318,
+            "simulated_f0_hz": 144.30101182847923,
+            "trial_id": "cal-a"
+          },
+          {
+            "descriptor_reasons": {},
+            "requested_f0_hz": 214.28770767407093,
+            "simulated_f0_hz": 202.9826287538528,
+            "trial_id": "cal-u"
+          }
+        ],
+        "score": 0.05258085501054897,
+        "score_excluding_pitch": 0.013798412201433602,
+        "status": "scored"
+      },
+      {
+        "candidate_id": "t1-two_mass-1",
+        "failures": [],
+        "predictions": [
+          {
+            "descriptor_reasons": {},
+            "requested_f0_hz": 147.00983765491318,
+            "simulated_f0_hz": 133.67348707029032,
+            "trial_id": "cal-a"
+          },
+          {
+            "descriptor_reasons": {},
+            "requested_f0_hz": 214.28770767407093,
+            "simulated_f0_hz": 178.7202671478088,
+            "trial_id": "cal-u"
+          }
+        ],
+        "score": 0.6577966883791051,
+        "score_excluding_pitch": 0.27585347096165536,
+        "status": "scored"
+      },
+      {
+        "candidate_id": "t1-two_mass-2",
+        "failures": [],
+        "predictions": [
+          {
+            "descriptor_reasons": {},
+            "requested_f0_hz": 147.00983765491318,
+            "simulated_f0_hz": 134.73210409352077,
+            "trial_id": "cal-a"
+          },
+          {
+            "descriptor_reasons": {},
+            "requested_f0_hz": 214.28770767407093,
+            "simulated_f0_hz": 181.91068151128607,
+            "trial_id": "cal-u"
+          }
+        ],
+        "score": 0.7151386630624523,
+        "score_excluding_pitch": 0.4539288155206879,
+        "status": "scored"
+      }
+    ],
+    "fixed_source": [
+      {
+        "candidate_id": "t0-geometric-0",
+        "failures": [],
+        "predictions": [
+          {
+            "descriptor_reasons": {},
             "requested_f0_hz": 147.00983765491318,
             "simulated_f0_hz": 147.00225866347068,
             "trial_id": "cal-a"
           },
           {
+            "descriptor_reasons": {},
             "requested_f0_hz": 214.28770767407093,
             "simulated_f0_hz": 214.32502141483218,
             "trial_id": "cal-u"
           }
         ],
+        "score": 0.19038576345764108,
+        "score_excluding_pitch": 0.25384708054503774,
+        "status": "scored"
+      },
+      {
+        "candidate_id": "t0-geometric-1",
         "failures": [],
+        "predictions": [
+          {
+            "descriptor_reasons": {},
+            "requested_f0_hz": 147.00983765491318,
+            "simulated_f0_hz": 147.00225866347068,
+            "trial_id": "cal-a"
+          },
+          {
+            "descriptor_reasons": {},
+            "requested_f0_hz": 214.28770767407093,
+            "simulated_f0_hz": 214.32502141483218,
+            "trial_id": "cal-u"
+          }
+        ],
         "score": 0.19038576345764108,
         "score_excluding_pitch": 0.25384708054503774,
         "status": "scored"
       },
       {
         "candidate_id": "t0-geometric-2",
-        "f0": [
+        "failures": [],
+        "predictions": [
           {
+            "descriptor_reasons": {},
             "requested_f0_hz": 147.00983765491318,
-            "simulated_f0_hz": 146.9998123851859,
+            "simulated_f0_hz": 147.00225866347068,
             "trial_id": "cal-a"
           },
           {
+            "descriptor_reasons": {},
             "requested_f0_hz": 214.28770767407093,
-            "simulated_f0_hz": 214.32922123495268,
+            "simulated_f0_hz": 214.32502141483218,
             "trial_id": "cal-u"
           }
         ],
-        "failures": [],
-        "score": 0.1803631195004783,
-        "score_excluding_pitch": 0.2404833993832335,
+        "score": 0.19038576345764108,
+        "score_excluding_pitch": 0.25384708054503774,
         "status": "scored"
       },
       {
         "candidate_id": "t1-geometric-0",
-        "f0": [
-          {
-            "requested_f0_hz": 147.00983765491318,
-            "simulated_f0_hz": 147.0034095981082,
-            "trial_id": "cal-a"
-          },
-          {
-            "requested_f0_hz": 214.28770767407093,
-            "simulated_f0_hz": null,
-            "trial_id": "cal-u"
-          }
-        ],
         "failures": [
           {
             "reason": "required_predicted_descriptor_missing",
+            "trial_id": "cal-u"
+          }
+        ],
+        "predictions": [
+          {
+            "descriptor_reasons": {},
+            "requested_f0_hz": 147.00983765491318,
+            "simulated_f0_hz": 147.0080220218445,
+            "trial_id": "cal-a"
+          },
+          {
+            "descriptor_reasons": {
+              "harmonicSpectralSlopeDbOctave": "Signal below declared-60dBFS analysis floor",
+              "periodicity": "Signal below declared-60dBFS analysis floor",
+              "pitchHz": "Signal below declared-60dBFS analysis floor",
+              "spectralFlatness": "Signal below declared-60dBFS analysis floor"
+            },
+            "requested_f0_hz": 214.28770767407093,
+            "simulated_f0_hz": null,
             "trial_id": "cal-u"
           }
         ],
@@ -429,21 +1656,28 @@
       },
       {
         "candidate_id": "t1-geometric-1",
-        "f0": [
+        "failures": [
           {
+            "reason": "required_predicted_descriptor_missing",
+            "trial_id": "cal-u"
+          }
+        ],
+        "predictions": [
+          {
+            "descriptor_reasons": {},
             "requested_f0_hz": 147.00983765491318,
             "simulated_f0_hz": 147.0080220218445,
             "trial_id": "cal-a"
           },
           {
+            "descriptor_reasons": {
+              "harmonicSpectralSlopeDbOctave": "Signal below declared-60dBFS analysis floor",
+              "periodicity": "Signal below declared-60dBFS analysis floor",
+              "pitchHz": "Signal below declared-60dBFS analysis floor",
+              "spectralFlatness": "Signal below declared-60dBFS analysis floor"
+            },
             "requested_f0_hz": 214.28770767407093,
             "simulated_f0_hz": null,
-            "trial_id": "cal-u"
-          }
-        ],
-        "failures": [
-          {
-            "reason": "required_predicted_descriptor_missing",
             "trial_id": "cal-u"
           }
         ],
@@ -453,21 +1687,28 @@
       },
       {
         "candidate_id": "t1-geometric-2",
-        "f0": [
-          {
-            "requested_f0_hz": 147.00983765491318,
-            "simulated_f0_hz": 147.00214032631555,
-            "trial_id": "cal-a"
-          },
-          {
-            "requested_f0_hz": 214.28770767407093,
-            "simulated_f0_hz": null,
-            "trial_id": "cal-u"
-          }
-        ],
         "failures": [
           {
             "reason": "required_predicted_descriptor_missing",
+            "trial_id": "cal-u"
+          }
+        ],
+        "predictions": [
+          {
+            "descriptor_reasons": {},
+            "requested_f0_hz": 147.00983765491318,
+            "simulated_f0_hz": 147.0080220218445,
+            "trial_id": "cal-a"
+          },
+          {
+            "descriptor_reasons": {
+              "harmonicSpectralSlopeDbOctave": "Signal below declared-60dBFS analysis floor",
+              "periodicity": "Signal below declared-60dBFS analysis floor",
+              "pitchHz": "Signal below declared-60dBFS analysis floor",
+              "spectralFlatness": "Signal below declared-60dBFS analysis floor"
+            },
+            "requested_f0_hz": 214.28770767407093,
+            "simulated_f0_hz": null,
             "trial_id": "cal-u"
           }
         ],
@@ -477,78 +1718,91 @@
       },
       {
         "candidate_id": "t0-two_mass-0",
-        "f0": [
+        "failures": [],
+        "predictions": [
           {
+            "descriptor_reasons": {},
             "requested_f0_hz": 147.00983765491318,
-            "simulated_f0_hz": 146.02971895653803,
+            "simulated_f0_hz": 141.38469722234464,
             "trial_id": "cal-a"
           },
           {
+            "descriptor_reasons": {},
             "requested_f0_hz": 214.28770767407093,
-            "simulated_f0_hz": 220.2788008367061,
+            "simulated_f0_hz": 209.80829742479932,
             "trial_id": "cal-u"
           }
         ],
-        "failures": [],
-        "score": 0.12002098612568785,
-        "score_excluding_pitch": 0.1446722190233011,
+        "score": 0.09212342444814722,
+        "score_excluding_pitch": 0.10128651548611421,
         "status": "scored"
       },
       {
         "candidate_id": "t0-two_mass-1",
-        "f0": [
+        "failures": [],
+        "predictions": [
           {
+            "descriptor_reasons": {},
             "requested_f0_hz": 147.00983765491318,
-            "simulated_f0_hz": 135.7265366424761,
+            "simulated_f0_hz": 141.38469722234464,
             "trial_id": "cal-a"
           },
           {
+            "descriptor_reasons": {},
             "requested_f0_hz": 214.28770767407093,
-            "simulated_f0_hz": 196.73735399768782,
+            "simulated_f0_hz": 209.80829742479932,
             "trial_id": "cal-u"
           }
         ],
-        "failures": [],
-        "score": 0.1536907389904455,
-        "score_excluding_pitch": 0.023534403694178266,
+        "score": 0.09212342444814722,
+        "score_excluding_pitch": 0.10128651548611421,
         "status": "scored"
       },
       {
         "candidate_id": "t0-two_mass-2",
-        "f0": [
+        "failures": [],
+        "predictions": [
           {
+            "descriptor_reasons": {},
             "requested_f0_hz": 147.00983765491318,
-            "simulated_f0_hz": 135.4960117268975,
+            "simulated_f0_hz": 141.38469722234464,
             "trial_id": "cal-a"
           },
           {
+            "descriptor_reasons": {},
             "requested_f0_hz": 214.28770767407093,
-            "simulated_f0_hz": 202.61855354429375,
+            "simulated_f0_hz": 209.80829742479932,
             "trial_id": "cal-u"
           }
         ],
-        "failures": [],
-        "score": 0.15811908451109258,
-        "score_excluding_pitch": 0.09885155201264761,
+        "score": 0.09212342444814722,
+        "score_excluding_pitch": 0.10128651548611421,
         "status": "scored"
       },
       {
         "candidate_id": "t1-two_mass-0",
-        "f0": [
-          {
-            "requested_f0_hz": 147.00983765491318,
-            "simulated_f0_hz": 136.81433722597953,
-            "trial_id": "cal-a"
-          },
-          {
-            "requested_f0_hz": 214.28770767407093,
-            "simulated_f0_hz": null,
-            "trial_id": "cal-u"
-          }
-        ],
         "failures": [
           {
             "reason": "required_predicted_descriptor_missing",
+            "trial_id": "cal-u"
+          }
+        ],
+        "predictions": [
+          {
+            "descriptor_reasons": {},
+            "requested_f0_hz": 147.00983765491318,
+            "simulated_f0_hz": 130.4165386474049,
+            "trial_id": "cal-a"
+          },
+          {
+            "descriptor_reasons": {
+              "harmonicSpectralSlopeDbOctave": "Signal below declared-60dBFS analysis floor",
+              "periodicity": "Signal below declared-60dBFS analysis floor",
+              "pitchHz": "Signal below declared-60dBFS analysis floor",
+              "spectralFlatness": "Signal below declared-60dBFS analysis floor"
+            },
+            "requested_f0_hz": 214.28770767407093,
+            "simulated_f0_hz": null,
             "trial_id": "cal-u"
           }
         ],
@@ -558,21 +1812,28 @@
       },
       {
         "candidate_id": "t1-two_mass-1",
-        "f0": [
-          {
-            "requested_f0_hz": 147.00983765491318,
-            "simulated_f0_hz": 86.72850670815824,
-            "trial_id": "cal-a"
-          },
-          {
-            "requested_f0_hz": 214.28770767407093,
-            "simulated_f0_hz": null,
-            "trial_id": "cal-u"
-          }
-        ],
         "failures": [
           {
             "reason": "required_predicted_descriptor_missing",
+            "trial_id": "cal-u"
+          }
+        ],
+        "predictions": [
+          {
+            "descriptor_reasons": {},
+            "requested_f0_hz": 147.00983765491318,
+            "simulated_f0_hz": 130.4165386474049,
+            "trial_id": "cal-a"
+          },
+          {
+            "descriptor_reasons": {
+              "harmonicSpectralSlopeDbOctave": "Signal below declared-60dBFS analysis floor",
+              "periodicity": "Signal below declared-60dBFS analysis floor",
+              "pitchHz": "Signal below declared-60dBFS analysis floor",
+              "spectralFlatness": "Signal below declared-60dBFS analysis floor"
+            },
+            "requested_f0_hz": 214.28770767407093,
+            "simulated_f0_hz": null,
             "trial_id": "cal-u"
           }
         ],
@@ -582,21 +1843,28 @@
       },
       {
         "candidate_id": "t1-two_mass-2",
-        "f0": [
-          {
-            "requested_f0_hz": 147.00983765491318,
-            "simulated_f0_hz": 126.10093531380663,
-            "trial_id": "cal-a"
-          },
-          {
-            "requested_f0_hz": 214.28770767407093,
-            "simulated_f0_hz": null,
-            "trial_id": "cal-u"
-          }
-        ],
         "failures": [
           {
             "reason": "required_predicted_descriptor_missing",
+            "trial_id": "cal-u"
+          }
+        ],
+        "predictions": [
+          {
+            "descriptor_reasons": {},
+            "requested_f0_hz": 147.00983765491318,
+            "simulated_f0_hz": 130.4165386474049,
+            "trial_id": "cal-a"
+          },
+          {
+            "descriptor_reasons": {
+              "harmonicSpectralSlopeDbOctave": "Signal below declared-60dBFS analysis floor",
+              "periodicity": "Signal below declared-60dBFS analysis floor",
+              "pitchHz": "Signal below declared-60dBFS analysis floor",
+              "spectralFlatness": "Signal below declared-60dBFS analysis floor"
+            },
+            "requested_f0_hz": 214.28770767407093,
+            "simulated_f0_hz": null,
             "trial_id": "cal-u"
           }
         ],
@@ -605,6 +1873,324 @@
         "status": "unscorable"
       }
     ],
+    "joint": [
+      {
+        "candidate_id": "t0-geometric-0",
+        "failures": [],
+        "predictions": [
+          {
+            "descriptor_reasons": {},
+            "requested_f0_hz": 147.00983765491318,
+            "simulated_f0_hz": 147.00338827942426,
+            "trial_id": "cal-a"
+          },
+          {
+            "descriptor_reasons": {},
+            "requested_f0_hz": 214.28770767407093,
+            "simulated_f0_hz": 214.33144590275987,
+            "trial_id": "cal-u"
+          }
+        ],
+        "score": 0.05514185349037964,
+        "score_excluding_pitch": 0.07352165689255075,
+        "status": "scored"
+      },
+      {
+        "candidate_id": "t0-geometric-1",
+        "failures": [],
+        "predictions": [
+          {
+            "descriptor_reasons": {},
+            "requested_f0_hz": 147.00983765491318,
+            "simulated_f0_hz": 147.00225866347068,
+            "trial_id": "cal-a"
+          },
+          {
+            "descriptor_reasons": {},
+            "requested_f0_hz": 214.28770767407093,
+            "simulated_f0_hz": 214.32502141483218,
+            "trial_id": "cal-u"
+          }
+        ],
+        "score": 0.19038576345764108,
+        "score_excluding_pitch": 0.25384708054503774,
+        "status": "scored"
+      },
+      {
+        "candidate_id": "t0-geometric-2",
+        "failures": [],
+        "predictions": [
+          {
+            "descriptor_reasons": {},
+            "requested_f0_hz": 147.00983765491318,
+            "simulated_f0_hz": 146.9998123851859,
+            "trial_id": "cal-a"
+          },
+          {
+            "descriptor_reasons": {},
+            "requested_f0_hz": 214.28770767407093,
+            "simulated_f0_hz": 214.32922123495268,
+            "trial_id": "cal-u"
+          }
+        ],
+        "score": 0.1803631195004783,
+        "score_excluding_pitch": 0.2404833993832335,
+        "status": "scored"
+      },
+      {
+        "candidate_id": "t1-geometric-0",
+        "failures": [
+          {
+            "reason": "required_predicted_descriptor_missing",
+            "trial_id": "cal-u"
+          }
+        ],
+        "predictions": [
+          {
+            "descriptor_reasons": {},
+            "requested_f0_hz": 147.00983765491318,
+            "simulated_f0_hz": 147.0034095981082,
+            "trial_id": "cal-a"
+          },
+          {
+            "descriptor_reasons": {
+              "harmonicSpectralSlopeDbOctave": "Signal below declared-60dBFS analysis floor",
+              "periodicity": "Signal below declared-60dBFS analysis floor",
+              "pitchHz": "Signal below declared-60dBFS analysis floor",
+              "spectralFlatness": "Signal below declared-60dBFS analysis floor"
+            },
+            "requested_f0_hz": 214.28770767407093,
+            "simulated_f0_hz": null,
+            "trial_id": "cal-u"
+          }
+        ],
+        "score": null,
+        "score_excluding_pitch": null,
+        "status": "unscorable"
+      },
+      {
+        "candidate_id": "t1-geometric-1",
+        "failures": [
+          {
+            "reason": "required_predicted_descriptor_missing",
+            "trial_id": "cal-u"
+          }
+        ],
+        "predictions": [
+          {
+            "descriptor_reasons": {},
+            "requested_f0_hz": 147.00983765491318,
+            "simulated_f0_hz": 147.0080220218445,
+            "trial_id": "cal-a"
+          },
+          {
+            "descriptor_reasons": {
+              "harmonicSpectralSlopeDbOctave": "Signal below declared-60dBFS analysis floor",
+              "periodicity": "Signal below declared-60dBFS analysis floor",
+              "pitchHz": "Signal below declared-60dBFS analysis floor",
+              "spectralFlatness": "Signal below declared-60dBFS analysis floor"
+            },
+            "requested_f0_hz": 214.28770767407093,
+            "simulated_f0_hz": null,
+            "trial_id": "cal-u"
+          }
+        ],
+        "score": null,
+        "score_excluding_pitch": null,
+        "status": "unscorable"
+      },
+      {
+        "candidate_id": "t1-geometric-2",
+        "failures": [
+          {
+            "reason": "required_predicted_descriptor_missing",
+            "trial_id": "cal-u"
+          }
+        ],
+        "predictions": [
+          {
+            "descriptor_reasons": {},
+            "requested_f0_hz": 147.00983765491318,
+            "simulated_f0_hz": 147.00214032631555,
+            "trial_id": "cal-a"
+          },
+          {
+            "descriptor_reasons": {
+              "harmonicSpectralSlopeDbOctave": "Signal below declared-60dBFS analysis floor",
+              "periodicity": "Signal below declared-60dBFS analysis floor",
+              "pitchHz": "Signal below declared-60dBFS analysis floor",
+              "spectralFlatness": "Signal below declared-60dBFS analysis floor"
+            },
+            "requested_f0_hz": 214.28770767407093,
+            "simulated_f0_hz": null,
+            "trial_id": "cal-u"
+          }
+        ],
+        "score": null,
+        "score_excluding_pitch": null,
+        "status": "unscorable"
+      },
+      {
+        "candidate_id": "t0-two_mass-0",
+        "failures": [],
+        "predictions": [
+          {
+            "descriptor_reasons": {},
+            "requested_f0_hz": 147.00983765491318,
+            "simulated_f0_hz": 146.02971895653803,
+            "trial_id": "cal-a"
+          },
+          {
+            "descriptor_reasons": {},
+            "requested_f0_hz": 214.28770767407093,
+            "simulated_f0_hz": 220.2788008367061,
+            "trial_id": "cal-u"
+          }
+        ],
+        "score": 0.12002098612568785,
+        "score_excluding_pitch": 0.1446722190233011,
+        "status": "scored"
+      },
+      {
+        "candidate_id": "t0-two_mass-1",
+        "failures": [],
+        "predictions": [
+          {
+            "descriptor_reasons": {},
+            "requested_f0_hz": 147.00983765491318,
+            "simulated_f0_hz": 135.7265366424761,
+            "trial_id": "cal-a"
+          },
+          {
+            "descriptor_reasons": {},
+            "requested_f0_hz": 214.28770767407093,
+            "simulated_f0_hz": 196.73735399768782,
+            "trial_id": "cal-u"
+          }
+        ],
+        "score": 0.1536907389904455,
+        "score_excluding_pitch": 0.023534403694178266,
+        "status": "scored"
+      },
+      {
+        "candidate_id": "t0-two_mass-2",
+        "failures": [],
+        "predictions": [
+          {
+            "descriptor_reasons": {},
+            "requested_f0_hz": 147.00983765491318,
+            "simulated_f0_hz": 135.4960117268975,
+            "trial_id": "cal-a"
+          },
+          {
+            "descriptor_reasons": {},
+            "requested_f0_hz": 214.28770767407093,
+            "simulated_f0_hz": 202.61855354429375,
+            "trial_id": "cal-u"
+          }
+        ],
+        "score": 0.15811908451109258,
+        "score_excluding_pitch": 0.09885155201264761,
+        "status": "scored"
+      },
+      {
+        "candidate_id": "t1-two_mass-0",
+        "failures": [
+          {
+            "reason": "required_predicted_descriptor_missing",
+            "trial_id": "cal-u"
+          }
+        ],
+        "predictions": [
+          {
+            "descriptor_reasons": {},
+            "requested_f0_hz": 147.00983765491318,
+            "simulated_f0_hz": 136.81433722597953,
+            "trial_id": "cal-a"
+          },
+          {
+            "descriptor_reasons": {
+              "harmonicSpectralSlopeDbOctave": "Signal below declared-60dBFS analysis floor",
+              "periodicity": "Signal below declared-60dBFS analysis floor",
+              "pitchHz": "Signal below declared-60dBFS analysis floor",
+              "spectralFlatness": "Signal below declared-60dBFS analysis floor"
+            },
+            "requested_f0_hz": 214.28770767407093,
+            "simulated_f0_hz": null,
+            "trial_id": "cal-u"
+          }
+        ],
+        "score": null,
+        "score_excluding_pitch": null,
+        "status": "unscorable"
+      },
+      {
+        "candidate_id": "t1-two_mass-1",
+        "failures": [
+          {
+            "reason": "required_predicted_descriptor_missing",
+            "trial_id": "cal-u"
+          }
+        ],
+        "predictions": [
+          {
+            "descriptor_reasons": {},
+            "requested_f0_hz": 147.00983765491318,
+            "simulated_f0_hz": 86.72850670815824,
+            "trial_id": "cal-a"
+          },
+          {
+            "descriptor_reasons": {
+              "harmonicSpectralSlopeDbOctave": "Signal below declared-60dBFS analysis floor",
+              "periodicity": "Signal below declared-60dBFS analysis floor",
+              "pitchHz": "Signal below declared-60dBFS analysis floor",
+              "spectralFlatness": "Signal below declared-60dBFS analysis floor"
+            },
+            "requested_f0_hz": 214.28770767407093,
+            "simulated_f0_hz": null,
+            "trial_id": "cal-u"
+          }
+        ],
+        "score": null,
+        "score_excluding_pitch": null,
+        "status": "unscorable"
+      },
+      {
+        "candidate_id": "t1-two_mass-2",
+        "failures": [
+          {
+            "reason": "required_predicted_descriptor_missing",
+            "trial_id": "cal-u"
+          }
+        ],
+        "predictions": [
+          {
+            "descriptor_reasons": {},
+            "requested_f0_hz": 147.00983765491318,
+            "simulated_f0_hz": 126.10093531380663,
+            "trial_id": "cal-a"
+          },
+          {
+            "descriptor_reasons": {
+              "harmonicSpectralSlopeDbOctave": "Signal below declared-60dBFS analysis floor",
+              "periodicity": "Signal below declared-60dBFS analysis floor",
+              "pitchHz": "Signal below declared-60dBFS analysis floor",
+              "spectralFlatness": "Signal below declared-60dBFS analysis floor"
+            },
+            "requested_f0_hz": 214.28770767407093,
+            "simulated_f0_hz": null,
+            "trial_id": "cal-u"
+          }
+        ],
+        "score": null,
+        "score_excluding_pitch": null,
+        "status": "unscorable"
+      }
+    ],
+    "observation_descriptor_reasons": {
+      "cal-a": {},
+      "cal-u": {}
+    },
     "per_family_calls": {
       "fixed_anatomy": 24,
       "fixed_source": 24,
@@ -632,7 +2218,7 @@
         "total": 36,
         "unavailable": 15
       },
-      "bank_sha256": "9be713d3c99d7ebb611bcd41904c43ff69043aa122a1d5898afe14ae30e41e25",
+      "bank_sha256": "c0ad5ffe9a555068af2555fca12a24b36964fe2cd2472f258158ef79e6b90a6f",
       "metrics": {
         "pitch_excluded": {
           "difference_two_mass_minus_geometric": null,
@@ -696,6 +2282,7 @@
             "alternative_id": "joint:t0-geometric-0",
             "heldout_rank": 7,
             "heldout_rank_excluding_pitch": 6,
+            "prediction_descriptor_reasons": {},
             "reason": null,
             "requested_f0_hz": 190.0,
             "score": 0.06829257772070407,
@@ -707,6 +2294,7 @@
             "alternative_id": "joint:t0-geometric-1",
             "heldout_rank": 3,
             "heldout_rank_excluding_pitch": 2,
+            "prediction_descriptor_reasons": {},
             "reason": null,
             "requested_f0_hz": 190.0,
             "score": 0.048393220541280646,
@@ -718,6 +2306,7 @@
             "alternative_id": "joint:t0-geometric-2",
             "heldout_rank": 4,
             "heldout_rank_excluding_pitch": 4,
+            "prediction_descriptor_reasons": {},
             "reason": null,
             "requested_f0_hz": 190.0,
             "score": 0.05019894709314753,
@@ -729,6 +2318,7 @@
             "alternative_id": "joint:t1-geometric-0",
             "heldout_rank": null,
             "heldout_rank_excluding_pitch": null,
+            "prediction_descriptor_reasons": null,
             "reason": "Calibration alternative was unscorable",
             "requested_f0_hz": null,
             "score": null,
@@ -740,6 +2330,7 @@
             "alternative_id": "joint:t1-geometric-1",
             "heldout_rank": null,
             "heldout_rank_excluding_pitch": null,
+            "prediction_descriptor_reasons": null,
             "reason": "Calibration alternative was unscorable",
             "requested_f0_hz": null,
             "score": null,
@@ -751,6 +2342,7 @@
             "alternative_id": "joint:t1-geometric-2",
             "heldout_rank": null,
             "heldout_rank_excluding_pitch": null,
+            "prediction_descriptor_reasons": null,
             "reason": "Calibration alternative was unscorable",
             "requested_f0_hz": null,
             "score": null,
@@ -762,6 +2354,7 @@
             "alternative_id": "joint:t0-two_mass-0",
             "heldout_rank": 2,
             "heldout_rank_excluding_pitch": 3,
+            "prediction_descriptor_reasons": {},
             "reason": null,
             "requested_f0_hz": 190.0,
             "score": 0.03305282200275537,
@@ -773,6 +2366,9 @@
             "alternative_id": "joint:t0-two_mass-1",
             "heldout_rank": null,
             "heldout_rank_excluding_pitch": null,
+            "prediction_descriptor_reasons": {
+              "harmonicSpectralSlopeDbOctave": "Fewer than four harmonic amplitudes within40dB of strongest harmonic"
+            },
             "reason": "Required predicted descriptor unavailable",
             "requested_f0_hz": 190.0,
             "score": null,
@@ -784,6 +2380,7 @@
             "alternative_id": "joint:t0-two_mass-2",
             "heldout_rank": 10,
             "heldout_rank_excluding_pitch": 10,
+            "prediction_descriptor_reasons": {},
             "reason": null,
             "requested_f0_hz": 190.0,
             "score": 0.19854551026451145,
@@ -795,6 +2392,7 @@
             "alternative_id": "joint:t1-two_mass-0",
             "heldout_rank": null,
             "heldout_rank_excluding_pitch": null,
+            "prediction_descriptor_reasons": null,
             "reason": "Calibration alternative was unscorable",
             "requested_f0_hz": null,
             "score": null,
@@ -806,6 +2404,7 @@
             "alternative_id": "joint:t1-two_mass-1",
             "heldout_rank": null,
             "heldout_rank_excluding_pitch": null,
+            "prediction_descriptor_reasons": null,
             "reason": "Calibration alternative was unscorable",
             "requested_f0_hz": null,
             "score": null,
@@ -817,6 +2416,7 @@
             "alternative_id": "joint:t1-two_mass-2",
             "heldout_rank": null,
             "heldout_rank_excluding_pitch": null,
+            "prediction_descriptor_reasons": null,
             "reason": "Calibration alternative was unscorable",
             "requested_f0_hz": null,
             "score": null,
@@ -828,6 +2428,7 @@
             "alternative_id": "fixed_source:t0-geometric-0",
             "heldout_rank": 3,
             "heldout_rank_excluding_pitch": 2,
+            "prediction_descriptor_reasons": {},
             "reason": null,
             "requested_f0_hz": 190.0,
             "score": 0.048393220541280646,
@@ -839,6 +2440,7 @@
             "alternative_id": "fixed_source:t0-geometric-1",
             "heldout_rank": 3,
             "heldout_rank_excluding_pitch": 2,
+            "prediction_descriptor_reasons": {},
             "reason": null,
             "requested_f0_hz": 190.0,
             "score": 0.048393220541280646,
@@ -850,6 +2452,7 @@
             "alternative_id": "fixed_source:t0-geometric-2",
             "heldout_rank": 3,
             "heldout_rank_excluding_pitch": 2,
+            "prediction_descriptor_reasons": {},
             "reason": null,
             "requested_f0_hz": 190.0,
             "score": 0.048393220541280646,
@@ -861,6 +2464,7 @@
             "alternative_id": "fixed_source:t1-geometric-0",
             "heldout_rank": null,
             "heldout_rank_excluding_pitch": null,
+            "prediction_descriptor_reasons": null,
             "reason": "Calibration alternative was unscorable",
             "requested_f0_hz": null,
             "score": null,
@@ -872,6 +2476,7 @@
             "alternative_id": "fixed_source:t1-geometric-1",
             "heldout_rank": null,
             "heldout_rank_excluding_pitch": null,
+            "prediction_descriptor_reasons": null,
             "reason": "Calibration alternative was unscorable",
             "requested_f0_hz": null,
             "score": null,
@@ -883,6 +2488,7 @@
             "alternative_id": "fixed_source:t1-geometric-2",
             "heldout_rank": null,
             "heldout_rank_excluding_pitch": null,
+            "prediction_descriptor_reasons": null,
             "reason": "Calibration alternative was unscorable",
             "requested_f0_hz": null,
             "score": null,
@@ -894,6 +2500,7 @@
             "alternative_id": "fixed_source:t0-two_mass-0",
             "heldout_rank": 5,
             "heldout_rank_excluding_pitch": 7,
+            "prediction_descriptor_reasons": {},
             "reason": null,
             "requested_f0_hz": 190.0,
             "score": 0.050307682535247554,
@@ -905,6 +2512,7 @@
             "alternative_id": "fixed_source:t0-two_mass-1",
             "heldout_rank": 5,
             "heldout_rank_excluding_pitch": 7,
+            "prediction_descriptor_reasons": {},
             "reason": null,
             "requested_f0_hz": 190.0,
             "score": 0.050307682535247554,
@@ -916,6 +2524,7 @@
             "alternative_id": "fixed_source:t0-two_mass-2",
             "heldout_rank": 5,
             "heldout_rank_excluding_pitch": 7,
+            "prediction_descriptor_reasons": {},
             "reason": null,
             "requested_f0_hz": 190.0,
             "score": 0.050307682535247554,
@@ -927,6 +2536,7 @@
             "alternative_id": "fixed_source:t1-two_mass-0",
             "heldout_rank": null,
             "heldout_rank_excluding_pitch": null,
+            "prediction_descriptor_reasons": null,
             "reason": "Calibration alternative was unscorable",
             "requested_f0_hz": null,
             "score": null,
@@ -938,6 +2548,7 @@
             "alternative_id": "fixed_source:t1-two_mass-1",
             "heldout_rank": null,
             "heldout_rank_excluding_pitch": null,
+            "prediction_descriptor_reasons": null,
             "reason": "Calibration alternative was unscorable",
             "requested_f0_hz": null,
             "score": null,
@@ -949,6 +2560,7 @@
             "alternative_id": "fixed_source:t1-two_mass-2",
             "heldout_rank": null,
             "heldout_rank_excluding_pitch": null,
+            "prediction_descriptor_reasons": null,
             "reason": "Calibration alternative was unscorable",
             "requested_f0_hz": null,
             "score": null,
@@ -960,6 +2572,7 @@
             "alternative_id": "fixed_anatomy:t0-geometric-0",
             "heldout_rank": 9,
             "heldout_rank_excluding_pitch": 9,
+            "prediction_descriptor_reasons": {},
             "reason": null,
             "requested_f0_hz": 190.0,
             "score": 0.14027518169172226,
@@ -971,6 +2584,7 @@
             "alternative_id": "fixed_anatomy:t0-geometric-1",
             "heldout_rank": 8,
             "heldout_rank_excluding_pitch": 8,
+            "prediction_descriptor_reasons": {},
             "reason": null,
             "requested_f0_hz": 190.0,
             "score": 0.08410746877819356,
@@ -982,6 +2596,7 @@
             "alternative_id": "fixed_anatomy:t0-geometric-2",
             "heldout_rank": 6,
             "heldout_rank_excluding_pitch": 5,
+            "prediction_descriptor_reasons": {},
             "reason": null,
             "requested_f0_hz": 190.0,
             "score": 0.05878109057267245,
@@ -993,6 +2608,7 @@
             "alternative_id": "fixed_anatomy:t1-geometric-0",
             "heldout_rank": 9,
             "heldout_rank_excluding_pitch": 9,
+            "prediction_descriptor_reasons": {},
             "reason": null,
             "requested_f0_hz": 190.0,
             "score": 0.14027518169172226,
@@ -1004,6 +2620,7 @@
             "alternative_id": "fixed_anatomy:t1-geometric-1",
             "heldout_rank": 8,
             "heldout_rank_excluding_pitch": 8,
+            "prediction_descriptor_reasons": {},
             "reason": null,
             "requested_f0_hz": 190.0,
             "score": 0.08410746877819356,
@@ -1015,6 +2632,7 @@
             "alternative_id": "fixed_anatomy:t1-geometric-2",
             "heldout_rank": 6,
             "heldout_rank_excluding_pitch": 5,
+            "prediction_descriptor_reasons": {},
             "reason": null,
             "requested_f0_hz": 190.0,
             "score": 0.05878109057267245,
@@ -1026,6 +2644,7 @@
             "alternative_id": "fixed_anatomy:t0-two_mass-0",
             "heldout_rank": 1,
             "heldout_rank_excluding_pitch": 1,
+            "prediction_descriptor_reasons": {},
             "reason": null,
             "requested_f0_hz": 190.0,
             "score": 0.00407366618604031,
@@ -1037,6 +2656,9 @@
             "alternative_id": "fixed_anatomy:t0-two_mass-1",
             "heldout_rank": null,
             "heldout_rank_excluding_pitch": null,
+            "prediction_descriptor_reasons": {
+              "harmonicSpectralSlopeDbOctave": "Fewer than four harmonic amplitudes within40dB of strongest harmonic"
+            },
             "reason": "Required predicted descriptor unavailable",
             "requested_f0_hz": 190.0,
             "score": null,
@@ -1048,6 +2670,7 @@
             "alternative_id": "fixed_anatomy:t0-two_mass-2",
             "heldout_rank": 11,
             "heldout_rank_excluding_pitch": 11,
+            "prediction_descriptor_reasons": {},
             "reason": null,
             "requested_f0_hz": 190.0,
             "score": 0.34111678111484695,
@@ -1059,6 +2682,7 @@
             "alternative_id": "fixed_anatomy:t1-two_mass-0",
             "heldout_rank": 1,
             "heldout_rank_excluding_pitch": 1,
+            "prediction_descriptor_reasons": {},
             "reason": null,
             "requested_f0_hz": 190.0,
             "score": 0.00407366618604031,
@@ -1070,6 +2694,9 @@
             "alternative_id": "fixed_anatomy:t1-two_mass-1",
             "heldout_rank": null,
             "heldout_rank_excluding_pitch": null,
+            "prediction_descriptor_reasons": {
+              "harmonicSpectralSlopeDbOctave": "Fewer than four harmonic amplitudes within40dB of strongest harmonic"
+            },
             "reason": "Required predicted descriptor unavailable",
             "requested_f0_hz": 190.0,
             "score": null,
@@ -1081,6 +2708,7 @@
             "alternative_id": "fixed_anatomy:t1-two_mass-2",
             "heldout_rank": 11,
             "heldout_rank_excluding_pitch": 11,
+            "prediction_descriptor_reasons": {},
             "reason": null,
             "requested_f0_hz": 190.0,
             "score": 0.34111678111484695,
@@ -1090,6 +2718,7 @@
           }
         ],
         "canonical_extractions": 1,
+        "observation_descriptor_reasons": {},
         "reason": "Conditional heldout bank discrepancies",
         "status": "available"
       }
@@ -1101,7 +2730,7 @@
         "total": 36,
         "unavailable": 12
       },
-      "bank_sha256": "ae14e68fe02b31367ae2d18d4fe121835688b8a256f2188b317e5ac21f329c40",
+      "bank_sha256": "665640ccdbad9480c32d7bcfd6de2b5eda058bd9079c46747254e207167f0aa4",
       "metrics": {
         "pitch_excluded": {
           "difference_two_mass_minus_geometric": 0.4251791428488163,
@@ -1167,6 +2796,7 @@
             "alternative_id": "joint:t0-geometric-0",
             "heldout_rank": 6,
             "heldout_rank_excluding_pitch": 7,
+            "prediction_descriptor_reasons": {},
             "reason": null,
             "requested_f0_hz": 190.0,
             "score": 0.12568436871616892,
@@ -1178,6 +2808,7 @@
             "alternative_id": "joint:t0-geometric-1",
             "heldout_rank": 4,
             "heldout_rank_excluding_pitch": 5,
+            "prediction_descriptor_reasons": {},
             "reason": null,
             "requested_f0_hz": 190.0,
             "score": 0.0688932777647709,
@@ -1189,6 +2820,7 @@
             "alternative_id": "joint:t0-geometric-2",
             "heldout_rank": 13,
             "heldout_rank_excluding_pitch": 13,
+            "prediction_descriptor_reasons": {},
             "reason": null,
             "requested_f0_hz": 190.0,
             "score": 1.2302513760676619,
@@ -1200,6 +2832,7 @@
             "alternative_id": "joint:t1-geometric-0",
             "heldout_rank": null,
             "heldout_rank_excluding_pitch": null,
+            "prediction_descriptor_reasons": null,
             "reason": "Calibration alternative was unscorable",
             "requested_f0_hz": null,
             "score": null,
@@ -1211,6 +2844,7 @@
             "alternative_id": "joint:t1-geometric-1",
             "heldout_rank": null,
             "heldout_rank_excluding_pitch": null,
+            "prediction_descriptor_reasons": null,
             "reason": "Calibration alternative was unscorable",
             "requested_f0_hz": null,
             "score": null,
@@ -1222,6 +2856,7 @@
             "alternative_id": "joint:t1-geometric-2",
             "heldout_rank": null,
             "heldout_rank_excluding_pitch": null,
+            "prediction_descriptor_reasons": null,
             "reason": "Calibration alternative was unscorable",
             "requested_f0_hz": null,
             "score": null,
@@ -1233,6 +2868,7 @@
             "alternative_id": "joint:t0-two_mass-0",
             "heldout_rank": 8,
             "heldout_rank_excluding_pitch": 8,
+            "prediction_descriptor_reasons": {},
             "reason": null,
             "requested_f0_hz": 190.0,
             "score": 0.18029956361153984,
@@ -1244,6 +2880,7 @@
             "alternative_id": "joint:t0-two_mass-1",
             "heldout_rank": 11,
             "heldout_rank_excluding_pitch": 11,
+            "prediction_descriptor_reasons": {},
             "reason": null,
             "requested_f0_hz": 190.0,
             "score": 0.5638324795545504,
@@ -1255,6 +2892,7 @@
             "alternative_id": "joint:t0-two_mass-2",
             "heldout_rank": 9,
             "heldout_rank_excluding_pitch": 10,
+            "prediction_descriptor_reasons": {},
             "reason": null,
             "requested_f0_hz": 190.0,
             "score": 0.35970851389690567,
@@ -1266,6 +2904,7 @@
             "alternative_id": "joint:t1-two_mass-0",
             "heldout_rank": null,
             "heldout_rank_excluding_pitch": null,
+            "prediction_descriptor_reasons": null,
             "reason": "Calibration alternative was unscorable",
             "requested_f0_hz": null,
             "score": null,
@@ -1277,6 +2916,7 @@
             "alternative_id": "joint:t1-two_mass-1",
             "heldout_rank": null,
             "heldout_rank_excluding_pitch": null,
+            "prediction_descriptor_reasons": null,
             "reason": "Calibration alternative was unscorable",
             "requested_f0_hz": null,
             "score": null,
@@ -1288,6 +2928,7 @@
             "alternative_id": "joint:t1-two_mass-2",
             "heldout_rank": null,
             "heldout_rank_excluding_pitch": null,
+            "prediction_descriptor_reasons": null,
             "reason": "Calibration alternative was unscorable",
             "requested_f0_hz": null,
             "score": null,
@@ -1299,6 +2940,7 @@
             "alternative_id": "fixed_source:t0-geometric-0",
             "heldout_rank": 4,
             "heldout_rank_excluding_pitch": 5,
+            "prediction_descriptor_reasons": {},
             "reason": null,
             "requested_f0_hz": 190.0,
             "score": 0.0688932777647709,
@@ -1310,6 +2952,7 @@
             "alternative_id": "fixed_source:t0-geometric-1",
             "heldout_rank": 4,
             "heldout_rank_excluding_pitch": 5,
+            "prediction_descriptor_reasons": {},
             "reason": null,
             "requested_f0_hz": 190.0,
             "score": 0.0688932777647709,
@@ -1321,6 +2964,7 @@
             "alternative_id": "fixed_source:t0-geometric-2",
             "heldout_rank": 4,
             "heldout_rank_excluding_pitch": 5,
+            "prediction_descriptor_reasons": {},
             "reason": null,
             "requested_f0_hz": 190.0,
             "score": 0.0688932777647709,
@@ -1332,6 +2976,7 @@
             "alternative_id": "fixed_source:t1-geometric-0",
             "heldout_rank": null,
             "heldout_rank_excluding_pitch": null,
+            "prediction_descriptor_reasons": null,
             "reason": "Calibration alternative was unscorable",
             "requested_f0_hz": null,
             "score": null,
@@ -1343,6 +2988,7 @@
             "alternative_id": "fixed_source:t1-geometric-1",
             "heldout_rank": null,
             "heldout_rank_excluding_pitch": null,
+            "prediction_descriptor_reasons": null,
             "reason": "Calibration alternative was unscorable",
             "requested_f0_hz": null,
             "score": null,
@@ -1354,6 +3000,7 @@
             "alternative_id": "fixed_source:t1-geometric-2",
             "heldout_rank": null,
             "heldout_rank_excluding_pitch": null,
+            "prediction_descriptor_reasons": null,
             "reason": "Calibration alternative was unscorable",
             "requested_f0_hz": null,
             "score": null,
@@ -1365,6 +3012,7 @@
             "alternative_id": "fixed_source:t0-two_mass-0",
             "heldout_rank": 5,
             "heldout_rank_excluding_pitch": 6,
+            "prediction_descriptor_reasons": {},
             "reason": null,
             "requested_f0_hz": 190.0,
             "score": 0.11592122675207224,
@@ -1376,6 +3024,7 @@
             "alternative_id": "fixed_source:t0-two_mass-1",
             "heldout_rank": 5,
             "heldout_rank_excluding_pitch": 6,
+            "prediction_descriptor_reasons": {},
             "reason": null,
             "requested_f0_hz": 190.0,
             "score": 0.11592122675207224,
@@ -1387,6 +3036,7 @@
             "alternative_id": "fixed_source:t0-two_mass-2",
             "heldout_rank": 5,
             "heldout_rank_excluding_pitch": 6,
+            "prediction_descriptor_reasons": {},
             "reason": null,
             "requested_f0_hz": 190.0,
             "score": 0.11592122675207224,
@@ -1398,6 +3048,7 @@
             "alternative_id": "fixed_source:t1-two_mass-0",
             "heldout_rank": null,
             "heldout_rank_excluding_pitch": null,
+            "prediction_descriptor_reasons": null,
             "reason": "Calibration alternative was unscorable",
             "requested_f0_hz": null,
             "score": null,
@@ -1409,6 +3060,7 @@
             "alternative_id": "fixed_source:t1-two_mass-1",
             "heldout_rank": null,
             "heldout_rank_excluding_pitch": null,
+            "prediction_descriptor_reasons": null,
             "reason": "Calibration alternative was unscorable",
             "requested_f0_hz": null,
             "score": null,
@@ -1420,6 +3072,7 @@
             "alternative_id": "fixed_source:t1-two_mass-2",
             "heldout_rank": null,
             "heldout_rank_excluding_pitch": null,
+            "prediction_descriptor_reasons": null,
             "reason": "Calibration alternative was unscorable",
             "requested_f0_hz": null,
             "score": null,
@@ -1431,6 +3084,7 @@
             "alternative_id": "fixed_anatomy:t0-geometric-0",
             "heldout_rank": 1,
             "heldout_rank_excluding_pitch": 2,
+            "prediction_descriptor_reasons": {},
             "reason": null,
             "requested_f0_hz": 190.0,
             "score": 0.007645780027111665,
@@ -1442,6 +3096,7 @@
             "alternative_id": "fixed_anatomy:t0-geometric-1",
             "heldout_rank": 3,
             "heldout_rank_excluding_pitch": 4,
+            "prediction_descriptor_reasons": {},
             "reason": null,
             "requested_f0_hz": 190.0,
             "score": 0.014946256433940305,
@@ -1453,6 +3108,7 @@
             "alternative_id": "fixed_anatomy:t0-geometric-2",
             "heldout_rank": 2,
             "heldout_rank_excluding_pitch": 3,
+            "prediction_descriptor_reasons": {},
             "reason": null,
             "requested_f0_hz": 190.0,
             "score": 0.010703672356894935,
@@ -1464,6 +3120,7 @@
             "alternative_id": "fixed_anatomy:t1-geometric-0",
             "heldout_rank": 1,
             "heldout_rank_excluding_pitch": 2,
+            "prediction_descriptor_reasons": {},
             "reason": null,
             "requested_f0_hz": 190.0,
             "score": 0.007645780027111665,
@@ -1475,6 +3132,7 @@
             "alternative_id": "fixed_anatomy:t1-geometric-1",
             "heldout_rank": 3,
             "heldout_rank_excluding_pitch": 4,
+            "prediction_descriptor_reasons": {},
             "reason": null,
             "requested_f0_hz": 190.0,
             "score": 0.014946256433940305,
@@ -1486,6 +3144,7 @@
             "alternative_id": "fixed_anatomy:t1-geometric-2",
             "heldout_rank": 2,
             "heldout_rank_excluding_pitch": 3,
+            "prediction_descriptor_reasons": {},
             "reason": null,
             "requested_f0_hz": 190.0,
             "score": 0.010703672356894935,
@@ -1497,6 +3156,7 @@
             "alternative_id": "fixed_anatomy:t0-two_mass-0",
             "heldout_rank": 12,
             "heldout_rank_excluding_pitch": 12,
+            "prediction_descriptor_reasons": {},
             "reason": null,
             "requested_f0_hz": 190.0,
             "score": 0.629502410944733,
@@ -1508,6 +3168,7 @@
             "alternative_id": "fixed_anatomy:t0-two_mass-1",
             "heldout_rank": 10,
             "heldout_rank_excluding_pitch": 9,
+            "prediction_descriptor_reasons": {},
             "reason": null,
             "requested_f0_hz": 190.0,
             "score": 0.40718044974575685,
@@ -1519,6 +3180,7 @@
             "alternative_id": "fixed_anatomy:t0-two_mass-2",
             "heldout_rank": 7,
             "heldout_rank_excluding_pitch": 1,
+            "prediction_descriptor_reasons": {},
             "reason": null,
             "requested_f0_hz": 190.0,
             "score": 0.14211322109601915,
@@ -1530,6 +3192,7 @@
             "alternative_id": "fixed_anatomy:t1-two_mass-0",
             "heldout_rank": 12,
             "heldout_rank_excluding_pitch": 12,
+            "prediction_descriptor_reasons": {},
             "reason": null,
             "requested_f0_hz": 190.0,
             "score": 0.629502410944733,
@@ -1541,6 +3204,7 @@
             "alternative_id": "fixed_anatomy:t1-two_mass-1",
             "heldout_rank": 10,
             "heldout_rank_excluding_pitch": 9,
+            "prediction_descriptor_reasons": {},
             "reason": null,
             "requested_f0_hz": 190.0,
             "score": 0.40718044974575685,
@@ -1552,6 +3216,7 @@
             "alternative_id": "fixed_anatomy:t1-two_mass-2",
             "heldout_rank": 7,
             "heldout_rank_excluding_pitch": 1,
+            "prediction_descriptor_reasons": {},
             "reason": null,
             "requested_f0_hz": 190.0,
             "score": 0.14211322109601915,
@@ -1561,6 +3226,7 @@
           }
         ],
         "canonical_extractions": 1,
+        "observation_descriptor_reasons": {},
         "reason": "Conditional heldout bank discrepancies",
         "status": "available"
       }
@@ -1573,5 +3239,5 @@
   },
   "nearest_grid": "t0-two_mass-0",
   "status": "evaluated",
-  "wall_s": 35.78
+  "wall_s": 42.16
 }
