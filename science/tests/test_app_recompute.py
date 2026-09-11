@@ -18,7 +18,7 @@ from science.scripts.recompute_session_score import digest
 
 
 @pytest.fixture(scope='module')
-def batch_replay(tmp_path_factory):
+def batch_evidence(tmp_path_factory):
     root = tmp_path_factory.mktemp('batch-recompute')
     now = lambda: datetime.now(timezone.utc).isoformat()
     with Engine() as engine:
@@ -27,7 +27,7 @@ def batch_replay(tmp_path_factory):
         provenance=provenance, frozen_at=now(), hypotheses=[{'hypothesis_id':'first','anatomy':{'hard_palate_length':4.2}},
         {'hypothesis_id':'second','anatomy':{'hard_palate_length':4.8}}]).data
     with JobService(root/'worker') as service:
-        controller = SessionController(root/'sessions', service, 'synthetic-replay-session')
+        controller = SessionController(service.root/'sessions', service, 'synthetic-replay-session')
         send(controller, 'register_model', snapshot=snapshot)
         for index, f0 in enumerate((180., 220.)):
             design, target = 'design-'+str(index), 'target-'+str(index)
@@ -43,7 +43,12 @@ def batch_replay(tmp_path_factory):
                 'artifact_id':'frame-'+str(index),'observed_at':now(),'pcm':pcm.tolist(),'source_kind':'engine-generated'})
             collect(controller, service)
         replay = controller.execute({'action':'replay'})
-    return replay
+    return root, replay
+
+
+@pytest.fixture(scope='module')
+def batch_replay(batch_evidence):
+    return batch_evidence[1]
 
 
 def test_multiple_actual_pcm_scores_match_without_mutation_and_retry(batch_replay):
@@ -115,3 +120,33 @@ def test_real_source_bank_score_and_missing_frame_receipt(tmp_path):
     assert source_score(missing)['status']=='missing_artifacts'
     bad=deepcopy(job);bad['request']['parameters']['pcm'][0]+=1
     with pytest.raises(ValueError,match='frame receipt'):source_score(bad)
+
+
+def test_app_runner_reads_real_http_worker_and_only_persists_redacted_report(batch_evidence, tmp_path, monkeypatch):
+    import threading
+    from singing_physics.http_service import ScientificHTTPServer
+    from science.scripts.app_recompute import run
+    root, original = batch_evidence
+    token = 'synthetic-token-' + 'a'*32
+    with ScientificHTTPServer(root/'worker', token, port=0) as server:
+        thread = threading.Thread(target=server.serve_forever, daemon=True); thread.start()
+        monkeypatch.setenv('SCIENCE_URL', 'http://127.0.0.1:'+str(server.server_port))
+        monkeypatch.setenv('SCIENCE_TOKEN', token)
+        try:
+            (tmp_path/'science-runs/run-synthetic').mkdir(parents=True)
+            (tmp_path/'science-current.json').write_text(json.dumps({'status':'succeeded','runId':'run-synthetic'}))
+            (tmp_path/'science-runs/run-synthetic/summary.json').write_text(json.dumps({'sessionId':'synthetic-replay-session'}))
+            output=tmp_path/'replay-verifications/replay-11111111-1111-4111-8111-111111111111'; output.mkdir(parents=True)
+            (output/'request.json').write_text(json.dumps({'runId':'run-synthetic','sessionId':'synthetic-replay-session','maxOperations':16}))
+            report=run(tmp_path,output)
+            assert report['counts']['agreed']==report['counts']['compared']==2, report
+            assert report['workerLedgerSha256']==original['ledger_sha256']
+            assert set(p.name for p in output.iterdir())=={'request.json','report.json'}
+            raw=(output/'report.json').read_text()
+            assert token not in raw and '"pcm":' not in raw
+            with pytest.raises(FileExistsError): run(tmp_path,output)
+            from science.scripts.live_capture_jobs import HTTPBackend
+            after=HTTPBackend('http://127.0.0.1:'+str(server.server_port),token,'synthetic-replay-session').execute({'action':'replay'})
+            assert after==original
+        finally:
+            server.shutdown();thread.join(timeout=5)
