@@ -16,13 +16,15 @@ Exports preserve the original image before any overlay. Existing `tongue-tip-rev
 
 `node scripts/tongue-benchmark.mjs review.json - report.json`
 
-This evaluates the tip predictions already captured in the export. Reports contain image hashes and metrics, not images. Report files are created with private permissions and cannot overwrite existing files.
+This evaluates the tip predictions and, when present, the separate region-box predictions already captured in the export. Reports contain image hashes and metrics, not images. Report files are created with private permissions and cannot overwrite existing files.
 
 For another detector, run it locally on the same original crops and provide its output:
 
 `node scripts/tongue-benchmark.mjs review.json predictions.json report.json`
 
-The prediction document must contain `schema: "tongue-predictions/v1"`, `reviewSha256` (SHA-256 of the exact review file bytes), a nonempty `modelId`, optional `modelSha256`, and a `samples` array. Each prediction identifies its zero-based `index`, optional verified `imageSha256`, optional `tip` point, and optional `surface` polygon. Coordinates are unmirrored normalized crop coordinates, identical to the labels. Explicit null means abstention; omitted predictions remain misses on reviewed positive frames. This interface accepts actual detector outputs; it does not contain or substitute a trained segmentation model.
+The prediction document must contain `schema: "tongue-predictions/v1"`, `reviewSha256` (SHA-256 of the exact review file bytes), a nonempty `modelId`, optional `modelSha256`, and a `samples` array. Each prediction identifies its zero-based `index`, optional verified `imageSha256`, optional `tip` point, and optional `surface` polygon, and optional `region` box `[xMin,yMin,xMax,yMax]`. Coordinates are unmirrored normalized crop coordinates, identical to the labels. Explicit null means abstention; omitted predictions remain misses on reviewed positive frames. This interface accepts actual detector outputs; it does not contain or substitute a trained segmentation model.
+
+Region reporting compares the detector box with the bounding box of each manually labeled visible surface. These are box IoU measurements, never segmentation IoU, and absent-surface false detections are separate. Original recorded acquisition timestamps remain in report rows because asynchronous observations may lag the image.
 
 Tip reporting separates visible-frame coverage, localization error on detections and false detections on hidden frames. Surface reporting includes misses in mean intersection-over-union and reports false detections on absent-surface frames. Surface overlap uses a declared 128×128 raster. Missing segmentation capability is unavailable, not a score of zero or a successful result. Compare held-out sessions, not only pooled frame counts.
 
@@ -34,4 +36,4 @@ Tip reporting separates visible-frame coverage, localization error on detections
 
 Three numerical/contract tests pass: independent surface/tip labels and misses, missing capability, and rejection of mismatched/duplicate/invalid predictions. A Chrome component check with a synthetic canvas stream verified freeze → outline → hidden tip → export, preserving both annotations and session ID without page errors. This is software verification, not detector accuracy.
 
-The actual head-to-head model comparison remains blocked on private trained weights and labeled recording locations. No new tongue detector has been trained, installed or claimed accurate by this change. Next: locate those assets, verify model hash/loading and real inference, then run both detectors against reviewed session-held-out frames.
+The public TongueSAM region baseline is now included and browser-verified; see [the baseline report](TONGUESAM-BASELINE.md). It can be benchmarked directly from lab exports without private tip weights. A meaningful singing-session accuracy comparison still requires independent reviewed recordings. Private tip/depth weights and the fine-tuned segmentation checkpoint are separate assets. No singer accuracy result or hidden anatomical measurement is claimed.
