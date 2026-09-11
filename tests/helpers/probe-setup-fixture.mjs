@@ -5,13 +5,14 @@ import {promisify} from 'node:util';
 import {createHash} from 'node:crypto';
 const execute=promisify(execFile);
 const hash=b=>createHash('sha256').update(b).digest('hex');
-export async function createProbeSetupFixture(root,repo=process.cwd()){
+/** Generated probe archive in `dataRoot` plus a calibration package whose evidence is a text file.
+ * `manifest` overrides native manifest fields (for example provenance) before the archive is built. */
+export async function createProbeSetupFixture(root,{repo=process.cwd(),dataRoot=join(root,'private-data'),manifest={}}={}){
  const capture=join(root,'generated-capture');
  await execute(process.execPath,['--experimental-strip-types','--input-type=module','-e',"import {makeFixture} from './scripts/import-acoustic-probe.test.ts'; await makeFixture(process.argv[1]);",capture],{cwd:repo});
- const native=JSON.parse(await readFile(join(capture,'manifest.json')));
- native.captureId='12345678-1234-1234-1234-123456789abc';
+ const native={...JSON.parse(await readFile(join(capture,'manifest.json'))),captureId:'12345678-1234-1234-1234-123456789abc',...manifest};
  await writeFile(join(capture,'manifest.json'),JSON.stringify(native));
- const dataRoot=join(root,'private-data');await mkdir(join(dataRoot,'usb-imports'),{recursive:true});
+ await mkdir(join(dataRoot,'usb-imports'),{recursive:true});
  const name=`probe-${native.captureId}.zip`;
  await execute('python3',['-c',"import pathlib,sys,zipfile\nwith zipfile.ZipFile(sys.argv[2],'w') as z:\n for p in pathlib.Path(sys.argv[1]).iterdir(): z.write(p,p.name)",capture,join(dataRoot,'usb-imports',name)]);
  const archive=await readFile(join(dataRoot,'usb-imports',name));
