@@ -1,6 +1,7 @@
 import * as ort from 'onnxruntime-web/wasm';
 import wasmUrl from 'onnxruntime-web/ort-wasm-simd-threaded.wasm?url';
 import type {Landmark, TongueDiagnostic, TongueObservation, TongueTipObservation} from '../types';
+import {sha256} from '../contracts';
 import {resultCurrent} from './tongueTracking';
 
 ort.env.wasm.numThreads=1;
@@ -15,8 +16,8 @@ export async function loadTongueNetwork(signal?:AbortSignal){
  if([meta,weights].some(r=>r.status===403||r.status===404)||(meta.ok&&meta.headers.get('content-type')?.includes('text/html')))return (await import('./tongueBaseline')).loadTongueBaseline(signal);
  if(!meta.ok||!weights.ok)throw Error('Personal tongue network is not installed on this Mac');
  const manifest=await meta.json();if(manifest.schema!=='personal-tongue-neural/v1')throw Error('Unknown tongue network format');
- const buffer=await weights.arrayBuffer();const digest=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',buffer))).map(v=>v.toString(16).padStart(2,'0')).join('');
- if(digest!==manifest.modelSha256)throw Error('Tongue model verification failed');
+ const buffer=await weights.arrayBuffer();
+ if(await sha256(new Uint8Array(buffer))!==manifest.modelSha256)throw Error('Tongue model verification failed');
  const session=await ort.InferenceSession.create(buffer,{executionProviders:['wasm'],graphOptimizationLevel:'all'});
  const canvas=document.createElement('canvas');canvas.width=128;canvas.height=128;const ctx=canvas.getContext('2d',{willReadFrequently:true})!;
  const source=document.createElement('canvas');const sc=source.getContext('2d')!;
