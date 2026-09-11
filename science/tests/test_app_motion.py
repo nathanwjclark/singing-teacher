@@ -37,7 +37,9 @@ def test_encoded_native_pcm_real_decode_canonical_fit_unchanged_model(tmp_path,m
         (data/'science-current.json').write_text(json.dumps(dict(status='succeeded',runId='run-test')))
         run=data/'science-runs'/'run-test';run.mkdir(parents=True);(run/'summary.json').write_text(json.dumps(dict(sessionId='session')))
         result=app_motion.run(data,identity,'a',tmp_path/'analysis')
-        assert result['status']=='available' and result['actualSynthesisCalls']==36
+        # 3 windows x (3 JA x 2 gains) candidates x 2 models, with the two gains sharing
+        # one waveform: 18 native calls (36 before gain-only synthesis reuse).
+        assert result['status']=='available' and result['actualSynthesisCalls']==18
         assert len(result['windows'])==3 and all(w['status']=='scored' for w in result['windows'])
         assert result['decode']['sampleRateHz']==48000
         assert result['temporalAnalysis']['status']=='available'
