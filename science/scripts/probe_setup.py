@@ -25,6 +25,8 @@ def resolve_setup(root, setup_id=None, *, legacy=False):
     if setup_id is None and not pointer.exists():
         return resolve_setup(root, legacy=True)
     current = json.loads(_read(pointer)) if setup_id is None else None
+    if setup_id is None and not isinstance(current, dict):
+        raise ValueError('Invalid probe setup pointer')
     identity = setup_id or current.get('setupId', '')
     if not isinstance(identity, str) or not re.fullmatch(r'[A-Za-z0-9_-]{1,100}', identity):
         raise ValueError('Invalid probe setup identity')

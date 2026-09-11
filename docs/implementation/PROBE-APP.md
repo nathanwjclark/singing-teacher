@@ -118,9 +118,9 @@ and parsed in tens of milliseconds; the earlier string re-measurement took over
 six seconds on the event loop.
 
 Verification: `PYTHONPATH=.:science/src python -m pytest
-science/tests/test_app_probe.py -q` runs nine tests: real B importer from original
+science/tests/test_app_probe.py -q` runs ten tests: real B importer from original
 synthetic PCM, preserved archive hashes and missing-calibration rejection; tamper
-rejection; a saved receipt without its capture hash and a setup for another
+rejection; a malformed setup pointer, a saved receipt without its capture hash and a setup for another
 capture, both kept as reviews with explicit reasons; and original probe re-import
 through the actual native joint runner with durable session adoption, including
 process death immediately after submission and after collection, and cancellation
