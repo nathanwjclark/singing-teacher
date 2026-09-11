@@ -14,7 +14,7 @@ ROOT=Path(__file__).resolve().parents[2]
 def archive_fixture(tmp_path):
     capture=tmp_path/'capture'
     subprocess.run(['node','--experimental-strip-types','--input-type=module','-e',
-        "import {makeFixture} from './scripts/import-acoustic-probe.test.ts'; await makeFixture(process.argv[1]);",str(capture)],cwd=ROOT,check=True,capture_output=True)
+        "import {makeFixture} from './scripts/acoustic-probe-fixture.ts'; await makeFixture(process.argv[1]);",str(capture)],cwd=ROOT,check=True,capture_output=True)
     manifest=json.loads((capture/'manifest.json').read_text())
     identity='12345678-1234-1234-1234-123456789abc'
     manifest['captureId']=identity

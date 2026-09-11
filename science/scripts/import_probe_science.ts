@@ -6,6 +6,7 @@ import { resolve, dirname, basename } from 'node:path'
 import { createHash } from 'node:crypto'
 import { pathToFileURL } from 'node:url'
 import { importAcousticProbe } from '../../scripts/import-acoustic-probe.ts'
+import { probeSource } from '../../src/contracts/probes.ts'
 
 const hash = (b: Uint8Array) => createHash('sha256').update(b).digest('hex')
 const finite = (x: unknown): x is number => typeof x === 'number' && Number.isFinite(x)
@@ -68,8 +69,9 @@ export async function importProbeScience(captureDirectory: string, outputDirecto
     }
   }
   await verifyOriginals()
-  const human = native.provenance === 'human-recording'
-  requireValue(human || native.provenance === 'software-fixture' || cal.kind === 'measured', 'Physical reference capture requires measured instrument calibration evidence')
+  // The gate uses the source kind the manifest's own fields support, never the bare provenance label.
+  const source = probeSource(native), human = source.kind === 'human-recording', fixture = source.kind === 'software-fixture'
+  requireValue(human || fixture || cal.kind === 'measured', 'Physical reference capture requires measured instrument calibration evidence')
   requireValue(!cal.source_hashes.includes(native.received.sha256) && !config.nuisance_prior.source_hashes.includes(native.received.sha256), 'Target response cannot calibrate itself')
   const out = resolve(outputDirectory)
   await mkdir(dirname(out), { recursive: true }); await mkdir(out, { mode: 0o700 }) // Fresh output required; never overwrite private artifacts.
@@ -85,14 +87,15 @@ export async function importProbeScience(captureDirectory: string, outputDirecto
   const full = JSON.parse(responseBytes.toString())
   requireValue(full.units === 'recorded-PCM-per-digital-drive' && full.sourceHashes.drive === native.drive.sha256 && full.sourceHashes.received === native.received.sha256, 'Full response source/units mismatch')
   const reasons: string[] = human ? [DECLARED_CALIBRATION_REASON] : []
+  if (source.kind !== source.declared) reasons.push(`Manifest says ${String(source.declared)} but ${source.nativeCaptureFields.length ? `carries iPhone recorder fields (${source.nativeCaptureFields.join(', ')})` : "lacks the software fixture generator's marker"}; it is treated as a human recording.`)
   const binding = config.capture_binding
   const bound = binding && binding.manifest_sha256 === hash(originalManifest) && binding.pose === config.pose && binding.placement_id === p.placement_id && binding.route_id === cal.route_id
   if (!bound) reasons.push('Capture manifest/pose/route/placement binding missing or mismatched')
-  if (native.provenance !== 'software-fixture' && (!bound || native.pose !== config.pose || native.calibration?.placementId !== p.placement_id || !id(native.calibration?.levelCheck?.routeSignature) || binding.native_route_signature !== native.calibration.levelCheck.routeSignature)) reasons.push('Original physical pose, placement or route signature does not match calibration binding')
+  if (!fixture && (!bound || native.pose !== config.pose || native.calibration?.placementId !== p.placement_id || !id(native.calibration?.levelCheck?.routeSignature) || binding.native_route_signature !== native.calibration.levelCheck.routeSignature)) reasons.push('Original physical pose, placement or route signature does not match calibration binding')
   const processing = config.processing
   const processingSupported = processing && id(processing.evidence_id) && processing.route_id === cal.route_id &&
     Array.isArray(processing.source_hashes) && processing.source_hashes.length && processing.source_hashes.every((h: unknown) => verified.has(h)) &&
-    (native.provenance === 'software-fixture' ? processing.kind === 'declared-software-fixture' : processing.kind === 'characterized-measurement')
+    (fixture ? processing.kind === 'declared-software-fixture' : processing.kind === 'characterized-measurement')
   if (!processingSupported) reasons.push('Hardware processing/nonlinearity uncharacterized for declared route; explicit independent characterization required')
   if (!measurement.responseUsable.value) reasons.push(measurement.responseUsable.reason, ...measurement.quality.flags)
   if (measurement.quality.clippedSamples || native.bufferDiscontinuities?.length || native.failures?.length) reasons.push('Clipping, discontinuity or failed acquisition retained; not eligible for fitting')
@@ -114,7 +117,7 @@ export async function importProbeScience(captureDirectory: string, outputDirecto
       pose_state: config.pose_state, pose: config.pose, quality_flags: [], frequency_hz: frequencies,
       response_real: indices.map(i => full.real[i]), response_imag: indices.map(i => full.imag[i]), valid_mask: valid,
       comparison: config.comparison, timing: { phase_verified: measurement.phaseUsable, uncertainty_s: measurement.timing.uncertaintySeconds, evidence_id: `${measurement.id}/native-timing`, source_hashes: [measurement.sourceHashes.manifest] },
-      bands: config.bands, source: { kind: native.provenance === 'software-fixture' ? 'synthetic-fixture' : native.provenance,
+      bands: config.bands, source: { kind: fixture ? 'synthetic-fixture' : source.kind, native_capture_fields: source.nativeCaptureFields,
         drive_artifact_id: `${measurement.id}/drive`, received_artifact_id: `${measurement.id}/received`, drive_sha256: native.drive.sha256, received_sha256: native.received.sha256 },
       placement: p, calibration: cal, nuisance_prior: config.nuisance_prior, conditions: c,
     }
@@ -125,7 +128,7 @@ export async function importProbeScience(captureDirectory: string, outputDirecto
     original_artifacts: originals, full_response_artifact: artifact, full_response_bins: full.frequencyHz.length,
     selected_indices: config.selected_indices, configuration_sha256: hash(configBytes), supplemental_evidence: evidence,
     extractor: measurement.extractor, timing: measurement.timing, quality: measurement.quality,
-    provenance: native.provenance, processing: processing ?? null, capture_binding: binding ?? null, calibration_authenticity_verified: false,
+    provenance: source.kind, declared_provenance: source.declared, native_capture_fields: source.nativeCaptureFields, processing: processing ?? null, capture_binding: binding ?? null, calibration_authenticity_verified: false,
     limitations: ['Evidence bytes verified; physical calibration validity is caller-supported, not authenticated.', 'Immutable B measurement remains includedInFit=false; only an actual fitter may report evidence use.', 'No sampled summary, additional DSP, generated phase alignment or anatomical recovery claim.'] }
   await writeFile(resolve(out, 'probe-science-document.json'), JSON.stringify(probe_document, null, 2), { flag: 'wx', mode: 0o600 })
   await writeFile(resolve(out, 'probe-science-receipt.json'), JSON.stringify(receipt, null, 2), { flag: 'wx', mode: 0o600 })

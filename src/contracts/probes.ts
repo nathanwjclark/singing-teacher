@@ -1,6 +1,20 @@
 /** Additive probe interchange. KIT 1.0 semantics remain unchanged. */
 export const PROBE_VERSION = 'probe-records-1.0.0' as const
 export type ProbeProvenance = 'software-fixture' | 'physical-reference' | 'human-recording'
+/** Manifest fields only the iPhone recorder writes (apps/ios/SingingDepth/SingingDepth/AcousticProbe.swift). */
+export const NATIVE_CAPTURE_FIELDS = ['route','playbackSchedule','rgbDepth','linkedDepthCaptureId','collectionSessionId','calibration.levelCheckArtifact','calibration.deviceResponseCalibrated'] as const
+/** Calibration id written only by the software fixture generator (scripts/acoustic-probe-fixture.ts). */
+export const SOFTWARE_FIXTURE_CALIBRATION_ID = 'digital-fixture-no-human-playback'
+/** Source kind a probe manifest supports. Provenance is self-declared in an unsigned manifest, so this cannot prove
+ * a label; it only refuses labels the manifest's own fields contradict. Any iPhone recorder field, a human label, or a
+ * software-fixture label without the generator's marker all mean human-recording. */
+export function probeSource(manifest:unknown):{kind:ProbeProvenance;declared:unknown;nativeCaptureFields:string[]} {
+ const m=(manifest&&typeof manifest==='object'?manifest:{}) as Record<string,unknown>,calibration=(m.calibration&&typeof m.calibration==='object'?m.calibration:{}) as Record<string,unknown>
+ const nativeCaptureFields=NATIVE_CAPTURE_FIELDS.filter(path=>path.startsWith('calibration.')?path.slice(12) in calibration:path in m)
+ const declared=m.provenance
+ const human=nativeCaptureFields.length>0||declared==='human-recording'||(declared==='software-fixture'&&calibration.id!==SOFTWARE_FIXTURE_CALIBRATION_ID)
+ return {kind:human?'human-recording':declared as ProbeProvenance,declared,nativeCaptureFields}
+}
 export interface ProbeMedia { path:string; sha256:string; byteCount:number; format:'float32-le'; channels:1; sampleCount:number }
 export interface ProbeDefinition { id:string; bandHz:[number,number]; gain:number; [key:string]:unknown }
 export interface ProbeCalibration { id?:string; levelCheck?:unknown; [key:string]:unknown }

@@ -37,7 +37,7 @@ def scenario(tmp_path_factory):
     capture_started_at = now()
     # Generate the heldout raw response after persisting the forecast. The known
     # FIR deliberately differs from native acoustics, testing honest mismatch.
-    node(f"import{{makeFixture}}from'./scripts/import-acoustic-probe.test.ts';import{{importProbeScience}}from'./science/scripts/import_probe_science.ts';await makeFixture({json.dumps(setup['capture'])});await importProbeScience({json.dumps(setup['capture'])},{json.dumps(str(out/'import'))},{json.dumps(setup['configPath'])});")
+    node(f"import{{makeFixture}}from'./scripts/acoustic-probe-fixture.ts';import{{importProbeScience}}from'./science/scripts/import_probe_science.ts';await makeFixture({json.dumps(setup['capture'])});await importProbeScience({json.dumps(setup['capture'])},{json.dumps(str(out/'import'))},{json.dumps(setup['configPath'])});")
     receipt = json.loads((out/'import/probe-science-receipt.json').read_text())
     def media(descriptors, base):
         return {d['path']:base64.b64encode((Path(base)/d['path']).read_bytes()).decode() for d in descriptors}
