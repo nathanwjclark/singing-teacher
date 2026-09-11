@@ -104,6 +104,10 @@ at least 500 ms of silence before stopping. For melodic attempts the single-note
 whole recording must be voiced does not apply; silence before or after the melody is judged only by
 the rules above.
 
+If a frozen melody fails this version's declaration checks (for example a protocol frozen before a
+field was added), the panel shows an alert and every prompted and transfer attempt is excluded with
+that reason; recall, retention and export keep working.
+
 The local JSON export keeps the raw pitch samples. Local JSON and KIT records both keep the full melody
 score (per-note values, frame metrics, reasons and failures), the frozen melody, the policy
 description and the cue lineage.
@@ -132,7 +136,9 @@ Sensation reports stay subjective.
   with a late change and a glide, transposition, octave slips, ±40/±80/±100 cent vibrato and an
   off-centre note, a breath inside the last note, phrase ending at end of audio, the strict 50-cent
   frame threshold, declaration limits including 0.01 Hz semitones, silence around a melodic attempt,
-  per-arm unobserved-end counts, frozen digest, stage routing and export) plus the unchanged
+  per-arm unobserved-end counts, a melody frozen before a scorer field existed (its melodic attempts are
+  excluded with a visible reason; recall and export still work), frozen digest, stage routing and
+  export) plus the unchanged
   single-note tests.
 - `npx playwright test tests/melody-learning.spec.ts` runs under the default real-server configuration.
   It drives the real app with a generated oscillator microphone through MediaRecorder, decoding and
