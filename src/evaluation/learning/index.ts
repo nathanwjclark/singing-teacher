@@ -1,15 +1,24 @@
+import { scoreMelody, validateMelody } from './melody.ts'
+import type { MelodyScore } from './melody.ts'
 import { canonicalJson, sha256 } from '../../contracts/index.ts'
 import type { LearningAttempt, LearningProtocol, LearningPhase, LearningArm } from '../../experiment/cues/types.ts'
 export async function freezeLearningProtocol(input: Omit<LearningProtocol,'digest'>): Promise<LearningProtocol> {
   if(!input.cue.review?.reviewer.trim() || !input.cue.review.evidence.trim() || !input.cue.review.role.trim()) throw new Error('Record specialist review of both exact wordings first.')
   if(!(input.targetHz>=50&&input.targetHz<=1200&&input.toleranceCents>0&&input.toleranceCents<=300&&input.retentionHours>=1&&input.context.trim()&&input.phrase.trim())) throw new Error('Supply a comfortable 50–1200 Hz target, tolerance 1–300 cents, context, phrase and retention delay of at least one hour.')
+  if(input.melody) { validateMelody(input.melody,input.toleranceCents); if(input.scoring!=='melodic-pitch-rhythm/1') throw Error('Melody requires the frozen melodic scoring policy.') }
+  else if(input.scoring!=='median-absolute-cents/1') throw Error('Scoring policy requires a declared melody.')
   const snapshot=JSON.parse(canonicalJson(input)) as typeof input
   return Object.freeze({...snapshot,digest:await sha256(canonicalJson(snapshot))})
 }
-export interface LearningScore { attemptId:string; status:'scored'|'failed'|'excluded'; reasons:string[]; errorCents:number|null; passed:boolean; movementAgreement:null }
+/** Melody protocols sing the declared melody in prompted practice and transfer; recall and retention keep the single target note. */
+export const isMelodic=(phase:LearningPhase)=>phase==='prompted'||phase==='transfer'
+export interface LearningScore { attemptId:string; status:'scored'|'failed'|'excluded'; reasons:string[]; errorCents:number|null; passed:boolean; movementAgreement:null; melody?:MelodyScore }
 export async function evaluateLearning(protocol:LearningProtocol, attempts:LearningAttempt[]):Promise<LearningScore[]> {
   const {digest,...payload}=protocol
   const valid=await sha256(canonicalJson(payload))===digest
+  // A melody this scorer cannot validate (for example a protocol frozen before a field was added) excludes its melodic attempts instead of throwing.
+  let melodyError:string|null=null
+  if(protocol.melody)try{validateMelody(protocol.melody,protocol.toleranceCents)}catch(e){melodyError=`Frozen melody cannot be scored by this version: ${e instanceof Error?e.message:String(e)}`}
   return attempts.map(attempt=>{
     const reasons:string[]=[]
     if(!valid)reasons.push('Frozen protocol digest changed')
@@ -25,17 +34,25 @@ export async function evaluateLearning(protocol:LearningProtocol, attempts:Learn
       const latest=Math.max(...earlier.map(a=>Date.parse(a.endedAt)))
       if(!earlier.length||attempt.sessionId===protocol.sessionId||Date.parse(attempt.startedAt)-latest<protocol.retentionHours*3600000)reasons.push('Later-session retention delay not met')
     }
+    const melodic=!!protocol.melody&&isMelodic(attempt.phase)
+    if(melodic&&melodyError)reasons.push(melodyError)
+    const melody=melodic&&!melodyError?scoreMelody(protocol.melody!,attempt.pitches,protocol.toleranceCents):undefined
     const validPitch=attempt.pitches.filter(p=>p.hz!==null&&Number.isFinite(p.hz)&&p.hz>0)
-    if(validPitch.length<protocol.minimumVoicedWindows||validPitch.length/Math.max(1,attempt.pitches.length)<protocol.minimumVoicedFraction)reasons.push('Insufficient voiced audio')
+    if(melody?.status==='unusable')reasons.push(...melody.reasons)
+    else if(!melodic&&(validPitch.length<protocol.minimumVoicedWindows||validPitch.length/Math.max(1,attempt.pitches.length)<protocol.minimumVoicedFraction))reasons.push('Insufficient voiced audio')
     const errors=validPitch.map(p=>Math.abs(1200*Math.log2(p.hz!/protocol.targetHz))).sort((a,b)=>a-b)
     const middle=Math.floor(errors.length/2)
     const errorCents=errors.length?(errors.length%2?errors[middle]:(errors[middle-1]+errors[middle])/2):null
     const failed=attempt.outcome!=='completed'||attempt.sensation.discomfort
     if(failed)reasons.push(attempt.failureReason||'Attempt stopped or discomfort reported')
-    return {attemptId:attempt.id,status:failed?'failed':reasons.length?'excluded':'scored',reasons,errorCents:reasons.length?null:errorCents,passed:!reasons.length&&errorCents!==null&&errorCents<=protocol.toleranceCents,movementAgreement:null}
+    // Broken melodic evidence excludes; a note left unsung fails the attempt; wrong pitch or rhythm is a scored non-pass.
+    const incomplete=!failed&&!reasons.length&&melody?.status==='incomplete'
+    if(incomplete)reasons.push(...melody!.reasons)
+    return {attemptId:attempt.id,status:failed||incomplete?'failed':reasons.length?'excluded':'scored',reasons,errorCents:reasons.length?null:melody?melody.errorCents:errorCents,passed:!reasons.length&&(melody?melody.passed:errorCents!==null&&errorCents<=protocol.toleranceCents),movementAgreement:null,...(melody?{melody}:{})}
   })
 }
+/** Per stage and arm; endNotObserved counts melodic exclusions for an unobserved phrase end so differential exclusion between arms stays visible. */
 export function compareLearning(attempts:LearningAttempt[],scores:LearningScore[]){
   const phases:LearningPhase[]=['prompted','recall','transfer','retention']
-  return phases.map(phase=>({phase,arms:(['baseline','variant'] as LearningArm[]).map(arm=>{const group=attempts.filter(a=>a.phase===phase&&a.arm===arm);const results=group.map(a=>scores.find(s=>s.attemptId===a.id));return {arm,attempts:group.length,passed:results.filter(s=>s?.passed).length,failed:results.filter(s=>s?.status==='failed').length,excluded:results.filter(s=>s?.status==='excluded').length}})}))
+  return phases.map(phase=>({phase,arms:(['baseline','variant'] as LearningArm[]).map(arm=>{const group=attempts.filter(a=>a.phase===phase&&a.arm===arm);const results=group.map(a=>scores.find(s=>s.attemptId===a.id));return {arm,attempts:group.length,passed:results.filter(s=>s?.passed).length,failed:results.filter(s=>s?.status==='failed').length,excluded:results.filter(s=>s?.status==='excluded').length,endNotObserved:results.filter(s=>s?.status==='excluded'&&s.melody?.status==='unusable'&&s.melody.onsetMs!==null&&!s.melody.offsetObserved).length}})}))
 }
