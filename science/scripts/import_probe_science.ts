@@ -5,7 +5,7 @@ import { open, realpath, mkdir, writeFile, chmod, readdir } from 'node:fs/promis
 import { resolve, dirname, basename } from 'node:path'
 import { createHash } from 'node:crypto'
 import { pathToFileURL } from 'node:url'
-import { importAcousticProbe } from '../../scripts/import-acoustic-probe.ts'
+import { importAcousticProbe, pullAcquisition } from '../../scripts/import-acoustic-probe.ts'
 import { probeSource } from '../../src/contracts/probes.ts'
 
 const hash = (b: Uint8Array) => createHash('sha256').update(b).digest('hex')
@@ -71,16 +71,9 @@ export async function importProbeScience(captureDirectory: string, outputDirecto
     }
   }
   await verifyOriginals()
-  let pull: any
-  if (receiptPath !== undefined) {
-    const pullRoot = await realpath(dirname(resolve(receiptPath)))
-    pull = JSON.parse((await read(pullRoot, basename(receiptPath), 1024 * 1024)).toString())
-    requireValue(pull && typeof pull === 'object' && sha(pull.sha256) && Number.isSafeInteger(pull.bytes), 'Pull receipt lacks the archive hash and byte count')
-    const archive = await read(pullRoot, 'original.zip', 512 * 1024 * 1024)
-    requireValue(archive.length === pull.bytes && hash(archive) === pull.sha256, 'Pulled archive does not match its pull receipt')
-  }
+  const acquisition = receiptPath === undefined ? undefined : await pullAcquisition(receiptPath)
   // The gate uses the source kind the manifest's own fields and pull receipt support, never the bare provenance label.
-  const source = probeSource(native, pull ? pull.acquisition ?? null : undefined), human = source.kind === 'human-recording', fixture = source.kind === 'software-fixture'
+  const source = probeSource(native, acquisition), human = source.kind === 'human-recording', fixture = source.kind === 'software-fixture'
   requireValue(source.attestation !== 'contradicted-fixture-receipt', 'Repository-fixture pull receipt contradicts the capture manifest: only a marked software fixture without iPhone recorder fields may carry one')
   requireValue(human || fixture || cal.kind === 'measured', 'Physical reference capture requires measured instrument calibration evidence')
   requireValue(!cal.source_hashes.includes(native.received.sha256) && !config.nuisance_prior.source_hashes.includes(native.received.sha256), 'Target response cannot calibrate itself')
@@ -88,11 +81,11 @@ export async function importProbeScience(captureDirectory: string, outputDirecto
   await mkdir(dirname(out), { recursive: true }); await mkdir(out, { mode: 0o700 }) // Fresh output required; never overwrite private artifacts.
   const bOut = resolve(out, 'b-import')
   await mkdir(bOut, { mode: 0o700 })
-  const measurement = await importAcousticProbe(root, bOut)
+  const measurement = await importAcousticProbe(root, bOut, acquisition)
   await chmod(bOut, 0o700)
   for (const file of await readdir(bOut)) await chmod(resolve(bOut, file), 0o600)
   await verifyOriginals()
-  requireValue(measurement.sourceHashes.manifest === hash(originalManifest) && measurement.sourceHashes.drive === native.drive.sha256 && measurement.sourceHashes.received === native.received.sha256, 'B source binding mismatch')
+  requireValue(measurement.sourceHashes.manifest === hash(originalManifest) && measurement.sourceHashes.drive === native.drive.sha256 && measurement.sourceHashes.received === native.received.sha256 && measurement.provenance === source.kind, 'B source binding mismatch')
   const artifact = measurement.artifacts.response, responseBytes = await read(bOut, artifact.path)
   requireValue(responseBytes.length === artifact.byteCount && hash(responseBytes) === artifact.sha256, 'Derived response hash/byte mismatch')
   const full = JSON.parse(responseBytes.toString())
@@ -143,7 +136,7 @@ export async function importProbeScience(captureDirectory: string, outputDirecto
     selected_indices: config.selected_indices, configuration_sha256: hash(configBytes), supplemental_evidence: evidence,
     extractor: measurement.extractor, timing: measurement.timing, quality: measurement.quality,
     provenance: source.kind, declared_provenance: source.declared, native_capture_fields: source.nativeCaptureFields,
-    attestation: source.attestation, acquisition: pull ? pull.acquisition ?? null : null, processing: processing ?? null, capture_binding: binding ?? null, calibration_authenticity_verified: false,
+    attestation: source.attestation, acquisition: acquisition ?? null, processing: processing ?? null, capture_binding: binding ?? null, calibration_authenticity_verified: false,
     limitations: ['Evidence bytes verified; physical calibration validity is caller-supported, not authenticated.', 'Immutable B measurement remains includedInFit=false; only an actual fitter may report evidence use.', 'No sampled summary, additional DSP, generated phase alignment or anatomical recovery claim.'] }
   await writeFile(resolve(out, 'probe-science-document.json'), JSON.stringify(probe_document, null, 2), { flag: 'wx', mode: 0o600 })
   await writeFile(resolve(out, 'probe-science-receipt.json'), JSON.stringify(receipt, null, 2), { flag: 'wx', mode: 0o600 })

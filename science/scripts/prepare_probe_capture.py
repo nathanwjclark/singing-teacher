@@ -73,7 +73,7 @@ def prepare(data_root, output):
                           setupProfileSha256=setup['profileSha256'])
     else:
         subprocess.run(['node', '--experimental-strip-types', str(ROOT/'scripts/import-acoustic-probe.ts'),
-                        str(capture), str(output/'review')], check=True, stdout=subprocess.DEVNULL)
+                        str(capture), str(output/'review'), str(output/'usb-receipt.json')], check=True, stdout=subprocess.DEVNULL)
         result = {'eligible': False, 'reasons': ['Measured route calibration, placement and processing evidence are required before joint fitting.'],
                   'measurementPath': 'review/probe-measurement.json'}
         if setup_error:

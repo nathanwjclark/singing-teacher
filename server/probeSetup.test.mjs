@@ -122,6 +122,8 @@ test('a pulled capture stripped to look like a fixture stays a human recording a
  assert.equal((await call('import',{requestId:'import-stripped'})).status,202);
  const status=await poll(call);
  assert.equal(status.setup.capture.provenance,'human-recording');assert.equal(status.setup.capture.declaredProvenance,'software-fixture');assert.match(status.fitBlockedReason,/Human recordings cannot be fitted/);
+ // The review import's own record agrees with the status.
+ assert.equal(status.measurement.provenance,'human-recording');
  const refused=await call('setup',{...fixture.request,importId:status.import.importId});
  assert.equal(refused.status,400);assert.ok(refused.body.error.startsWith(`Calibration is not eligible: ${DECLARED_CALIBRATION_REASON}; Manifest says software-fixture but its pull receipt shows it was copied from an iPhone by devicectl; it is treated as a human recording.`),refused.body.error);
  assert.deepEqual(await setups(),[]);

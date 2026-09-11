@@ -163,6 +163,8 @@ test('a pull receipt decides whether a fixture label counts, and must match its 
   r = await importProbeScience(capture, join(root, 'pulled'), configPath, await pulled(root, devicectl))
   assert.equal(r.receipt.eligible_for_fit, false); assert.equal(r.probe_document, null); assert.equal(r.receipt.provenance, 'human-recording'); assert.equal(r.receipt.declared_provenance, 'software-fixture')
   assert.equal(r.receipt.attestation, 'devicectl-receipt'); assert.deepEqual(r.receipt.acquisition, devicectl)
+  // B's review record agrees with the science receipt about the source kind.
+  assert.equal(r.measurement.provenance, 'human-recording'); assert.equal(JSON.parse(await readFile(join(root, 'pulled', 'b-import', 'probe-measurement.json'), 'utf8')).provenance, 'human-recording')
   assert.deepEqual(r.receipt.reasons.slice(0, 2), [DECLARED_CALIBRATION_REASON, 'Manifest says software-fixture but its pull receipt shows it was copied from an iPhone by devicectl; it is treated as a human recording.'])
   // A receipt from before transport recording cannot vouch for a fixture either.
   r = await importProbeScience(capture, join(root, 'legacy'), configPath, await pulled(root, undefined))
