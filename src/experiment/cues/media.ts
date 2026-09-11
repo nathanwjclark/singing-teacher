@@ -20,11 +20,17 @@ export async function extractLearningPitch(blob:Blob, melodic=false):Promise<Lea
   return frames
  }finally{await context.close()}
 }
-/** Reference playback for declared notes: one Web Audio triangle oscillator per note with short ramps to mark note changes. */
-export async function playLearningMelody(notes:{hz:number;durationMs:number}[]){
+/** Reference playback for declared notes: one Web Audio triangle oscillator per note with short ramps to mark note changes.
+ * stop() ends playback early; the context is always closed. Playback that has not started within a second
+ * (for example audio blocked by the browser) or that the browser suspends fails instead of waiting forever. */
+export function playLearningMelody(notes:{hz:number;durationMs:number}[]):{done:Promise<void>;stop:()=>void}{
  const context=new AudioContext()
- try{
-  await context.resume()
+ let settle:(error?:Error)=>void=()=>{}
+ const done=new Promise<void>((resolve,reject)=>{settle=error=>{settle=()=>{};clearTimeout(startup);context.onstatechange=null;void context.close().catch(()=>{});if(error)reject(error);else resolve()}})
+ const startup=setTimeout(()=>{if(context.state!=='running')settle(Error('Audio output did not start; check that the browser allows sound.'))},1000)
+ void context.resume().then(()=>{
+  if(context.state==='closed')return
+  context.onstatechange=()=>{if(context.state!=='running')settle(Error('Audio output was interrupted.'))}
   let time=context.currentTime+.05, last:OscillatorNode|null=null
   for(const note of notes){
    const oscillator=context.createOscillator(),gain=context.createGain(),end=time+note.durationMs/1000
@@ -32,6 +38,7 @@ export async function playLearningMelody(notes:{hz:number;durationMs:number}[]){
    gain.gain.setValueAtTime(0,time);gain.gain.linearRampToValueAtTime(.2,time+.02);gain.gain.setValueAtTime(.2,end-.03);gain.gain.linearRampToValueAtTime(0,end)
    oscillator.connect(gain).connect(context.destination);oscillator.start(time);oscillator.stop(end);time=end;last=oscillator
   }
-  if(last)await new Promise(resolve=>{last.onended=resolve})
- }finally{await context.close()}
+  if(last)last.onended=()=>settle();else settle()
+ },error=>settle(error instanceof Error?error:Error(String(error))))
+ return {done,stop:()=>settle()}
 }
