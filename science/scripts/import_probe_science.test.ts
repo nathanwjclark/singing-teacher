@@ -1,11 +1,14 @@
-import { test } from 'node:test'
+import { test, type TestContext } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtemp, writeFile, readFile, stat } from 'node:fs/promises'
+import { mkdtemp, writeFile, readFile, stat, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { createHash } from 'node:crypto'
 import { makeFixture } from '../../scripts/acoustic-probe-fixture.ts'
 import { importProbeScience, DECLARED_CALIBRATION_REASON } from './import_probe_science.ts'
+
+// Exported helpers keep their files (the Python tests read them after `node -e`); each test removes its own.
+function owned<T extends { root: string }>(t: TestContext, fixture: T) { t.after(() => rm(fixture.root, { recursive: true, force: true })); return fixture }
 
 export async function setupFixture() {
   const root = await mkdtemp(join(tmpdir(), 'probe-science-'))
@@ -28,8 +31,8 @@ export async function setupFixture() {
   return { root, capture, native, config, configPath }
 }
 
-test('exact full B response maps to fitter schema with verified lineage and immutable B record', async () => {
-  const { root, capture, config, configPath } = await setupFixture()
+test('exact full B response maps to fitter schema with verified lineage and immutable B record', async t => {
+  const { root, capture, config, configPath } = owned(t, await setupFixture())
   const out = join(root, 'science'), r = await importProbeScience(capture, out, configPath)
   assert.equal(r.receipt.eligible_for_fit, true); assert.equal(r.measurement.includedInFit.value, false)
   assert.equal(r.receipt.included_in_fit, false); assert.equal(r.probe_document!.trials[0].source.kind, 'synthetic-fixture')
@@ -43,8 +46,8 @@ test('exact full B response maps to fitter schema with verified lineage and immu
   await assert.rejects(importProbeScience(capture, out, configPath), /EEXIST/)
 })
 
-test('unusable acquisition, missing processing and unsupported phase stay captured but excluded', async () => {
-  const { root, capture, native, config, configPath } = await setupFixture()
+test('unusable acquisition, missing processing and unsupported phase stay captured but excluded', async t => {
+  const { root, capture, native, config, configPath } = owned(t, await setupFixture())
   delete (config as any).processing; await writeFile(configPath, JSON.stringify(config))
   let r = await importProbeScience(capture, join(root, 'processing'), configPath)
   assert.equal(r.probe_document, null); assert.match(r.receipt.reasons.join(), /uncharacterized/)
@@ -63,8 +66,8 @@ test('unusable acquisition, missing processing and unsupported phase stay captur
   assert.equal(r.receipt.eligible_for_fit, true); assert.equal(r.probe_document!.trials[0].timing.phase_verified, false)
 })
 
-test('corrupt source/evidence, incompatible grid and physical fixture calibration rejected', async () => {
-  const { root, capture, native, config, configPath } = await setupFixture()
+test('corrupt source/evidence, incompatible grid and physical fixture calibration rejected', async t => {
+  const { root, capture, native, config, configPath } = owned(t, await setupFixture())
   config.capture_binding.route_id = 'wrong-route'; await writeFile(configPath, JSON.stringify(config))
   const mismatch = await importProbeScience(capture, join(root, 'binding'), configPath)
   assert.equal(mismatch.probe_document, null); assert.match(mismatch.receipt.reasons.join(), /binding/)
@@ -96,19 +99,19 @@ export async function declaredMeasuredPackage(provenance: 'human-recording' | 'p
   return fixture
 }
 
-test('real-voice capture with a metadata-only calibration package stays ineligible with the declared-calibration reason', async () => {
-  const { root, capture, configPath } = await declaredMeasuredPackage('human-recording')
+test('real-voice capture with a metadata-only calibration package stays ineligible with the declared-calibration reason', async t => {
+  const { root, capture, configPath } = owned(t, await declaredMeasuredPackage('human-recording'))
   const r = await importProbeScience(capture, join(root, 'human'), configPath)
   assert.equal(r.receipt.eligible_for_fit, false); assert.equal(r.probe_document, null); assert.equal(r.receipt.captured, true)
   assert.deepEqual(r.receipt.reasons, [DECLARED_CALIBRATION_REASON])
   assert.equal(JSON.parse(await readFile(join(root, 'human', 'probe-science-document.json'), 'utf8')), null)
 })
 
-test('reference-object and synthetic captures keep the existing calibrated import path', async () => {
-  const reference = await declaredMeasuredPackage('physical-reference')
+test('reference-object and synthetic captures keep the existing calibrated import path', async t => {
+  const reference = owned(t, await declaredMeasuredPackage('physical-reference'))
   const r = await importProbeScience(reference.capture, join(reference.root, 'reference'), reference.configPath)
   assert.equal(r.receipt.eligible_for_fit, true); assert.equal(r.probe_document!.trials[0].source.kind, 'physical-reference')
-  const synthetic = await setupFixture()
+  const synthetic = owned(t, await setupFixture())
   assert.equal((await importProbeScience(synthetic.capture, join(synthetic.root, 'synthetic'), synthetic.configPath)).probe_document!.trials[0].source.kind, 'synthetic-fixture')
 })
 
@@ -122,19 +125,19 @@ async function relabelled(fixture: Awaited<ReturnType<typeof setupFixture>>, pro
   await writeFile(configPath, JSON.stringify(config))
 }
 
-test('relabelling an iPhone recording as a fixture or reference object does not make it eligible', async () => {
-  const synthetic = await setupFixture()
+test('relabelling an iPhone recording as a fixture or reference object does not make it eligible', async t => {
+  const synthetic = owned(t, await setupFixture())
   await relabelled(synthetic, 'software-fixture')
   let r = await importProbeScience(synthetic.capture, join(synthetic.root, 'as-fixture'), synthetic.configPath)
   assert.equal(r.receipt.eligible_for_fit, false); assert.equal(r.receipt.provenance, 'human-recording'); assert.equal(r.receipt.declared_provenance, 'software-fixture')
   assert.equal(r.receipt.reasons[0], DECLARED_CALIBRATION_REASON); assert.match(r.receipt.reasons[1], /carries iPhone recorder fields \(route, playbackSchedule, calibration.deviceResponseCalibrated\)/)
   assert.equal(r.measurement.provenance, 'human-recording')
-  const reference = await declaredMeasuredPackage('physical-reference')
+  const reference = owned(t, await declaredMeasuredPackage('physical-reference'))
   await relabelled(reference, 'physical-reference')
   r = await importProbeScience(reference.capture, join(reference.root, 'as-reference'), reference.configPath)
   assert.equal(r.receipt.eligible_for_fit, false); assert.equal(r.probe_document, null); assert.match(r.receipt.reasons.join(), /Manifest says physical-reference but carries iPhone recorder fields/)
   // A fixture label without the fixture generator's marker is not accepted either.
-  const unmarked = await setupFixture(); unmarked.native.calibration = {}
+  const unmarked = owned(t, await setupFixture()); unmarked.native.calibration = {}
   await writeFile(join(unmarked.capture, 'manifest.json'), JSON.stringify(unmarked.native))
   unmarked.config.capture_binding.manifest_sha256 = createHash('sha256').update(await readFile(join(unmarked.capture, 'manifest.json'))).digest('hex'); await writeFile(unmarked.configPath, JSON.stringify(unmarked.config))
   r = await importProbeScience(unmarked.capture, join(unmarked.root, 'unmarked'), unmarked.configPath)
@@ -143,8 +146,8 @@ test('relabelling an iPhone recording as a fixture or reference object does not 
 
 // This test runs the genuine native consumer; the Python runtime must have science dependencies.
 import { execFileSync } from 'node:child_process'
-test('original known-filter PCM traverses joint native fitter and reports nonzero mismatch', async () => {
-  const { root, capture, configPath } = await setupFixture()
+test('original known-filter PCM traverses joint native fitter and reports nonzero mismatch', async t => {
+  const { root, capture, configPath } = owned(t, await setupFixture())
   const out = join(root, 'end-to-end')
   await importProbeScience(capture, out, configPath)
   const code = `

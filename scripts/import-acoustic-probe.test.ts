@@ -1,14 +1,15 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtemp,writeFile,readFile } from 'node:fs/promises'
+import { mkdtemp,writeFile,readFile,rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { importAcousticProbe } from './import-acoustic-probe.ts'
 import { validateProbeMeasurement } from '../src/contracts/probes.ts'
 import type { ProbeAttempt } from '../src/contracts/probes.ts'
 import { makeFixture } from './acoustic-probe-fixture.ts'
-test('known filter response, withheld fit state, and corrupt-byte rejection',async()=>{
- const root=await mkdtemp(join(tmpdir(),'probe-dsp-')),a=await makeFixture(root),out=join(root,'derived'),r=await importAcousticProbe(root,out)
+test('known filter response, withheld fit state, and corrupt-byte rejection',async t=>{
+ const root=await mkdtemp(join(tmpdir(),'probe-dsp-'));t.after(()=>rm(root,{recursive:true,force:true}))
+ const a=await makeFixture(root),out=join(root,'derived'),r=await importAcousticProbe(root,out)
  assert.equal(r.responseUsable.value,true);assert.equal(r.includedInFit.value,false);assert.equal(r.provenance,'software-fixture');assert.equal(r.phaseUsable,true)
  const records=JSON.parse(await readFile(join(out,'probe-records.json'),'utf8')).records
  assert.equal(records[0].id,`${r.id}/definition`);assert.equal(records[0].kind,'probe-definition')
@@ -23,5 +24,4 @@ test('known filter response, withheld fit state, and corrupt-byte rejection',asy
  function yLength(value:ProbeAttempt){return value.received.sampleCount}
  a.failures=[];a.segments[0].receivedStartSample=null;await writeFile(join(root,'manifest.json'),JSON.stringify(a));const unknown=await importAcousticProbe(root,join(root,'unknown'));assert.equal(unknown.captured.value,true);assert.equal(unknown.responseUsable.value,false)
  const bytes=await readFile(join(root,'received.f32le'));bytes[10]^=1;await writeFile(join(root,'received.f32le'),bytes);await assert.rejects(importAcousticProbe(root,out),/hash\/byte mismatch/)
- console.log(`Fixture report: ${out}/probe-measurement.json`)
 })
