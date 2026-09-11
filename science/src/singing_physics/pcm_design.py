@@ -9,7 +9,7 @@ import re
 import numpy as np
 
 from .engine import ANATOMY, Engine, finite
-from .pcm_inverse import BRIDGE, FEATURES, ROOT, _bridge, _features, extract_pcm, resample_native_pcm
+from .pcm_inverse import BRIDGE, BRIDGE_SHA256, FEATURES, ROOT, _bridge, _features, extract_pcm, resample_native_pcm
 from .pcm_spectral import COARSE_OBJECTIVE, SPECTRAL_OBJECTIVE, objective_policy, extract_spectral, validate_spectral, discrepancy
 from .prediction import Artifact, _encode, _identity, _timestamp
 
@@ -17,15 +17,18 @@ PROFILE = {'sample_rate_hz': 44100, 'frame_start_sample': 4410, 'frame_size': 40
 SCHEMA = 'internal-pcm-design-0.1'
 
 
-# Every source file whose code can change a sealed prediction or its later score.
-# The TypeScript extractor and contracts are pinned separately by the extractor
-# subprocess itself (extractorSha256/contractsSha256) and checked on update.
-_PINNED_SOURCES = [Path(__file__).with_name(name) for name in ('pcm_design.py', 'pcm_inverse.py', 'pcm_spectral.py', 'prediction.py', 'engine.py')]+[BRIDGE]
-# Computed once at import so the pin names the code this process executes. Editing
+# Every source file whose code can change a sealed prediction or its later score,
+# hashed once at import so the pin names the code this process executes. Editing
 # these files on disk does not change a running worker; restart it to upgrade. The
 # restarted worker pins different hashes and rejects designs sealed by older code.
+# The extractor bridge runs as a new Node process per extraction and reads its file
+# from disk; _bridge rejects any reply whose self-reported hash differs from
+# BRIDGE_SHA256 (the value pinned here). The TypeScript extractor and contracts are
+# hashed by that subprocess (extractorSha256/contractsSha256) and checked on update.
+_PINNED_MODULES = [Path(__file__).with_name(name) for name in ('pcm_design.py', 'pcm_inverse.py', 'pcm_spectral.py', 'prediction.py', 'engine.py')]
 SCORER_PIN = {'version': 'pcm-scorer-pin-1',
-    'implementation_sha256': {path.relative_to(ROOT).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest() for path in _PINNED_SOURCES},
+    'implementation_sha256': {**{path.relative_to(ROOT).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest() for path in _PINNED_MODULES},
+                              BRIDGE.relative_to(ROOT).as_posix(): BRIDGE_SHA256},
     'numpy_version': np.__version__, 'scipy_version': scipy.__version__}
 
 
@@ -197,8 +200,11 @@ def design_pcm(snapshot, *, expected_digest, design_id, target_observation_id, g
     if not _timestamp(data['sealed_at']) <= _timestamp(generated_at) <= _timestamp(_now()):
         raise ValueError('Design timestamp must follow hypothesis receipt and not be future')
     _scales(feature_scales)
-    if objective == SPECTRAL_OBJECTIVE and not {'pitchHz','periodicity'} <= set(feature_scales):
-        raise ValueError('Spectral objective requires declared pitch and periodicity scales')
+    # The spectral score reads pitch and periodicity from these declared features but
+    # scales them by its frozen policy, so the declaration must state those same scales.
+    if objective == SPECTRAL_OBJECTIVE and any(feature_scales.get(name, {}).get('scale') != objective_signature['config'][key]
+            for name, key in (('pitchHz', 'pitch_scale_hz'), ('periodicity', 'periodicity_scale'))):
+        raise ValueError('Spectral objective requires pitchHz and periodicity scales equal to its frozen policy (20 Hz, 0.1)')
     for name, value in [('minimum_separation', minimum_separation), ('retention_margin', retention_margin), ('maximum_discrepancy', maximum_discrepancy)]:
         if finite(value, name) <= 0:
             raise ValueError('Separation and retention thresholds must be positive')

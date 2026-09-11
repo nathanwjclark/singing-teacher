@@ -21,6 +21,9 @@ from .pcm_spectral import COARSE_OBJECTIVE, OPTIONAL_TRIAL_FIELDS, SPECTRAL_OBJE
 
 ROOT = Path(__file__).resolve().parents[3]
 BRIDGE = ROOT/'science/scripts/extract_pcm.ts'
+# Hashed once at import. Each extraction starts a new Node process that reads the
+# bridge from disk, so every reply must report this same hash (see _bridge).
+BRIDGE_SHA256 = hashlib.sha256(BRIDGE.read_bytes()).hexdigest()
 FEATURES = {'dbfs': ('dBFS', 3.), 'centroidHz': ('Hz', 250.), 'flatness': ('ratio', .1),
             'pitchHz': ('Hz', 20.), 'periodicity': ('ratio', .1)}
 
@@ -37,7 +40,10 @@ def _bridge(payload, node_binary):
         input=json.dumps(payload, allow_nan=False), capture_output=True, text=True, timeout=30)
     if completed.returncode:
         raise ValueError('Canonical PCM bridge rejected input: '+completed.stderr[-2000:])
-    return json.loads(completed.stdout)
+    result = json.loads(completed.stdout)
+    if result.pop('bridgeSha256', None) != BRIDGE_SHA256:
+        raise RuntimeError('Canonical PCM bridge changed on disk since this process started; restart it')
+    return result
 
 
 def extract_pcm(audio, sample_rate_hz, *, measurement_id, observation_id, artifact_id,

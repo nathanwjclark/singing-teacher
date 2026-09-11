@@ -24,6 +24,10 @@ def test_gain_normalized_shape_and_bounded_level_tilt_are_separate():
     assert result['adjusted_shape_rms_db'] < 1e-7
     assert result['gain_adjustment_db'] == pytest.approx(20*np.log10(4))
     assert result['unexplained_level_db'] == 0
+    # Level differences inside the +/-24 dB bound add nothing to the score; only the excess counts.
+    for db,expected in ((0.,0.),(-6.,0.),(-23.,0.),(-30.,4.)):
+        scaled=discrepancy(base,spectral(frame*10**(db/20)))
+        assert scaled['components']['unexplained_level']==pytest.approx(expected,abs=1e-6)  # float32 frames
     beyond=spectral(frame*30)
     result=discrepancy(base,beyond)
     assert result['nuisance_bound_reached']
@@ -88,6 +92,10 @@ def test_native_spectral_fit_freeze_and_heldout_update(tmp_path):
         provenance=engine.provenance
     snapshot=freeze_pcm_hypotheses(model_id='spectral-model',evidence_ids=['cal'],evidence_hashes=[canonical['pcmFloat32Sha256']],provenance=provenance,hypotheses=[{'hypothesis_id':c['candidate_id'],'anatomy':c['anatomy']} for c in candidates],frozen_at=now())
     scales={k:dict(unit=u,scale=s,assumption='Engineering scale') for k,(u,s) in FEATURES.items()}
+    for name,scale in (('pitchHz',5.),('periodicity',.5)):
+        with pytest.raises(ValueError,match='frozen policy'):
+            design_pcm(snapshot,expected_digest=snapshot.sha256,design_id='bad-scale',target_observation_id='held',generated_at=now(),experiments=[dict(experiment_id='held-vowel',pose='i',**{**controls,'gain':16.})],
+                feature_scales={**scales,name:{**scales[name],'scale':scale}},objective=SPECTRAL_OBJECTIVE,max_synthesis_calls=2)
     design=design_pcm(snapshot,expected_digest=snapshot.sha256,design_id='spectral-design',target_observation_id='held',generated_at=now(),experiments=[dict(experiment_id='held-vowel',pose='i',**{**controls,'gain':16.})],feature_scales=scales,objective=SPECTRAL_OBJECTIVE,minimum_separation=.001,retention_margin=.001,max_synthesis_calls=2)
     sealed=design.content
     # A different vowel is synthesized only after the predictions are sealed.
@@ -122,8 +130,20 @@ def test_pins_are_fixed_at_import_not_reread_from_disk(monkeypatch):
     # files on disk are replaced after import.
     monkeypatch.setattr(pcm_spectral.Path, 'read_bytes', lambda self: b'replaced on disk')
     assert pcm_design.SCORER_PIN == before_design and policy() == before_spectral
-    for path in pcm_design._PINNED_SOURCES:
+    for path in pcm_design._PINNED_MODULES:
         assert path.is_file()
+
+
+def test_extractor_bridge_must_match_the_hash_pinned_at_import(monkeypatch):
+    from singing_physics import pcm_design, pcm_inverse
+    frame=.01*np.sin(2*np.pi*180*np.arange(4096)/44100)
+    reply=pcm_inverse._bridge({'operation':'validate','records':[],'sampleRates':[44100]},None)
+    assert 'bridgeSha256' not in reply  # Checked, then dropped from recorded provenance.
+    assert pcm_design.SCORER_PIN['implementation_sha256']['science/scripts/extract_pcm.ts']==pcm_inverse.BRIDGE_SHA256
+    # A process that imported an older bridge must refuse the file now on disk.
+    monkeypatch.setattr(pcm_inverse,'BRIDGE_SHA256','0'*64)
+    with pytest.raises(RuntimeError,match='bridge changed on disk'):
+        extract_pcm(frame,44100,measurement_id='m',observation_id='o',artifact_id='a')
 
 
 def test_legacy_coarse_design_without_pin_still_updates_as_unverified():

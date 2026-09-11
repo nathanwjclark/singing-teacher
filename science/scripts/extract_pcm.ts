@@ -12,7 +12,9 @@ const input = JSON.parse(text);
 const digest = (data: Uint8Array) => createHash('sha256').update(data).digest('hex');
 const extractorSha256 = digest(await readFile(new URL('../../src/lib/audio.ts', import.meta.url)));
 const contractsSha256 = digest(await readFile(new URL('../../src/contracts/index.ts', import.meta.url)));
-const provenance = { extractorVersion: AUDIO_EXTRACTOR_VERSION, contractVersion: CONTRACT_VERSION, extractorSha256, contractsSha256 };
+// The Python caller checks this against the bridge hash it pinned at import, then drops it.
+const bridgeSha256 = digest(await readFile(new URL(import.meta.url)));
+const provenance = { extractorVersion: AUDIO_EXTRACTOR_VERSION, contractVersion: CONTRACT_VERSION, extractorSha256, contractsSha256, bridgeSha256 };
 if (input.operation === 'validate') {
   if (!Array.isArray(input.records) || input.records.length > 100) throw Error('Expected bounded records');
   for (const record of input.records) {
