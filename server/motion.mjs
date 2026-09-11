@@ -18,7 +18,8 @@ export function createMotionRoutes({dataRoot,json,repo=join(import.meta.dirname,
  // The Python analysis owns its version; a stored result is reused only when it was produced by that version.
  let policy;
  const analysisPolicy=()=>policy??=readFile(join(repo,'science/src/singing_physics/motion_trajectory.py'),'utf8').then(source=>{
-  const version=source.match(/^VERSION = '([A-Za-z0-9.-]+)'$/m)?.[1];if(!version)throw Error('Motion analysis version is unavailable.');return version;});
+  const version=source.match(/^VERSION = '([A-Za-z0-9.-]+)'$/m)?.[1];if(!version)throw Error('Motion analysis version is unavailable.');return version;})
+  .catch(error=>{policy=undefined;throw error;});  // A failed read is retried on the next request, not cached.
  async function decoderAvailability(){
   if(!decoderCheck)decoderCheck=Promise.all([process.env.SINGING_FFMPEG||'ffmpeg',process.env.SINGING_FFPROBE||'ffprobe'].map(binary=>promisify(execFile)(binary,['-version'],{timeout:5000,maxBuffer:131072})))
    .then(()=>({available:true,reason:null})).catch(()=>({available:false,reason:'Optional audio decoding is unavailable on this Mac. Your motion recording remains saved and replayable.'}));

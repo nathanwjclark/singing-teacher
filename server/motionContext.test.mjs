@@ -27,13 +27,13 @@ test('long motion context retains timeline endpoints and explicitly counts omitt
 });
 
 test('ambiguity sets, sampled segment boundaries and excluded-window reasons survive with explicit truncation',()=>{
- const result=boundedMotionEvidence({windows,temporalAnalysis:temporal(),warnings:[{code:'no-information-over-constant',message:'constant'}],modelUpdated:false},{});
+ const result=boundedMotionEvidence({windows,temporalAnalysis:temporal(),warnings:[{code:'constant-within-tolerance',message:'constant'}],modelUpdated:false},{});
  assert.ok(JSON.stringify(result).length<=MOTION_CONTEXT_LIMIT);assert.equal(result.timeline.sampleSize,12);
  const t=result.temporal;assert.equal(t.informationOverConstant,'exceeds-tolerance');
  // The constant-path result travels with its definition and with what it cannot show.
  assert.deepEqual(t.limitations,limitations);assert.equal(t.settings.constantTolerancePerWindow,.01);assert.match(t.settings.constantComparison,/constantTolerancePerWindow times the included window count/);
  assert.ok(t.limitations.some(row=>row.includes('not evidence of articulation change')));
- assert.deepEqual(t.sensitivity[0].pathChangesAtPitchBankSwitch,{count:1,sample:[{fromPosition:9,toPosition:10}]});assert.equal(result.warnings[0].code,'no-information-over-constant');
+ assert.deepEqual(t.sensitivity[0].pathChangesAtPitchBankSwitch,{count:1,sample:[{fromPosition:9,toPosition:10}]});assert.equal(result.warnings[0].code,'constant-within-tolerance');
  assert.equal(t.settings.objective,undefined);assert.equal(t.settings.objectiveGapTolerance,.1);
  assert.equal(t.segments.count,40);assert.equal(t.segments.sample.length,12);assert.deepEqual(t.segments.sample[0],{firstPosition:1,lastPosition:2,startSeconds:.35,endSeconds:.69,windowCount:2});assert.equal(t.segments.sample.at(-1).lastPosition,119);
  assert.equal(t.excludedWindows.count,40);assert.equal(t.excludedWindows.sample.length,12);assert.ok(t.excludedWindows.sample.every(row=>row.reason&&row.startSeconds!==null));
