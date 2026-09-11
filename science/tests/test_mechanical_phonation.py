@@ -5,12 +5,17 @@ evaluation/wave3/source; nothing here is evidence that either family predicts be
 """
 from copy import deepcopy
 import hashlib
+from pathlib import Path
+import sys
 
 import numpy as np
 import pytest
 
 from singing_physics.engine import BUILD, Engine, select_speaker_source, speaker_source_selection
 import singing_physics.phonation as source
+
+sys.path.insert(0,str(Path(__file__).parents[1]/'scripts'))
+from app_source import source_candidates
 
 
 SHAPE={'source_model':'two_mass','XB':.005,'XT':.005,'EAA':0.,'DF':1.}
@@ -134,6 +139,24 @@ def test_rows_record_requested_and_simulated_f0_and_a_pitch_excluded_score(monke
         assert all(row['requested_f0_hz']==190. and row['source_model'] in ('geometric','two_mass') for row in scored['alternatives'])
         assert all((row['score'] is None)==(row['score_excluding_pitch'] is None)==(row['heldout_rank_excluding_pitch'] is None) for row in scored['alternatives'])
         assert scored['alternatives'][0]['simulated_f0_hz']==rows[0]['simulated_f0_hz']
+
+
+def test_app_grids_vary_one_declared_axis_and_shared_gain_does_not_clip():
+    for count,axis in ((1,[.005,.01,.015]),(3,[.005,.015])):
+        _,support=source_candidates([{'anatomy':{}}]*count,'t',180.,'two_mass')
+        assert [row['XB'] for row in support]==[row['XT'] for row in support]==axis
+        assert {(row['EAA'],row['DF']) for row in support}=={(0.,1.)}
+    _,geometric=source_candidates([{'anatomy':{}}],'t',180.)
+    candidates,support=source_candidates([{'anatomy':{}}],'t',180.,'two_mass')
+    assert {c['trials']['t']['gain'] for c in candidates}=={2.}
+    with Engine() as engine:
+        # Loudest points of a 65-600 Hz sweep over all five vowels at PR=8000 (science/MECHANICAL_SOURCE.md).
+        for shape,f0 in [(geometric[0],415.),(geometric[2],415.),(support[0],600.),(support[1],485.),(support[2],380.),(support[0],65.)]:
+            audio,_=source.synthesize_phonation(engine,pose='a',JA=-3,F0=f0,PR=8000,**shape)
+            peak=float(np.max(np.abs(source._frame(audio,48000)[0])))
+            assert 2*peak<.995
+        audio,_=source.synthesize_phonation(engine,pose='a',JA=-3,F0=600,PR=8000,**support[0])
+        assert 4*float(np.max(np.abs(source._frame(audio,48000)[0])))>=.995  # the former gain 4 clipped here
 
 
 def test_on_grid_mixed_family_plumbing_is_not_a_comparison(monkeypatch):
