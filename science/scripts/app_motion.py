@@ -17,7 +17,7 @@ import numpy as np
 from live_capture_jobs import HTTPBackend
 from singing_physics.engine import Engine
 from singing_physics.pcm_inverse import extract_pcm,fit_pcm
-from singing_physics.motion_trajectory import window_offsets,score_forward_bank,MAX_SYNTHESIS_CALLS,VERSION
+from singing_physics.motion_trajectory import window_offsets,score_forward_bank,select_hypotheses,MAX_SYNTHESIS_CALLS,MAX_RECORDING_SECONDS,RESCORING_OBJECTIVE,VERSION
 
 
 def sha(raw):return hashlib.sha256(raw).hexdigest()
@@ -36,7 +36,7 @@ def write(path,value):
     fd,temporary=tempfile.mkstemp(prefix=path.name+'.',dir=path.parent)
     try:
         with os.fdopen(fd,'w') as f:
-            json.dump(value,f,allow_nan=False);f.flush();os.fsync(f.fileno())
+            json.dump(value,f,allow_nan=False,separators=(',',':'));f.flush();os.fsync(f.fileno())
         os.link(temporary,path)  # Atomic publication, preserving exclusive creation.
     finally:
         os.unlink(temporary)
@@ -62,7 +62,7 @@ def run(data_root,capture_id,pose,output,expected_model_id=None):
     if record.get('containsProbe') or record.get('containsExternalExcitation'):raise ValueError('External excitation is not ordinary singing')
     output.mkdir(parents=True,exist_ok=False,mode=0o700)
     result={'kind':'motion-pcm-fit-1','captureId':capture_id,'pose':pose,'status':'unavailable','windows':[],
-        'sourceHashes':{'media':mh,'record':rh,'receipt':sha(sb)},'actualSynthesisCalls':0,'visualSync':'unknown','modelUpdated':False,
+        'sourceHashes':{'media':mh,'record':rh,'receipt':sha(sb)},'actualSynthesisCalls':0,'visualSync':'unknown','modelUpdated':False,'warnings':[],
         'assumptions':['Explicit pose is user-declared, not measured execution.','Recorded PCM decoded at original declared sample rate; no normalization or observed resampling.',
         'Candidate JA and digital gains are hypotheses; source pitch uses a declared bounded anchor bank and other source controls use fixed native defaults.',
         'Audio-only conditional trajectory; no calibrated2D geometry, audiovisual synchronization or physiology identification.','Input is caller-declared ordinary singing without external excitation.']}
@@ -77,7 +77,14 @@ def run(data_root,capture_id,pose,output,expected_model_id=None):
     snapshot=state.get('snapshot');hypotheses=snapshot['hypotheses'] if snapshot else []
     if expected_model_id is not None and snapshot and snapshot['model_id']!=expected_model_id:raise ValueError('Current baseline differs from expected model ID')
     if not hypotheses:raise ValueError('Retained model hypotheses unavailable')
-    selected=hypotheses[:3];result.update(modelId=snapshot['model_id'],sessionId=session_id,hypothesisSubset={'selectedIds':[h['hypothesis_id'] for h in selected],'totalRetained':len(hypotheses),'selection':'first3-retained-in-ledger-order'})
+    # Declared from the frozen snapshot before any recording byte is decoded.
+    selected,subset=select_hypotheses(snapshot);result.update(modelId=snapshot['model_id'],sessionId=session_id,hypothesisSubset=subset)
+    # A baseline receipt without an objective predates selectable objectives and used the coarse descriptors.
+    baseline_objective=app.get('objective') or RESCORING_OBJECTIVE
+    result['objective']={'rescoring':RESCORING_OBJECTIVE,'baseline':baseline_objective,'baselineDeclared':'objective' in app,'matchesBaseline':baseline_objective==RESCORING_OBJECTIVE,
+        'source':'baseline science run summary objective field; absent means the legacy coarse objective'}
+    if baseline_objective!=RESCORING_OBJECTIVE:
+        result['warnings'].append({'code':'objective-differs-from-baseline','message':f'The baseline model was fitted with {baseline_objective}; this analysis rescored it with {RESCORING_OBJECTIVE} coarse descriptors, so its ranking may differ from the baseline fit.'})
     write(output/'model-snapshot.json',snapshot)
     # Decode only verified private bytes copied to this job, not a mutable original pathname.
     local=output/'source-media';local.write_bytes(media);local.chmod(0o600)
@@ -86,9 +93,9 @@ def run(data_root,capture_id,pose,output,expected_model_id=None):
     if len(streams)!=1:
         result['reason']='Exactly one recorded audio stream required';write(output/'summary.json',result);return result
     stream=streams[0];rate=int(stream['sample_rate']);channels=int(stream['channels']);duration=float(info.get('format',{}).get('duration',stream.get('duration',0)))
-    if rate not in (44100,48000,96000) or not 1<=channels<=8 or not 0<duration<=30:raise ValueError('Unsupported audio rate/channels or duration outside0..30seconds')
-    decoded=process([ffmpeg,'-v','error','-nostdin','-i',str(local),'-map',f'0:{stream["index"]}','-vn','-t','30','-f','f32le','-acodec','pcm_f32le','pipe:1'])
-    if len(decoded)%(4*channels) or len(decoded)>rate*30*channels*4:raise ValueError('Decoded PCM dimensions exceed bounds')
+    if rate not in (44100,48000,96000) or not 1<=channels<=8 or not 0<duration<=MAX_RECORDING_SECONDS:raise ValueError(f'Unsupported audio rate/channels or duration outside 0..{MAX_RECORDING_SECONDS} seconds')
+    decoded=process([ffmpeg,'-v','error','-nostdin','-i',str(local),'-map',f'0:{stream["index"]}','-vn','-t',str(MAX_RECORDING_SECONDS),'-f','f32le','-acodec','pcm_f32le','pipe:1'])
+    if len(decoded)%(4*channels) or len(decoded)>rate*MAX_RECORDING_SECONDS*channels*4:raise ValueError('Decoded PCM dimensions exceed bounds')
     samples=np.frombuffer(decoded,dtype='<f4').reshape(-1,channels)
     if not len(samples) or not np.isfinite(samples).all():raise ValueError('Invalid decoded PCM')
     channel=int(np.argmax(np.mean(samples[::8].astype(float)**2,axis=0)));mono=samples[:,channel].copy();chunk_size=round(.25*rate);frame_start=round(.1*rate);frame_size=8192 if rate==96000 else 4096
@@ -98,7 +105,7 @@ def run(data_root,capture_id,pose,output,expected_model_id=None):
     result['analysisPolicy']=VERSION
     with Engine() as engine:
         from singing_physics import engine as engine_module,pcm_inverse as pcm_module
-        result['sourceConditions']={'sourceInfo':engine.source_info,'fixedPressurePa':8000,'pressureRampSeconds':.025,'F0':'minimum, median and maximum observed voiced pitch anchors; nearest within100cents','otherControls':'native source_info defaults','engineSha256':sha(Path(engine_module.__file__).read_bytes()),'fitterSha256':sha(Path(pcm_module.__file__).read_bytes()),'nativeProvenance':engine.provenance}
+        result['sourceConditions']={'sourceInfo':engine.source_info,'fixedPressurePa':8000,'pressureRampSeconds':.025,'F0':'10th, 50th and 90th percentile measured voiced pitch anchors; nearest within 100 cents','otherControls':'native source_info defaults','engineSha256':sha(Path(engine_module.__file__).read_bytes()),'fitterSha256':sha(Path(pcm_module.__file__).read_bytes()),'nativeProvenance':engine.provenance}
         native_synthesize=engine.synthesize
         synthesis_cache={}
         def counted_synthesis(*args,**kwargs):
@@ -110,22 +117,26 @@ def run(data_root,capture_id,pose,output,expected_model_id=None):
             return synthesis_cache[key].copy()
         engine.synthesize=counted_synthesis
         for index,offset in enumerate(offsets):
-            row={'index':index,'sourceStartSample':offset,'startSample':offset,'sampleRateHz':rate,'status':'unavailable','fit':None};result['windows'].append(row)
+            row={'index':index,'sourceStartSample':offset,'startSample':offset,'sampleRateHz':rate,'windowOffsetWithinExcerpt':frame_start,'status':'unavailable','fit':None};result['windows'].append(row)
             if offset+chunk_size>len(mono) or any(offset<end and start<offset+chunk_size for start,end in used):row['reason']='Insufficient disjoint source duration';continue
             used.append((offset,offset+chunk_size));excerpt=mono[offset:offset+chunk_size];raw=excerpt.astype('<f4').tobytes();artifact=f'{capture_id}:excerpt:{offset}'
             file=output/f'excerpt-{index}.f32';file.write_bytes(raw);file.chmod(0o600)
             frame=excerpt[frame_start:frame_start+frame_size]
             canonical=extract_pcm(frame,rate,measurement_id=artifact+':measurement',observation_id=artifact,artifact_id=artifact+':pcm',start_ms=100.,source_kind='engine-generated' if record.get('provenance',{}).get('kind') in ('development-fixture','engine-generated') else 'human-observation')
-            row.update(measurement=canonical['measurement'],excerptSha256=sha(raw),frameSha256=sha(frame.astype('<f4').tobytes()),windowOffsetWithinExcerpt=frame_start,sourceKind=record.get('provenance',{}).get('kind','caller-declared-recording'))
+            row.update(measurement=canonical['measurement'],excerptSha256=sha(raw),frameSha256=sha(frame.astype('<f4').tobytes()),sourceKind=record.get('provenance',{}).get('kind','caller-declared-recording'))
             measurement=canonical['measurement'];values={m['name']:m['value'] for m in measurement['measurements']}
             pitch=next((m['value'] for m in measurement['measurements'] if m['name']=='pitchHz'),None)
             if pitch is None or not 65<=pitch<=1000 or measurement['quality']['missingReason'] or set(measurement['quality']['flags'])&{'clipping','invalid','dropped','low-signal-to-noise'}:row['reason']='Unvoiced or invalid canonical window';continue
             if any(values.get(name) is None or not math.isfinite(values[name]) for name in ('dbfs','centroidHz','flatness','pitchHz','periodicity')):
                 row['reason']='Incomplete canonical objective descriptors';continue
             row.update(status='measured',reason=None)
-        result['trajectoryBank']=score_forward_bank(engine,result['windows'],selected,pose,rate,frame_start,frame_size,fitter=fit_pcm)
+        result['trajectoryBank'],banks=score_forward_bank(engine,result['windows'],selected,pose,rate,frame_start,frame_size,fitter=fit_pcm)
+    # Complete bank predictions are kept once beside the summary; windows cite them by hash.
+    for row,fitted in zip(result['trajectoryBank']['banks'],banks):
+        if fitted is not None:write(output/row['artifact'],fitted)
     from singing_physics.motion_path import couple_motion_hypotheses
     result['temporalAnalysis']=couple_motion_hypotheses(result['windows'])
+    result['warnings']+=result['temporalAnalysis']['warnings']
     result['status']='available' if any(w['status']=='scored' for w in result['windows']) else 'insufficient-quality'
     write(output/'summary.json',result);return result
 

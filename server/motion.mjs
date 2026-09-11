@@ -75,7 +75,7 @@ export function createMotionRoutes({dataRoot,json,repo=join(import.meta.dirname,
   if(previous.requestId===body.requestId&&(previous.pose!==body.pose||previous.expectedModelId!==previous.currentModelId)){
    json(res,409,{error:'This request ID belongs to a different vowel or baseline model. Start a new analysis request.'});return;
   }
-  if(previous.requestId===body.requestId&&previous.status==='succeeded'&&previous.result?.analysisPolicy==='motion-forward-bank-2'){json(res,200,{accepted:true,reused:true,analysisId:previous.analysisId});return;}
+  if(previous.requestId===body.requestId&&previous.status==='succeeded'&&previous.result?.analysisPolicy==='motion-forward-bank-3'){json(res,200,{accepted:true,reused:true,analysisId:previous.analysisId});return;}
   if(analysisBusy||previous.status==='running'){json(res,409,{error:'An audio analysis is already running.'});return;}
   if(!previous.availability.available){json(res,503,{error:previous.availability.reason});return;}
   if(!previous.currentModelId){json(res,503,{error:'Complete a voice model fit and connect its worker before analyzing motion audio.'});return;}

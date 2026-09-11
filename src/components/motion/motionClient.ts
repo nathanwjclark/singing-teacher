@@ -1,4 +1,4 @@
-import type {TemporalResult} from './TemporalAnalysis'
+import type {TemporalResult,TemporalWarning} from './TemporalAnalysis'
 export interface MotionReceipt {
  id:string;observationId:string;attemptId:string;recordSha256:string;mediaSha256:string;
  mediaByteLength:number;mimeType:string;sampleCount:number;timingGaps:number;unsuccessfulMarkers:number;
@@ -19,7 +19,7 @@ export async function importMotionCapture(record:Blob,media:Blob,filename:string
 export const motionAssetUrl=(id:string,kind:'record'|'media')=>`/api/motion/${kind}?id=${encodeURIComponent(id)}`;
 export type MotionVowel='a'|'e'|'i'|'o'|'u';
 export function motionAnalysisRequestIdentity(previous:{key:string;id:string}|null,captureId:string,pose:MotionVowel,modelId:string|null){
- const key=JSON.stringify([captureId,pose,modelId,'motion-forward-bank-2']);
+ const key=JSON.stringify([captureId,pose,modelId,'motion-forward-bank-3']);
  return previous?.key===key?previous:{key,id:crypto.randomUUID()};
 }
 export interface MotionCandidateScore {candidate_id:string;status:string;weighted_mean_square_discrepancy:number|null;missing_features?:Array<{reason:string;feature?:string}>}
@@ -27,11 +27,12 @@ export const rankMotionCandidates=(candidates:MotionCandidateScore[])=>[...candi
 export interface MotionAudioResult {
  temporalAnalysis?:TemporalResult;
  analysisPolicy?:string;trajectoryBank?:{maxWindows:number;maxSynthesisCalls:number;pitchAnchorsHz:number[];maxPitchDistanceCents:number;synthesisRequests:number;interpretation:string};
+ warnings?:TemporalWarning[];objective?:{rescoring:string;baseline:string;baselineDeclared:boolean;matchesBaseline:boolean};
  kind:'motion-pcm-fit-1';captureId:string;pose:MotionVowel;status:string;
  windows:Array<{index:number;startSample:number;measurement:unknown;status:string;reason?:string|null;pitchAnchorHz?:number;pitchDistanceCents?:number;
   fit?:{joint:{candidates:MotionCandidateScore[]}}|null}>;
  modelId:string;sessionId:string;actualSynthesisCalls:number;visualSync:'unknown';modelUpdated:false;
- hypothesisSubset:{selectedIds:string[];totalRetained:number;selection:string};assumptions:string[];
+ hypothesisSubset:{selectedIds:string[];totalRetained:number;selection:string;rankingBasis?:string};assumptions:string[];
 }
 export interface MotionAnalysisStatus {
  status:'not-run'|'running'|'succeeded'|'failed'|'interrupted';analysisId?:string;error?:string;

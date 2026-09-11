@@ -20,9 +20,12 @@ import numpy as np
 import pytest
 
 from app_port import listening_port
+from singing_physics.engine import Engine
 from singing_physics.http_service import ScientificHTTPServer
+from singing_physics.pcm_inverse import resample_native_pcm
 from test_live_capture_jobs import capture
 from test_app_source_loop import publish_capture, wait_for
+from test_motion_trajectory import summary_budget
 
 
 BOOTSTRAP = r"""
@@ -69,10 +72,10 @@ def motion_record(media, identity, mime):
         'interpretation': 'observed-visible-motion-not-anatomical-limits'}
 
 
-def encode_media(ffmpeg, directory, pcm, *, name, audio=True):
+def encode_media(ffmpeg, directory, pcm, *, name, audio=True, seconds=.6):
     output = directory / name
     command = [ffmpeg, '-hide_banner', '-loglevel', 'error', '-nostdin', '-y',
-        '-f', 'lavfi', '-i', 'color=c=black:s=64x64:r=20:d=0.6']
+        '-f', 'lavfi', '-i', f'color=c=black:s=64x64:r=20:d={seconds}']
     if audio:
         command += ['-f', 'f32le', '-ar', '48000', '-ac', '1', '-i', str(pcm)]
     command += ['-c:v', 'libvpx-vp9' if output.suffix == '.webm' else 'libx264']
@@ -192,7 +195,14 @@ def test_encoded_motion_audio_ranks_native_windows_without_changing_baseline(tmp
             assert call(session_path)['state'] == initial_state
             assert hashlib.sha256(baseline_file.read_bytes()).hexdigest() == initial_hash
 
-        voiced = encode_media(ffmpeg, tmp_path, original / 'audio.pcm.raw', name='voiced.webm')
+        # Six seconds of native audio: one-second JA segments and a silent gap from 3.0 to 3.75 s.
+        with Engine() as engine:
+            segments = [engine.synthesize('a', {'JA': ja}, f0_hz=180., duration_s=1.) for ja in (-4., -3., -2., -3., -4., -3.)]
+        motion_pcm, _ = resample_native_pcm(np.concatenate(segments), 44100, 48000)
+        motion_pcm[3 * 48000:round(3.75 * 48000)] = 0
+        raw_motion = tmp_path / 'motion.f32'
+        raw_motion.write_bytes(motion_pcm.astype('<f4').tobytes())
+        voiced = encode_media(ffmpeg, tmp_path, raw_motion, name='voiced.webm', seconds=6)
         record = motion_record(voiced, 'native-voiced-motion', 'video/webm')
         imported = upload(record, voiced)
         capture_id = imported['capture']['id']
@@ -213,9 +223,19 @@ def test_encoded_motion_audio_ranks_native_windows_without_changing_baseline(tmp
         assert result['decode']['sampleRateHz'] == 48000
         assert result['decode']['codec'] == 'opus'
         assert 0 < result['actualSynthesisCalls'] <= 108
-        assert len(result['windows']) == 2
-        scored = [row for row in result['windows'] if row['status'] == 'scored']
-        assert len(scored) >= 1
+        windows = result['windows']
+        assert len(windows) == result['decode']['decodedSampleCount'] // 12000 >= 23
+        scored = [row for row in windows if row['status'] == 'scored']
+        silent = [row['index'] for row in windows if 3 < (row['sourceStartSample'] + row['windowOffsetWithinExcerpt']) / 48000 < 3.75 - 4096 / 48000]
+        assert len(silent) >= 2 and all(windows[i]['reason'] == 'Unvoiced or invalid canonical window' for i in silent)
+        assert len(scored) >= 18
+        subset = result['hypothesisSubset']
+        assert len(subset['selectedIds']) == 3 and subset['rankingBasis'] == 'baseline search discrepancy ranking'
+        assert subset['selectedIds'] == [h['hypothesis_id'] for h in initial_state['snapshot']['hypotheses'][:3]]
+        assert subset['rankingReceiptSha256'] == initial_state['snapshot']['search_result_sha256']
+        analysis_dir = data / 'motion-analyses' / capture_id / completed['analysisId']
+        assert (analysis_dir / 'summary.json').stat().st_size <= summary_budget(len(windows))
+        assert all((analysis_dir / bank['artifact']).is_file() for bank in result['trajectoryBank']['banks'])
         for row in scored:
             fit = row['fit']
             assert fit['kind'] == 'conditional_pcm_candidate_fit'
@@ -229,15 +249,27 @@ def test_encoded_motion_audio_ranks_native_windows_without_changing_baseline(tmp
         assert temporal['additionalSynthesisCalls'] == 0 and temporal['modelUpdated'] is False
         for comparison in temporal['sensitivity']:
             for alternative in comparison['alternatives']:
-                assert len({step['anatomySha256'] for step in alternative['path']}) == 1
+                # One fixed anatomy per complete path; every step is a scored candidate of that anatomy.
                 for step in alternative['path']:
-                    assert step['candidateId'] in [c['candidate_id'] for c in result['windows'][step['position']]['fit']['joint']['candidates']]
+                    candidate = next(c for c in windows[step['position']]['fit']['joint']['candidates'] if c['candidate_id'] == step['candidateId'])
+                    assert candidate['anatomySha256'] == alternative['anatomySha256'] and (candidate['JA'], candidate['gain']) == (step['JA'], step['gain'])
+        assert {row['position']: row['reason'] for row in temporal['excludedWindows']}.items() >= {i: 'Unvoiced or invalid canonical window' for i in silent}.items()
+        assert len(temporal['segments']) >= 2 and temporal['informationOverConstant'] in ('present', 'none')
+        # The server's Astra reduction of this real summary keeps ambiguity, gaps and reasons within its limit.
         compact = call('/test/motion-context?session=' + result['sessionId'] + '&model=' + result['modelId'])
         assert compact['receiptSha256'] and compact['temporal']['status'] == temporal['status']
+        assert len(json.dumps(compact, separators=(',', ':'))) <= 24000
+        assert compact['temporal']['informationOverConstant'] == temporal['informationOverConstant'] and compact['warnings'] == result['warnings']
+        assert compact['temporal']['excludedWindows']['count'] == len(temporal['excludedWindows'])
+        assert {row['reason'] for row in compact['temporal']['excludedWindows']['sample']} >= {'Unvoiced or invalid canonical window'}
+        for full, reduced in zip(temporal['sensitivity'], compact['temporal']['sensitivity']):
+            assert reduced['uncertainty']['count'] == len(full['uncertainty'])
+            assert all(row in [{k: u[k] for k in ('position', 'startSeconds', 'JASet', 'gainSet', 'anatomyCount')} for u in full['uncertainty']] for row in reduced['uncertainty']['sample'])
+            assert reduced['constantComparison'] == full['constantComparison']
         exported = call('/api/session-export')
         assert exported['summary']['motionAnalysisCount'] == 1
         assert next(a for a in exported['artifacts'] if a.get('binding', {}).get('role') == 'conditional-motion-audio-analysis')['data']['temporalAnalysis'] == temporal
-        assert result['analysisPolicy'] == 'motion-forward-bank-2'
+        assert result['analysisPolicy'] == 'motion-forward-bank-3'
         assert result['trajectoryBank']['synthesisRequests'] <= 108
         assert call('/api/motion/status')['record']['timebase']['syncUncertaintyMs'] is None
         unchanged()

@@ -44,21 +44,27 @@ def test_encoded_native_pcm_real_decode_canonical_fit_unchanged_model(tmp_path,m
         assert result['decode']['sampleRateHz']==48000
         assert result['trajectoryBank']['synthesisRequests']<=36
         assert len(result['trajectoryBank']['pitchAnchorsHz'])<=3
+        assert result['objective']['matchesBaseline'] and result['warnings']==result['temporalAnalysis']['warnings']
         assert all(len(row['uncertainty'])==4 for row in result['temporalAnalysis']['sensitivity'])
         assert result['temporalAnalysis']['status']=='available'
         assert result['temporalAnalysis']['additionalSynthesisCalls']==0
         assert len(result['temporalAnalysis']['sensitivity'])==3
-        assert all(len(s['best']['path'])==4 for s in result['temporalAnalysis']['sensitivity'])
+        assert all(len(s['alternatives'][0]['path'])==4 for s in result['temporalAnalysis']['sensitivity'])
         assert backend.execute({'action':'state'})['state']['snapshot']==model
         assert result['visualSync']=='unknown' and not result['modelUpdated']
         monkeypatch.setattr(app_motion,'fit_pcm',lambda *args,**kwargs:{'joint':{'best':None,'candidates':[{'status':'missing_predicted_features'}]},'actual_synthesis_calls':0})
         unsupported=app_motion.run(data,identity,'a',tmp_path/'missing-predictions')
         assert unsupported['status']=='insufficient-quality' and all(w['status']=='insufficient-quality' for w in unsupported['windows'])
+        assert {bank['status'] for bank in unsupported['trajectoryBank']['banks']}=={'unverified'} and not list((tmp_path/'missing-predictions').glob('bank-*.json'))
+        # A baseline fitted with another objective is flagged: this analysis always rescores with coarse descriptors.
+        (run/'summary.json').write_text(json.dumps(dict(sessionId='session',objective='multires-log-spectrum-v1')))
         silent_dir=tmp_path/'silent-source';silent_dir.mkdir()
         silent_id=encoded_capture(data,silent_dir,silent=True)
         silence=app_motion.run(data,silent_id,'a',tmp_path/'silence')
         assert silence['status']=='insufficient-quality' and silence['actualSynthesisCalls']==0 and len(silence['windows'])==4
         assert all(w['status']=='unavailable' for w in silence['windows'])
+        assert silence['objective']['baseline']=='multires-log-spectrum-v1' and silence['objective']['baselineDeclared'] and not silence['objective']['matchesBaseline']
+        assert [w['code'] for w in silence['warnings']]==['objective-differs-from-baseline']
     finally:server.shutdown();thread.join();server.server_close()
 
 
