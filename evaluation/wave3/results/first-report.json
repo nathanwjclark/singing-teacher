@@ -1,0 +1,2550 @@
+{
+  "actual_extraction_calls": {
+    "canonical": 86,
+    "spectral": 30
+  },
+  "actual_synthesis_calls": 21,
+  "anatomical_identifiability": "not_established",
+  "cases": [
+    {
+      "candidates": [
+        {
+          "candidate_id": "anatomy-0-source-0",
+          "mean_square": 0.023388977554391458,
+          "per_pose": {
+            "a": {
+              "mean_square": 0.04672351670255996,
+              "reason": null
+            },
+            "i": {
+              "mean_square": 5.4438406222953424e-05,
+              "reason": null
+            }
+          }
+        },
+        {
+          "candidate_id": "anatomy-0-source-1",
+          "mean_square": 0.0005778385299361326,
+          "per_pose": {
+            "a": {
+              "mean_square": 0.0010711980104135027,
+              "reason": null
+            },
+            "i": {
+              "mean_square": 8.447904945876246e-05,
+              "reason": null
+            }
+          }
+        },
+        {
+          "candidate_id": "anatomy-1-source-0",
+          "mean_square": 9.971207625618252,
+          "per_pose": {
+            "a": {
+              "mean_square": 0.03513231520503289,
+              "reason": null
+            },
+            "i": {
+              "mean_square": 19.90728293603147,
+              "reason": null
+            }
+          }
+        },
+        {
+          "candidate_id": "anatomy-1-source-1",
+          "mean_square": 10.035230823604888,
+          "per_pose": {
+            "a": {
+              "mean_square": 0.004753215514379329,
+              "reason": null
+            },
+            "i": {
+              "mean_square": 20.065708431695395,
+              "reason": null
+            }
+          }
+        }
+      ],
+      "case": "clean",
+      "heldout_all_candidates": [
+        {
+          "candidate_id": "anatomy-0-source-0",
+          "mean_square": 36.686334714046396,
+          "reason": null
+        },
+        {
+          "candidate_id": "anatomy-0-source-1",
+          "mean_square": 36.60664741904748,
+          "reason": null
+        },
+        {
+          "candidate_id": "anatomy-1-source-0",
+          "mean_square": null,
+          "reason": "Invalid or clipped audio cannot constrain the model"
+        },
+        {
+          "candidate_id": "anatomy-1-source-1",
+          "mean_square": null,
+          "reason": "Invalid or clipped audio cannot constrain the model"
+        }
+      ],
+      "heldout_best_ids_scoring_only": [
+        "anatomy-0-source-1"
+      ],
+      "heldout_selected": [
+        {
+          "candidate_id": "anatomy-0-source-1",
+          "mean_square": 36.60664741904748,
+          "reason": null
+        }
+      ],
+      "objective": "canonical-coarse-v1",
+      "tied_best_ids": [
+        "anatomy-0-source-1"
+      ]
+    },
+    {
+      "candidates": [
+        {
+          "candidate_id": "anatomy-0-source-0",
+          "mean_square": 0.0302133253336199,
+          "per_pose": {
+            "a": {
+              "adjusted_shape_rms_db": 2.9468432669550264,
+              "components": {
+                "periodicity": 8.235347737639565e-05,
+                "pitchHz": 1.647245756894609e-08,
+                "spectral_shape": 0.2412190344443937,
+                "unexplained_level": 0.0
+              },
+              "gain_adjustment_db": 1.323888079716319,
+              "mean_square": 0.06032535109855691,
+              "nuisance_bound_reached": false,
+              "nuisance_interpretation": "Empirical recording/source tilt and level adjustment, not measured source physiology or calibrated room response",
+              "raw_shape_rms_db": 2.9917757916861505,
+              "reason": null,
+              "shape_normalization": "Unbounded constant log-power offset removed separately per resolution; overall PCM level is scored separately with bounded gain",
+              "tilt_adjustment_db_per_octave": 0.3782708848071611,
+              "unexplained_level_db": 0.0
+            },
+            "i": {
+              "adjusted_shape_rms_db": 0.12073956204166426,
+              "components": {
+                "periodicity": 2.162683535728016e-07,
+                "pitchHz": 3.639965537976631e-08,
+                "spectral_shape": 0.00040494560672258036,
+                "unexplained_level": 0.0
+              },
+              "gain_adjustment_db": 0.049461834673351746,
+              "mean_square": 0.00010129956868288323,
+              "nuisance_bound_reached": false,
+              "nuisance_interpretation": "Empirical recording/source tilt and level adjustment, not measured source physiology or calibrated room response",
+              "raw_shape_rms_db": 0.12104013181093111,
+              "reason": null,
+              "shape_normalization": "Unbounded constant log-power offset removed separately per resolution; overall PCM level is scored separately with bounded gain",
+              "tilt_adjustment_db_per_octave": -0.006242554334087932,
+              "unexplained_level_db": 0.0
+            }
+          }
+        },
+        {
+          "candidate_id": "anatomy-0-source-1",
+          "mean_square": 0.02043906507120617,
+          "per_pose": {
+            "a": {
+              "adjusted_shape_rms_db": 2.4251207164360378,
+              "components": {
+                "periodicity": 9.022527579444564e-07,
+                "pitchHz": 1.5328854716543126e-09,
+                "spectral_shape": 0.16336695803575668,
+                "unexplained_level": 0.0
+              },
+              "gain_adjustment_db": -0.2195333709806988,
+              "mean_square": 0.04084196545535003,
+              "nuisance_bound_reached": false,
+              "nuisance_interpretation": "Empirical recording/source tilt and level adjustment, not measured source physiology or calibrated room response",
+              "raw_shape_rms_db": 2.4467779670685776,
+              "reason": null,
+              "shape_normalization": "Unbounded constant log-power offset removed separately per resolution; overall PCM level is scored separately with bounded gain",
+              "tilt_adjustment_db_per_octave": -0.23786500661258284,
+              "unexplained_level_db": 0.0
+            },
+            "i": {
+              "adjusted_shape_rms_db": 0.07200692307692143,
+              "components": {
+                "periodicity": 2.397136344457762e-07,
+                "pitchHz": 3.913409757387964e-07,
+                "spectral_shape": 0.00014402769363904667,
+                "unexplained_level": 0.0
+              },
+              "gain_adjustment_db": -0.06159878392008977,
+              "mean_square": 3.616468706230781e-05,
+              "nuisance_bound_reached": false,
+              "nuisance_interpretation": "Empirical recording/source tilt and level adjustment, not measured source physiology or calibrated room response",
+              "raw_shape_rms_db": 0.07492244195546677,
+              "reason": null,
+              "shape_normalization": "Unbounded constant log-power offset removed separately per resolution; overall PCM level is scored separately with bounded gain",
+              "tilt_adjustment_db_per_octave": 0.015156258374900986,
+              "unexplained_level_db": 0.0
+            }
+          }
+        },
+        {
+          "candidate_id": "anatomy-1-source-0",
+          "mean_square": 1.1927796643289943,
+          "per_pose": {
+            "a": {
+              "adjusted_shape_rms_db": 2.7282028502244695,
+              "components": {
+                "periodicity": 0.00014111574941919405,
+                "pitchHz": 3.461893584967555e-08,
+                "spectral_shape": 0.20675252199924773,
+                "unexplained_level": 0.0
+              },
+              "gain_adjustment_db": 1.0948250408139124,
+              "mean_square": 0.051723418091900696,
+              "nuisance_bound_reached": false,
+              "nuisance_interpretation": "Empirical recording/source tilt and level adjustment, not measured source physiology or calibrated room response",
+              "raw_shape_rms_db": 2.7833189771104183,
+              "reason": null,
+              "shape_normalization": "Unbounded constant log-power offset removed separately per resolution; overall PCM level is scored separately with bounded gain",
+              "tilt_adjustment_db_per_octave": 0.40360346113980716,
+              "unexplained_level_db": 0.0
+            },
+            "i": {
+              "adjusted_shape_rms_db": 13.971676083391472,
+              "components": {
+                "periodicity": 0.010027452336998907,
+                "pitchHz": 0.00033659235003978175,
+                "spectral_shape": 5.4224370160892565,
+                "unexplained_level": 3.9025425814880568
+              },
+              "gain_adjustment_db": -24.0,
+              "mean_square": 2.333835910566088,
+              "nuisance_bound_reached": true,
+              "nuisance_interpretation": "Empirical recording/source tilt and level adjustment, not measured source physiology or calibrated room response",
+              "raw_shape_rms_db": 14.00981223135588,
+              "reason": null,
+              "shape_normalization": "Unbounded constant log-power offset removed separately per resolution; overall PCM level is scored separately with bounded gain",
+              "tilt_adjustment_db_per_octave": 0.7564558532569312,
+              "unexplained_level_db": -5.926456212053921
+            }
+          }
+        },
+        {
+          "candidate_id": "anatomy-1-source-1",
+          "mean_square": 1.2312921139617465,
+          "per_pose": {
+            "a": {
+              "adjusted_shape_rms_db": 2.5962707465199215,
+              "components": {
+                "periodicity": 2.8656104791250497e-05,
+                "pitchHz": 7.734832237632988e-09,
+                "spectral_shape": 0.18723949414541974,
+                "unexplained_level": 0.0
+              },
+              "gain_adjustment_db": -0.4466735990463988,
+              "mean_square": 0.04681703949626081,
+              "nuisance_bound_reached": false,
+              "nuisance_interpretation": "Empirical recording/source tilt and level adjustment, not measured source physiology or calibrated room response",
+              "raw_shape_rms_db": 2.6176809784493202,
+              "reason": null,
+              "shape_normalization": "Unbounded constant log-power offset removed separately per resolution; overall PCM level is scored separately with bounded gain",
+              "tilt_adjustment_db_per_octave": -0.2446661900979372,
+              "unexplained_level_db": 0.0
+            },
+            "i": {
+              "adjusted_shape_rms_db": 14.204596193769435,
+              "components": {
+                "periodicity": 0.007877171367438266,
+                "pitchHz": 0.00037746096401628903,
+                "spectral_shape": 5.604737584112476,
+                "unexplained_level": 4.050076537264999
+              },
+              "gain_adjustment_db": -24.0,
+              "mean_square": 2.4157671884272323,
+              "nuisance_bound_reached": true,
+              "nuisance_interpretation": "Empirical recording/source tilt and level adjustment, not measured source physiology or calibrated room response",
+              "raw_shape_rms_db": 14.206121989917964,
+              "reason": null,
+              "shape_normalization": "Unbounded constant log-power offset removed separately per resolution; overall PCM level is scored separately with bounded gain",
+              "tilt_adjustment_db_per_octave": 0.1524646403672993,
+              "unexplained_level_db": -6.03744058648903
+            }
+          }
+        }
+      ],
+      "case": "clean",
+      "heldout_all_candidates": [
+        {
+          "adjusted_shape_rms_db": 9.268668428145107,
+          "candidate_id": "anatomy-0-source-0",
+          "components": {
+            "periodicity": 0.01177761822648556,
+            "pitchHz": 0.0003869462921892237,
+            "spectral_shape": 2.3863392897470526,
+            "unexplained_level": 30.70137132608961
+          },
+          "gain_adjustment_db": 24.0,
+          "mean_square": 8.274968795088835,
+          "nuisance_bound_reached": true,
+          "nuisance_interpretation": "Empirical recording/source tilt and level adjustment, not measured source physiology or calibrated room response",
+          "raw_shape_rms_db": 9.324568587967402,
+          "reason": null,
+          "shape_normalization": "Unbounded constant log-power offset removed separately per resolution; overall PCM level is scored separately with bounded gain",
+          "tilt_adjustment_db_per_octave": 0.7465584199351755,
+          "unexplained_level_db": 16.622645455366197
+        },
+        {
+          "adjusted_shape_rms_db": 9.264710912977833,
+          "candidate_id": "anatomy-0-source-1",
+          "components": {
+            "periodicity": 0.011858766361471257,
+            "pitchHz": 0.00044488415540506094,
+            "spectral_shape": 2.384301897251404,
+            "unexplained_level": 30.538283157679114
+          },
+          "gain_adjustment_db": 24.0,
+          "mean_square": 8.233722176361848,
+          "nuisance_bound_reached": true,
+          "nuisance_interpretation": "Empirical recording/source tilt and level adjustment, not measured source physiology or calibrated room response",
+          "raw_shape_rms_db": 9.321673285405096,
+          "reason": null,
+          "shape_normalization": "Unbounded constant log-power offset removed separately per resolution; overall PCM level is scored separately with bounded gain",
+          "tilt_adjustment_db_per_octave": 0.7534791861169815,
+          "unexplained_level_db": 16.578436247701774
+        },
+        {
+          "candidate_id": "anatomy-1-source-0",
+          "mean_square": null,
+          "reason": "Invalid or clipped audio cannot constrain the model"
+        },
+        {
+          "candidate_id": "anatomy-1-source-1",
+          "mean_square": null,
+          "reason": "Invalid or clipped audio cannot constrain the model"
+        }
+      ],
+      "heldout_best_ids_scoring_only": [
+        "anatomy-0-source-1"
+      ],
+      "heldout_selected": [
+        {
+          "adjusted_shape_rms_db": 9.264710912977833,
+          "candidate_id": "anatomy-0-source-1",
+          "components": {
+            "periodicity": 0.011858766361471257,
+            "pitchHz": 0.00044488415540506094,
+            "spectral_shape": 2.384301897251404,
+            "unexplained_level": 30.538283157679114
+          },
+          "gain_adjustment_db": 24.0,
+          "mean_square": 8.233722176361848,
+          "nuisance_bound_reached": true,
+          "nuisance_interpretation": "Empirical recording/source tilt and level adjustment, not measured source physiology or calibrated room response",
+          "raw_shape_rms_db": 9.321673285405096,
+          "reason": null,
+          "shape_normalization": "Unbounded constant log-power offset removed separately per resolution; overall PCM level is scored separately with bounded gain",
+          "tilt_adjustment_db_per_octave": 0.7534791861169815,
+          "unexplained_level_db": 16.578436247701774
+        }
+      ],
+      "objective": "multires-log-spectrum-v1",
+      "tied_best_ids": [
+        "anatomy-0-source-1"
+      ]
+    },
+    {
+      "candidates": [
+        {
+          "candidate_id": "anatomy-0-source-0",
+          "mean_square": 0.6462729325598509,
+          "per_pose": {
+            "a": {
+              "mean_square": 0.49799612044800573,
+              "reason": null
+            },
+            "i": {
+              "mean_square": 0.7945497446716959,
+              "reason": null
+            }
+          }
+        },
+        {
+          "candidate_id": "anatomy-0-source-1",
+          "mean_square": 0.8448228419447814,
+          "per_pose": {
+            "a": {
+              "mean_square": 0.8653172657249772,
+              "reason": null
+            },
+            "i": {
+              "mean_square": 0.8243284181645857,
+              "reason": null
+            }
+          }
+        },
+        {
+          "candidate_id": "anatomy-1-source-0",
+          "mean_square": 14.6331168122874,
+          "per_pose": {
+            "a": {
+              "mean_square": 0.5476989537510921,
+              "reason": null
+            },
+            "i": {
+              "mean_square": 28.718534670823708,
+              "reason": null
+            }
+          }
+        },
+        {
+          "candidate_id": "anatomy-1-source-1",
+          "mean_square": 14.915600114601816,
+          "per_pose": {
+            "a": {
+              "mean_square": 0.9297817047553009,
+              "reason": null
+            },
+            "i": {
+              "mean_square": 28.90141852444833,
+              "reason": null
+            }
+          }
+        }
+      ],
+      "case": "gain",
+      "heldout_all_candidates": [
+        {
+          "candidate_id": "anatomy-0-source-0",
+          "mean_square": 26.62193984175628,
+          "reason": null
+        },
+        {
+          "candidate_id": "anatomy-0-source-1",
+          "mean_square": 26.55408214487347,
+          "reason": null
+        },
+        {
+          "candidate_id": "anatomy-1-source-0",
+          "mean_square": null,
+          "reason": "Invalid or clipped audio cannot constrain the model"
+        },
+        {
+          "candidate_id": "anatomy-1-source-1",
+          "mean_square": null,
+          "reason": "Invalid or clipped audio cannot constrain the model"
+        }
+      ],
+      "heldout_best_ids_scoring_only": [
+        "anatomy-0-source-1"
+      ],
+      "heldout_selected": [
+        {
+          "candidate_id": "anatomy-0-source-0",
+          "mean_square": 26.62193984175628,
+          "reason": null
+        }
+      ],
+      "objective": "canonical-coarse-v1",
+      "tied_best_ids": [
+        "anatomy-0-source-0"
+      ]
+    },
+    {
+      "candidates": [
+        {
+          "candidate_id": "anatomy-0-source-0",
+          "mean_square": 0.03311622803030613,
+          "per_pose": {
+            "a": {
+              "adjusted_shape_rms_db": 2.9195597338894506,
+              "components": {
+                "periodicity": 8.235347737639565e-05,
+                "pitchHz": 1.647245756894609e-08,
+                "spectral_shape": 0.23677302888190666,
+                "unexplained_level": 0.0
+              },
+              "gain_adjustment_db": -4.696711833563306,
+              "mean_square": 0.059213849707935154,
+              "nuisance_bound_reached": false,
+              "nuisance_interpretation": "Empirical recording/source tilt and level adjustment, not measured source physiology or calibrated room response",
+              "raw_shape_rms_db": 3.02268094608971,
+              "reason": null,
+              "shape_normalization": "Unbounded constant log-power offset removed separately per resolution; overall PCM level is scored separately with bounded gain",
+              "tilt_adjustment_db_per_octave": 0.5732299777632064,
+              "unexplained_level_db": 0.0
+            },
+            "i": {
+              "adjusted_shape_rms_db": 1.0053209530976566,
+              "components": {
+                "periodicity": 2.162683535728016e-07,
+                "pitchHz": 3.639965537976631e-08,
+                "spectral_shape": 0.028074172742699462,
+                "unexplained_level": 0.0
+              },
+              "gain_adjustment_db": -5.971138078606273,
+              "mean_square": 0.007018606352677104,
+              "nuisance_bound_reached": false,
+              "nuisance_interpretation": "Empirical recording/source tilt and level adjustment, not measured source physiology or calibrated room response",
+              "raw_shape_rms_db": 1.4493496539921684,
+              "reason": null,
+              "shape_normalization": "Unbounded constant log-power offset removed separately per resolution; overall PCM level is scored separately with bounded gain",
+              "tilt_adjustment_db_per_octave": 0.7645077686711216,
+              "unexplained_level_db": 0.0
+            }
+          }
+        },
+        {
+          "candidate_id": "anatomy-0-source-1",
+          "mean_square": 0.030746222823542665,
+          "per_pose": {
+            "a": {
+              "adjusted_shape_rms_db": 2.795200477031466,
+              "components": {
+                "periodicity": 9.022527579444564e-07,
+                "pitchHz": 1.5328854716543126e-09,
+                "spectral_shape": 0.21703182518880373,
+                "unexplained_level": 0.0
+              },
+              "gain_adjustment_db": -6.240133284260324,
+              "mean_square": 0.05425818224361179,
+              "nuisance_bound_reached": false,
+              "nuisance_interpretation": "Empirical recording/source tilt and level adjustment, not measured source physiology or calibrated room response",
+              "raw_shape_rms_db": 2.795814499286769,
+              "reason": null,
+              "shape_normalization": "Unbounded constant log-power offset removed separately per resolution; overall PCM level is scored separately with bounded gain",
+              "tilt_adjustment_db_per_octave": -0.04290591365653754,
+              "unexplained_level_db": 0.0
+            },
+            "i": {
+              "adjusted_shape_rms_db": 1.0206425486595307,
+              "components": {
+                "periodicity": 2.397136344457762e-07,
+                "pitchHz": 3.913409757387964e-07,
+                "spectral_shape": 0.02893642255928396,
+                "unexplained_level": 0.0
+              },
+              "gain_adjustment_db": -6.082198697199715,
+              "mean_square": 0.007234263403473536,
+              "nuisance_bound_reached": false,
+              "nuisance_interpretation": "Empirical recording/source tilt and level adjustment, not measured source physiology or calibrated room response",
+              "raw_shape_rms_db": 1.4810554005616858,
+              "reason": null,
+              "shape_normalization": "Unbounded constant log-power offset removed separately per resolution; overall PCM level is scored separately with bounded gain",
+              "tilt_adjustment_db_per_octave": 0.7859065813801106,
+              "unexplained_level_db": 0.0
+            }
+          }
+        },
+        {
+          "candidate_id": "anatomy-1-source-0",
+          "mean_square": 2.6733005967946606,
+          "per_pose": {
+            "a": {
+              "adjusted_shape_rms_db": 2.7161958239745507,
+              "components": {
+                "periodicity": 0.00014111574941919405,
+                "pitchHz": 3.461893584967555e-08,
+                "spectral_shape": 0.20493665983824413,
+                "unexplained_level": 0.0
+              },
+              "gain_adjustment_db": -4.925774872465713,
+              "mean_square": 0.051269452551649795,
+              "nuisance_bound_reached": false,
+              "nuisance_interpretation": "Empirical recording/source tilt and level adjustment, not measured source physiology or calibrated room response",
+              "raw_shape_rms_db": 2.8365203262458567,
+              "reason": null,
+              "shape_normalization": "Unbounded constant log-power offset removed separately per resolution; overall PCM level is scored separately with bounded gain",
+              "tilt_adjustment_db_per_octave": 0.5985625540958525,
+              "unexplained_level_db": 0.0
+            },
+            "i": {
+              "adjusted_shape_rms_db": 13.82845128180347,
+              "components": {
+                "periodicity": 0.010027452336998907,
+                "pitchHz": 0.00033659235003978175,
+                "spectral_shape": 5.311835134811447,
+                "unexplained_level": 15.859127784652202
+              },
+              "gain_adjustment_db": -24.0,
+              "mean_square": 5.295331741037671,
+              "nuisance_bound_reached": true,
+              "nuisance_interpretation": "Empirical recording/source tilt and level adjustment, not measured source physiology or calibrated room response",
+              "raw_shape_rms_db": 13.984832121787667,
+              "reason": null,
+              "shape_normalization": "Unbounded constant log-power offset removed separately per resolution; overall PCM level is scored separately with bounded gain",
+              "tilt_adjustment_db_per_octave": 1.5272061762621407,
+              "unexplained_level_db": -11.947056125333546
+            }
+          }
+        },
+        {
+          "candidate_id": "anatomy-1-source-1",
+          "mean_square": 2.734473001758443,
+          "per_pose": {
+            "a": {
+              "adjusted_shape_rms_db": 2.923653458021014,
+              "components": {
+                "periodicity": 2.8656104791250497e-05,
+                "pitchHz": 7.734832237632988e-09,
+                "spectral_shape": 0.23743748729439534,
+                "unexplained_level": 0.0
+              },
+              "gain_adjustment_db": -6.467273512326024,
+              "mean_square": 0.05936653778350471,
+              "nuisance_bound_reached": false,
+              "nuisance_interpretation": "Empirical recording/source tilt and level adjustment, not measured source physiology or calibrated room response",
+              "raw_shape_rms_db": 2.92444134306717,
+              "reason": null,
+              "shape_normalization": "Unbounded constant log-power offset removed separately per resolution; overall PCM level is scored separately with bounded gain",
+              "tilt_adjustment_db_per_octave": -0.049707097141891914,
+              "unexplained_level_db": 0.0
+            },
+            "i": {
+              "adjusted_shape_rms_db": 14.039120824518545,
+              "components": {
+                "periodicity": 0.007877171367438266,
+                "pitchHz": 0.00037746096401628903,
+                "spectral_shape": 5.474914264595285,
+                "unexplained_level": 16.155148966006784
+              },
+              "gain_adjustment_db": -24.0,
+              "mean_square": 5.4095794657333816,
+              "nuisance_bound_reached": true,
+              "nuisance_interpretation": "Empirical recording/source tilt and level adjustment, not measured source physiology or calibrated room response",
+              "raw_shape_rms_db": 14.095614949712852,
+              "reason": null,
+              "shape_normalization": "Unbounded constant log-power offset removed separately per resolution; overall PCM level is scored separately with bounded gain",
+              "tilt_adjustment_db_per_octave": 0.923214963372509,
+              "unexplained_level_db": -12.058040499768651
+            }
+          }
+        }
+      ],
+      "case": "gain",
+      "heldout_all_candidates": [
+        {
+          "adjusted_shape_rms_db": 9.268668428145107,
+          "candidate_id": "anatomy-0-source-0",
+          "components": {
+            "periodicity": 0.01177761822648556,
+            "pitchHz": 0.0003869462921892237,
+            "spectral_shape": 2.3863392897470526,
+            "unexplained_level": 12.489263297386417
+          },
+          "gain_adjustment_db": 24.0,
+          "mean_square": 3.721941787913036,
+          "nuisance_bound_reached": true,
+          "nuisance_interpretation": "Empirical recording/source tilt and level adjustment, not measured source physiology or calibrated room response",
+          "raw_shape_rms_db": 9.324568587967402,
+          "reason": null,
+          "shape_normalization": "Unbounded constant log-power offset removed separately per resolution; overall PCM level is scored separately with bounded gain",
+          "tilt_adjustment_db_per_octave": 0.746558419935175,
+          "unexplained_level_db": 10.602045542086572
+        },
+        {
+          "adjusted_shape_rms_db": 9.264710912977831,
+          "candidate_id": "anatomy-0-source-1",
+          "components": {
+            "periodicity": 0.011858766361471257,
+            "pitchHz": 0.00044488415540506094,
+            "spectral_shape": 2.3843018972514036,
+            "unexplained_level": 12.385323118271613
+          },
+          "gain_adjustment_db": 24.0,
+          "mean_square": 3.6954821665099726,
+          "nuisance_bound_reached": true,
+          "nuisance_interpretation": "Empirical recording/source tilt and level adjustment, not measured source physiology or calibrated room response",
+          "raw_shape_rms_db": 9.321673285405096,
+          "reason": null,
+          "shape_normalization": "Unbounded constant log-power offset removed separately per resolution; overall PCM level is scored separately with bounded gain",
+          "tilt_adjustment_db_per_octave": 0.753479186116981,
+          "unexplained_level_db": 10.557836334422149
+        },
+        {
+          "candidate_id": "anatomy-1-source-0",
+          "mean_square": null,
+          "reason": "Invalid or clipped audio cannot constrain the model"
+        },
+        {
+          "candidate_id": "anatomy-1-source-1",
+          "mean_square": null,
+          "reason": "Invalid or clipped audio cannot constrain the model"
+        }
+      ],
+      "heldout_best_ids_scoring_only": [
+        "anatomy-0-source-1"
+      ],
+      "heldout_selected": [
+        {
+          "adjusted_shape_rms_db": 9.264710912977831,
+          "candidate_id": "anatomy-0-source-1",
+          "components": {
+            "periodicity": 0.011858766361471257,
+            "pitchHz": 0.00044488415540506094,
+            "spectral_shape": 2.3843018972514036,
+            "unexplained_level": 12.385323118271613
+          },
+          "gain_adjustment_db": 24.0,
+          "mean_square": 3.6954821665099726,
+          "nuisance_bound_reached": true,
+          "nuisance_interpretation": "Empirical recording/source tilt and level adjustment, not measured source physiology or calibrated room response",
+          "raw_shape_rms_db": 9.321673285405096,
+          "reason": null,
+          "shape_normalization": "Unbounded constant log-power offset removed separately per resolution; overall PCM level is scored separately with bounded gain",
+          "tilt_adjustment_db_per_octave": 0.753479186116981,
+          "unexplained_level_db": 10.557836334422149
+        }
+      ],
+      "objective": "multires-log-spectrum-v1",
+      "tied_best_ids": [
+        "anatomy-0-source-1"
+      ]
+    },
+    {
+      "candidates": [
+        {
+          "candidate_id": "anatomy-0-source-0",
+          "mean_square": 0.0032289097737852298,
+          "per_pose": {
+            "a": {
+              "mean_square": 0.0064321728237638695,
+              "reason": null
+            },
+            "i": {
+              "mean_square": 2.5646723806590437e-05,
+              "reason": null
+            }
+          }
+        },
+        {
+          "candidate_id": "anatomy-0-source-1",
+          "mean_square": 0.03622099714019311,
+          "per_pose": {
+            "a": {
+              "mean_square": 0.0719880879055199,
+              "reason": null
+            },
+            "i": {
+              "mean_square": 0.0004539063748663282,
+              "reason": null
+            }
+          }
+        },
+        {
+          "candidate_id": "anatomy-1-source-0",
+          "mean_square": 10.010446414072293,
+          "per_pose": {
+            "a": {
+              "mean_square": 0.005681228045980962,
+              "reason": null
+            },
+            "i": {
+              "mean_square": 20.015211600098606,
+              "reason": null
+            }
+          }
+        },
+        {
+          "candidate_id": "anatomy-1-source-1",
+          "mean_square": 10.127943660747258,
+          "per_pose": {
+            "a": {
+              "mean_square": 0.08187323755173993,
+              "reason": null
+            },
+            "i": {
+              "mean_square": 20.174014083942776,
+              "reason": null
+            }
+          }
+        }
+      ],
+      "case": "tilt",
+      "heldout_all_candidates": [
+        {
+          "candidate_id": "anatomy-0-source-0",
+          "mean_square": 36.37228075078468,
+          "reason": null
+        },
+        {
+          "candidate_id": "anatomy-0-source-1",
+          "mean_square": 36.29288728316304,
+          "reason": null
+        },
+        {
+          "candidate_id": "anatomy-1-source-0",
+          "mean_square": null,
+          "reason": "Invalid or clipped audio cannot constrain the model"
+        },
+        {
+          "candidate_id": "anatomy-1-source-1",
+          "mean_square": null,
+          "reason": "Invalid or clipped audio cannot constrain the model"
+        }
+      ],
+      "heldout_best_ids_scoring_only": [
+        "anatomy-0-source-1"
+      ],
+      "heldout_selected": [
+        {
+          "candidate_id": "anatomy-0-source-0",
+          "mean_square": 36.37228075078468,
+          "reason": null
+        }
+      ],
+      "objective": "canonical-coarse-v1",
+      "tied_best_ids": [
+        "anatomy-0-source-0"
+      ]
+    },
+    {
+      "candidates": [
+        {
+          "candidate_id": "anatomy-0-source-0",
+          "mean_square": 0.05077375207891693,
+          "per_pose": {
+            "a": {
+              "adjusted_shape_rms_db": 3.8222572645854194,
+              "components": {
+                "periodicity": 9.079277423689001e-05,
+                "pitchHz": 2.8630342448049376e-09,
+                "spectral_shape": 0.40582362768544483,
+                "unexplained_level": 0.0
+              },
+              "gain_adjustment_db": 0.12879049262314624,
+              "mean_square": 0.101478605830679,
+              "nuisance_bound_reached": false,
+              "nuisance_interpretation": "Empirical recording/source tilt and level adjustment, not measured source physiology or calibrated room response",
+              "raw_shape_rms_db": 4.955827509591183,
+              "reason": null,
+              "shape_normalization": "Unbounded constant log-power offset removed separately per resolution; overall PCM level is scored separately with bounded gain",
+              "tilt_adjustment_db_per_octave": -2.3099568885889887,
+              "unexplained_level_db": 0.0
+            },
+            "i": {
+              "adjusted_shape_rms_db": 0.09633843106915634,
+              "components": {
+                "periodicity": 2.7034968277939164e-06,
+                "pitchHz": 1.5081664545319952e-05,
+                "spectral_shape": 0.0002578081472462941,
+                "unexplained_level": 0.0
+              },
+              "gain_adjustment_db": -0.03152731775432471,
+              "mean_square": 6.889832715485199e-05,
+              "nuisance_bound_reached": false,
+              "nuisance_interpretation": "Empirical recording/source tilt and level adjustment, not measured source physiology or calibrated room response",
+              "raw_shape_rms_db": 0.09685297014895612,
+              "reason": null,
+              "shape_normalization": "Unbounded constant log-power offset removed separately per resolution; overall PCM level is scored separately with bounded gain",
+              "tilt_adjustment_db_per_octave": 0.007301008421548062,
+              "unexplained_level_db": 0.0
+            }
+          }
+        },
+        {
+          "candidate_id": "anatomy-0-source-1",
+          "mean_square": 0.05380462738394032,
+          "per_pose": {
+            "a": {
+              "adjusted_shape_rms_db": 3.9332183826217557,
+              "components": {
+                "periodicity": 0.0003116473351220256,
+                "pitchHz": 2.0363381274360017e-08,
+                "spectral_shape": 0.4297279679276028,
+                "unexplained_level": 0.0
+              },
+              "gain_adjustment_db": -1.4146309580738716,
+              "mean_square": 0.10750990890652652,
+              "nuisance_bound_reached": false,
+              "nuisance_interpretation": "Empirical recording/source tilt and level adjustment, not measured source physiology or calibrated room response",
+              "raw_shape_rms_db": 5.606867326338427,
+              "reason": null,
+              "shape_normalization": "Unbounded constant log-power offset removed separately per resolution; overall PCM level is scored separately with bounded gain",
+              "tilt_adjustment_db_per_octave": -2.9260927800087324,
+              "unexplained_level_db": 0.0
+            },
+            "i": {
+              "adjusted_shape_rms_db": 0.11811019460982745,
+              "components": {
+                "periodicity": 4.7551943710769096e-07,
+                "pitchHz": 9.407424013453881e-06,
+                "spectral_shape": 0.0003875005019658698,
+                "unexplained_level": 0.0
+              },
+              "gain_adjustment_db": -0.14258793634776623,
+              "mean_square": 9.934586135410784e-05,
+              "nuisance_bound_reached": false,
+              "nuisance_interpretation": "Empirical recording/source tilt and level adjustment, not measured source physiology or calibrated room response",
+              "raw_shape_rms_db": 0.12444293886617233,
+              "reason": null,
+              "shape_normalization": "Unbounded constant log-power offset removed separately per resolution; overall PCM level is scored separately with bounded gain",
+              "tilt_adjustment_db_per_octave": 0.02869982113053698,
+              "unexplained_level_db": 0.0
+            }
+          }
+        },
+        {
+          "candidate_id": "anatomy-1-source-0",
+          "mean_square": 1.2292261668236828,
+          "per_pose": {
+            "a": {
+              "adjusted_shape_rms_db": 3.7351049728913672,
+              "components": {
+                "periodicity": 4.521474323596845e-05,
+                "pitchHz": 1.7717736425248292e-11,
+                "spectral_shape": 0.38752803218105053,
+                "unexplained_level": 0.0
+              },
+              "gain_adjustment_db": -0.10027254627926041,
+              "mean_square": 0.09689331173550106,
+              "nuisance_bound_reached": false,
+              "nuisance_interpretation": "Empirical recording/source tilt and level adjustment, not measured source physiology or calibrated room response",
+              "raw_shape_rms_db": 4.866675650571889,
+              "reason": null,
+              "shape_normalization": "Unbounded constant log-power offset removed separately per resolution; overall PCM level is scored separately with bounded gain",
+              "tilt_adjustment_db_per_octave": -2.2846243122563425,
+              "unexplained_level_db": 0.0
+            },
+            "i": {
+              "adjusted_shape_rms_db": 13.975688666231001,
+              "components": {
+                "periodicity": 0.01026500325854512,
+                "pitchHz": 0.0004857253793752921,
+                "spectral_shape": 5.425552047094935,
+                "unexplained_level": 4.009933311914603
+              },
+              "gain_adjustment_db": -24.0,
+              "mean_square": 2.3615590219118645,
+              "nuisance_bound_reached": true,
+              "nuisance_interpretation": "Empirical recording/source tilt and level adjustment, not measured source physiology or calibrated room response",
+              "raw_shape_rms_db": 14.015189360505232,
+              "reason": null,
+              "shape_normalization": "Unbounded constant log-power offset removed separately per resolution; overall PCM level is scored separately with bounded gain",
+              "tilt_adjustment_db_per_octave": 0.7699994160125673,
+              "unexplained_level_db": -6.0074453644815975
+            }
+          }
+        },
+        {
+          "candidate_id": "anatomy-1-source-1",
+          "mean_square": 1.2787411046742008,
+          "per_pose": {
+            "a": {
+              "adjusted_shape_rms_db": 4.042884381419287,
+              "components": {
+                "periodicity": 0.0001755695544184083,
+                "pitchHz": 8.81805626887203e-09,
+                "spectral_shape": 0.45402539226455585,
+                "unexplained_level": 0.0
+              },
+              "gain_adjustment_db": -1.6417711861395716,
+              "mean_square": 0.11355024265925763,
+              "nuisance_bound_reached": false,
+              "nuisance_interpretation": "Empirical recording/source tilt and level adjustment, not measured source physiology or calibrated room response",
+              "raw_shape_rms_db": 5.690867994105646,
+              "reason": null,
+              "shape_normalization": "Unbounded constant log-power offset removed separately per resolution; overall PCM level is scored separately with bounded gain",
+              "tilt_adjustment_db_per_octave": -2.9328939634940867,
+              "unexplained_level_db": 0.0
+            },
+            "i": {
+              "adjusted_shape_rms_db": 14.208274518011333,
+              "components": {
+                "periodicity": 0.008087875229483097,
+                "pitchHz": 0.0005345843212140346,
+                "spectral_shape": 5.6076406883102825,
+                "unexplained_level": 4.159464718895595
+              },
+              "gain_adjustment_db": -24.0,
+              "mean_square": 2.443931966689144,
+              "nuisance_bound_reached": true,
+              "nuisance_interpretation": "Empirical recording/source tilt and level adjustment, not measured source physiology or calibrated room response",
+              "raw_shape_rms_db": 14.210082943351923,
+              "reason": null,
+              "shape_normalization": "Unbounded constant log-power offset removed separately per resolution; overall PCM level is scored separately with bounded gain",
+              "tilt_adjustment_db_per_octave": 0.16600820312293516,
+              "unexplained_level_db": -6.118429738916706
+            }
+          }
+        }
+      ],
+      "case": "tilt",
+      "heldout_all_candidates": [
+        {
+          "adjusted_shape_rms_db": 10.197948579104196,
+          "candidate_id": "anatomy-0-source-0",
+          "components": {
+            "periodicity": 0.014732956290860896,
+            "pitchHz": 0.00031988424840306314,
+            "spectral_shape": 2.888837645057036,
+            "unexplained_level": 30.082129861737744
+          },
+          "gain_adjustment_db": 24.0,
+          "mean_square": 8.246505086833512,
+          "nuisance_bound_reached": true,
+          "nuisance_interpretation": "Empirical recording/source tilt and level adjustment, not measured source physiology or calibrated room response",
+          "raw_shape_rms_db": 10.729601560858004,
+          "reason": null,
+          "shape_normalization": "Unbounded constant log-power offset removed separately per resolution; overall PCM level is scored separately with bounded gain",
+          "tilt_adjustment_db_per_octave": -2.4426041630831596,
+          "unexplained_level_db": 16.45415354114698
+        },
+        {
+          "adjusted_shape_rms_db": 10.194376617555614,
+          "candidate_id": "anatomy-0-source-1",
+          "components": {
+            "periodicity": 0.01482369984741328,
+            "pitchHz": 0.00037274614953384546,
+            "spectral_shape": 2.8868142950156845,
+            "unexplained_level": 29.920697003110693
+          },
+          "gain_adjustment_db": 24.0,
+          "mean_square": 8.205676936030832,
+          "nuisance_bound_reached": true,
+          "nuisance_interpretation": "Empirical recording/source tilt and level adjustment, not measured source physiology or calibrated room response",
+          "raw_shape_rms_db": 10.723271396486865,
+          "reason": null,
+          "shape_normalization": "Unbounded constant log-power offset removed separately per resolution; overall PCM level is scored separately with bounded gain",
+          "tilt_adjustment_db_per_octave": -2.435683396901353,
+          "unexplained_level_db": 16.409944333482557
+        },
+        {
+          "candidate_id": "anatomy-1-source-0",
+          "mean_square": null,
+          "reason": "Invalid or clipped audio cannot constrain the model"
+        },
+        {
+          "candidate_id": "anatomy-1-source-1",
+          "mean_square": null,
+          "reason": "Invalid or clipped audio cannot constrain the model"
+        }
+      ],
+      "heldout_best_ids_scoring_only": [
+        "anatomy-0-source-1"
+      ],
+      "heldout_selected": [
+        {
+          "adjusted_shape_rms_db": 10.197948579104196,
+          "candidate_id": "anatomy-0-source-0",
+          "components": {
+            "periodicity": 0.014732956290860896,
+            "pitchHz": 0.00031988424840306314,
+            "spectral_shape": 2.888837645057036,
+            "unexplained_level": 30.082129861737744
+          },
+          "gain_adjustment_db": 24.0,
+          "mean_square": 8.246505086833512,
+          "nuisance_bound_reached": true,
+          "nuisance_interpretation": "Empirical recording/source tilt and level adjustment, not measured source physiology or calibrated room response",
+          "raw_shape_rms_db": 10.729601560858004,
+          "reason": null,
+          "shape_normalization": "Unbounded constant log-power offset removed separately per resolution; overall PCM level is scored separately with bounded gain",
+          "tilt_adjustment_db_per_octave": -2.4426041630831596,
+          "unexplained_level_db": 16.45415354114698
+        }
+      ],
+      "objective": "multires-log-spectrum-v1",
+      "tied_best_ids": [
+        "anatomy-0-source-0"
+      ]
+    },
+    {
+      "candidates": [
+        {
+          "candidate_id": "anatomy-0-source-0",
+          "mean_square": 0.4963045486207347,
+          "per_pose": {
+            "a": {
+              "mean_square": 0.27000146174491685,
+              "reason": null
+            },
+            "i": {
+              "mean_square": 0.7226076354965526,
+              "reason": null
+            }
+          }
+        },
+        {
+          "candidate_id": "anatomy-0-source-1",
+          "mean_square": 0.4319409064444719,
+          "per_pose": {
+            "a": {
+              "mean_square": 0.14297287772177497,
+              "reason": null
+            },
+            "i": {
+              "mean_square": 0.7209089351671688,
+              "reason": null
+            }
+          }
+        },
+        {
+          "candidate_id": "anatomy-1-source-0",
+          "mean_square": 10.11351946490363,
+          "per_pose": {
+            "a": {
+              "mean_square": 0.25751052379514533,
+              "reason": null
+            },
+            "i": {
+              "mean_square": 19.969528406012117,
+              "reason": null
+            }
+          }
+        },
+        {
+          "candidate_id": "anatomy-1-source-1",
+          "mean_square": 10.08890133642075,
+          "per_pose": {
+            "a": {
+              "mean_square": 0.15453489108297663,
+              "reason": null
+            },
+            "i": {
+              "mean_square": 20.023267781758523,
+              "reason": null
+            }
+          }
+        }
+      ],
+      "case": "noise",
+      "heldout_all_candidates": [
+        {
+          "candidate_id": "anatomy-0-source-0",
+          "mean_square": 37.640297872821264,
+          "reason": null
+        },
+        {
+          "candidate_id": "anatomy-0-source-1",
+          "mean_square": 37.56001427954492,
+          "reason": null
+        },
+        {
+          "candidate_id": "anatomy-1-source-0",
+          "mean_square": null,
+          "reason": "Invalid or clipped audio cannot constrain the model"
+        },
+        {
+          "candidate_id": "anatomy-1-source-1",
+          "mean_square": null,
+          "reason": "Invalid or clipped audio cannot constrain the model"
+        }
+      ],
+      "heldout_best_ids_scoring_only": [
+        "anatomy-0-source-1"
+      ],
+      "heldout_selected": [
+        {
+          "candidate_id": "anatomy-0-source-1",
+          "mean_square": 37.56001427954492,
+          "reason": null
+        }
+      ],
+      "objective": "canonical-coarse-v1",
+      "tied_best_ids": [
+        "anatomy-0-source-1"
+      ]
+    },
+    {
+      "candidates": [
+        {
+          "candidate_id": "anatomy-0-source-0",
+          "mean_square": 0.6069719227948539,
+          "per_pose": {
+            "a": {
+              "adjusted_shape_rms_db": 11.89518975069194,
+              "components": {
+                "periodicity": 0.12559058223762107,
+                "pitchHz": 7.860541472375645e-07,
+                "spectral_shape": 3.9304316445824057,
+                "unexplained_level": 0.0
+              },
+              "gain_adjustment_db": 1.692246221541435,
+              "mean_square": 1.0140057532185434,
+              "nuisance_bound_reached": true,
+              "nuisance_interpretation": "Empirical recording/source tilt and level adjustment, not measured source physiology or calibrated room response",
+              "raw_shape_rms_db": 15.452217006038103,
+              "reason": null,
+              "shape_normalization": "Unbounded constant log-power offset removed separately per resolution; overall PCM level is scored separately with bounded gain",
+              "tilt_adjustment_db_per_octave": 6.0,
+              "unexplained_level_db": 0.0
+            },
+            "i": {
+              "adjusted_shape_rms_db": 5.058355628852521,
+              "components": {
+                "periodicity": 0.08798693841234918,
+                "pitchHz": 0.0010164958516427648,
+                "spectral_shape": 0.7107489352206662,
+                "unexplained_level": 0.0
+              },
+              "gain_adjustment_db": 0.48959200263870173,
+              "mean_square": 0.19993809237116453,
+              "nuisance_bound_reached": false,
+              "nuisance_interpretation": "Empirical recording/source tilt and level adjustment, not measured source physiology or calibrated room response",
+              "raw_shape_rms_db": 6.977548905175208,
+              "reason": null,
+              "shape_normalization": "Unbounded constant log-power offset removed separately per resolution; overall PCM level is scored separately with bounded gain",
+              "tilt_adjustment_db_per_octave": 3.5194799411495494,
+              "unexplained_level_db": 0.0
+            }
+          }
+        },
+        {
+          "candidate_id": "anatomy-0-source-1",
+          "mean_square": 0.609822499580829,
+          "per_pose": {
+            "a": {
+              "adjusted_shape_rms_db": 11.936814362632528,
+              "components": {
+                "periodicity": 0.11989779092760333,
+                "pitchHz": 9.521660038408504e-07,
+                "spectral_shape": 3.957987142443062,
+                "unexplained_level": 0.0
+              },
+              "gain_adjustment_db": 0.14882477084441703,
+              "mean_square": 1.0194714713841673,
+              "nuisance_bound_reached": true,
+              "nuisance_interpretation": "Empirical recording/source tilt and level adjustment, not measured source physiology or calibrated room response",
+              "raw_shape_rms_db": 15.032468377301775,
+              "reason": null,
+              "shape_normalization": "Unbounded constant log-power offset removed separately per resolution; overall PCM level is scored separately with bounded gain",
+              "tilt_adjustment_db_per_octave": 6.0,
+              "unexplained_level_db": 0.0
+            },
+            "i": {
+              "adjusted_shape_rms_db": 5.063528626211935,
+              "components": {
+                "periodicity": 0.08742150058951509,
+                "pitchHz": 0.0010692175074560814,
+                "spectral_shape": 0.7122033930129923,
+                "unexplained_level": 0.0
+              },
+              "gain_adjustment_db": 0.3785313840452602,
+              "mean_square": 0.20017352777749087,
+              "nuisance_bound_reached": false,
+              "nuisance_interpretation": "Empirical recording/source tilt and level adjustment, not measured source physiology or calibrated room response",
+              "raw_shape_rms_db": 7.0014494677082,
+              "reason": null,
+              "shape_normalization": "Unbounded constant log-power offset removed separately per resolution; overall PCM level is scored separately with bounded gain",
+              "tilt_adjustment_db_per_octave": 3.5408787538585385,
+              "unexplained_level_db": 0.0
+            }
+          }
+        },
+        {
+          "candidate_id": "anatomy-1-source-0",
+          "mean_square": 1.6375884224175092,
+          "per_pose": {
+            "a": {
+              "adjusted_shape_rms_db": 12.491765207165248,
+              "components": {
+                "periodicity": 0.12758608853861658,
+                "pitchHz": 6.870426750716104e-07,
+                "spectral_shape": 4.334561055304007,
+                "unexplained_level": 0.0
+              },
+              "gain_adjustment_db": 1.4631831826390282,
+              "mean_square": 1.1155369577213246,
+              "nuisance_bound_reached": true,
+              "nuisance_interpretation": "Empirical recording/source tilt and level adjustment, not measured source physiology or calibrated room response",
+              "raw_shape_rms_db": 15.933818191178942,
+              "reason": null,
+              "shape_normalization": "Unbounded constant log-power offset removed separately per resolution; overall PCM level is scored separately with bounded gain",
+              "tilt_adjustment_db_per_octave": 6.0,
+              "unexplained_level_db": 0.0
+            },
+            "i": {
+              "adjusted_shape_rms_db": 13.598837799282125,
+              "components": {
+                "periodicity": 0.15705213996449113,
+                "pitchHz": 0.000188426841323971,
+                "spectral_shape": 5.136899708088453,
+                "unexplained_level": 3.3444192735605056
+              },
+              "gain_adjustment_db": -24.0,
+              "mean_square": 2.159639887113694,
+              "nuisance_bound_reached": true,
+              "nuisance_interpretation": "Empirical recording/source tilt and level adjustment, not measured source physiology or calibrated room response",
+              "raw_shape_rms_db": 14.8028365018703,
+              "reason": null,
+              "shape_normalization": "Unbounded constant log-power offset removed separately per resolution; overall PCM level is scored separately with bounded gain",
+              "tilt_adjustment_db_per_octave": 4.282178348740568,
+              "unexplained_level_db": -5.486326044088571
+            }
+          }
+        },
+        {
+          "candidate_id": "anatomy-1-source-1",
+          "mean_square": 1.6676248134203977,
+          "per_pose": {
+            "a": {
+              "adjusted_shape_rms_db": 12.524694749610651,
+              "components": {
+                "periodicity": 0.1229665550815126,
+                "pitchHz": 8.593181071963905e-07,
+                "spectral_shape": 4.357443849192349,
+                "unexplained_level": 0.0
+              },
+              "gain_adjustment_db": -0.07831545722128297,
+              "mean_square": 1.1201028158979922,
+              "nuisance_bound_reached": true,
+              "nuisance_interpretation": "Empirical recording/source tilt and level adjustment, not measured source physiology or calibrated room response",
+              "raw_shape_rms_db": 15.498495085679583,
+              "reason": null,
+              "shape_normalization": "Unbounded constant log-power offset removed separately per resolution; overall PCM level is scored separately with bounded gain",
+              "tilt_adjustment_db_per_octave": 6.0,
+              "unexplained_level_db": 0.0
+            },
+            "i": {
+              "adjusted_shape_rms_db": 13.723050827485798,
+              "components": {
+                "periodicity": 0.14815902367458855,
+                "pitchHz": 0.0001598951240246237,
+                "spectral_shape": 5.231170111493295,
+                "unexplained_level": 3.481098213479304
+              },
+              "gain_adjustment_db": -24.0,
+              "mean_square": 2.215146810942803,
+              "nuisance_bound_reached": true,
+              "nuisance_interpretation": "Empirical recording/source tilt and level adjustment, not measured source physiology or calibrated room response",
+              "raw_shape_rms_db": 14.613404548945368,
+              "reason": null,
+              "shape_normalization": "Unbounded constant log-power offset removed separately per resolution; overall PCM level is scored separately with bounded gain",
+              "tilt_adjustment_db_per_octave": 3.6781871358509366,
+              "unexplained_level_db": -5.59731041852368
+            }
+          }
+        }
+      ],
+      "case": "noise",
+      "heldout_all_candidates": [
+        {
+          "adjusted_shape_rms_db": 5.978268216961805,
+          "candidate_id": "anatomy-0-source-0",
+          "components": {
+            "periodicity": 0.035817867856003174,
+            "pitchHz": 0.0001661860896275657,
+            "spectral_shape": 0.9927691909426578,
+            "unexplained_level": 32.15088488703127
+          },
+          "gain_adjustment_db": 24.0,
+          "mean_square": 8.29490953297989,
+          "nuisance_bound_reached": true,
+          "nuisance_interpretation": "Empirical recording/source tilt and level adjustment, not measured source physiology or calibrated room response",
+          "raw_shape_rms_db": 7.02719014618889,
+          "reason": null,
+          "shape_normalization": "Unbounded constant log-power offset removed separately per resolution; overall PCM level is scored separately with bounded gain",
+          "tilt_adjustment_db_per_octave": 2.70466938087297,
+          "unexplained_level_db": 17.01052509428446
+        },
+        {
+          "adjusted_shape_rms_db": 5.976242748008496,
+          "candidate_id": "anatomy-0-source-1",
+          "components": {
+            "periodicity": 0.035676735991381575,
+            "pitchHz": 0.00020485180884299368,
+            "spectral_shape": 0.9920965939756706,
+            "unexplained_level": 31.98398608495283
+          },
+          "gain_adjustment_db": 24.0,
+          "mean_square": 8.252991066682181,
+          "nuisance_bound_reached": true,
+          "nuisance_interpretation": "Empirical recording/source tilt and level adjustment, not measured source physiology or calibrated room response",
+          "raw_shape_rms_db": 7.030440283810855,
+          "reason": null,
+          "shape_normalization": "Unbounded constant log-power offset removed separately per resolution; overall PCM level is scored separately with bounded gain",
+          "tilt_adjustment_db_per_octave": 2.7115901470547765,
+          "unexplained_level_db": 16.966315886620038
+        },
+        {
+          "candidate_id": "anatomy-1-source-0",
+          "mean_square": null,
+          "reason": "Invalid or clipped audio cannot constrain the model"
+        },
+        {
+          "candidate_id": "anatomy-1-source-1",
+          "mean_square": null,
+          "reason": "Invalid or clipped audio cannot constrain the model"
+        }
+      ],
+      "heldout_best_ids_scoring_only": [
+        "anatomy-0-source-1"
+      ],
+      "heldout_selected": [
+        {
+          "adjusted_shape_rms_db": 5.978268216961805,
+          "candidate_id": "anatomy-0-source-0",
+          "components": {
+            "periodicity": 0.035817867856003174,
+            "pitchHz": 0.0001661860896275657,
+            "spectral_shape": 0.9927691909426578,
+            "unexplained_level": 32.15088488703127
+          },
+          "gain_adjustment_db": 24.0,
+          "mean_square": 8.29490953297989,
+          "nuisance_bound_reached": true,
+          "nuisance_interpretation": "Empirical recording/source tilt and level adjustment, not measured source physiology or calibrated room response",
+          "raw_shape_rms_db": 7.02719014618889,
+          "reason": null,
+          "shape_normalization": "Unbounded constant log-power offset removed separately per resolution; overall PCM level is scored separately with bounded gain",
+          "tilt_adjustment_db_per_octave": 2.70466938087297,
+          "unexplained_level_db": 17.01052509428446
+        }
+      ],
+      "objective": "multires-log-spectrum-v1",
+      "tied_best_ids": [
+        "anatomy-0-source-0"
+      ]
+    },
+    {
+      "candidates": [
+        {
+          "candidate_id": "anatomy-0-source-0",
+          "mean_square": null,
+          "per_pose": {
+            "a": {
+              "mean_square": 0.873508670099804,
+              "reason": null
+            },
+            "i": {
+              "mean_square": null,
+              "reason": "Insufficient canonical descriptors"
+            }
+          }
+        },
+        {
+          "candidate_id": "anatomy-0-source-1",
+          "mean_square": null,
+          "per_pose": {
+            "a": {
+              "mean_square": 0.6937176821927264,
+              "reason": null
+            },
+            "i": {
+              "mean_square": null,
+              "reason": "Insufficient canonical descriptors"
+            }
+          }
+        },
+        {
+          "candidate_id": "anatomy-1-source-0",
+          "mean_square": null,
+          "per_pose": {
+            "a": {
+              "mean_square": 0.8493231529135239,
+              "reason": null
+            },
+            "i": {
+              "mean_square": null,
+              "reason": "Insufficient canonical descriptors"
+            }
+          }
+        },
+        {
+          "candidate_id": "anatomy-1-source-1",
+          "mean_square": null,
+          "per_pose": {
+            "a": {
+              "mean_square": 0.6908836738793985,
+              "reason": null
+            },
+            "i": {
+              "mean_square": null,
+              "reason": "Insufficient canonical descriptors"
+            }
+          }
+        }
+      ],
+      "case": "wrong-fixed-control",
+      "heldout_all_candidates": [
+        {
+          "candidate_id": "anatomy-0-source-0",
+          "mean_square": 27.33099911362993,
+          "reason": null
+        },
+        {
+          "candidate_id": "anatomy-0-source-1",
+          "mean_square": 27.263170746866088,
+          "reason": null
+        },
+        {
+          "candidate_id": "anatomy-1-source-0",
+          "mean_square": null,
+          "reason": "Invalid or clipped audio cannot constrain the model"
+        },
+        {
+          "candidate_id": "anatomy-1-source-1",
+          "mean_square": null,
+          "reason": "Invalid or clipped audio cannot constrain the model"
+        }
+      ],
+      "heldout_best_ids_scoring_only": [
+        "anatomy-0-source-1"
+      ],
+      "heldout_selected": [],
+      "objective": "canonical-coarse-v1",
+      "tied_best_ids": []
+    },
+    {
+      "candidates": [
+        {
+          "candidate_id": "anatomy-0-source-0",
+          "mean_square": null,
+          "per_pose": {
+            "a": {
+              "adjusted_shape_rms_db": 17.49548580856341,
+              "components": {
+                "periodicity": 0.0031022547946730483,
+                "pitchHz": 3.0686286227954693,
+                "spectral_shape": 8.502556213267878,
+                "unexplained_level": 0.0
+              },
+              "gain_adjustment_db": 2.719831812688522,
+              "mean_square": 2.893571772714505,
+              "nuisance_bound_reached": false,
+              "nuisance_interpretation": "Empirical recording/source tilt and level adjustment, not measured source physiology or calibrated room response",
+              "raw_shape_rms_db": 18.097838949337127,
+              "reason": null,
+              "shape_normalization": "Unbounded constant log-power offset removed separately per resolution; overall PCM level is scored separately with bounded gain",
+              "tilt_adjustment_db_per_octave": 3.39070212613964,
+              "unexplained_level_db": 0.0
+            },
+            "i": {
+              "mean_square": null,
+              "reason": "Insufficient canonical descriptors"
+            }
+          }
+        },
+        {
+          "candidate_id": "anatomy-0-source-1",
+          "mean_square": null,
+          "per_pose": {
+            "a": {
+              "adjusted_shape_rms_db": 17.46353426813727,
+              "components": {
+                "periodicity": 0.004073362616839436,
+                "pitchHz": 3.068941118423086,
+                "spectral_shape": 8.471528587066798,
+                "unexplained_level": 0.0
+              },
+              "gain_adjustment_db": 1.176410361991504,
+              "mean_square": 2.8861357670266807,
+              "nuisance_bound_reached": false,
+              "nuisance_interpretation": "Empirical recording/source tilt and level adjustment, not measured source physiology or calibrated room response",
+              "raw_shape_rms_db": 17.869833146388434,
+              "reason": null,
+              "shape_normalization": "Unbounded constant log-power offset removed separately per resolution; overall PCM level is scored separately with bounded gain",
+              "tilt_adjustment_db_per_octave": 2.774566234719896,
+              "unexplained_level_db": 0.0
+            },
+            "i": {
+              "mean_square": null,
+              "reason": "Insufficient canonical descriptors"
+            }
+          }
+        },
+        {
+          "candidate_id": "anatomy-1-source-0",
+          "mean_square": null,
+          "per_pose": {
+            "a": {
+              "adjusted_shape_rms_db": 17.02988398153805,
+              "components": {
+                "periodicity": 0.0027977281877749707,
+                "pitchHz": 3.0684264160945247,
+                "spectral_shape": 8.05602634512906,
+                "unexplained_level": 0.0
+              },
+              "gain_adjustment_db": 2.4907687737861153,
+              "mean_square": 2.78181262235284,
+              "nuisance_bound_reached": false,
+              "nuisance_interpretation": "Empirical recording/source tilt and level adjustment, not measured source physiology or calibrated room response",
+              "raw_shape_rms_db": 17.657243753861163,
+              "reason": null,
+              "shape_normalization": "Unbounded constant log-power offset removed separately per resolution; overall PCM level is scored separately with bounded gain",
+              "tilt_adjustment_db_per_octave": 3.416034702472286,
+              "unexplained_level_db": 0.0
+            },
+            "i": {
+              "mean_square": null,
+              "reason": "Insufficient canonical descriptors"
+            }
+          }
+        },
+        {
+          "candidate_id": "anatomy-1-source-1",
+          "mean_square": null,
+          "per_pose": {
+            "a": {
+              "adjusted_shape_rms_db": 17.001251081889915,
+              "components": {
+                "periodicity": 0.0035306924960085717,
+                "pitchHz": 3.0687701559507374,
+                "spectral_shape": 8.028959398596196,
+                "unexplained_level": 0.0
+              },
+              "gain_adjustment_db": 0.9492701339258041,
+              "mean_square": 2.7753150617607356,
+              "nuisance_bound_reached": false,
+              "nuisance_interpretation": "Empirical recording/source tilt and level adjustment, not measured source physiology or calibrated room response",
+              "raw_shape_rms_db": 17.416318555547313,
+              "reason": null,
+              "shape_normalization": "Unbounded constant log-power offset removed separately per resolution; overall PCM level is scored separately with bounded gain",
+              "tilt_adjustment_db_per_octave": 2.7677650512345418,
+              "unexplained_level_db": 0.0
+            },
+            "i": {
+              "mean_square": null,
+              "reason": "Insufficient canonical descriptors"
+            }
+          }
+        }
+      ],
+      "case": "wrong-fixed-control",
+      "heldout_all_candidates": [
+        {
+          "adjusted_shape_rms_db": 11.540370429485087,
+          "candidate_id": "anatomy-0-source-0",
+          "components": {
+            "periodicity": 0.006958927016773378,
+            "pitchHz": 3.0218267541464248,
+            "spectral_shape": 3.699448601381495,
+            "unexplained_level": 11.699017534171773
+          },
+          "gain_adjustment_db": 24.0,
+          "mean_square": 4.606812954179116,
+          "nuisance_bound_reached": true,
+          "nuisance_interpretation": "Empirical recording/source tilt and level adjustment, not measured source physiology or calibrated room response",
+          "raw_shape_rms_db": 12.083444445802892,
+          "reason": null,
+          "shape_normalization": "Unbounded constant log-power offset removed separately per resolution; overall PCM level is scored separately with bounded gain",
+          "tilt_adjustment_db_per_octave": 2.6229154898666915,
+          "unexplained_level_db": 10.261147977080633
+        },
+        {
+          "adjusted_shape_rms_db": 11.538245632736398,
+          "candidate_id": "anatomy-0-source-1",
+          "components": {
+            "periodicity": 0.007021335732271348,
+            "pitchHz": 3.0168872756005154,
+            "spectral_shape": 3.6980864522600156,
+            "unexplained_level": 11.598426424222223
+          },
+          "gain_adjustment_db": 24.0,
+          "mean_square": 4.580105371953757,
+          "nuisance_bound_reached": true,
+          "nuisance_interpretation": "Empirical recording/source tilt and level adjustment, not measured source physiology or calibrated room response",
+          "raw_shape_rms_db": 12.084220487267189,
+          "reason": null,
+          "shape_normalization": "Unbounded constant log-power offset removed separately per resolution; overall PCM level is scored separately with bounded gain",
+          "tilt_adjustment_db_per_octave": 2.6298362560484985,
+          "unexplained_level_db": 10.21693876941621
+        },
+        {
+          "candidate_id": "anatomy-1-source-0",
+          "mean_square": null,
+          "reason": "Invalid or clipped audio cannot constrain the model"
+        },
+        {
+          "candidate_id": "anatomy-1-source-1",
+          "mean_square": null,
+          "reason": "Invalid or clipped audio cannot constrain the model"
+        }
+      ],
+      "heldout_best_ids_scoring_only": [
+        "anatomy-0-source-1"
+      ],
+      "heldout_selected": [],
+      "objective": "multires-log-spectrum-v1",
+      "tied_best_ids": []
+    },
+    {
+      "candidates": [
+        {
+          "candidate_id": "anatomy-0-source-0",
+          "mean_square": 0.08905251882645404,
+          "per_pose": {
+            "a": {
+              "mean_square": 0.16807971291122,
+              "reason": null
+            },
+            "i": {
+              "mean_square": 0.010025324741688066,
+              "reason": null
+            }
+          }
+        },
+        {
+          "candidate_id": "anatomy-0-source-1",
+          "mean_square": 0.21858443327658944,
+          "per_pose": {
+            "a": {
+              "mean_square": 0.42355858910553856,
+              "reason": null
+            },
+            "i": {
+              "mean_square": 0.013610277447640318,
+              "reason": null
+            }
+          }
+        },
+        {
+          "candidate_id": "anatomy-1-source-0",
+          "mean_square": 10.53340641027982,
+          "per_pose": {
+            "a": {
+              "mean_square": 0.1899074125457164,
+              "reason": null
+            },
+            "i": {
+              "mean_square": 20.876905408013926,
+              "reason": null
+            }
+          }
+        },
+        {
+          "candidate_id": "anatomy-1-source-1",
+          "mean_square": 10.74489012554907,
+          "per_pose": {
+            "a": {
+              "mean_square": 0.4513256395140773,
+              "reason": null
+            },
+            "i": {
+              "mean_square": 21.03845461158406,
+              "reason": null
+            }
+          }
+        }
+      ],
+      "case": "outside-support",
+      "heldout_all_candidates": [
+        {
+          "candidate_id": "anatomy-0-source-0",
+          "mean_square": 0.21565543338132076,
+          "reason": null
+        },
+        {
+          "candidate_id": "anatomy-0-source-1",
+          "mean_square": 0.22182732054728432,
+          "reason": null
+        },
+        {
+          "candidate_id": "anatomy-1-source-0",
+          "mean_square": null,
+          "reason": "Invalid or clipped audio cannot constrain the model"
+        },
+        {
+          "candidate_id": "anatomy-1-source-1",
+          "mean_square": null,
+          "reason": "Invalid or clipped audio cannot constrain the model"
+        }
+      ],
+      "heldout_best_ids_scoring_only": [
+        "anatomy-0-source-0"
+      ],
+      "heldout_selected": [
+        {
+          "candidate_id": "anatomy-0-source-0",
+          "mean_square": 0.21565543338132076,
+          "reason": null
+        }
+      ],
+      "objective": "canonical-coarse-v1",
+      "tied_best_ids": [
+        "anatomy-0-source-0"
+      ]
+    },
+    {
+      "candidates": [
+        {
+          "candidate_id": "anatomy-0-source-0",
+          "mean_square": 0.17301523572048913,
+          "per_pose": {
+            "a": {
+              "adjusted_shape_rms_db": 7.056338084217796,
+              "components": {
+                "periodicity": 0.0003384501800225226,
+                "pitchHz": 1.3065997160262267e-08,
+                "spectral_shape": 1.383108532188402,
+                "unexplained_level": 0.0
+              },
+              "gain_adjustment_db": -2.217329042670805,
+              "mean_square": 0.34586174885860543,
+              "nuisance_bound_reached": false,
+              "nuisance_interpretation": "Empirical recording/source tilt and level adjustment, not measured source physiology or calibrated room response",
+              "raw_shape_rms_db": 7.059538381192849,
+              "reason": null,
+              "shape_normalization": "Unbounded constant log-power offset removed separately per resolution; overall PCM level is scored separately with bounded gain",
+              "tilt_adjustment_db_per_octave": 0.1556427284359731,
+              "unexplained_level_db": 0.0
+            },
+            "i": {
+              "adjusted_shape_rms_db": 0.14995325910057938,
+              "components": {
+                "periodicity": 3.6040345641544236e-05,
+                "pitchHz": 1.4239430658462209e-05,
+                "spectral_shape": 0.0006246105531912637,
+                "unexplained_level": 0.0
+              },
+              "gain_adjustment_db": -0.670918182289995,
+              "mean_square": 0.00016872258237281753,
+              "nuisance_bound_reached": false,
+              "nuisance_interpretation": "Empirical recording/source tilt and level adjustment, not measured source physiology or calibrated room response",
+              "raw_shape_rms_db": 0.20533061236277766,
+              "reason": null,
+              "shape_normalization": "Unbounded constant log-power offset removed separately per resolution; overall PCM level is scored separately with bounded gain",
+              "tilt_adjustment_db_per_octave": 0.10271493939192061,
+              "unexplained_level_db": 0.0
+            }
+          }
+        },
+        {
+          "candidate_id": "anatomy-0-source-1",
+          "mean_square": 0.15617241217986016,
+          "per_pose": {
+            "a": {
+              "adjusted_shape_rms_db": 6.701414045014035,
+              "components": {
+                "periodicity": 0.000703417933619558,
+                "pitchHz": 6.306929998343733e-10,
+                "spectral_shape": 1.2474708389642046,
+                "unexplained_level": 0.0
+              },
+              "gain_adjustment_db": -3.760750493367823,
+              "mean_square": 0.3120435643821293,
+              "nuisance_bound_reached": false,
+              "nuisance_interpretation": "Empirical recording/source tilt and level adjustment, not measured source physiology or calibrated room response",
+              "raw_shape_rms_db": 6.730854023058836,
+              "reason": null,
+              "shape_normalization": "Unbounded constant log-power offset removed separately per resolution; overall PCM level is scored separately with bounded gain",
+              "tilt_adjustment_db_per_octave": -0.46049316298377085,
+              "unexplained_level_db": 0.0
+            },
+            "i": {
+              "adjusted_shape_rms_db": 0.20530222603380457,
+              "components": {
+                "periodicity": 2.548946246789044e-05,
+                "pitchHz": 8.74478082854775e-06,
+                "spectral_shape": 0.0011708056670676496,
+                "unexplained_level": 0.0
+              },
+              "gain_adjustment_db": -0.7819788008834365,
+              "mean_square": 0.000301259977591022,
+              "nuisance_bound_reached": false,
+              "nuisance_interpretation": "Empirical recording/source tilt and level adjustment, not measured source physiology or calibrated room response",
+              "raw_shape_rms_db": 0.2662242329613038,
+              "reason": null,
+              "shape_normalization": "Unbounded constant log-power offset removed separately per resolution; overall PCM level is scored separately with bounded gain",
+              "tilt_adjustment_db_per_octave": 0.12411375210090954,
+              "unexplained_level_db": 0.0
+            }
+          }
+        },
+        {
+          "candidate_id": "anatomy-1-source-0",
+          "mean_square": 1.498061527983917,
+          "per_pose": {
+            "a": {
+              "adjusted_shape_rms_db": 7.70898100104954,
+              "components": {
+                "periodicity": 0.00024313173742111175,
+                "pitchHz": 2.9591969593796597e-08,
+                "spectral_shape": 1.650788557626188,
+                "unexplained_level": 0.0
+              },
+              "gain_adjustment_db": -2.4463920815732116,
+              "mean_square": 0.4127579297388947,
+              "nuisance_bound_reached": false,
+              "nuisance_interpretation": "Empirical recording/source tilt and level adjustment, not measured source physiology or calibrated room response",
+              "raw_shape_rms_db": 7.712941414971586,
+              "reason": null,
+              "shape_normalization": "Unbounded constant log-power offset removed separately per resolution; overall PCM level is scored separately with bounded gain",
+              "tilt_adjustment_db_per_octave": 0.1809753047686191,
+              "unexplained_level_db": 0.0
+            },
+            "i": {
+              "adjusted_shape_rms_db": 13.9593522656707,
+              "components": {
+                "periodicity": 0.011167307536331092,
+                "pitchHz": 0.0004808890852112484,
+                "spectral_shape": 5.412875435474604,
+                "unexplained_level": 4.908936872819611
+              },
+              "gain_adjustment_db": -24.0,
+              "mean_square": 2.583365126228939,
+              "nuisance_bound_reached": true,
+              "nuisance_interpretation": "Empirical recording/source tilt and level adjustment, not measured source physiology or calibrated room response",
+              "raw_shape_rms_db": 14.009288555877331,
+              "reason": null,
+              "shape_normalization": "Unbounded constant log-power offset removed separately per resolution; overall PCM level is scored separately with bounded gain",
+              "tilt_adjustment_db_per_octave": 0.8654133469829397,
+              "unexplained_level_db": -6.646836229017268
+            }
+          }
+        },
+        {
+          "candidate_id": "anatomy-1-source-1",
+          "mean_square": 1.5311627192444504,
+          "per_pose": {
+            "a": {
+              "adjusted_shape_rms_db": 7.522649020840136,
+              "components": {
+                "periodicity": 0.0004892394324100763,
+                "pitchHz": 5.462601712071041e-09,
+                "spectral_shape": 1.5719513414096407,
+                "unexplained_level": 0.0
+              },
+              "gain_adjustment_db": -3.987890721433523,
+              "mean_square": 0.3931101465761631,
+              "nuisance_bound_reached": false,
+              "nuisance_interpretation": "Empirical recording/source tilt and level adjustment, not measured source physiology or calibrated room response",
+              "raw_shape_rms_db": 7.549666295731216,
+              "reason": null,
+              "shape_normalization": "Unbounded constant log-power offset removed separately per resolution; overall PCM level is scored separately with bounded gain",
+              "tilt_adjustment_db_per_octave": -0.4672943464691251,
+              "unexplained_level_db": 0.0
+            },
+            "i": {
+              "adjusted_shape_rms_db": 14.18997212288678,
+              "components": {
+                "periodicity": 0.008890933128700377,
+                "pitchHz": 0.0005295100198667986,
+                "spectral_shape": 5.593203023564,
+                "unexplained_level": 5.074237700938383
+              },
+              "gain_adjustment_db": -24.0,
+              "mean_square": 2.6692152919127374,
+              "nuisance_bound_reached": true,
+              "nuisance_interpretation": "Empirical recording/source tilt and level adjustment, not measured source physiology or calibrated room response",
+              "raw_shape_rms_db": 14.19446210828162,
+              "reason": null,
+              "shape_normalization": "Unbounded constant log-power offset removed separately per resolution; overall PCM level is scored separately with bounded gain",
+              "tilt_adjustment_db_per_octave": 0.2614221340933078,
+              "unexplained_level_db": -6.757820603452377
+            }
+          }
+        }
+      ],
+      "case": "outside-support",
+      "heldout_all_candidates": [
+        {
+          "adjusted_shape_rms_db": 0.4987492183877528,
+          "candidate_id": "anatomy-0-source-0",
+          "components": {
+            "periodicity": 9.661659382620771e-05,
+            "pitchHz": 5.857846979441462e-06,
+            "spectral_shape": 0.0069097439678442885,
+            "unexplained_level": 0.0
+          },
+          "gain_adjustment_db": -3.113448401279804,
+          "mean_square": 0.0017530546021624844,
+          "nuisance_bound_reached": false,
+          "nuisance_interpretation": "Empirical recording/source tilt and level adjustment, not measured source physiology or calibrated room response",
+          "raw_shape_rms_db": 0.7191507712645918,
+          "reason": null,
+          "shape_normalization": "Unbounded constant log-power offset removed separately per resolution; overall PCM level is scored separately with bounded gain",
+          "tilt_adjustment_db_per_octave": 0.3793961407210848,
+          "unexplained_level_db": 0.0
+        },
+        {
+          "adjusted_shape_rms_db": 0.5112280415017045,
+          "candidate_id": "anatomy-0-source-1",
+          "components": {
+            "periodicity": 0.00010409307842906834,
+            "pitchHz": 1.4758087482522086e-05,
+            "spectral_shape": 0.007259836400490794,
+            "unexplained_level": 0.0
+          },
+          "gain_adjustment_db": -3.157657608944227,
+          "mean_square": 0.001844671891600596,
+          "nuisance_bound_reached": false,
+          "nuisance_interpretation": "Empirical recording/source tilt and level adjustment, not measured source physiology or calibrated room response",
+          "raw_shape_rms_db": 0.7346179412995084,
+          "reason": null,
+          "shape_normalization": "Unbounded constant log-power offset removed separately per resolution; overall PCM level is scored separately with bounded gain",
+          "tilt_adjustment_db_per_octave": 0.38631690690289094,
+          "unexplained_level_db": 0.0
+        },
+        {
+          "candidate_id": "anatomy-1-source-0",
+          "mean_square": null,
+          "reason": "Invalid or clipped audio cannot constrain the model"
+        },
+        {
+          "candidate_id": "anatomy-1-source-1",
+          "mean_square": null,
+          "reason": "Invalid or clipped audio cannot constrain the model"
+        }
+      ],
+      "heldout_best_ids_scoring_only": [
+        "anatomy-0-source-0"
+      ],
+      "heldout_selected": [
+        {
+          "adjusted_shape_rms_db": 0.5112280415017045,
+          "candidate_id": "anatomy-0-source-1",
+          "components": {
+            "periodicity": 0.00010409307842906834,
+            "pitchHz": 1.4758087482522086e-05,
+            "spectral_shape": 0.007259836400490794,
+            "unexplained_level": 0.0
+          },
+          "gain_adjustment_db": -3.157657608944227,
+          "mean_square": 0.001844671891600596,
+          "nuisance_bound_reached": false,
+          "nuisance_interpretation": "Empirical recording/source tilt and level adjustment, not measured source physiology or calibrated room response",
+          "raw_shape_rms_db": 0.7346179412995084,
+          "reason": null,
+          "shape_normalization": "Unbounded constant log-power offset removed separately per resolution; overall PCM level is scored separately with bounded gain",
+          "tilt_adjustment_db_per_octave": 0.38631690690289094,
+          "unexplained_level_db": 0.0
+        }
+      ],
+      "objective": "multires-log-spectrum-v1",
+      "tied_best_ids": [
+        "anatomy-0-source-1"
+      ]
+    },
+    {
+      "candidates": [
+        {
+          "candidate_id": "anatomy-0-source-0",
+          "mean_square": null,
+          "per_pose": {
+            "a": {
+              "mean_square": null,
+              "reason": "Insufficient canonical descriptors"
+            },
+            "i": {
+              "mean_square": null,
+              "reason": "Insufficient canonical descriptors"
+            }
+          }
+        },
+        {
+          "candidate_id": "anatomy-0-source-1",
+          "mean_square": null,
+          "per_pose": {
+            "a": {
+              "mean_square": null,
+              "reason": "Insufficient canonical descriptors"
+            },
+            "i": {
+              "mean_square": null,
+              "reason": "Insufficient canonical descriptors"
+            }
+          }
+        },
+        {
+          "candidate_id": "anatomy-1-source-0",
+          "mean_square": null,
+          "per_pose": {
+            "a": {
+              "mean_square": null,
+              "reason": "Insufficient canonical descriptors"
+            },
+            "i": {
+              "mean_square": null,
+              "reason": "Insufficient canonical descriptors"
+            }
+          }
+        },
+        {
+          "candidate_id": "anatomy-1-source-1",
+          "mean_square": null,
+          "per_pose": {
+            "a": {
+              "mean_square": null,
+              "reason": "Insufficient canonical descriptors"
+            },
+            "i": {
+              "mean_square": null,
+              "reason": "Insufficient canonical descriptors"
+            }
+          }
+        }
+      ],
+      "case": "all-missing",
+      "heldout_all_candidates": [
+        {
+          "candidate_id": "anatomy-0-source-0",
+          "mean_square": null,
+          "reason": "Insufficient canonical descriptors"
+        },
+        {
+          "candidate_id": "anatomy-0-source-1",
+          "mean_square": null,
+          "reason": "Insufficient canonical descriptors"
+        },
+        {
+          "candidate_id": "anatomy-1-source-0",
+          "mean_square": null,
+          "reason": "Invalid or clipped audio cannot constrain the model"
+        },
+        {
+          "candidate_id": "anatomy-1-source-1",
+          "mean_square": null,
+          "reason": "Invalid or clipped audio cannot constrain the model"
+        }
+      ],
+      "heldout_best_ids_scoring_only": [],
+      "heldout_selected": [],
+      "objective": "canonical-coarse-v1",
+      "tied_best_ids": []
+    },
+    {
+      "candidates": [
+        {
+          "candidate_id": "anatomy-0-source-0",
+          "mean_square": null,
+          "per_pose": {
+            "a": {
+              "mean_square": null,
+              "reason": "Insufficient canonical descriptors"
+            },
+            "i": {
+              "mean_square": null,
+              "reason": "Insufficient canonical descriptors"
+            }
+          }
+        },
+        {
+          "candidate_id": "anatomy-0-source-1",
+          "mean_square": null,
+          "per_pose": {
+            "a": {
+              "mean_square": null,
+              "reason": "Insufficient canonical descriptors"
+            },
+            "i": {
+              "mean_square": null,
+              "reason": "Insufficient canonical descriptors"
+            }
+          }
+        },
+        {
+          "candidate_id": "anatomy-1-source-0",
+          "mean_square": null,
+          "per_pose": {
+            "a": {
+              "mean_square": null,
+              "reason": "Insufficient canonical descriptors"
+            },
+            "i": {
+              "mean_square": null,
+              "reason": "Insufficient canonical descriptors"
+            }
+          }
+        },
+        {
+          "candidate_id": "anatomy-1-source-1",
+          "mean_square": null,
+          "per_pose": {
+            "a": {
+              "mean_square": null,
+              "reason": "Insufficient canonical descriptors"
+            },
+            "i": {
+              "mean_square": null,
+              "reason": "Insufficient canonical descriptors"
+            }
+          }
+        }
+      ],
+      "case": "all-missing",
+      "heldout_all_candidates": [
+        {
+          "candidate_id": "anatomy-0-source-0",
+          "mean_square": null,
+          "reason": "Insufficient canonical descriptors"
+        },
+        {
+          "candidate_id": "anatomy-0-source-1",
+          "mean_square": null,
+          "reason": "Insufficient canonical descriptors"
+        },
+        {
+          "candidate_id": "anatomy-1-source-0",
+          "mean_square": null,
+          "reason": "Invalid or clipped audio cannot constrain the model"
+        },
+        {
+          "candidate_id": "anatomy-1-source-1",
+          "mean_square": null,
+          "reason": "Invalid or clipped audio cannot constrain the model"
+        }
+      ],
+      "heldout_best_ids_scoring_only": [],
+      "heldout_selected": [],
+      "objective": "multires-log-spectrum-v1",
+      "tied_best_ids": []
+    },
+    {
+      "candidates": [
+        {
+          "candidate_id": "identical-a",
+          "mean_square": 0.023388977554391458,
+          "per_pose": {
+            "a": {
+              "mean_square": 0.04672351670255996,
+              "reason": null
+            },
+            "i": {
+              "mean_square": 5.4438406222953424e-05,
+              "reason": null
+            }
+          }
+        },
+        {
+          "candidate_id": "identical-b",
+          "mean_square": 0.023388977554391458,
+          "per_pose": {
+            "a": {
+              "mean_square": 0.04672351670255996,
+              "reason": null
+            },
+            "i": {
+              "mean_square": 5.4438406222953424e-05,
+              "reason": null
+            }
+          }
+        }
+      ],
+      "case": "degeneracy",
+      "heldout_all_candidates": [
+        {
+          "candidate_id": "identical-a",
+          "mean_square": 36.686334714046396,
+          "reason": null
+        },
+        {
+          "candidate_id": "identical-b",
+          "mean_square": 36.686334714046396,
+          "reason": null
+        }
+      ],
+      "heldout_best_ids_scoring_only": [
+        "identical-a",
+        "identical-b"
+      ],
+      "heldout_selected": [
+        {
+          "candidate_id": "identical-a",
+          "mean_square": 36.686334714046396,
+          "reason": null
+        },
+        {
+          "candidate_id": "identical-b",
+          "mean_square": 36.686334714046396,
+          "reason": null
+        }
+      ],
+      "objective": "canonical-coarse-v1",
+      "tied_best_ids": [
+        "identical-a",
+        "identical-b"
+      ]
+    },
+    {
+      "candidates": [
+        {
+          "candidate_id": "identical-a",
+          "mean_square": 0.0302133253336199,
+          "per_pose": {
+            "a": {
+              "adjusted_shape_rms_db": 2.9468432669550264,
+              "components": {
+                "periodicity": 8.235347737639565e-05,
+                "pitchHz": 1.647245756894609e-08,
+                "spectral_shape": 0.2412190344443937,
+                "unexplained_level": 0.0
+              },
+              "gain_adjustment_db": 1.323888079716319,
+              "mean_square": 0.06032535109855691,
+              "nuisance_bound_reached": false,
+              "nuisance_interpretation": "Empirical recording/source tilt and level adjustment, not measured source physiology or calibrated room response",
+              "raw_shape_rms_db": 2.9917757916861505,
+              "reason": null,
+              "shape_normalization": "Unbounded constant log-power offset removed separately per resolution; overall PCM level is scored separately with bounded gain",
+              "tilt_adjustment_db_per_octave": 0.3782708848071611,
+              "unexplained_level_db": 0.0
+            },
+            "i": {
+              "adjusted_shape_rms_db": 0.12073956204166426,
+              "components": {
+                "periodicity": 2.162683535728016e-07,
+                "pitchHz": 3.639965537976631e-08,
+                "spectral_shape": 0.00040494560672258036,
+                "unexplained_level": 0.0
+              },
+              "gain_adjustment_db": 0.049461834673351746,
+              "mean_square": 0.00010129956868288323,
+              "nuisance_bound_reached": false,
+              "nuisance_interpretation": "Empirical recording/source tilt and level adjustment, not measured source physiology or calibrated room response",
+              "raw_shape_rms_db": 0.12104013181093111,
+              "reason": null,
+              "shape_normalization": "Unbounded constant log-power offset removed separately per resolution; overall PCM level is scored separately with bounded gain",
+              "tilt_adjustment_db_per_octave": -0.006242554334087932,
+              "unexplained_level_db": 0.0
+            }
+          }
+        },
+        {
+          "candidate_id": "identical-b",
+          "mean_square": 0.0302133253336199,
+          "per_pose": {
+            "a": {
+              "adjusted_shape_rms_db": 2.9468432669550264,
+              "components": {
+                "periodicity": 8.235347737639565e-05,
+                "pitchHz": 1.647245756894609e-08,
+                "spectral_shape": 0.2412190344443937,
+                "unexplained_level": 0.0
+              },
+              "gain_adjustment_db": 1.323888079716319,
+              "mean_square": 0.06032535109855691,
+              "nuisance_bound_reached": false,
+              "nuisance_interpretation": "Empirical recording/source tilt and level adjustment, not measured source physiology or calibrated room response",
+              "raw_shape_rms_db": 2.9917757916861505,
+              "reason": null,
+              "shape_normalization": "Unbounded constant log-power offset removed separately per resolution; overall PCM level is scored separately with bounded gain",
+              "tilt_adjustment_db_per_octave": 0.3782708848071611,
+              "unexplained_level_db": 0.0
+            },
+            "i": {
+              "adjusted_shape_rms_db": 0.12073956204166426,
+              "components": {
+                "periodicity": 2.162683535728016e-07,
+                "pitchHz": 3.639965537976631e-08,
+                "spectral_shape": 0.00040494560672258036,
+                "unexplained_level": 0.0
+              },
+              "gain_adjustment_db": 0.049461834673351746,
+              "mean_square": 0.00010129956868288323,
+              "nuisance_bound_reached": false,
+              "nuisance_interpretation": "Empirical recording/source tilt and level adjustment, not measured source physiology or calibrated room response",
+              "raw_shape_rms_db": 0.12104013181093111,
+              "reason": null,
+              "shape_normalization": "Unbounded constant log-power offset removed separately per resolution; overall PCM level is scored separately with bounded gain",
+              "tilt_adjustment_db_per_octave": -0.006242554334087932,
+              "unexplained_level_db": 0.0
+            }
+          }
+        }
+      ],
+      "case": "degeneracy",
+      "heldout_all_candidates": [
+        {
+          "adjusted_shape_rms_db": 9.268668428145107,
+          "candidate_id": "identical-a",
+          "components": {
+            "periodicity": 0.01177761822648556,
+            "pitchHz": 0.0003869462921892237,
+            "spectral_shape": 2.3863392897470526,
+            "unexplained_level": 30.70137132608961
+          },
+          "gain_adjustment_db": 24.0,
+          "mean_square": 8.274968795088835,
+          "nuisance_bound_reached": true,
+          "nuisance_interpretation": "Empirical recording/source tilt and level adjustment, not measured source physiology or calibrated room response",
+          "raw_shape_rms_db": 9.324568587967402,
+          "reason": null,
+          "shape_normalization": "Unbounded constant log-power offset removed separately per resolution; overall PCM level is scored separately with bounded gain",
+          "tilt_adjustment_db_per_octave": 0.7465584199351755,
+          "unexplained_level_db": 16.622645455366197
+        },
+        {
+          "adjusted_shape_rms_db": 9.268668428145107,
+          "candidate_id": "identical-b",
+          "components": {
+            "periodicity": 0.01177761822648556,
+            "pitchHz": 0.0003869462921892237,
+            "spectral_shape": 2.3863392897470526,
+            "unexplained_level": 30.70137132608961
+          },
+          "gain_adjustment_db": 24.0,
+          "mean_square": 8.274968795088835,
+          "nuisance_bound_reached": true,
+          "nuisance_interpretation": "Empirical recording/source tilt and level adjustment, not measured source physiology or calibrated room response",
+          "raw_shape_rms_db": 9.324568587967402,
+          "reason": null,
+          "shape_normalization": "Unbounded constant log-power offset removed separately per resolution; overall PCM level is scored separately with bounded gain",
+          "tilt_adjustment_db_per_octave": 0.7465584199351755,
+          "unexplained_level_db": 16.622645455366197
+        }
+      ],
+      "heldout_best_ids_scoring_only": [
+        "identical-a",
+        "identical-b"
+      ],
+      "heldout_selected": [
+        {
+          "adjusted_shape_rms_db": 9.268668428145107,
+          "candidate_id": "identical-a",
+          "components": {
+            "periodicity": 0.01177761822648556,
+            "pitchHz": 0.0003869462921892237,
+            "spectral_shape": 2.3863392897470526,
+            "unexplained_level": 30.70137132608961
+          },
+          "gain_adjustment_db": 24.0,
+          "mean_square": 8.274968795088835,
+          "nuisance_bound_reached": true,
+          "nuisance_interpretation": "Empirical recording/source tilt and level adjustment, not measured source physiology or calibrated room response",
+          "raw_shape_rms_db": 9.324568587967402,
+          "reason": null,
+          "shape_normalization": "Unbounded constant log-power offset removed separately per resolution; overall PCM level is scored separately with bounded gain",
+          "tilt_adjustment_db_per_octave": 0.7465584199351755,
+          "unexplained_level_db": 16.622645455366197
+        },
+        {
+          "adjusted_shape_rms_db": 9.268668428145107,
+          "candidate_id": "identical-b",
+          "components": {
+            "periodicity": 0.01177761822648556,
+            "pitchHz": 0.0003869462921892237,
+            "spectral_shape": 2.3863392897470526,
+            "unexplained_level": 30.70137132608961
+          },
+          "gain_adjustment_db": 24.0,
+          "mean_square": 8.274968795088835,
+          "nuisance_bound_reached": true,
+          "nuisance_interpretation": "Empirical recording/source tilt and level adjustment, not measured source physiology or calibrated room response",
+          "raw_shape_rms_db": 9.324568587967402,
+          "reason": null,
+          "shape_normalization": "Unbounded constant log-power offset removed separately per resolution; overall PCM level is scored separately with bounded gain",
+          "tilt_adjustment_db_per_octave": 0.7465584199351755,
+          "unexplained_level_db": 16.622645455366197
+        }
+      ],
+      "objective": "multires-log-spectrum-v1",
+      "tied_best_ids": [
+        "identical-a",
+        "identical-b"
+      ]
+    }
+  ],
+  "completed_at": "2026-09-11T01:20:28.351975+00:00",
+  "evidence_source": "development-fixture",
+  "failures": [],
+  "frozen_calibration_rankings_sha256": "431dac43400ad3469bee389484f1eee99aa679627c29be1ca421a16902e8fe76",
+  "frozen_prediction_bank_sha256": "0ed21ac57cd7ad400e2c0e7c1a0ed490e17bcdf4dfac39b92817994ba805744d",
+  "limitations": [
+    "Both objectives reuse exactly the same synthesized forecasts.",
+    "Held-out e is a new vowel in the same native speaker, not a held-out human.",
+    "Compare within-objective rankings and failures, not unlike numerical objective scales.",
+    "Four candidates cannot establish recovery, uniqueness or coverage of real anatomy.",
+    "Coarse and spectral objectives each use the production canonical quality gate."
+  ],
+  "native_provenance": {
+    "build_type": "Release",
+    "geometry_basis": "vtl-anatomy-params-reconstructed-v1",
+    "library_sha256": "0d064eab49a06ede2f16f07479544f1b2c196873465ba9ef53694b6540beed0a",
+    "patch_sha256": "8f3df0996b4444cd17810ea3f8e48b4feac2d86d51e06036ce9d4c676f8ad1ab",
+    "sanitized": false,
+    "speaker_sha256": "e1e592dae13991e981c17bcc326cccc7bce3705e3862eb77fdeaeb238418a503",
+    "upstream_revision": "df30392f18dc5e175b577c3ba734caaa65a3927f"
+  },
+  "objective_policy": {
+    "config": {
+      "frequency_grid_hz": [
+        80.0,
+        205.71428571428572,
+        331.42857142857144,
+        457.1428571428571,
+        582.8571428571429,
+        708.5714285714286,
+        834.2857142857142,
+        960.0,
+        1085.7142857142858,
+        1211.4285714285713,
+        1337.142857142857,
+        1462.857142857143,
+        1588.5714285714284,
+        1714.2857142857142,
+        1840.0,
+        1965.7142857142856,
+        2091.4285714285716,
+        2217.142857142857,
+        2342.8571428571427,
+        2468.5714285714284,
+        2594.285714285714,
+        2720.0,
+        2845.714285714286,
+        2971.428571428571,
+        3097.142857142857,
+        3222.8571428571427,
+        3348.5714285714284,
+        3474.285714285714,
+        3600.0,
+        3725.7142857142853,
+        3851.428571428571,
+        3977.142857142857,
+        4102.857142857143,
+        4228.571428571428,
+        4354.285714285714,
+        4480.0,
+        4605.714285714285,
+        4731.428571428572,
+        4857.142857142857,
+        4982.857142857142,
+        5108.571428571428,
+        5234.285714285714,
+        5360.0,
+        5485.714285714285,
+        5611.428571428572,
+        5737.142857142857,
+        5862.857142857142,
+        5988.571428571428,
+        6114.285714285714,
+        6240.0,
+        6365.714285714285,
+        6491.428571428572,
+        6617.142857142857,
+        6742.857142857142,
+        6868.571428571428,
+        6994.285714285714,
+        7120.0,
+        7245.714285714285,
+        7371.428571428571,
+        7497.142857142857,
+        7622.857142857142,
+        7748.571428571428,
+        7874.285714285714,
+        8000.0
+      ],
+      "frequency_interpolation": "linear-power-density",
+      "gain_adjustment_bounds_db": [
+        -24.0,
+        24.0
+      ],
+      "hop_fraction": 0.25,
+      "interpretation": "engineering discrepancy with bounded nuisance projection, not calibrated likelihood",
+      "periodicity_scale": 0.1,
+      "pitch_scale_hz": 20.0,
+      "pooling": "mean-one-sided-power-density-over-complete-windows",
+      "power_floor_fs2_per_hz": 1e-14,
+      "reference_sample_rate_hz": 44100,
+      "reference_window_samples": [
+        512,
+        1024,
+        2048
+      ],
+      "shape_scale_db": 6.0,
+      "tilt_adjustment_bounds_db_per_octave": [
+        -6.0,
+        6.0
+      ],
+      "unexplained_level_scale_db": 3.0,
+      "version": "multires-log-spectrum-v1",
+      "window": "periodic-hann"
+    },
+    "implementation_sha256": "d10089bdf97c0347dbf87cbe65938fa25e8ab07d89f6d506eb6e7fc7c1bf0357",
+    "numpy_version": "2.2.6"
+  },
+  "protocol_sha256": "9ed4e2a4f92be009a7adaab7a3bdbcd84bde0a382086ba09b46fd387f667c1a4",
+  "uncertainty_calibration": "not_measured"
+}
