@@ -19,6 +19,26 @@ from science.scripts.app_recompute import recompute_session, source_score, visua
 from science.scripts.recompute_session_score import digest
 
 
+def worker_files(root):
+    """Hash every worker file. SQLite's -shm index and an empty -wal hold no data, and the job
+    scheduler opens and closes jobs.sqlite3 about every 30 ms, creating and deleting them, so they
+    are skipped, as is a sidecar deleted between listing and reading. A -wal with content is a
+    write and is compared like any other file."""
+    files = {}
+    for path in sorted(root.rglob('*')):
+        if not path.is_file() or path.name.endswith('-shm'):
+            continue
+        try:
+            data = path.read_bytes()
+        except FileNotFoundError:
+            if path.name.endswith(('-wal', '-journal')):
+                continue
+            raise
+        if path.name.endswith('-wal') and not data:
+            continue
+        files[str(path)] = hashlib.sha256(data).hexdigest()
+    return files
+
 @pytest.fixture(scope='module')
 def batch_evidence(tmp_path_factory):
     root = tmp_path_factory.mktemp('batch-recompute')
@@ -237,7 +257,7 @@ def test_app_runner_reads_real_http_worker_and_only_persists_redacted_report(bat
             (tmp_path/'science-runs/run-synthetic/summary.json').write_text(json.dumps({'sessionId':'synthetic-replay-session'}))
             output=tmp_path/'replay-verifications/replay-11111111-1111-4111-8111-111111111111'; output.mkdir(parents=True)
             (output/'request.json').write_text(json.dumps({'runId':'run-synthetic','sessionId':'synthetic-replay-session','maxOperations':16}))
-            worker=lambda:{str(p):hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted((root/'worker').rglob('*')) if p.is_file()}
+            worker=lambda:worker_files(root/'worker')
             retained=worker()
             report=run(tmp_path,output)
             assert report['counts']['matched']==report['counts']['policyVerified']==2, report
