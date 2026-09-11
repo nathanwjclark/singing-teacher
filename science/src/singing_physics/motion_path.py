@@ -5,7 +5,9 @@ import json
 import math
 import re
 
-VERSION='motion-conditional-path-1'
+VERSION='motion-conditional-path-2'
+OBJECTIVE_GAP=.1
+REFERENCE_INTERVAL_SECONDS=.25
 PENALTIES=(0.,.1,1.)
 MAX_LINK_GAP_SECONDS=.5
 
@@ -20,14 +22,16 @@ def couple_motion_hypotheses(windows):
 
     This objective is a heuristic sum of fixed-scale discrepancies, not likelihood.
     """
-    if not isinstance(windows,list) or len(windows)>3:raise ValueError('At most3 predeclared windows supported')
+    if not isinstance(windows,list) or len(windows)>120:raise ValueError('At most120 predeclared windows supported')
     result={'kind':VERSION,'status':'unavailable','settings':{'penalties':list(PENALTIES),'maxLinkGapSeconds':MAX_LINK_GAP_SECONDS,
         'JA_difference_scale_deg':1.,'log2_gain_difference_scale':1.,'anatomyScope':'fixed-across-entire-recording',
         'objective':'sum fixed-scale PCM weighted mean-square discrepancies + lambda * sum squared JA/gain differences',
-        'transitionInterpretation':'dimensionless engineering regularizer; not calibrated motion dynamics or posterior'},
+        'transitionInterpretation':'elapsed-time-scaled engineering regularizer; not calibrated motion dynamics or posterior',
+        'referenceIntervalSeconds':REFERENCE_INTERVAL_SECONDS,'objectiveGapTolerance':OBJECTIVE_GAP,
+        'uncertaintyInterpretation':'minimum complete-path objective gaps; sensitivity sets, not confidence intervals or probabilities'},
         'inputSha256':hashlib.sha256(json.dumps(windows,sort_keys=True,separators=(',',':'),allow_nan=True).encode()).hexdigest(),'inputHashScope':'Python canonical JSON including explicit nonfinite tokens if supplied','segments':[],'excludedWindows':[],'independent':[],'sensitivity':[],
-        'additionalSynthesisCalls':0,'modelUpdated':False,'limitations':['Sparse observed frames only; no interpolation or audiovisual correspondence.',
-            'Source F0 is conditioned on each measured frame; remaining source assumptions inherited unchanged.',
+        'additionalSynthesisCalls':0,'modelUpdated':False,'limitations':['Discrete observed frames only; unmeasured intervals are not interpolated or aligned to video.',
+            'Source F0 uses the declared per-frame pitch bank; remaining source assumptions are inherited unchanged.',
             'Scores are not probabilities; low cost does not identify anatomy or observed JA.']}
     parsed=[];signature=None;previous=None;segments=[];current=[]
     for position,window in enumerate(windows):
@@ -87,31 +91,73 @@ def couple_motion_hypotheses(windows):
         'transitionCount':len(segment)-1,'acousticFrames':[{'position':n['position'],'startSeconds':n['start'],'endSeconds':n['end']} for n in segment]} for segment in segments]
     shared=set.intersection(*[{r['anatomySha256'] for r in node['rows']} for node in parsed])
     if not shared:result['reason']='No single anatomy has valid candidates across every usable window';return result
+    def jump(prior,row,interval):
+        return ((row['JA']-prior['JA'])**2+math.log2(row['gain']/prior['gain'])**2)*REFERENCE_INTERVAL_SECONDS/interval
     for penalty in PENALTIES:
-        alternatives=[]
+        alternatives=[];marginals=[];transition_marginals=[]
         for anatomy_hash in sorted(shared):
-            selected=[];total=0.;data_total=0.;transition_total=0.
+            analyses=[]
             for segment in segments:
-                states=[]
-                for node in segment:
-                    choices=sorted([r for r in node['rows'] if r['anatomySha256']==anatomy_hash],key=lambda r:r['candidateId'])
-                    next_states=[]
-                    for row in choices:
-                        if not states:best=(row['dataCost'],[{'position':node['position'],**row}],row['dataCost'],0.)
+                choices=[sorted([r for r in node['rows'] if r['anatomySha256']==anatomy_hash],key=lambda r:r['candidateId']) for node in segment]
+                forward=[];parents=[]
+                for index,rows in enumerate(choices):
+                    costs=[];pointers=[]
+                    for row in rows:
+                        if index==0:costs.append(row['dataCost']);pointers.append(None)
                         else:
-                            candidates=[]
-                            for cost,path,data_cost,transition_cost in states:
-                                prior=path[-1];jump=(row['JA']-prior['JA'])**2+(math.log2(row['gain']/prior['gain']))**2
-                                candidates.append((cost+row['dataCost']+penalty*jump,path+[{'position':node['position'],**row}],data_cost+row['dataCost'],transition_cost+jump))
-                            best=min(candidates,key=lambda s:(s[0],[r['candidateId'] for r in s[1]]))
-                        next_states.append(best)
-                    states=next_states
-                cost,path,data_cost,transition_cost=min(states,key=lambda s:(s[0],[r['candidateId'] for r in s[1]]))
-                selected.extend(path);total+=cost;data_total+=data_cost;transition_total+=transition_cost
+                            interval=segment[index]['start']-segment[index-1]['start']
+                            values=[forward[index-1][j]+penalty*jump(previous,row,interval) for j,previous in enumerate(choices[index-1])]
+                            chosen=min(range(len(values)),key=lambda j:(values[j],choices[index-1][j]['candidateId']))
+                            costs.append(values[chosen]+row['dataCost']);pointers.append(chosen)
+                    forward.append(costs);parents.append(pointers)
+                backward=[[0.]*len(rows) for rows in choices]
+                for index in range(len(choices)-2,-1,-1):
+                    interval=segment[index+1]['start']-segment[index]['start']
+                    backward[index]=[min(penalty*jump(row,next_row,interval)+next_row['dataCost']+backward[index+1][j]
+                        for j,next_row in enumerate(choices[index+1])) for row in choices[index]]
+                best_index=min(range(len(forward[-1])),key=lambda j:(forward[-1][j],choices[-1][j]['candidateId']))
+                optimum=forward[-1][best_index];path=[]
+                for index in range(len(choices)-1,-1,-1):
+                    node=segment[index];row=choices[index][best_index]
+                    path.append({'position':node['position'],'startSeconds':node['start'],'endSeconds':node['end'],**row})
+                    best_index=parents[index][best_index]
+                path.reverse()
+                data=sum(row['dataCost'] for row in path)
+                transition=sum(jump(path[i-1],path[i],path[i]['startSeconds']-path[i-1]['startSeconds']) for i in range(1,len(path)))
+                analyses.append((segment,choices,forward,backward,path,optimum,data,transition))
+            total=sum(entry[5] for entry in analyses);data_total=sum(entry[6] for entry in analyses);transition_total=sum(entry[7] for entry in analyses)
+            selected=[row for entry in analyses for row in entry[4]]
             alternatives.append({'anatomySha256':anatomy_hash,'anatomy':selected[0]['anatomy'],'objective':total,'dataCost':data_total,
                 'unweightedTransitionCost':transition_total,'weightedTransitionCost':penalty*transition_total,'path':selected})
+            for segment,choices,forward,backward,path,optimum,_,_ in analyses:
+                for index,rows in enumerate(choices):
+                    for j,row in enumerate(rows):
+                        marginals.append({'position':segment[index]['position'],**row,'minimumPathObjective':total-optimum+forward[index][j]+backward[index][j]})
+                    if index:
+                        interval=segment[index]['start']-segment[index-1]['start']
+                        for prior_index,prior in enumerate(choices[index-1]):
+                            for j,row in enumerate(rows):
+                                transition_marginals.append({'fromPosition':segment[index-1]['position'],'toPosition':segment[index]['position'],
+                                    'anatomySha256':anatomy_hash,'JAChange':row['JA']-prior['JA'],'gainRatio':row['gain']/prior['gain'],
+                                    'minimumPathObjective':total-optimum+forward[index-1][prior_index]+penalty*jump(prior,row,interval)+row['dataCost']+backward[index][j]})
         alternatives.sort(key=lambda r:(r['objective'],r['anatomySha256']))
-        result['sensitivity'].append({'lambda':penalty,'alternatives':alternatives,'best':alternatives[0],'tiedBestAnatomyHashes':[r['anatomySha256'] for r in alternatives if r['objective']==alternatives[0]['objective']]})
+        best=alternatives[0]['objective'];uncertainty=[];transitions=[]
+        for node in parsed:
+            all_rows=[{**row,'objectiveGap':max(0.,row['minimumPathObjective']-best)} for row in marginals if row['position']==node['position']]
+            support=[row for row in all_rows if row['objectiveGap']<=OBJECTIVE_GAP+1e-10]
+            uncertainty.append({'position':node['position'],'startSeconds':node['start'],'endSeconds':node['end'],
+                'JASet':sorted({row['JA'] for row in support}),'gainSet':sorted({row['gain'] for row in support}),
+                'anatomyCount':len({row['anatomySha256'] for row in support}),'candidates':all_rows})
+        for segment in segments:
+            for prior,node in zip(segment,segment[1:]):
+                rows=[row for row in transition_marginals if row['fromPosition']==prior['position'] and row['toPosition']==node['position']
+                    and row['minimumPathObjective']-best<=OBJECTIVE_GAP+1e-10]
+                transitions.append({'fromPosition':prior['position'],'toPosition':node['position'],
+                    'JAChangeSet':sorted({row['JAChange'] for row in rows}),'gainRatioSet':sorted({row['gainRatio'] for row in rows}),
+                    'admissiblePairCount':len(rows),'intervalSeconds':node['start']-prior['start']})
+        result['sensitivity'].append({'lambda':penalty,'alternatives':alternatives,'best':alternatives[0],
+            'tiedBestAnatomyHashes':[r['anatomySha256'] for r in alternatives if abs(r['objective']-best)<=1e-12],
+            'uncertainty':uncertainty,'transitionUncertainty':transitions})
     result['status']='available' if any(len(segment)>1 for segment in segments) else 'no-temporal-links'
     result['includedWindowCount']=len(parsed);result['partialEvidence']=bool(result['excludedWindows'])
     return result

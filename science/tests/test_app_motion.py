@@ -11,9 +11,11 @@ sys.path.insert(0,str(Path(__file__).parents[1]/'scripts'))
 import app_motion
 
 
-def encoded_capture(data,temporary,silent=False):
-    with Engine() as engine:
-        audio,_=synthesize_phonation(engine,pose='a',JA=-3,F0=180,PR=8000,PS=0,duration_s=1.)
+def encoded_capture(data,temporary,silent=False,pcm=None):
+    if pcm is None:
+        with Engine() as engine:
+            audio,_=synthesize_phonation(engine,pose='a',JA=-3,F0=180,PR=8000,PS=0,duration_s=1.)
+    else:audio=pcm.copy()
     if silent:audio[:]=0
     raw=temporary/'source.f32';raw.write_bytes(audio.astype('<f4').tobytes());video=temporary/'source.webm'
     app_motion.process([shutil.which('ffmpeg'),'-v','error','-f','f32le','-ar','44100','-ac','1','-i',str(raw),'-c:a','libopus',str(video)])
@@ -37,15 +39,16 @@ def test_encoded_native_pcm_real_decode_canonical_fit_unchanged_model(tmp_path,m
         (data/'science-current.json').write_text(json.dumps(dict(status='succeeded',runId='run-test')))
         run=data/'science-runs'/'run-test';run.mkdir(parents=True);(run/'summary.json').write_text(json.dumps(dict(sessionId='session')))
         result=app_motion.run(data,identity,'a',tmp_path/'analysis')
-        # 3 windows x (3 JA x 2 gains) candidates x 2 models, with the two gains sharing
-        # one waveform: 18 native calls (36 before gain-only synthesis reuse).
-        assert result['status']=='available' and result['actualSynthesisCalls']==18
-        assert len(result['windows'])==3 and all(w['status']=='scored' for w in result['windows'])
+        assert result['status']=='available' and 0<result['actualSynthesisCalls']<=9
+        assert len(result['windows'])==4 and all(w['status']=='scored' for w in result['windows'])
         assert result['decode']['sampleRateHz']==48000
+        assert result['trajectoryBank']['synthesisRequests']<=36
+        assert len(result['trajectoryBank']['pitchAnchorsHz'])<=3
+        assert all(len(row['uncertainty'])==4 for row in result['temporalAnalysis']['sensitivity'])
         assert result['temporalAnalysis']['status']=='available'
         assert result['temporalAnalysis']['additionalSynthesisCalls']==0
         assert len(result['temporalAnalysis']['sensitivity'])==3
-        assert all(len(s['best']['path'])==3 for s in result['temporalAnalysis']['sensitivity'])
+        assert all(len(s['best']['path'])==4 for s in result['temporalAnalysis']['sensitivity'])
         assert backend.execute({'action':'state'})['state']['snapshot']==model
         assert result['visualSync']=='unknown' and not result['modelUpdated']
         monkeypatch.setattr(app_motion,'fit_pcm',lambda *args,**kwargs:{'joint':{'best':None,'candidates':[{'status':'missing_predicted_features'}]},'actual_synthesis_calls':0})
@@ -54,7 +57,7 @@ def test_encoded_native_pcm_real_decode_canonical_fit_unchanged_model(tmp_path,m
         silent_dir=tmp_path/'silent-source';silent_dir.mkdir()
         silent_id=encoded_capture(data,silent_dir,silent=True)
         silence=app_motion.run(data,silent_id,'a',tmp_path/'silence')
-        assert silence['status']=='insufficient-quality' and silence['actualSynthesisCalls']==0 and len(silence['windows'])==3
+        assert silence['status']=='insufficient-quality' and silence['actualSynthesisCalls']==0 and len(silence['windows'])==4
         assert all(w['status']=='unavailable' for w in silence['windows'])
     finally:server.shutdown();thread.join();server.server_close()
 

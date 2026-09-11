@@ -2,6 +2,7 @@
 import argparse
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -16,6 +17,7 @@ import numpy as np
 from live_capture_jobs import HTTPBackend
 from singing_physics.engine import Engine
 from singing_physics.pcm_inverse import extract_pcm,fit_pcm
+from singing_physics.motion_trajectory import window_offsets,score_forward_bank,MAX_SYNTHESIS_CALLS,VERSION
 
 
 def sha(raw):return hashlib.sha256(raw).hexdigest()
@@ -62,8 +64,8 @@ def run(data_root,capture_id,pose,output,expected_model_id=None):
     result={'kind':'motion-pcm-fit-1','captureId':capture_id,'pose':pose,'status':'unavailable','windows':[],
         'sourceHashes':{'media':mh,'record':rh,'receipt':sha(sb)},'actualSynthesisCalls':0,'visualSync':'unknown','modelUpdated':False,
         'assumptions':['Explicit pose is user-declared, not measured execution.','Recorded PCM decoded at original declared sample rate; no normalization or observed resampling.',
-        'Candidate JA and digital gains are hypotheses; source controls other than measured pitch use fixed native defaults.',
-        'No calibrated2D geometry, audiovisual synchronization, continuous motor trajectory or physiology identification.','Input is caller-declared ordinary singing without external excitation.']}
+        'Candidate JA and digital gains are hypotheses; source pitch uses a declared bounded anchor bank and other source controls use fixed native defaults.',
+        'Audio-only conditional trajectory; no calibrated2D geometry, audiovisual synchronization or physiology identification.','Input is caller-declared ordinary singing without external excitation.']}
     ffmpeg=os.environ.get('SINGING_FFMPEG') or shutil.which('ffmpeg');ffprobe=os.environ.get('SINGING_FFPROBE') or shutil.which('ffprobe')
     if not ffmpeg or not ffprobe:
         result['reason']='ffmpeg/ffprobe unavailable';write(output/'summary.json',result);return result
@@ -91,16 +93,21 @@ def run(data_root,capture_id,pose,output,expected_model_id=None):
     if not len(samples) or not np.isfinite(samples).all():raise ValueError('Invalid decoded PCM')
     channel=int(np.argmax(np.mean(samples[::8].astype(float)**2,axis=0)));mono=samples[:,channel].copy();chunk_size=round(.25*rate);frame_start=round(.1*rate);frame_size=8192 if rate==96000 else 4096
     result['decode']={'sampleRateHz':rate,'channelCount':channels,'selectedChannel':channel+1,'decodedSampleCount':len(mono),'pcmSha256':sha(mono.astype('<f4').tobytes()),'codec':stream.get('codec_name'),'durationSeconds':duration,'policy':'highest energy every eighth sample; earliest tie'}
-    # Three predeclared disjoint quarter-second excerpts; short recordings retain unavailable slots.
-    offsets=[0,max(0,(len(mono)-chunk_size)//2),max(0,len(mono)-chunk_size)];used=[]
+    # Grid selection uses only duration, never the agreement of a window with a model.
+    offsets=window_offsets(len(mono),rate,chunk_size);used=[]
+    result['analysisPolicy']=VERSION
     with Engine() as engine:
         from singing_physics import engine as engine_module,pcm_inverse as pcm_module
-        result['sourceConditions']={'sourceInfo':engine.source_info,'fixedPressurePa':8000,'pressureRampSeconds':.025,'F0':'observed canonical pitch per excerpt','otherControls':'native source_info defaults','engineSha256':sha(Path(engine_module.__file__).read_bytes()),'fitterSha256':sha(Path(pcm_module.__file__).read_bytes()),'nativeProvenance':engine.provenance}
+        result['sourceConditions']={'sourceInfo':engine.source_info,'fixedPressurePa':8000,'pressureRampSeconds':.025,'F0':'minimum, median and maximum observed voiced pitch anchors; nearest within100cents','otherControls':'native source_info defaults','engineSha256':sha(Path(engine_module.__file__).read_bytes()),'fitterSha256':sha(Path(pcm_module.__file__).read_bytes()),'nativeProvenance':engine.provenance}
         native_synthesize=engine.synthesize
+        synthesis_cache={}
         def counted_synthesis(*args,**kwargs):
-            if result['actualSynthesisCalls']>=108:raise RuntimeError('Hard aggregate motion synthesis budget exhausted')
-            result['actualSynthesisCalls']+=1
-            return native_synthesize(*args,**kwargs)
+            key=json.dumps([engine.anatomy(),args,kwargs],sort_keys=True,separators=(',',':'),allow_nan=False)
+            if key not in synthesis_cache:
+                if result['actualSynthesisCalls']>=MAX_SYNTHESIS_CALLS:raise RuntimeError('Hard aggregate motion synthesis budget exhausted')
+                result['actualSynthesisCalls']+=1
+                synthesis_cache[key]=native_synthesize(*args,**kwargs)
+            return synthesis_cache[key].copy()
         engine.synthesize=counted_synthesis
         for index,offset in enumerate(offsets):
             row={'index':index,'sourceStartSample':offset,'startSample':offset,'sampleRateHz':rate,'status':'unavailable','fit':None};result['windows'].append(row)
@@ -113,13 +120,10 @@ def run(data_root,capture_id,pose,output,expected_model_id=None):
             measurement=canonical['measurement'];values={m['name']:m['value'] for m in measurement['measurements']}
             pitch=next((m['value'] for m in measurement['measurements'] if m['name']=='pitchHz'),None)
             if pitch is None or not 65<=pitch<=1000 or measurement['quality']['missingReason'] or set(measurement['quality']['flags'])&{'clipping','invalid','dropped','low-signal-to-noise'}:row['reason']='Unvoiced or invalid canonical window';continue
-            identity=f'window-{index}';doc={'schema_version':'0.1.0','kind':'canonical_pcm_observations','trials':[dict(id=identity,pose=pose,measurement=measurement,sample_rate_hz=rate,frame_start_sample=frame_start,frame_size=frame_size,duration_s=.25)]}
-            candidates=[dict(candidate_id=f'{h["hypothesis_id"]}:JA{ja}:gain{gain}',anatomy=h['anatomy'],trials={identity:dict(JA=ja,f0_hz=pitch,gain=gain)}) for h in selected for ja in (-4.,-3.,-2.) for gain in (1.,4.)]
-            try:
-                fitted=fit_pcm(engine,doc,candidates=candidates,max_synthesis_calls=len(candidates)*2)
-            except (ValueError,RuntimeError) as error:
-                row.update(status='failed',reason=str(error));continue
-            row.update(status='scored' if fitted['joint']['best'] is not None else 'insufficient-quality',fit=fitted,reason=None if fitted['joint']['best'] is not None else 'No complete scorable candidate prediction')
+            if any(values.get(name) is None or not math.isfinite(values[name]) for name in ('dbfs','centroidHz','flatness','pitchHz','periodicity')):
+                row['reason']='Incomplete canonical objective descriptors';continue
+            row.update(status='measured',reason=None)
+        result['trajectoryBank']=score_forward_bank(engine,result['windows'],selected,pose,rate,frame_start,frame_size,fitter=fit_pcm)
     from singing_physics.motion_path import couple_motion_hypotheses
     result['temporalAnalysis']=couple_motion_hypotheses(result['windows'])
     result['status']='available' if any(w['status']=='scored' for w in result['windows']) else 'insufficient-quality'
