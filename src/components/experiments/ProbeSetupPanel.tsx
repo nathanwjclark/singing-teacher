@@ -83,7 +83,7 @@ export function ProbeSetupPanel({ status, busy, onSaved }: { status?: ProbeSetup
     <p>Import a calibration package from your measurement workflow and its original evidence files. The app checks that each file matches the package's SHA-256 hash and that the package fits this capture. Hashing is not measurement: it does not show that the loudspeaker, microphone, placement or timing values are physically correct.</p>
     {!capture && <p>Analyze the latest probe first to retain and identify its original capture.</p>}
     {capture && <p>Capture: {capture.captureId} · {capture.provenance}. {capture.provenance === 'software-fixture' && <strong>Generated software evidence; not a human or device measurement.</strong>}
-      {capture.declaredProvenance !== capture.provenance && ` Its manifest says ${capture.declaredProvenance}, but its own fields do not support that label, so it is treated as a human recording.`}</p>}
+      {capture.declaredProvenance !== capture.provenance && ` Its manifest says ${capture.declaredProvenance}, but its own fields or its USB pull receipt do not support that label, so it is treated as a human recording.`}</p>}
     {human && <p role="note">Human recordings cannot become eligible for scientific fitting yet. A calibration package is declared, not measured, and the app has no step that derives calibration from measurement recordings (for example a reference-microphone sweep). The review above stays available.</p>}
     {otherCapture && <p>The saved setup {last?.setupId} was made for an earlier capture.</p>}
     {status?.legacyConfiguration && <p>An existing private configuration is available. Saving here replaces the active setup while preserving its files.</p>}

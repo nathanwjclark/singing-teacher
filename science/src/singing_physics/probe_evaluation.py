@@ -15,11 +15,14 @@ from .probe_inverse import _parse_record
 
 
 def evaluate_probe(forecast, *, expected_digest, document, receipt, configuration_json,
-                   original_artifacts, supplemental_artifacts, capture_started_at):
+                   original_artifacts, supplemental_artifacts, capture_started_at, pull_artifacts=None):
     """Re-run canonical DSP from supplied bytes; report errors, never update anatomy.
 
     Capture time is a caller assertion, not hardware-authenticated chronology.
     Artifact maps contain relative paths to base64 bytes, never filesystem paths.
+    `pull_artifacts` maps `usb-receipt.json` and `original.zip` to base64 bytes. An app import records the hash of the
+    pull receipt it read (`receipt_sha256`), so, as for the fit's re-import, it is replayed with that receipt and must
+    reproduce the hash. A submission without a pull receipt is judged by the manifest-only source rule.
     """
     if not isinstance(forecast, Artifact) or forecast.sha256 != expected_digest:
         raise ValueError('Stale forecast digest')
@@ -31,6 +34,10 @@ def evaluate_probe(forecast, *, expected_digest, document, receipt, configuratio
         raise ValueError('Capture must follow forecast seal and precede receipt')
     if prior['configuration_sha256'] != hashlib.sha256(_encode(prior['configuration'])).hexdigest():
         raise ValueError('Forecast configuration digest mismatch')
+    if isinstance(receipt, dict) and receipt.get('receipt_sha256') is not None and pull_artifacts is None:
+        raise ValueError('This import was made from a USB pull; supply its pull receipt and original archive')
+    if pull_artifacts is not None and (not isinstance(pull_artifacts, dict) or set(pull_artifacts) != {'usb-receipt.json', 'original.zip'}):
+        raise ValueError('Pull artifacts must be exactly usb-receipt.json and original.zip')
     # Reusing the importer verifies media, calibration evidence, quality, DSP and
     # exact selected bins together instead of trusting editable receipt claims.
     script = Path(__file__).resolve().parents[2] / 'scripts/import_probe_science.ts'
@@ -39,12 +46,13 @@ def evaluate_probe(forecast, *, expected_digest, document, receipt, configuratio
         raise ValueError('Node runtime required for canonical probe importer')
     with tempfile.TemporaryDirectory(prefix='probe-score-') as directory:
         root = Path(directory); capture = root / 'capture'; capture.mkdir()
-        for destination, artifacts in ((capture, original_artifacts), (root, supplemental_artifacts)):
+        pull = root / 'pull'
+        for destination, artifacts in ((capture, original_artifacts), (root, supplemental_artifacts), *(((pull, pull_artifacts),) if pull_artifacts is not None else ())):
             if not isinstance(artifacts, dict) or not artifacts:
                 raise ValueError('Original media and supplemental evidence bytes required')
             for name, encoded in artifacts.items():
                 path = Path(name)
-                if path.is_absolute() or '..' in path.parts or not path.parts or path.parts[0] in {'capture','output','config.json'}:
+                if path.is_absolute() or '..' in path.parts or not path.parts or path.parts[0] in {'capture','output','config.json','pull'}:
                     raise ValueError('Artifact names must be safe relative paths')
                 try:
                     raw = base64.b64decode(encoded, validate=True)
@@ -55,7 +63,8 @@ def evaluate_probe(forecast, *, expected_digest, document, receipt, configuratio
                 target = destination / path; target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_bytes(raw)
         (root / 'config.json').write_text(configuration_json)
-        run = subprocess.run([node, str(script), str(capture), str(root/'output'), str(root/'config.json')],
+        run = subprocess.run([node, str(script), str(capture), str(root/'output'), str(root/'config.json'),
+                              *([str(pull/'usb-receipt.json')] if pull_artifacts is not None else [])],
                              capture_output=True, text=True, timeout=60)
         if run.returncode:
             raise ValueError('Canonical probe import rejected supplied bytes: ' + run.stderr[-2000:])

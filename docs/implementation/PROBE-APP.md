@@ -41,17 +41,35 @@ declared, not measured; no measured-calibration evidence was derived". Saving a
 setup for such a capture returns that reason, the legacy private configuration
 gets the same result, and the fitter also rejects probe records marked as
 human recordings (it sees only the document it is given). For a human capture the panel explains this and does not offer the form.
-Software-fixture and physical-reference captures keep the calibrated path below.
+Software-fixture captures keep the calibrated path below; a physical-reference capture reaches it only through a command-line import without a receipt.
 
 The source kind comes from the manifest's own fields, not only its `provenance`
 label. A manifest with any field only the iPhone recorder writes is treated as a
 human recording even if it says `software-fixture` or `physical-reference`, and a
 `software-fixture` label counts only with the fixture generator's marker. The
-panel shows when a label was overridden. Provenance is still self-declared: the
-manifest and pull receipt are unsigned, so an edited manifest without those fields
-is not caught. The recommended fix is for the USB pull to record the source device
-and archive hash in its own receipt, or for the iPhone to sign the manifest, with
-the importer checking that. See [the import specification](../../science/PROBE_IMPORT.md).
+panel shows when a label was overridden.
+
+The USB pull receipt also counts. Each import keeps the pull receipt as
+`usb-receipt.json` beside `original.zip`, and the importer checks the archive's
+SHA-256 and byte count against it. A receipt that says the archive came from the
+iPhone by devicectl, or an older receipt with no transport, makes a
+`software-fixture` or `physical-reference` label a human recording, so a pulled
+recording whose manifest was stripped and relabelled is still refused. The only
+probe writer in the app container, `apps/ios/SingingDepth/SingingDepth/AcousticProbe.swift`,
+always writes `human-recording`, so another label on a pulled archive was edited
+or injected. A reference-object capture can therefore reach the calibrated path
+only through a direct command-line import; keeping that is an owner decision. Only receipts written by
+the repository's test fixtures (`transport: "repository-fixture"`) let a marked
+fixture through, and such a receipt on any other manifest refuses the import, both
+the first analysis and the calibrated one, with the importer's reason as the error.
+
+This does not make provenance authenticated. Nothing is signed yet
+(`signature.status` is `not-provided`), so it does not stop someone with shell
+access editing `.local-data` (receipt included), files pushed into the
+development-signed app container with `devicectl device copy to` (pulled like the app's
+own recordings, as human recordings), a human recording relabelled
+`physical-reference` and imported from the command line without a receipt, AirDrop
+imports, or a synthetic sound played into the microphone. See [the import specification](../../science/PROBE_IMPORT.md).
 
 The calibration package is measurement-workflow output, not a new estimate made
 by the app. It is JSON with `schema_version: "0.1.0"` and
@@ -154,8 +172,11 @@ the original model binding and the body-size limits and timing.
 HTTP route, subprocess importer and generated original PCM: missing, corrupt,
 unsafe and reserved evidence rejection, prior/grid rejection, no folders after
 failed attempts, atomic publication and hash-bound calibrated reimport; a human
-recording refused through setup and through a private configuration; and a
-physical-reference capture that still saves and imports eligible.
+recording refused through setup and through a private configuration; a pulled
+capture labelled physical-reference refused as a human recording with the reason
+"Manifest says physical-reference but its pull receipt shows it was copied from an
+iPhone by devicectl"; stripped-fixture and contradicted-receipt captures refused;
+and importer file errors shown without a private path.
 `npx playwright test tests/probe-setup-runtime.spec.ts tests/probe-app.spec.ts`
 uses the default config (real build and server, isolated data). It uploads real
 calibration files, checks the automatic analysis after saving, a second capture

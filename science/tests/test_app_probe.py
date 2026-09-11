@@ -6,9 +6,11 @@ import subprocess
 import zipfile
 from pathlib import Path
 import pytest
-from science.scripts.prepare_probe_capture import prepare
+from science.scripts.prepare_probe_capture import FILES_MESSAGE, prepare, run_importer
 
 ROOT=Path(__file__).resolve().parents[2]
+# Generated archives say so in their pull receipt; the app's own pulls record devicectl instead.
+FIXTURE_ACQUISITION={'transport':'repository-fixture','generator':'science/tests/test_app_probe.py'}
 
 
 def archive_fixture(tmp_path):
@@ -24,7 +26,7 @@ def archive_fixture(tmp_path):
     with zipfile.ZipFile(root/'usb-imports'/name,'w') as z:
         for source in capture.iterdir():z.write(source,source.name)
     raw=(root/'usb-imports'/name).read_bytes()
-    receipt={'name':name,'bytes':len(raw),'sha256':hashlib.sha256(raw).hexdigest()}
+    receipt={'name':name,'bytes':len(raw),'sha256':hashlib.sha256(raw).hexdigest(),'acquisition':FIXTURE_ACQUISITION}
     (root/'native-pull-latest.json').write_text(json.dumps(receipt))
     return root,receipt
 
@@ -100,7 +102,7 @@ def test_original_probe_runs_joint_session_adoption(tmp_path, monkeypatch,crash_
     from test_session_probe import setup
     descriptor=tmp_path/'fixture.json'
     subprocess.run(['node','--experimental-strip-types','--input-type=module','-e',
-        "import {setupFixture} from './science/scripts/import_probe_science.test.ts'; import {writeFile} from 'node:fs/promises'; await writeFile(process.argv[1],JSON.stringify(await setupFixture()));",str(descriptor)],
+        "import {setupFixture} from './tests/helpers/probe-science-fixture.ts'; import {writeFile} from 'node:fs/promises'; await writeFile(process.argv[1],JSON.stringify(await setupFixture()));",str(descriptor)],
         cwd=ROOT,env={**os.environ,'PROBE_PYTHON':sys.executable},check=True,capture_output=True)
     fixture=json.loads(descriptor.read_text());root=tmp_path/'data';root.mkdir()
     config=fixture['config'];evidence=Path(fixture['root'])/'calibration-evidence.txt'
@@ -112,6 +114,8 @@ def test_original_probe_runs_joint_session_adoption(tmp_path, monkeypatch,crash_
         original=save_setup(root,'review','original-setup',config,evidence,-3.)
         summary=prepare(root,imported)
         assert summary['eligible'] and summary['setupId']=='original-setup' and summary['setupProfileSha256']==original['profileSha256']
+        bridge=json.loads((imported/'science/probe-science-receipt.json').read_text())
+        assert bridge['attestation']=='repository-fixture-receipt' and bridge['acquisition']==FIXTURE_ACQUISITION
         # A later setup must not replace the controls already bound to this import.
         save_setup(root,'imported','later-setup',config,evidence,-4.)
         assert json.loads((root/'probe-setup-current.json').read_text())['setupId']=='later-setup'
@@ -122,8 +126,14 @@ def test_original_probe_runs_joint_session_adoption(tmp_path, monkeypatch,crash_
         (root/'probe-fit-profile.json').write_text(json.dumps({'JA':-3.,'gain':1.,'direct_gain':1.,'coupling_gain':1.,'delay_s':0.}))
         imported.mkdir(parents=True)
         # Importer verifies original capture bytes again inside runner, not review JSON.
+        # An import laid out as prepare_probe_capture.py leaves it: capture, original.zip and its pull receipt.
         shutil.copytree(fixture['capture'],imported/'capture')
-        (imported/'summary.json').write_text(json.dumps({'eligible':True,'captureDirectory':'capture'}))
+        with zipfile.ZipFile(imported/'original.zip','w') as z:
+            for source in (imported/'capture').iterdir():z.write(source,source.name)
+        raw=(imported/'original.zip').read_bytes()
+        receipt=json.dumps({'name':'probe-known-filter-fixture.zip','bytes':len(raw),'sha256':hashlib.sha256(raw).hexdigest(),'acquisition':FIXTURE_ACQUISITION}).encode()
+        (imported/'usb-receipt.json').write_bytes(receipt)
+        (imported/'summary.json').write_text(json.dumps({'eligible':True,'captureDirectory':'capture','archiveSha256':hashlib.sha256(raw).hexdigest(),'receiptSha256':hashlib.sha256(receipt).hexdigest()}))
     voice=root/'science-runs'/'voice';voice.mkdir(parents=True)
     (root/'science-current.json').write_text(json.dumps({'status':'succeeded','runId':'voice'}))
     (voice/'summary.json').write_text(json.dumps({'sessionId':'probe-runner'}))
@@ -166,6 +176,8 @@ def test_original_probe_runs_joint_session_adoption(tmp_path, monkeypatch,crash_
         assert result['modelId']!=parent['model_id']
         assert result['score']['probe_discrepancy']>100
         assert (root/'probe-fits/fit/session-ledger.json').exists()
+        reimport=json.loads(next((root/'probe-fits/fit').glob('verification-*/import/probe-science-receipt.json')).read_text())
+        assert reimport['attestation']=='repository-fixture-receipt' and reimport['receipt_sha256']==json.loads((imported/'summary.json').read_text())['receiptSha256']
         if app_setup:
             intent=json.loads((root/'probe-fits/fit/intent.json').read_text())
             assert intent['setupId']=='original-setup' and intent['configurationSha256']==original['configurationSha256']
@@ -176,3 +188,41 @@ def test_original_probe_runs_joint_session_adoption(tmp_path, monkeypatch,crash_
         assert run_probe_fit.run(root,'imported',parent['model_id'],root/'probe-fits'/'fit')==result
         assert controller.execute({'action':'state'})['state']['version']==version
         assert len([j for j in state['jobs'] if j['request']['operation']=='fit_probe_pcm'])==1
+
+
+@pytest.mark.parametrize('change',['missing','edited','unrecorded'])
+def test_fit_refuses_a_pulled_import_whose_receipt_was_lost_or_edited(tmp_path,change):
+    from science.scripts import run_probe_fit
+    descriptor=tmp_path/'fixture.json'
+    subprocess.run(['node','--experimental-strip-types','--input-type=module','-e',
+        "import {setupFixture} from './tests/helpers/probe-science-fixture.ts'; import {writeFile} from 'node:fs/promises'; await writeFile(process.argv[1],JSON.stringify(await setupFixture()));",str(descriptor)],
+        cwd=ROOT,check=True,capture_output=True)
+    fixture=json.loads(descriptor.read_text())
+    try:
+        root,_=archive_fixture(tmp_path)
+        prepare(root,root/'probe-imports'/'review')
+        save_setup(root,'review','setup',fixture['config'],Path(fixture['root'])/'calibration-evidence.txt',-3.)
+        assert prepare(root,root/'probe-imports'/'imported')['eligible']
+        # The fit reaches its re-import: a current voice model run exists (its contents are not used before the refusal).
+        (root/'science-current.json').write_text(json.dumps({'status':'succeeded','runId':'voice'}))
+        (root/'science-runs/voice').mkdir(parents=True);(root/'science-runs/voice/summary.json').write_text(json.dumps({'sessionId':'probe-runner'}))
+        imported=root/'probe-imports'/'imported';receipt=imported/'usb-receipt.json'
+        if change=='missing':receipt.unlink()
+        elif change=='edited':receipt.write_text(json.dumps({**json.loads(receipt.read_text()),'acquisition':None}))
+        else:
+            summary=json.loads((imported/'summary.json').read_text());del summary['receiptSha256'];(imported/'summary.json').write_text(json.dumps(summary))
+        with pytest.raises(ValueError,match='USB pull receipt recorded when this probe was analyzed is missing or changed'):
+            run_probe_fit.run(root,'imported','any-model',root/'probe-fits'/'fit')
+    finally:
+        shutil.rmtree(fixture['root'])
+
+
+def test_importer_file_errors_carry_no_private_path(tmp_path):
+    # A missing capture folder: Node's ENOENT message names the absolute path, so the app gets the generic reason.
+    with pytest.raises(ValueError) as refused:
+        run_importer('scripts/import-acoustic-probe.ts',tmp_path/'missing-capture',tmp_path/'review')
+    assert str(refused.value)==FILES_MESSAGE and '/' not in str(refused.value) and str(tmp_path) not in str(refused.value)
+    # An importer refusal without a path keeps its own reason.
+    archive_fixture(tmp_path)
+    with pytest.raises(ValueError,match='^Unsafe artifact path$'):
+        run_importer('scripts/import-acoustic-probe.ts',tmp_path/'capture',tmp_path/'review','..')

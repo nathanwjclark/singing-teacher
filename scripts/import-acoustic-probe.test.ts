@@ -1,8 +1,11 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtemp,writeFile,readFile,rm } from 'node:fs/promises'
+import { mkdtemp,writeFile,readFile,rm,stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
+import { createHash } from 'node:crypto'
 import { importAcousticProbe } from './import-acoustic-probe.ts'
 import { validateProbeMeasurement } from '../src/contracts/probes.ts'
 import type { ProbeAttempt } from '../src/contracts/probes.ts'
@@ -24,4 +27,28 @@ test('known filter response, withheld fit state, and corrupt-byte rejection',asy
  function yLength(value:ProbeAttempt){return value.received.sampleCount}
  a.failures=[];a.segments[0].receivedStartSample=null;await writeFile(join(root,'manifest.json'),JSON.stringify(a));const unknown=await importAcousticProbe(root,join(root,'unknown'));assert.equal(unknown.captured.value,true);assert.equal(unknown.responseUsable.value,false)
  const bytes=await readFile(join(root,'received.f32le'));bytes[10]^=1;await writeFile(join(root,'received.f32le'),bytes);await assert.rejects(importAcousticProbe(root,out),/hash\/byte mismatch/)
+})
+
+test('the command line classifies with a pull receipt when given one and keeps the manifest rule without',async t=>{
+ const root=await mkdtemp(join(tmpdir(),'probe-cli-'));t.after(()=>rm(root,{recursive:true,force:true}))
+ await makeFixture(join(root,'capture'))
+ const run=(...args:string[])=>promisify(execFile)(process.execPath,['--experimental-strip-types','scripts/import-acoustic-probe.ts',join(root,'capture'),...args])
+ const measured=async(name:string)=>JSON.parse(await readFile(join(root,name,'probe-measurement.json'),'utf8'))
+ await run(join(root,'direct'));assert.equal((await measured('direct')).provenance,'software-fixture')
+ // Input data: an archive and the receipt the app's pull writes for it, with a fictional device.
+ const archive=Buffer.from('archive bytes for the review-import receipt test')
+ const receipt={schemaVersion:'native-pull-receipt-2',name:'probe-12345678-1234-1234-1234-123456789abc.zip',bytes:archive.length,sha256:createHash('sha256').update(archive).digest('hex'),
+  acquisition:{transport:'devicectl',connection:{transportType:'wired',tunnelState:'connected'},device:{coreDeviceId:'0B1C2D3E-4F50-4A6B-8C7D-9E0F1A2B3C4D',udid:null,productType:'iPhone16,1',osVersion:'26.0'}}}
+ await writeFile(join(root,'original.zip'),archive);await writeFile(join(root,'usb-receipt.json'),JSON.stringify(receipt))
+ await run(join(root,'pulled'),join(root,'usb-receipt.json'))
+ assert.equal((await measured('pulled')).provenance,'human-recording')
+ const kit=JSON.parse(await readFile(join(root,'pulled','probe-kit-observation.json'),'utf8'));assert.equal(kit.records[0].provenance.kind,'human-observation')
+ await writeFile(join(root,'original.zip'),Buffer.concat([archive,Buffer.from('!')]))
+ await assert.rejects(run(join(root,'changed'),join(root,'usb-receipt.json')),/does not match its pull receipt/)
+ // A repository-fixture receipt counts only on the generator's own manifest; on anything else the review import is refused.
+ await writeFile(join(root,'original.zip'),archive);await writeFile(join(root,'usb-receipt.json'),JSON.stringify({...receipt,acquisition:{transport:'repository-fixture',generator:'scripts/import-acoustic-probe.test.ts'}}))
+ await run(join(root,'fixture'),join(root,'usb-receipt.json'));assert.equal((await measured('fixture')).provenance,'software-fixture')
+ const manifest=JSON.parse(await readFile(join(root,'capture','manifest.json'),'utf8'));await writeFile(join(root,'capture','manifest.json'),JSON.stringify({...manifest,provenance:'human-recording'}))
+ await assert.rejects(run(join(root,'contradicted'),join(root,'usb-receipt.json')),/Repository-fixture pull receipt contradicts the capture manifest/)
+ await assert.rejects(stat(join(root,'contradicted')),{code:'ENOENT'})
 })

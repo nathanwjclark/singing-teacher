@@ -85,7 +85,7 @@ def publish(root, index):
     with zipfile.ZipFile(archive, 'x') as zipped:
         for file in source.iterdir(): zipped.write(file, file.name)
     (root / 'native-pull-latest.json').write_text(json.dumps({'name': archive.name, 'bytes': archive.stat().st_size,
-        'sha256': hashlib.sha256(archive.read_bytes()).hexdigest()}))
+        'sha256': hashlib.sha256(archive.read_bytes()).hexdigest(), 'acquisition': {'transport': 'repository-fixture', 'generator': 'science/tests/control_browser_fixture.py'}}))
 
 
 def main():

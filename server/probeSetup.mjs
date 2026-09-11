@@ -2,12 +2,16 @@ import {constants} from 'node:fs';
 import {open,writeFile,mkdir,rename,readdir,rm,lstat} from 'node:fs/promises';
 import {join} from 'node:path';
 import {createHash,randomUUID} from 'node:crypto';
-import {probeSource} from '../src/contracts/probes.ts';
+import {probeSource,receiptAcquisition} from '../src/contracts/probes.ts';
 
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
 const safeId=value=>typeof value==='string'&&/^[A-Za-z0-9_-]{1,100}$/.test(value);
 const finite=value=>typeof value==='number'&&Number.isFinite(value);
 const requireValue=(value,message)=>{if(!value)throw Error(message);};
+// A Node system error (ENOENT, EACCES, ...) or any message naming an absolute path would put a private path, and with
+// it the macOS user name, on the page; such a message is replaced whole. The same rule is in prepare_probe_capture.py.
+export const FILES_MESSAGE='The probe importer could not read or write its files; original artifacts were retained.';
+export const pageSafe=message=>/^(?:\w*Error: )?E[A-Z0-9]+: /.test(message)||/(?:^|[\s'"([=:])\//.test(message)?FILES_MESSAGE:message;
 const limits={JA:[-5,-1],gain:[.01,100],direct_gain:[0,2],coupling_gain:[0,2],delay_s:[-.01,.01]};
 async function bytes(path,limit=2*1024*1024){
  const file=await open(path,constants.O_RDONLY|constants.O_NOFOLLOW);
@@ -39,7 +43,9 @@ export async function probeSetupStatus(dataRoot,importId){
    requireValue(['capture','unpacked/sound'].includes(summary.captureDirectory),'Invalid original probe capture path');
    const manifestBytes=await bytes(join(folder,summary.captureDirectory,'manifest.json'));
    const manifest=JSON.parse(manifestBytes);
-   const source=probeSource(manifest);
+   // Display only: the importers classify with the receipt after checking original.zip against it. Hashing the
+   // archive on every status poll is too slow, so this reads the receipt kept beside the import unverified.
+   const source=probeSource(manifest,receiptAcquisition(await read(join(folder,'usb-receipt.json'))));
    capture={importId,captureId:manifest.captureId,manifestSha256:hash(manifestBytes),provenance:source.kind,declaredProvenance:source.declared,
     pose:manifest.pose??null,placementId:manifest.calibration?.placementId??null,routeSignature:manifest.calibration?.levelCheck?.routeSignature??null};
   }
@@ -100,7 +106,7 @@ export async function saveProbeSetup({repo,dataRoot,body,runProcess}){
   await write(join(staging,'configuration.json'),configuration);await write(join(staging,'profile.json'),body.profile);
   for(const [name,data] of supplied)await write(join(staging,name),data);
   const imported=await read(join(dataRoot,'probe-imports',body.importId,'summary.json'));
-  await runProcess(process.execPath,['--experimental-strip-types',join(repo,'science/scripts/import_probe_science.ts'),join(dataRoot,'probe-imports',body.importId,imported.captureDirectory),join(staging,'verification'),join(staging,'configuration.json')],{cwd:repo,timeout:60000,maxBuffer:65536});
+  await runProcess(process.execPath,['--experimental-strip-types',join(repo,'science/scripts/import_probe_science.ts'),join(dataRoot,'probe-imports',body.importId,imported.captureDirectory),join(staging,'verification'),join(staging,'configuration.json'),join(dataRoot,'probe-imports',body.importId,'usb-receipt.json')],{cwd:repo,timeout:60000,maxBuffer:65536});
   const verified=await read(join(staging,'verification/probe-science-receipt.json'));
   requireValue(verified?.eligible_for_fit,`Calibration is not eligible: ${(verified?.reasons??['verification unavailable']).join('; ')}`);
   const receipt={setupId:body.requestId,importId:body.importId,createdAt:new Date().toISOString(),requestSha256,configurationSha256:hash(await bytes(join(staging,'configuration.json'))),profileSha256:hash(await bytes(join(staging,'profile.json'))),packageSha256:hash(packageBytes),manifestSha256:capture.manifestSha256,
@@ -113,7 +119,7 @@ export async function saveProbeSetup({repo,dataRoot,body,runProcess}){
   return receipt;
  }catch(error){
   await rm(staging,{recursive:true,force:true});
-  if(!error.stderr)throw error;
-  throw Error(`Canonical probe verification failed: ${/^Error: (.+)$/m.exec(error.stderr)?.[1]??'check calibration arrays, route, source evidence and native capture bindings.'}`);
+  if(!error.stderr)throw error.syscall?Error(FILES_MESSAGE):error;
+  throw Error(`Canonical probe verification failed: ${pageSafe(/^Error: (.+)$/m.exec(error.stderr)?.[1]??'check calibration arrays, route, source evidence and native capture bindings.')}`);
  }
 }

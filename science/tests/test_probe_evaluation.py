@@ -24,10 +24,10 @@ def node(code):
     assert run.returncode == 0, run.stderr
 
 @pytest.fixture(scope='module')
-def scenario(tmp_path_factory):
+def built(tmp_path_factory):
     out = tmp_path_factory.mktemp('probe-evaluation')
     config_path = out/'setup.json'
-    node(f"import {{setupFixture}} from './science/scripts/import_probe_science.test.ts'; import{{writeFile}}from'node:fs/promises';const f=await setupFixture();await writeFile({json.dumps(str(config_path))},JSON.stringify(f));")
+    node(f"import {{setupFixture}} from './tests/helpers/probe-science-fixture.ts'; import{{writeFile}}from'node:fs/promises';const f=await setupFixture();await writeFile({json.dumps(str(config_path))},JSON.stringify(f));")
     setup = json.loads(config_path.read_text()); config = setup['config']
     with Engine() as engine:
         provenance = engine.provenance
@@ -41,7 +41,12 @@ def scenario(tmp_path_factory):
     receipt = json.loads((out/'import/probe-science-receipt.json').read_text())
     def media(descriptors, base):
         return {d['path']:base64.b64encode((Path(base)/d['path']).read_bytes()).decode() for d in descriptors}
-    return forecast,dict(expected_digest=forecast.sha256,document=json.loads((out/'import/probe-science-document.json').read_text()),receipt=receipt,configuration_json=Path(setup['configPath']).read_text(),original_artifacts=media(receipt['original_artifacts'],setup['capture']),supplemental_artifacts=media(receipt['supplemental_evidence'],setup['root']),capture_started_at=capture_started_at)
+    return forecast,setup,out,dict(expected_digest=forecast.sha256,document=json.loads((out/'import/probe-science-document.json').read_text()),receipt=receipt,configuration_json=Path(setup['configPath']).read_text(),original_artifacts=media(receipt['original_artifacts'],setup['capture']),supplemental_artifacts=media(receipt['supplemental_evidence'],setup['root']),capture_started_at=capture_started_at)
+
+@pytest.fixture(scope='module')
+def scenario(built):
+    forecast,_,_,args=built
+    return forecast,args
 
 def test_native_forecast_then_verified_raw_outcome(scenario):
     forecast, args = scenario
@@ -89,3 +94,38 @@ def test_service_evaluates_and_preserves_model_binding(scenario,tmp_path):
         wrong=deepcopy(request);wrong['parameters']['forecast_json']=json.dumps({**forecast.data,'model_id':'other'})
         with pytest.raises(ValueError,match='model'):
             service.submit(wrong,idempotency_key='wrong')
+
+
+def test_app_import_is_scored_with_its_pull_receipt(built):
+    import hashlib
+    import zipfile
+    forecast,setup,out,args=built
+    # The same generated capture imported as the app does: original.zip plus its repository-fixture pull receipt.
+    pull=out/'pull';pull.mkdir()
+    with zipfile.ZipFile(pull/'original.zip','w') as z:
+        for source in Path(setup['capture']).iterdir():z.write(source,source.name)
+    raw=(pull/'original.zip').read_bytes()
+    (pull/'usb-receipt.json').write_text(json.dumps({'name':'probe-known-filter-fixture.zip','bytes':len(raw),'sha256':hashlib.sha256(raw).hexdigest(),
+        'acquisition':{'transport':'repository-fixture','generator':'science/tests/test_probe_evaluation.py'}}))
+    node(f"import{{importProbeScience}}from'./science/scripts/import_probe_science.ts';await importProbeScience({json.dumps(setup['capture'])},{json.dumps(str(out/'app-import'))},{json.dumps(setup['configPath'])},{json.dumps(str(pull/'usb-receipt.json'))});")
+    receipt=json.loads((out/'app-import/probe-science-receipt.json').read_text())
+    assert receipt['attestation']=='repository-fixture-receipt' and receipt['receipt_sha256']
+    app={**args,'receipt':receipt,'document':json.loads((out/'app-import/probe-science-document.json').read_text()),
+         'pull_artifacts':{name:base64.b64encode((pull/name).read_bytes()).decode() for name in ('usb-receipt.json','original.zip')}}
+    result=evaluate_probe(forecast,**app).data
+    assert result['model_updated'] is False and result['scores'][0]['valid_bins']==3
+    # The worker's evaluate_probe job accepts the same pull artifacts.
+    from singing_physics.service import JobService
+    with JobService(out/'jobs') as service:
+        service.register_model('session','score-model')
+        job=service.submit({'operation':'evaluate_probe','session_id':'session','model_id':'score-model','parameters':{'forecast_json':forecast.content.decode(),**app}},idempotency_key='app-score')
+        assert service.wait(job)['status']=='succeeded' and service.result(job)['scores'][0]['valid_bins']==3
+    # Without its pull receipt an app import is refused rather than judged by the manifest-only rule.
+    with pytest.raises(ValueError,match='supply its pull receipt'):
+        evaluate_probe(forecast,**{k:v for k,v in app.items() if k!='pull_artifacts'})
+    # A pull receipt other than the one the import read does not match the recorded receipt hash.
+    edited=json.loads((pull/'usb-receipt.json').read_text());edited['acquisition']['generator']='edited'
+    with pytest.raises(ValueError,match='does not match verified original bytes'):
+        evaluate_probe(forecast,**{**app,'pull_artifacts':{**app['pull_artifacts'],'usb-receipt.json':base64.b64encode(json.dumps(edited).encode()).decode()}})
+    with pytest.raises(ValueError,match='usb-receipt.json and original.zip'):
+        evaluate_probe(forecast,**{**app,'pull_artifacts':{'usb-receipt.json':app['pull_artifacts']['usb-receipt.json']}})

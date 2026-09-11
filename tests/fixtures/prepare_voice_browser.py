@@ -33,5 +33,5 @@ with tempfile.TemporaryDirectory(dir=root) as work:
     with zipfile.ZipFile(archive, 'x') as zipped:
         for file in source.iterdir(): zipped.write(file, file.name)
 (root/'native-pull-latest.json').write_text(json.dumps({'name': archive.name, 'bytes': archive.stat().st_size,
-    'sha256': hashlib.sha256(archive.read_bytes()).hexdigest()}))
+    'sha256': hashlib.sha256(archive.read_bytes()).hexdigest(), 'acquisition': {'transport': 'repository-fixture', 'generator': 'tests/fixtures/prepare_voice_browser.py'}}))
 print(json.dumps({'capture': manifest['capture_id'], 'archive': archive.name}))

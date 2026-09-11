@@ -1,35 +1,13 @@
 import { test, type TestContext } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtemp, writeFile, readFile, stat, rm } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { writeFile, readFile, stat, rm } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { createHash } from 'node:crypto'
-import { makeFixture } from '../../scripts/acoustic-probe-fixture.ts'
+import { setupFixture, declaredMeasuredPackage } from '../../tests/helpers/probe-science-fixture.ts'
 import { importProbeScience, DECLARED_CALIBRATION_REASON } from './import_probe_science.ts'
 
-// Exported helpers keep their files (the Python tests read them after `node -e`); each test removes its own.
+// The fixture helpers keep their files (the Python tests read them after `node -e`); each test here removes its own.
 function owned<T extends { root: string }>(t: TestContext, fixture: T) { t.after(() => rm(fixture.root, { recursive: true, force: true })); return fixture }
-
-export async function setupFixture() {
-  const root = await mkdtemp(join(tmpdir(), 'probe-science-'))
-  const capture = join(root, 'capture'), native = await makeFixture(capture)
-  const evidence = Buffer.from('Declared software calibration: unit test fixture, not measured hardware.')
-  const digest = createHash('sha256').update(evidence).digest('hex')
-  await writeFile(join(root, 'calibration-evidence.txt'), evidence)
-  const indices = [80, 100, 128], f = indices.map(i => i * 16000 / 4096)
-  const manifestHash = createHash('sha256').update(await readFile(join(capture, 'manifest.json'))).digest('hex')
-  const config = { capture_binding: { manifest_sha256: manifestHash, pose: 'a', placement_id: 'placement', route_id: 'fixture-route' }, schema_version: '0.1.0', kind: 'probe_science_import_configuration', trial_id: 'native-filter', pose: 'a', pose_state: 'held-quiet', comparison: 'complex', selected_indices: indices,
-    evidence: [{ path: 'calibration-evidence.txt', sha256: digest, byteCount: evidence.length }],
-    placement: { placement_id: 'placement', coordinate_frame: 'fixture-meters', source_m: [.15, 0, 0], microphone_m: [.12, .05, 0], mouth_m: [0, 0, 0] },
-    calibration: { calibration_id: 'fixture-calibration', route_id: 'fixture-route', placement_id: 'placement', kind: 'synthetic-fixture', frequency_hz: f, source_volume_velocity_real: [1e-5, 1e-5, 1e-5], source_volume_velocity_imag: [0, 0, 0], microphone_gain_real: [.01, .01, .01], microphone_gain_imag: [0, 0, 0], source_hashes: [digest], delay_s: 0 },
-    processing: { kind: 'declared-software-fixture', evidence_id: 'known-fir', route_id: 'fixture-route', source_hashes: [digest] },
-    nuisance_prior: { prior_id: 'fixture-prior', source_hashes: [digest], bounds: { gain: [1, 1], direct_gain: [1, 1], coupling_gain: [1, 1], delay_s: [0, 0] } },
-    bands: [{ low_hz: 300, high_hz: 501, sigma: .01, weight: 1 }],
-    conditions: { termination: 'rigid', termination_resistance_pa_s_m3: null, attenuation_np_per_m: .5 } }
-  const configPath = join(root, 'config.json')
-  await writeFile(configPath, JSON.stringify(config))
-  return { root, capture, native, config, configPath }
-}
 
 test('exact full B response maps to fitter schema with verified lineage and immutable B record', async t => {
   const { root, capture, config, configPath } = owned(t, await setupFixture())
@@ -88,17 +66,6 @@ test('corrupt source/evidence, incompatible grid and physical fixture calibratio
   await assert.rejects(importProbeScience(capture, join(root, 'evidence'), configPath), /evidence hash/)
 })
 
-// A self-declared "measured" package (hand-written arrays, typed placement) is metadata, not measurement.
-export async function declaredMeasuredPackage(provenance: 'human-recording' | 'physical-reference') {
-  const fixture = await setupFixture(), { capture, native, config, configPath } = fixture
-  Object.assign(native, { provenance, pose: 'a' }); native.calibration = { ...native.calibration, placementId: 'placement', levelCheck: { routeSignature: 'declared-route' } }
-  await writeFile(join(capture, 'manifest.json'), JSON.stringify(native))
-  config.calibration.kind = 'measured'; Object.assign(config.processing, { kind: 'characterized-measurement' })
-  Object.assign(config.capture_binding, { manifest_sha256: createHash('sha256').update(await readFile(join(capture, 'manifest.json'))).digest('hex'), native_route_signature: 'declared-route' })
-  await writeFile(configPath, JSON.stringify(config))
-  return fixture
-}
-
 test('real-voice capture with a metadata-only calibration package stays ineligible with the declared-calibration reason', async t => {
   const { root, capture, configPath } = owned(t, await declaredMeasuredPackage('human-recording'))
   const r = await importProbeScience(capture, join(root, 'human'), configPath)
@@ -142,6 +109,60 @@ test('relabelling an iPhone recording as a fixture or reference object does not 
   unmarked.config.capture_binding.manifest_sha256 = createHash('sha256').update(await readFile(join(unmarked.capture, 'manifest.json'))).digest('hex'); await writeFile(unmarked.configPath, JSON.stringify(unmarked.config))
   r = await importProbeScience(unmarked.capture, join(unmarked.root, 'unmarked'), unmarked.configPath)
   assert.equal(r.receipt.eligible_for_fit, false); assert.match(r.receipt.reasons.join(), /lacks the software fixture generator's marker/)
+})
+
+// The app's USB pull output: `original.zip` and its `usb-receipt.json`. The importer hashes the archive; it never unzips it.
+async function pulled(root: string, acquisition: unknown, archive = Buffer.from('archive bytes for the pull-receipt tests')) {
+  const receipt = { schemaVersion: 'native-pull-receipt-2', name: 'probe-12345678-1234-1234-1234-123456789abc.zip', bytes: archive.length, sha256: createHash('sha256').update(archive).digest('hex'), ...(acquisition === undefined ? {} : { acquisition }) }
+  await writeFile(join(root, 'original.zip'), archive); await writeFile(join(root, 'usb-receipt.json'), JSON.stringify(receipt))
+  return join(root, 'usb-receipt.json')
+}
+const devicectl = { transport: 'devicectl', connection: { transportType: 'wired', tunnelState: 'connected' }, container: { domainType: 'appDataContainer', bundleId: 'com.singingteacher.depth', path: 'Documents/probe-12345678-1234-1234-1234-123456789abc.zip' },
+  device: { coreDeviceId: '0B1C2D3E-4F50-4A6B-8C7D-9E0F1A2B3C4D', udid: '00008130-000A1B2C3D4E5F60', productType: 'iPhone16,1', osVersion: '26.0' } }
+
+test('a pull receipt decides whether a fixture label counts, and must match its archive', async t => {
+  const { root, capture, configPath } = owned(t, await setupFixture())
+  // A repository-fixture receipt on a marked fixture keeps the synthetic path and is recorded.
+  const fixtureReceipt = await pulled(root, { transport: 'repository-fixture', generator: 'science/scripts/import_probe_science.test.ts' })
+  let r = await importProbeScience(capture, join(root, 'fixture'), configPath, fixtureReceipt)
+  assert.equal(r.receipt.receipt_sha256, createHash('sha256').update(await readFile(fixtureReceipt)).digest('hex'))
+  assert.equal(r.receipt.eligible_for_fit, true); assert.equal(r.receipt.attestation, 'repository-fixture-receipt'); assert.deepEqual(r.receipt.acquisition, { transport: 'repository-fixture', generator: 'science/scripts/import_probe_science.test.ts' })
+  // The attack: the same stripped, marked manifest arriving through a devicectl pull is a human recording.
+  r = await importProbeScience(capture, join(root, 'pulled'), configPath, await pulled(root, devicectl))
+  assert.equal(r.receipt.eligible_for_fit, false); assert.equal(r.probe_document, null); assert.equal(r.receipt.provenance, 'human-recording'); assert.equal(r.receipt.declared_provenance, 'software-fixture')
+  assert.equal(r.receipt.attestation, 'devicectl-receipt'); assert.deepEqual(r.receipt.acquisition, devicectl)
+  // B's review record agrees with the science receipt about the source kind.
+  assert.equal(r.measurement.provenance, 'human-recording'); assert.equal(JSON.parse(await readFile(join(root, 'pulled', 'b-import', 'probe-measurement.json'), 'utf8')).provenance, 'human-recording')
+  assert.deepEqual(r.receipt.reasons.slice(0, 2), [DECLARED_CALIBRATION_REASON, 'Manifest says software-fixture but its pull receipt shows it was copied from an iPhone by devicectl; it is treated as a human recording.'])
+  // A receipt from before transport recording cannot vouch for a fixture either.
+  r = await importProbeScience(capture, join(root, 'legacy'), configPath, await pulled(root, undefined))
+  assert.equal(r.receipt.eligible_for_fit, false); assert.equal(r.receipt.attestation, 'legacy-receipt'); assert.equal(r.receipt.acquisition, null); assert.match(r.receipt.reasons.join(), /does not name a known transport/)
+  // Without a receipt (direct command-line import) the manifest-only rule applies and says so.
+  r = await importProbeScience(capture, join(root, 'direct'), configPath)
+  assert.equal(r.receipt.eligible_for_fit, true); assert.equal(r.receipt.attestation, 'none'); assert.equal(r.receipt.acquisition, null); assert.equal(r.receipt.receipt_sha256, null)
+  // An archive that differs from its receipt is refused before any output is written.
+  const receipt = await pulled(root, devicectl), archive = await readFile(join(root, 'original.zip')); archive[0] ^= 1; await writeFile(join(root, 'original.zip'), archive)
+  await assert.rejects(importProbeScience(capture, join(root, 'changed'), configPath, receipt), /does not match its pull receipt/)
+  await writeFile(join(root, 'usb-receipt.json'), JSON.stringify({ name: 'probe.zip', acquisition: devicectl }))
+  await assert.rejects(importProbeScience(capture, join(root, 'no-hash'), configPath, receipt), /lacks the archive hash/)
+  await assert.rejects(stat(join(root, 'changed')), { code: 'ENOENT' })
+})
+
+test('a contradicted fixture receipt refuses the import and a pulled reference label is a human recording', async t => {
+  const human = owned(t, await declaredMeasuredPackage('human-recording')), repository = { transport: 'repository-fixture', generator: 'science/scripts/import_probe_science.test.ts' }
+  await assert.rejects(importProbeScience(human.capture, join(human.root, 'human'), human.configPath, await pulled(human.root, repository)), /Repository-fixture pull receipt contradicts the capture manifest/)
+  const reference = owned(t, await declaredMeasuredPackage('physical-reference'))
+  await assert.rejects(importProbeScience(reference.capture, join(reference.root, 'reference'), reference.configPath, await pulled(reference.root, repository)), /contradicts the capture manifest/)
+  // The app's recorder writes only human-recording, so a reference label on a pulled or legacy-receipt archive was edited:
+  // it is a human recording, ineligible even with a declared-measured package. Without a receipt the label is kept.
+  for (const [name, acquisition, why] of [['pulled', devicectl, 'shows it was copied from an iPhone by devicectl'], ['legacy', undefined, 'does not name a known transport']] as const) {
+    const r = await importProbeScience(reference.capture, join(reference.root, name), reference.configPath, await pulled(reference.root, acquisition))
+    assert.equal(r.receipt.eligible_for_fit, false); assert.equal(r.receipt.provenance, 'human-recording'); assert.equal(r.measurement.provenance, 'human-recording')
+    assert.deepEqual(r.receipt.reasons.slice(0, 2), [DECLARED_CALIBRATION_REASON, `Manifest says physical-reference but its pull receipt ${why}; it is treated as a human recording.`])
+  }
+  const phoneShaped = owned(t, await setupFixture()); await relabelled(phoneShaped, 'software-fixture')
+  await assert.rejects(importProbeScience(phoneShaped.capture, join(phoneShaped.root, 'phone'), phoneShaped.configPath, await pulled(phoneShaped.root, repository)), /contradicts the capture manifest/)
+  await assert.rejects(stat(join(human.root, 'human')), { code: 'ENOENT' })
 })
 
 // This test runs the genuine native consumer; the Python runtime must have science dependencies.

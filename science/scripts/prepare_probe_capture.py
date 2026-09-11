@@ -24,6 +24,22 @@ def write(path, value):
         os.unlink(pending)
 
 
+FILES_MESSAGE = 'The probe importer could not read or write its files; original artifacts were retained.'
+
+
+def run_importer(script, *args):
+    """Run a Node importer. Its refusal reaches the app as a ValueError carrying the importer's own message, unless that
+    message is a Node system error or names an absolute path: those would show a private path (and the macOS user name)
+    on the page, so they are replaced whole. server/probeSetup.mjs pageSafe applies the same rule."""
+    done = subprocess.run(['node', '--experimental-strip-types', str(ROOT/script), *map(str, args)],
+                          stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+    if done.returncode:
+        message = next((line[len('Error: '):] for line in reversed(done.stderr.splitlines()) if line.startswith('Error: ')),
+                       'The probe importer stopped without a reason; original artifacts were retained.')
+        private = re.match(r'E[A-Z0-9]+: ', message) or re.search(r'''(?:^|[\s'"(\[=:])/''', message)
+        raise ValueError(FILES_MESSAGE if private else message)
+
+
 def prepare(data_root, output):
     root, output = Path(data_root), Path(output)
     receipt = _json((root/'native-pull-latest.json').read_bytes())
@@ -40,7 +56,8 @@ def prepare(data_root, output):
         raise ValueError('USB probe archive hash mismatch')
     output.mkdir(mode=0o700, parents=True, exist_ok=False)
     write(output/'original.zip', raw)
-    write(output/'usb-receipt.json', receipt)
+    receipt_bytes = json.dumps(receipt, allow_nan=False).encode()
+    write(output/'usb-receipt.json', receipt_bytes)
     if name.startswith('session-'):
         import_session_bundle(output/'original.zip', output/'unpacked')
         capture = output/'unpacked/sound'
@@ -63,8 +80,7 @@ def prepare(data_root, output):
         configuration = None
         setup_error = f"The saved calibration setup {setup['setupId']} belongs to a different capture; each probe capture needs its own setup."
     if configuration and configuration.exists():
-        subprocess.run(['node', '--experimental-strip-types', str(ROOT/'science/scripts/import_probe_science.ts'),
-                        str(capture), str(output/'science'), str(configuration)], check=True, stdout=subprocess.DEVNULL)
+        run_importer('science/scripts/import_probe_science.ts', capture, output/'science', configuration, output/'usb-receipt.json')
         bridge = _json((output/'science/probe-science-receipt.json').read_bytes())
         result = {'eligible': bridge['eligible_for_fit'], 'reasons': bridge.get('reasons', []),
                   'measurementPath': 'science/b-import/probe-measurement.json'}
@@ -72,13 +88,14 @@ def prepare(data_root, output):
             result.update(setupId=setup['setupId'], setupConfigurationSha256=setup['configurationSha256'],
                           setupProfileSha256=setup['profileSha256'])
     else:
-        subprocess.run(['node', '--experimental-strip-types', str(ROOT/'scripts/import-acoustic-probe.ts'),
-                        str(capture), str(output/'review')], check=True, stdout=subprocess.DEVNULL)
+        run_importer('scripts/import-acoustic-probe.ts', capture, output/'review', output/'usb-receipt.json')
         result = {'eligible': False, 'reasons': ['Measured route calibration, placement and processing evidence are required before joint fitting.'],
                   'measurementPath': 'review/probe-measurement.json'}
         if setup_error:
             result['reasons'].append(setup_error)
+    # The fit's re-import must use this same receipt; its hash lets the fit refuse a lost or edited one.
     result.update(importId=output.name, archiveSha256=receipt['sha256'], includedInFit=False,
+                  receiptSha256=hashlib.sha256(receipt_bytes).hexdigest(),
                   captureDirectory=str(capture.relative_to(output)))
     write(output/'summary.json', result)
     return result

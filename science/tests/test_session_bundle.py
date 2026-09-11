@@ -63,6 +63,15 @@ def test_swift_wrapper_unpacks_exact_original_phases_and_retains_partial_stop(tm
     assert destination.stat().st_mode & 0o777 == 0o700
     with pytest.raises(FileExistsError):
         module.import_session_bundle(source, destination)
+    assert report["nextCommands"]["sound"]["argv"][-1] == str((destination/"sound-analysis").resolve())
+
+
+def test_app_import_suggests_the_sound_command_with_its_pull_receipt(tmp_path):
+    source, *_ = fixture(tmp_path)
+    app = tmp_path/"import"; app.mkdir(); original = app/"original.zip"; source.rename(original)
+    (app/"usb-receipt.json").write_text(json.dumps({"name": "session-fixture.zip"}))
+    report = module.import_session_bundle(original, app/"unpacked")
+    assert report["nextCommands"]["sound"]["argv"][-2:] == [str((app/"unpacked/sound-analysis").resolve()), str((app/"usb-receipt.json").resolve())]
 
 
 @pytest.mark.parametrize("change", [

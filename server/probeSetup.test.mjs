@@ -6,8 +6,9 @@ import {mkdtemp,readFile,writeFile,rm,readdir,mkdir,utimes} from 'node:fs/promis
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {createProbeRoutes} from './probe.mjs';
-import {createProbeSetupFixture} from '../tests/helpers/probe-setup-fixture.mjs';
+import {createProbeSetupFixture,devicectlAcquisition} from '../tests/helpers/probe-setup-fixture.mjs';
 import {DECLARED_CALIBRATION_REASON} from '../science/scripts/import_probe_science.ts';
+import {FILES_MESSAGE,pageSafe} from './probeSetup.mjs';
 
 async function poll(call){
  for(let i=0;i<200;i++){
@@ -36,7 +37,8 @@ function declaredMeasured(fixture,importId){
  const pkg=structuredClone(fixture.calibration);pkg.calibration.kind='measured';pkg.processing.kind='characterized-measurement';
  return {...fixture.request,requestId:'declared-measured',importId,packageBase64:Buffer.from(JSON.stringify(pkg)).toString('base64')};
 }
-const device=provenance=>({manifest:{provenance,pose:'a',calibration:{placementId:'fixture-placement',levelCheck:{routeSignature:'declared-route'}}}});
+// A capture pulled from an iPhone whose manifest declares this provenance.
+const device=provenance=>({acquisition:devicectlAcquisition,manifest:{provenance,pose:'a',calibration:{placementId:'fixture-placement',levelCheck:{routeSignature:'declared-route'}}}});
 
 test('actual route verifies original calibration, atomically saves setup and reimports with immutable lineage',async t=>{
  const {fixture,call,setups}=await serve(t);
@@ -95,22 +97,69 @@ test('a human recording stays ineligible whether a declared-measured package arr
  status=await poll(call);assert.equal(status.import.eligible,false);assert.deepEqual(status.import.reasons,[DECLARED_CALIBRATION_REASON]);assert.equal(status.canFit,false);
 });
 
-test('a reference-object capture still freezes a declared-measured setup and imports eligible',async t=>{
- const {fixture,call}=await serve(t,device('physical-reference'));
+// The app's recorder writes only human-recording, so a pulled archive labelled physical-reference was edited or injected.
+test('a pulled capture labelled physical-reference is a human recording, so a declared-measured setup is refused',async t=>{
+ const {fixture,call,setups}=await serve(t,device('physical-reference'));
  assert.equal((await call('import',{requestId:'import-reference'})).status,202);
- let status=await poll(call);
- const saved=await call('setup',declaredMeasured(fixture,status.import.importId));
- assert.equal(saved.status,200);assert.equal(saved.body.setup.provenance,'physical-reference');assert.equal(saved.body.setup.calibrationAuthenticityVerified,false);
- assert.equal((await call('import',{requestId:'import-reference-calibrated'})).status,202);
- status=await poll(call);assert.equal(status.import.eligible,true);assert.equal(status.import.setupId,'declared-measured');
+ const status=await poll(call);
+ assert.equal(status.setup.capture.provenance,'human-recording');assert.equal(status.setup.capture.declaredProvenance,'physical-reference');assert.equal(status.measurement.provenance,'human-recording');
+ const refused=await call('setup',declaredMeasured(fixture,status.import.importId));
+ assert.equal(refused.status,400);assert.equal(refused.body.error,`Calibration is not eligible: ${DECLARED_CALIBRATION_REASON}; Manifest says physical-reference but its pull receipt shows it was copied from an iPhone by devicectl; it is treated as a human recording.`);
+ assert.deepEqual(await setups(),[]);
 });
 
 test('an iPhone-shaped capture relabelled as a software fixture is reported and refused as a human recording',async t=>{
- const {fixture,call,setups}=await serve(t,{manifest:{provenance:'software-fixture',route:{output:'Speaker'},calibration:{placementId:'fixture-placement',deviceResponseCalibrated:false}}});
+ const {fixture,call,setups}=await serve(t,{acquisition:devicectlAcquisition,manifest:{provenance:'software-fixture',route:{output:'Speaker'},calibration:{placementId:'fixture-placement',deviceResponseCalibrated:false}}});
  assert.equal((await call('import',{requestId:'import-relabelled'})).status,202);
  const status=await poll(call);
  assert.equal(status.setup.capture.provenance,'human-recording');assert.equal(status.setup.capture.declaredProvenance,'software-fixture');assert.equal(status.measurement.provenance,'human-recording');
  const refused=await call('setup',{...fixture.request,importId:status.import.importId});
  assert.equal(refused.status,400);assert.match(refused.body.error,/declared, not measured.*Manifest says software-fixture but carries iPhone recorder fields \(route, calibration.deviceResponseCalibrated\)/);
  assert.deepEqual(await setups(),[]);
+});
+
+test('a pulled capture stripped to look like a fixture stays a human recording and its setup is refused',async t=>{
+ // The generator's own manifest, marker included and no iPhone fields, but its pull receipt says devicectl copied it from an iPhone.
+ const {fixture,call,setups}=await serve(t,{acquisition:devicectlAcquisition});
+ assert.equal((await call('import',{requestId:'import-stripped'})).status,202);
+ const status=await poll(call);
+ assert.equal(status.setup.capture.provenance,'human-recording');assert.equal(status.setup.capture.declaredProvenance,'software-fixture');assert.match(status.fitBlockedReason,/Human recordings cannot be fitted/);
+ // The review import's own record agrees with the status.
+ assert.equal(status.measurement.provenance,'human-recording');
+ const refused=await call('setup',{...fixture.request,importId:status.import.importId});
+ assert.equal(refused.status,400);assert.ok(refused.body.error.startsWith(`Calibration is not eligible: ${DECLARED_CALIBRATION_REASON}; Manifest says software-fixture but its pull receipt shows it was copied from an iPhone by devicectl; it is treated as a human recording.`),refused.body.error);
+ assert.deepEqual(await setups(),[]);
+});
+
+test('a repository-fixture receipt on a human-labelled capture refuses the import with the importer\'s reason',async t=>{
+ const {call,setups}=await serve(t,{manifest:{provenance:'human-recording'}});
+ assert.equal((await call('import',{requestId:'import-contradicted'})).status,202);
+ const status=await poll(call);
+ assert.equal(status.import,null);assert.equal(status.setup.capture,null);
+ assert.equal(status.error,'ValueError: Repository-fixture pull receipt contradicts the capture manifest: only a marked software fixture without iPhone recorder fields may carry one');
+ assert.deepEqual(await setups(),[]);
+});
+
+test('importer file errors reach the page without a private path',async t=>{
+ const {fixture,call}=await serve(t);
+ assert.equal((await call('import',{requestId:'import-first'})).status,202);
+ let status=await poll(call);const review=join(fixture.dataRoot,'probe-imports',status.import.importId);
+ // Setup verification with its pull receipt gone: the importer's ENOENT names the data folder.
+ const receipt=await readFile(join(review,'usb-receipt.json'));await rm(join(review,'usb-receipt.json'));
+ const refused=await call('setup',{...fixture.request,importId:status.import.importId});
+ assert.equal(refused.status,400);assert.equal(refused.body.error,`Canonical probe verification failed: ${FILES_MESSAGE}`);
+ await writeFile(join(review,'usb-receipt.json'),receipt);
+ assert.equal((await call('setup',{...fixture.request,importId:status.import.importId})).status,200);
+ assert.equal((await call('import',{requestId:'import-calibrated'})).status,202);
+ status=await poll(call);assert.equal(status.import.eligible,true);
+ // The reviewer's path: a fit whose re-import finds original.zip deleted, read back through /api/probe/status.
+ await writeFile(join(fixture.dataRoot,'science-current.json'),JSON.stringify({status:'succeeded',runId:'voice'}));
+ await mkdir(join(fixture.dataRoot,'science-runs','voice'),{recursive:true});await writeFile(join(fixture.dataRoot,'science-runs','voice','summary.json'),JSON.stringify({sessionId:'probe-runner'}));
+ await rm(join(fixture.dataRoot,'probe-imports',status.import.importId,'original.zip'));
+ assert.equal((await call('fit',{requestId:'fit-one',importId:status.import.importId,expectedModelId:'any-model'})).status,202);
+ status=await poll(call);
+ assert.equal(status.error,`ValueError: ${FILES_MESSAGE}`);
+ // Python's own file errors and path-free Node system errors are replaced too; ordinary reasons pass through.
+ for(const line of ["FileNotFoundError: [Errno 2] No such file or directory: '/x/science-current.json'",'ValueError: EISDIR: illegal operation on a directory, read','ValueError: see file:///x/y.ts'])assert.equal(pageSafe(line),FILES_MESSAGE,line);
+ assert.equal(pageSafe('ValueError: Original capture changed or hash/byte mismatch'),'ValueError: Original capture changed or hash/byte mismatch');assert.equal(status.error.includes('/'),false);assert.equal(status.error.includes(fixture.dataRoot),false);
 });
