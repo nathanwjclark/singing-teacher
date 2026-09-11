@@ -20,16 +20,16 @@ const other={...phone,identifier:'9F8E7D6C-5B4A-4392-8170-6F5E4D3C2B1A',hardware
 const listing=(devices)=>({info:{arguments:['devicectl','list','devices'],commandType:'devicectl.list.devices',jsonVersion:2,outcome:'success',version:'477.29'},result:{devices}});
 const files={info:{commandType:'devicectl.device.info.files',outcome:'success'},result:{files:[{name,relativePath:name,resources:{isDirectory:false,isSymbolicLink:false},metadata:{size:archive.length,lastModDate:'2026-09-10T12:00:00Z'}}]}};
 
-async function serve(t,devices){
+async function serve(t,devices,{config={deviceId:deviceId.toLowerCase()},copied=archive}={}){
  const dataRoot=await mkdtemp(join(tmpdir(),'native-pull-'));t.after(()=>rm(dataRoot,{recursive:true,force:true}));
- await writeFile(join(dataRoot,'iphone-device.json'),JSON.stringify({deviceId:deviceId.toLowerCase()}));
+ await writeFile(join(dataRoot,'iphone-device.json'),JSON.stringify(config));
  const calls=[];
  async function runProcess(command,args){
   calls.push([command,...args]);
   const output=args[args.indexOf('--json-output')+1];
   if(args[1]==='list'){if(devices instanceof Error)throw devices;await writeFile(output,typeof devices==='string'?devices:JSON.stringify(listing(devices)));}
   else if(args[2]==='info')await writeFile(output,JSON.stringify(files));
-  else if(args[2]==='copy'){await writeFile(args[args.indexOf('--destination')+1],archive);await writeFile(output,'{}');}
+  else if(args[2]==='copy'){await writeFile(args[args.indexOf('--destination')+1],copied);await writeFile(output,'{}');}
   else throw Error(`Unexpected command ${command} ${args.join(' ')}`);
   return {stdout:'',stderr:''};
  }
@@ -38,11 +38,12 @@ async function serve(t,devices){
  t.after(()=>new Promise(resolve=>server.close(resolve)));
  const base=`http://127.0.0.1:${server.address().port}/api/native-captures/`;
  const call=async(action,method='GET')=>{const response=await fetch(base+action,{method});return {status:response.status,body:await response.json()};};
- return {dataRoot,calls,call};
+ const jobs=async()=>(await readdir(dataRoot)).filter(name=>name.startsWith('usb-pull-'));
+ return {dataRoot,calls,call,jobs};
 }
 
 test('a pull records the configured device, its connection and the container beside the existing receipt fields',async t=>{
- const {dataRoot,calls,call}=await serve(t,[other,phone]);
+ const {dataRoot,calls,call,jobs}=await serve(t,[other,phone]);
  const pulled=await call('pull','POST');assert.equal(pulled.status,200,JSON.stringify(pulled.body));
  const receipt=pulled.body.receipt;
  assert.equal(receipt.schemaVersion,'native-pull-receipt-2');
@@ -59,16 +60,18 @@ test('a pull records the configured device, its connection and the container bes
  assert.deepEqual(await readFile(join(dataRoot,'usb-imports',name)),archive);
  assert.deepEqual(calls[0].slice(0,6),['xcrun','devicectl','list','devices','--timeout','20']);
  assert.deepEqual(calls.map(c=>c.slice(1,4).join(' ')),['devicectl list devices','devicectl device info','devicectl device copy']);
+ // The device list names every device paired with this Mac; it is deleted once the configured entry is read.
+ const [job]=await jobs();assert.ok(job);assert.equal((await readdir(join(dataRoot,job))).includes('devices.json'),false);
  // A second pull of the same archive reuses the local copy and records the device again.
  const again=(await call('pull','POST')).body.receipt;assert.equal(again.reused,true);assert.deepEqual(again.acquisition,receipt.acquisition);
 });
 
 test('a missing configured device refuses the pull with 503 before any file is listed or copied',async t=>{
- const {dataRoot,calls,call}=await serve(t,[other]);
+ const {dataRoot,calls,call,jobs}=await serve(t,[other]);
  const refused=await call('pull','POST');
  assert.equal(refused.status,503);assert.match(refused.body.error,/configured iPhone is not connected/);
  assert.equal(calls.length,1);assert.deepEqual((await call('latest')).body,{inFlight:false,receipt:null});
- assert.equal((await readdir(dataRoot)).includes('usb-imports'),false);
+ assert.equal((await readdir(dataRoot)).includes('usb-imports'),false);assert.deepEqual(await jobs(),[]);
 });
 
 test('a wireless pull records its transport and leaves absent fields null',async t=>{
@@ -81,7 +84,23 @@ test('a wireless pull records its transport and leaves absent fields null',async
 
 test('an unreadable or failed device list refuses the pull with 503',async t=>{
  for(const devices of ['not json',JSON.stringify({info:{outcome:'failed'}}),Object.assign(Error('devicectl timed out'),{stderr:'timed out'})]){
-  const {call,calls}=await serve(t,devices);
-  const refused=await call('pull','POST');assert.equal(refused.status,503,String(devices));assert.equal(calls.length,1);
+  const {call,calls,jobs}=await serve(t,devices);
+  const refused=await call('pull','POST');assert.equal(refused.status,503,String(devices));assert.equal(calls.length,1);assert.deepEqual(await jobs(),[]);
  }
+});
+
+test('a malformed device configuration is refused with 503 before devicectl runs',async t=>{
+ for(const config of [{deviceId:[deviceId]},{deviceId:12345},null,{}]){
+  const {call,calls,jobs}=await serve(t,[phone],{config});
+  const refused=await call('pull','POST');
+  assert.equal(refused.status,503,JSON.stringify(config));assert.equal(refused.body.error,'The private iPhone device configuration is invalid.');
+  assert.equal(calls.length,0);assert.deepEqual(await jobs(),[]);
+ }
+});
+
+test('a transfer whose size differs from the phone is refused and the partial download discarded',async t=>{
+ const {dataRoot,call,jobs}=await serve(t,[phone],{copied:archive.subarray(1)});
+ const refused=await call('pull','POST');
+ assert.equal(refused.status,502);assert.match(refused.body.error,/incomplete download was discarded/);
+ assert.deepEqual(await jobs(),[]);assert.deepEqual(await readdir(join(dataRoot,'usb-imports')),[]);
 });

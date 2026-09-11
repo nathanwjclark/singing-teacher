@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { access, chmod, lstat, mkdir, mkdtemp, readFile, rename, writeFile } from 'node:fs/promises';
+import { access, chmod, lstat, mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { createReadStream } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { join } from 'node:path';
@@ -46,19 +46,26 @@ export function createNativePullRoutes({ repo, dataRoot, json, runProcess = run 
     let config;
     try { config = JSON.parse(await readFile(join(dataRoot, 'iphone-device.json'), 'utf8')); }
     catch { throw fail('This Mac has no configured iPhone. Set its private iphone-device.json deviceId first.', 503); }
-    if (!uuid.test(config.deviceId ?? '')) throw fail('The private iPhone device configuration is invalid.', 503);
+    if (typeof config?.deviceId !== 'string' || !uuid.test(config.deviceId)) throw fail('The private iPhone device configuration is invalid.', 503);
     await mkdir(dataRoot, { recursive: true, mode: 0o700 });
     const job = await mkdtemp(join(dataRoot, 'usb-pull-'));
-    await chmod(job, 0o700);
+    // A refused or failed pull leaves nothing behind, including any partial download.
+    try { await chmod(job, 0o700); return await transfer(config.deviceId, job); }
+    catch (error) { await rm(job, { recursive: true, force: true }); throw error; }
+  }
+  async function transfer(deviceId, job) {
     const devicesFile = join(job, 'devices.json'), listFile = join(job, 'device-files.json');
     try { await runProcess('xcrun', ['devicectl', 'list', 'devices', '--timeout', '20', '--json-output', devicesFile], options(25_000)); }
     catch (error) { throw fail(message(error), 503); }
     let devices;
+    // The list names every device paired with this Mac (serial number, ECID, UDID, name); only the matched entry's
+    // fields below are kept.
     try { devices = JSON.parse(await readFile(devicesFile, 'utf8')).result?.devices; } catch { /* Refused below. */ }
+    finally { await rm(devicesFile, { force: true }); }
     if (!Array.isArray(devices)) throw fail('The connected device list was unavailable. Keep the iPhone connected and try again.', 503);
-    const entry = devices.find(item => typeof item?.identifier === 'string' && item.identifier.toUpperCase() === config.deviceId.toUpperCase());
+    const entry = devices.find(item => typeof item?.identifier === 'string' && item.identifier.toUpperCase() === deviceId.toUpperCase());
     if (!entry) throw fail('The configured iPhone is not connected to this Mac. Connect it by USB, unlock it, accept Trust if prompted, and try again.', 503);
-    const device = ['--device', config.deviceId, '--domain-type', 'appDataContainer', '--domain-identifier', bundleId];
+    const device = ['--device', deviceId, '--domain-type', 'appDataContainer', '--domain-identifier', bundleId];
     try {
       await runProcess('xcrun', ['devicectl', 'device', 'info', 'files', ...device, '--subdirectory', 'Documents', '--no-recurse', '--timeout', '20', '--json-output', listFile], options(25_000));
     } catch (error) { throw fail(message(error), 503); }
@@ -83,7 +90,7 @@ export function createNativePullRoutes({ repo, dataRoot, json, runProcess = run 
         await runProcess('xcrun', ['devicectl', 'device', 'copy', 'from', ...device, '--source', `Documents/${selected.name}`, '--destination', temporary, '--timeout', '80', '--json-output', join(job, 'copy-result.json')], options(85_000));
       } catch (error) { throw fail(message(error), 503); }
       const copied = await fileStat(temporary);
-      if (!copied?.isFile() || copied.isSymbolicLink() || copied.size !== selected.metadata.size) throw fail('The transferred size does not match the phone. The incomplete download is retained privately; try again.', 502);
+      if (!copied?.isFile() || copied.isSymbolicLink() || copied.size !== selected.metadata.size) throw fail('The transferred size does not match the phone. The incomplete download was discarded; try again.', 502);
       await chmod(temporary, 0o600);
       await rename(temporary, target);
     }
