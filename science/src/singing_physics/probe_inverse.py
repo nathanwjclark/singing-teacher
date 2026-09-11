@@ -131,8 +131,8 @@ def _parse_record(record):
 
 
 class _Operators:
-    def __init__(self, engine, budget, pcm_per_model):
-        self.engine, self.budget, self.pcm_per_model = engine, budget, pcm_per_model
+    def __init__(self, engine, budget):
+        self.engine, self.budget = engine, budget
         self.counts = {model: {'pcm_synthesis_calls': 0, 'probe_geometry_calls': 0, 'external_forward_calls': 0}
                        for model in ('joint', 'fixed_anatomy_baseline')}
         self.model = 'joint'
@@ -150,8 +150,8 @@ class _Operators:
         self.counts[model][kind] += 1
 
     def synthesize(self, *args, **kwargs):
-        model = 'joint' if self.counts['joint']['pcm_synthesis_calls'] < self.pcm_per_model else 'fixed_anatomy_baseline'
-        self.count('pcm_synthesis_calls', model)
+        # Provisional: fit_pcm's own per-model accounting attributes these afterwards.
+        self.count('pcm_synthesis_calls', 'joint')
         return self.engine.synthesize(*args, **kwargs)
 
     def geometry(self, *args, **kwargs):
@@ -268,12 +268,16 @@ def fit_probe_pcm(engine: Engine, pcm_document, probe_document, *, candidates,
     required = 2*len(candidates)*(len(pcm['trials'])+2*len(usable))
     if required > max_native_calls:
         raise ValueError('Declared joint and baseline operators exceed total budget')
-    operators = _Operators(engine, max_native_calls, len(candidates)*len(pcm['trials']))
+    operators = _Operators(engine, max_native_calls)
     saved = engine.anatomy()
     models = {'joint': [], 'fixed_anatomy_baseline': []}
     try:
         pcm_result = fit_pcm(operators, pcm, candidates=pcm_candidates,
             max_synthesis_calls=2*len(candidates)*len(pcm['trials']), node_binary=node_binary)
+        if operators.counts['joint']['pcm_synthesis_calls'] != sum(pcm_result[model]['actual_synthesis_calls'] for model in models):
+            raise RuntimeError('Native PCM call accounting mismatch')
+        for model in models:
+            operators.counts[model]['pcm_synthesis_calls'] = pcm_result[model]['actual_synthesis_calls']
         for model in models:
             operators.model = model
             pcm_rows = {row['candidate_id']: row for row in pcm_result[model]['candidates']}

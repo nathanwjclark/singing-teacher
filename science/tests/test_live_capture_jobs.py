@@ -54,14 +54,19 @@ def test_native_capture_freezes_authoritative_session_and_verified_export(tmp_pa
         assert summary['objectivePolicy']==summary['forecast']['objective_policy']
         assert summary['forecast']['scorer_implementation_pin']['version']=='pcm-scorer-pin-1'
         protocol=json.loads((output/'protocol.json').read_text())
+        fit=json.loads((output/'fit.json').read_text())
         observations=json.loads((output/'observations.json').read_text())['trials']
         spectral=objective=='multires-log-spectrum-v1'
         assert ('spectral_nuisance' in protocol)==spectral
         assert all(('spectral_observation' in t)==('frame_sha256' in t)==spectral for t in observations)
         if spectral:
             assert all(t['spectral_observation']['frame_sha256']==t['frame_sha256'] not in t['measurement']['provenance']['sourceHashes'] for t in observations)
-            assert json.loads((output/'fit.json').read_text())['source_artifact_bytes_verified'] is False
-        assert len(summary['jobs'])==4 and summary['nativeCalls']==77
+            assert fit['source_artifact_bytes_verified'] is False
+        # Three gain-only nuisance profiles share each waveform: the declared 60-call
+        # search cap is spent as 5 anatomy points x 2 windows x 2 models = 20 calls,
+        # then 15 forecast and 2 geometry-export calls (77 before synthesis reuse).
+        assert fit['actual_synthesis_calls']==20 and fit['max_synthesis_calls']==60
+        assert len(summary['jobs'])==4 and summary['nativeCalls']==37
         assert summary['modelId']==summary['forecast']['model_id']
         assert summary['forecast']['profile']=={'sample_rate_hz':48000,'frame_start_sample':4800,'frame_size':4096,'duration_s':.25}
         comparison=json.loads((output/'space-diff.json').read_text())
