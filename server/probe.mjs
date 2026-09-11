@@ -56,7 +56,9 @@ export function createProbeRoutes({repo,dataRoot,json,runProcess=execute}) {
    }
    if(req.method!=='POST'||url.pathname.endsWith('/status')){json(res,405,{error:'Method not allowed'});return true;}
    const configuring=url.pathname.endsWith('/setup');
-   let raw='';for await(const chunk of req){raw+=chunk;if(Buffer.byteLength(raw)>(configuring?26*1024*1024:4096))throw Error('Request too large');}
+   const chunks=[],limit=configuring?26*1024*1024:4096;let length=0;
+   for await(const chunk of req){length+=chunk.length;if(length>limit)throw Error('Request too large');chunks.push(chunk);}
+   const raw=Buffer.concat(chunks,length).toString('utf8');
    if(configuring){
     if(busy){json(res,409,{error:'A probe operation is already running'});return true;}
     const body=JSON.parse(raw);
