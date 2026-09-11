@@ -9,6 +9,7 @@ const run = promisify(execFile);
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const archiveName = /^(capture|probe|session|rear-lidar)-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.zip$/i;
 const limit = 512 * 1024 * 1024;
+const bundleId = 'com.singingteacher.depth';
 const fail = (message, status = 400) => Object.assign(new Error(message), { status });
 const options = timeout => ({ timeout, maxBuffer: 2 * 1024 * 1024, windowsHide: true });
 async function digest(file) { const hash = createHash('sha256'); for await (const chunk of createReadStream(file)) hash.update(chunk); return hash.digest('hex'); }
@@ -20,10 +21,25 @@ function message(error) {
   return 'USB transfer did not finish. Keep the iPhone connected and unlocked, then try again. Existing captures were preserved.';
 }
 
-/** Fixed private device configuration; no client paths, device IDs, or shell commands.
+/** Identity of the configured device from `devicectl list devices --json-output`. Field names follow two maintained
+ * consumers of that output: Flutter's packages/flutter_tools/lib/src/ios/core_devices.dart (IOSCoreDevice, commit
+ * e8dca90, 2026-08-27) and appium/node-devicectl lib/types.ts (DeviceInfo, commit 20601e3, 2026-05-16). Both read
+ * result.devices[].identifier, hardwareProperties.udid and .productType, deviceProperties.osVersionNumber and
+ * connectionProperties.transportType ('wired' or 'localNetwork') and .tunnelState. Neither has been checked against
+ * a device on this repository's machines. A missing field is recorded as null, never filled in. */
+function acquisitionFor(entry, name) {
+  const text = value => typeof value === 'string' && value ? value : null;
+  return { transport: 'devicectl',
+    connection: { transportType: text(entry.connectionProperties?.transportType), tunnelState: text(entry.connectionProperties?.tunnelState) },
+    container: { domainType: 'appDataContainer', bundleId, path: `Documents/${name}` },
+    device: { coreDeviceId: entry.identifier, udid: text(entry.hardwareProperties?.udid), productType: text(entry.hardwareProperties?.productType), osVersion: text(entry.deviceProperties?.osVersionNumber) } };
+}
+
+/** Fixed private device configuration; no client paths, device IDs, or shell commands. `runProcess` runs xcrun and
+ * the depth review script (execFile semantics).
  * Wire before the API fallback: if (await routes(req,res,url)) return;
  */
-export function createNativePullRoutes({ repo, dataRoot, json }) {
+export function createNativePullRoutes({ repo, dataRoot, json, runProcess = run }) {
   let inFlight = false;
   const receiptFile = join(dataRoot, 'native-pull-latest.json');
   async function pull() {
@@ -34,10 +50,17 @@ export function createNativePullRoutes({ repo, dataRoot, json }) {
     await mkdir(dataRoot, { recursive: true, mode: 0o700 });
     const job = await mkdtemp(join(dataRoot, 'usb-pull-'));
     await chmod(job, 0o700);
-    const listFile = join(job, 'device-files.json');
-    const device = ['--device', config.deviceId, '--domain-type', 'appDataContainer', '--domain-identifier', 'com.singingteacher.depth'];
+    const devicesFile = join(job, 'devices.json'), listFile = join(job, 'device-files.json');
+    try { await runProcess('xcrun', ['devicectl', 'list', 'devices', '--timeout', '20', '--json-output', devicesFile], options(25_000)); }
+    catch (error) { throw fail(message(error), 503); }
+    let devices;
+    try { devices = JSON.parse(await readFile(devicesFile, 'utf8')).result?.devices; } catch { /* Refused below. */ }
+    if (!Array.isArray(devices)) throw fail('The connected device list was unavailable. Keep the iPhone connected and try again.', 503);
+    const entry = devices.find(item => typeof item?.identifier === 'string' && item.identifier.toUpperCase() === config.deviceId.toUpperCase());
+    if (!entry) throw fail('The configured iPhone is not connected to this Mac. Connect it by USB, unlock it, accept Trust if prompted, and try again.', 503);
+    const device = ['--device', config.deviceId, '--domain-type', 'appDataContainer', '--domain-identifier', bundleId];
     try {
-      await run('xcrun', ['devicectl', 'device', 'info', 'files', ...device, '--subdirectory', 'Documents', '--no-recurse', '--timeout', '20', '--json-output', listFile], options(25_000));
+      await runProcess('xcrun', ['devicectl', 'device', 'info', 'files', ...device, '--subdirectory', 'Documents', '--no-recurse', '--timeout', '20', '--json-output', listFile], options(25_000));
     } catch (error) { throw fail(message(error), 503); }
     const listing = JSON.parse(await readFile(listFile, 'utf8'));
     const files = listing.result?.files;
@@ -57,7 +80,7 @@ export function createNativePullRoutes({ repo, dataRoot, json }) {
     if (!existing) {
       const temporary = join(job, selected.name);
       try {
-        await run('xcrun', ['devicectl', 'device', 'copy', 'from', ...device, '--source', `Documents/${selected.name}`, '--destination', temporary, '--timeout', '80', '--json-output', join(job, 'copy-result.json')], options(85_000));
+        await runProcess('xcrun', ['devicectl', 'device', 'copy', 'from', ...device, '--source', `Documents/${selected.name}`, '--destination', temporary, '--timeout', '80', '--json-output', join(job, 'copy-result.json')], options(85_000));
       } catch (error) { throw fail(message(error), 503); }
       const copied = await fileStat(temporary);
       if (!copied?.isFile() || copied.isSymbolicLink() || copied.size !== selected.metadata.size) throw fail('The transferred size does not match the phone. The incomplete download is retained privately; try again.', 502);
@@ -65,17 +88,18 @@ export function createNativePullRoutes({ repo, dataRoot, json }) {
       await rename(temporary, target);
     }
     const receipt = {
-      name: selected.name, bytes: selected.metadata.size, phoneModifiedAt: selected.metadata.lastModDate,
+      schemaVersion: 'native-pull-receipt-2', name: selected.name, bytes: selected.metadata.size, phoneModifiedAt: selected.metadata.lastModDate,
       receivedAt: new Date().toISOString(), reused: !!existing, sha256: await digest(target),
       verification: 'downloaded-only', source: 'configured-iphone-app-container',
       message: 'Saved privately. This archive has not yet been validated for model use.',
+      acquisition: acquisitionFor(entry, selected.name), signature: { status: 'not-provided' },
     };
     if (selected.name.startsWith('capture-') || selected.name.startsWith('rear-lidar-')) {
       let python = join(repo, 'science', '.venv', 'bin', 'python');
       try { await access(python); } catch { python = '/usr/bin/python3'; }
       try {
         const reportFile = join(job, 'depth-review.json');
-        await run(python, [join(repo, 'scripts', 'review-native-depth.py'), target, '--output', reportFile,...(process.env.LIDAR_PREVIEW_ENABLED==='1'?['--allow-rear-lidar']:[])], options(80_000));
+        await runProcess(python, [join(repo, 'scripts', 'review-native-depth.py'), target, '--output', reportFile,...(process.env.LIDAR_PREVIEW_ENABLED==='1'?['--allow-rear-lidar']:[])], options(80_000));
         const report = JSON.parse(await readFile(reportFile, 'utf8'));
         if (report.kind !== 'native-depth-coverage-review' || !Number.isSafeInteger(report.callbacks)
           || String(report.capture_id).toUpperCase() !== selected.name.replace(/^(capture|rear-lidar)-/, '').slice(0,-4).toUpperCase()) throw new Error('Invalid review result or capture ID');
