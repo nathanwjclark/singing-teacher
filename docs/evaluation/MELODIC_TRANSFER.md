@@ -19,7 +19,9 @@ melody must have:
 - 2–8 notes, each 65–1100 Hz and 500–4000 ms, at most 20 s in total;
 - adjacent notes at least 100 cents apart, with 0.5 cent slack so semitones entered to 0.01 Hz
   (C4 261.63 → C♯4 277.18) are accepted (repeated notes and rests are not supported);
-- a pitch tolerance of at most half the smallest adjacent interval, so a neighbouring note cannot pass;
+- a pitch tolerance strictly less than half the actual smallest adjacent interval, so no pitch can be
+  within tolerance of two neighbouring notes (a 99.99-cent semitone entered to 0.01 Hz needs a
+  tolerance below 50 cents);
 - a note-start and phrase-length tolerance of 100–500 ms (default 200 ms);
 - a breath allowance of 0–250 ms and a lead-in allowance of 0–5000 ms of voicing before note 1. The
   panel freezes 250 ms and 1000 ms.

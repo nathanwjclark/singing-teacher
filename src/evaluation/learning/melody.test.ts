@@ -121,7 +121,7 @@ test('vibrato is scored by its centre: ±40, ±80 and ±100 cents around the tar
   const vibrato = (extent: number, centre = 0) => track(sung()).map(s => s.hz ? { ...s, hz: s.hz*2**((centre+extent*Math.sin(2*Math.PI*5.5*s.offsetMs/1000))/1200) } : s)
   for (const extent of [40, 80, 100]) {
     const score = scoreMelody(melody, vibrato(extent), 50)
-    assert.equal(score.passed, true, `±${extent} cents`); assert.ok(score.errorCents! < 15, `±${extent}: ${score.errorCents}`); assert.ok(score.transitionErrorMs! <= 60)
+    assert.equal(score.passed, true, `±${extent} cents`); assert.ok(score.errorCents! < 15, `±${extent}: ${score.errorCents}`); assert.ok(score.transitionErrorMs! <= 40)
   }
   const flat = scoreMelody(melody, vibrato(80, -60), 50)
   assert.equal(flat.passed, false); assert.ok(flat.notes.every(n => Math.abs(n.errorCents!-60) < 15))
@@ -155,9 +155,15 @@ test('melody declarations reject unsupported repeated notes, range, malformed va
   assert.throws(() => validateMelody({ ...melody, notes: [{hz:220,durationMs:NaN},melody.notes[1]] }, 50), /500–4000/)
   assert.throws(() => validateMelody({ ...melody, rhythmToleranceMs: 50 }, 50), /100–500/)
   assert.throws(() => validateMelody({ ...melody, policy: 'fixed-tempo-onset/1' as LearningMelody['policy'] }, 50), /2–8 notes/)
-  assert.throws(() => validateMelody(melody, 200), /at most half the smallest adjacent interval \(316 cents\)/)
+  assert.throws(() => validateMelody(melody, 200), /less than half the smallest adjacent interval \(315\.64 cents\)/)
   // Semitones entered to 0.01 Hz land a few hundredths of a cent short of 100 and must be accepted.
-  for (const notes of [[{hz:261.63,durationMs:800},{hz:277.18,durationMs:800}],[{hz:220,durationMs:800},{hz:233.08,durationMs:800}]]) assert.doesNotThrow(() => validateMelody({ ...melody, notes }, 50))
+  // The tolerance must be strictly below half the actual interval, so a 99.99-cent step needs less than 50 cents.
+  for (const notes of [[{hz:261.63,durationMs:800},{hz:277.18,durationMs:800}],[{hz:220,durationMs:800},{hz:233.08,durationMs:800}]]) {
+    assert.doesNotThrow(() => validateMelody({ ...melody, notes }, 49.9))
+    assert.throws(() => validateMelody({ ...melody, notes }, 50), /less than half the smallest adjacent interval \(99\.9\d cents\)/)
+  }
+  const nearSemitone = [{hz:220,durationMs:800},{hz:220*2**(99.6/1200),durationMs:800}]
+  assert.throws(() => validateMelody({ ...melody, notes: nearSemitone }, 49.8), /less than half/); assert.doesNotThrow(() => validateMelody({ ...melody, notes: nearSemitone }, 49.79))
   assert.throws(() => validateMelody({ ...melody, notes: [{hz:220,durationMs:800},{hz:232.9,durationMs:800}] }, 50), /Adjacent notes/)
   assert.throws(() => validateMelody({ ...melody, maximumBreathMs: 300 }, 50), /breaths of 0–250 ms/)
 })
