@@ -31,21 +31,113 @@ def _id(value):
     return value
 
 
-def _ledger(db, session_id):
+INLINE_BYTES = 1024
+EVENT_KEYS = {'format','session_id','version','previous_sha256','action','received_at','details','state_root'}
+
+
+def _split(value, nodes):
+    """Canonical text of value and its child entry: None (inline ["v",value]) or a ["h",digest] reference.
+
+    Builds the canonical text bottom-up in one pass; every value whose text reaches
+    INLINE_BYTES is stored once in nodes as ["v",value], ["d",{key:child}] or ["l",[child]]."""
+    if isinstance(value, dict) and any(type(key) is not str for key in value):
+        value = json.loads(canonical(value))  # The key normalization v1 storage and reload applied.
+    items = value.values() if isinstance(value, dict) else value if isinstance(value, list) else ()
+    if not any(isinstance(item, (dict, list)) for item in items):
+        text, parts = canonical(value), None
+    elif isinstance(value, dict):
+        keys = sorted(value); parts = [_split(value[key], nodes) for key in keys]
+        text = '{'+','.join(json.dumps(key)+':'+part for key, (part, _) in zip(keys, parts))+'}'
+    else:
+        parts = [_split(item, nodes) for item in value]; text = '['+','.join(part for part, _ in parts)+']'
+    if len(text) < INLINE_BYTES: return text, None
+    if parts is None or all(ref is None for _, ref in parts): body = '["v",'+text+']'
+    elif isinstance(value, dict):
+        body = '["d",{'+','.join(json.dumps(key)+':'+(ref or '["v",'+part+']') for key, (part, ref) in zip(keys, parts))+'}]'
+    else: body = '["l",['+','.join(ref or '["v",'+part+']' for part, ref in parts)+']]'
+    digest = hashlib.sha256(body.encode()).hexdigest(); nodes[digest] = body
+    return text, '["h","'+digest+'"]'
+
+
+def _root(state, nodes):
+    """Digest of the state's root node, which is stored however small the state is."""
+    text, ref = _split(state, nodes)
+    if ref is not None: return json.loads(ref)[1]
+    body = '["v",'+text+']'; digest = hashlib.sha256(body.encode()).hexdigest(); nodes[digest] = body
+    return digest
+
+
+def join(digest, nodes):
+    """Value of a verified stored node; parses on every visit, so shared nodes never alias."""
+    tag, value = json.loads(nodes[digest])
+    if tag == 'v': return value
+    child = lambda c: c[1] if c[0] == 'v' else join(c[1], nodes)
+    return {key: child(c) for key, c in value.items()} if tag == 'd' else [child(c) for c in value]
+
+
+def state_field(event, nodes, key):
+    """One top-level field of a verified event's state without joining the whole state."""
+    if 'state' in event: return event['state'].get(key)
+    tag, value = json.loads(nodes[event['state_root']])
+    if tag == 'v': return value.get(key)
+    child = value.get(key)
+    return None if child is None else child[1] if child[0] == 'v' else join(child[1], nodes)
+
+
+def _children(body):
+    node = json.loads(body)
+    if type(node) is not list or len(node) != 2: raise ValueError('Invalid ledger node')
+    tag, value = node
+    children = value.values() if tag == 'd' and type(value) is dict else value if tag == 'l' and type(value) is list else () if tag == 'v' else None
+    if children is None or not all(type(c) is list and len(c) == 2 and (c[0] == 'v' or c[0] == 'h' and type(c[1]) is str) for c in children):
+        raise ValueError('Invalid ledger node')
+    return [c[1] for c in children if c[0] == 'h']
+
+
+def _verify(session_id, rows, load_nodes):
+    """The one integrity check for stored rows and supplied replays: (state, ledger digest, events, nodes).
+
+    rows are (version, canonical event body, digest). Full-state (v1) events carry their
+    state; format 2 events carry the digest of their state's root node. load_nodes() yields
+    (digest, body) and is only called once a format 2 event exists, so databases written
+    before the nodes table still open read-only."""
     state = {'session_id':session_id,'version':0,'snapshot':None,'calibration':None,
              'pending':None,'designs':{},'attempts':[],'sensations':[],'jobs':[]}
-    previous = '0'*64
-    events=[]
-    for version, body, digest in db.execute('SELECT version,body,digest FROM events WHERE session=? ORDER BY version',(session_id,)):
-        # _append stores exactly canonical(event), so verify those original
-        # bytes without serializing every historical state a second time.
-        if hashlib.sha256(body.encode()).hexdigest()!=digest:
-            raise RuntimeError('Session ledger integrity failure')
-        event=json.loads(body)
-        if version!=state['version']+1 or event['previous_sha256']!=previous or event['session_id']!=session_id or event['state']['version']!=version:
-            raise RuntimeError('Session ledger integrity failure')
-        state=event['state']; previous=digest; events.append({**event,'sha256':digest})
-    return state,previous,events
+    previous = '0'*64; events = []; nodes = {}
+    try:
+        for version, body, digest in rows:
+            # Verify the original stored bytes without serializing any state again.
+            if hashlib.sha256(body.encode()).hexdigest() != digest: raise ValueError('digest')
+            event = json.loads(body)
+            if version != len(events)+1 or event['previous_sha256'] != previous or event['session_id'] != session_id: raise ValueError('chain')
+            if 'format' in event:
+                if event['format'] != 2 or set(event) != EVENT_KEYS or event['version'] != version: raise ValueError('format')
+            elif events and 'format' in events[-1] or event['state']['version'] != version: raise ValueError('v1 event')
+            previous = digest; events.append({**event,'sha256':digest})
+        upgraded = [event for event in events if 'format' in event]
+        if upgraded:
+            references = {}
+            for digest, body in load_nodes():
+                if hashlib.sha256(body.encode()).hexdigest() != digest: raise ValueError('node digest')
+                references[digest] = _children(body); nodes[digest] = body
+            reachable = set(); pending = [event['state_root'] for event in upgraded]
+            while pending:
+                digest = pending.pop()
+                if digest not in reachable: reachable.add(digest); pending.extend(references[digest])
+            if reachable != set(references): raise ValueError('unreachable node')
+            for event in upgraded:
+                if state_field(event, nodes, 'version') != event['version'] or state_field(event, nodes, 'session_id') != session_id: raise ValueError('root')
+            state = join(upgraded[-1]['state_root'], nodes)
+        elif events: state = events[-1]['state']
+    except (KeyError, IndexError, TypeError, ValueError, AttributeError, RecursionError) as exc:
+        raise RuntimeError('Session ledger integrity failure') from exc
+    return state, previous, events, nodes
+
+
+def _ledger(db, session_id):
+    # Fetch all rows first: a cursor left open by a failed check would keep the database read-locked.
+    return _verify(session_id, db.execute('SELECT version,body,digest FROM events WHERE session=? ORDER BY version',(session_id,)).fetchall(),
+                   lambda: db.execute('SELECT digest,body FROM nodes WHERE session=?',(session_id,)).fetchall())
 
 
 def read_ledger(root, session_id):
@@ -61,14 +153,19 @@ def read_ledger(root, session_id):
     db = sqlite3.connect(path.as_uri()+'?mode=ro', uri=True, timeout=15)
     try:
         db.execute('BEGIN DEFERRED')
-        state,digest,events=_ledger(db, session_id)
+        state,digest,events,nodes=_ledger(db, session_id)
     except sqlite3.Error as exc:
         raise RuntimeError('Session ledger unavailable') from exc
     finally:
         db.close()
     if not events:
         raise KeyError(session_id)  # No recorded session; never an empty stand-in.
-    return {'state':state,'ledger_sha256':digest,'events':events}
+    return _response(state,digest,events,nodes)
+
+
+def _response(state, digest, events, nodes):
+    # Nodes appear only once a format 2 event exists, so full-state ledgers read back unchanged.
+    return {'state':state,'ledger_sha256':digest,'events':events,**({'nodes':{key:json.loads(body) for key,body in nodes.items()}} if nodes else {})}
 
 
 class SessionController:
@@ -89,6 +186,7 @@ class SessionController:
         with self._db() as db:
             db.execute('CREATE TABLE IF NOT EXISTS events(session TEXT, version INTEGER, body TEXT, digest TEXT, PRIMARY KEY(session,version))')
             db.execute('CREATE TABLE IF NOT EXISTS commands(session TEXT, id TEXT, digest TEXT, PRIMARY KEY(session,id))')
+            db.execute('CREATE TABLE IF NOT EXISTS nodes(session TEXT, digest TEXT, body TEXT, PRIMARY KEY(session,digest))')
         os.chmod(self.path, 0o600)
 
     @contextmanager
@@ -108,17 +206,20 @@ class SessionController:
         return _ledger(db, self.session_id)
 
     def _append(self, db, state, action, details):
-        _,previous,_=self._read(db)
+        # A format 2 event binds the state by its root node digest; nodes are stored once per session.
+        _,previous,_,stored=self._read(db)
         state['version']+=1
-        event={'session_id':self.session_id,'previous_sha256':previous,'action':action,'received_at':_now(),
-               'details':details,'state':deepcopy(state)}
+        nodes={}; root=_root(state,nodes)
+        db.executemany('INSERT OR IGNORE INTO nodes VALUES(?,?,?)',[(self.session_id,key,body) for key,body in nodes.items() if key not in stored])
+        event={'format':2,'session_id':self.session_id,'version':state['version'],'previous_sha256':previous,'action':action,
+               'received_at':_now(),'details':details,'state_root':root}
         db.execute('INSERT INTO events VALUES(?,?,?,?)',(self.session_id,state['version'],canonical(event),_hash(event)))
 
     def _dispatch(self, *, ledger=False):
         # Persisted intent precedes this side effect. The stable key recovers a crash
         # after JobService submission but before the job ID was recorded here.
         with self._db() as db:
-            state,digest,events=self._read(db)
+            state,digest,events,nodes=self._read(db)
             model=state['snapshot']['model_id'] if state['snapshot'] else 'session-unfitted:'+_hash(self.session_id)
             self.service.register_model(self.session_id,model)
             pending=state['pending']
@@ -145,9 +246,9 @@ class SessionController:
                         for design in state['designs'].values():
                             if design['status']=='outcome_pending': design['status']='failed'
                 self._append(db,state,'job_dispatched',{'job_id':pending.get('job_id')})
-                if ledger:state,digest,events=self._read(db)
+                if ledger:state,digest,events,nodes=self._read(db)
             # Parsed state/events are detached request-local objects already.
-            return (state,digest,events) if ledger else state
+            return (state,digest,events,nodes) if ledger else state
 
     def execute(self, command):
         if not isinstance(command,dict) or len(canonical(command).encode())>2_000_000:
@@ -156,11 +257,11 @@ class SessionController:
         if action in ('state','replay'):
             if set(command)!={'action'}:
                 raise ValueError('Unexpected read parameters')
-            state,digest,events=self._dispatch(ledger=True)
+            state,digest,events,nodes=self._dispatch(ledger=True)
             if state.get('control_receipts'):
                 from .session_control import verify_ledger
-                verify_ledger(state,events)
-            return {'state':state,'ledger_sha256':digest, **({'events':events} if action=='replay' else {})}
+                verify_ledger(state,events,nodes)
+            return _response(state,digest,events,nodes) if action=='replay' else {'state':state,'ledger_sha256':digest}
         command_id=_id(command.get('command_id'))
         fields={'forecast_visual':{'forecast_id','parameters'},'score_visual':{'forecast_id','parameters'},'register_model':{'snapshot'},'ingest_calibration':{'document'},'search':{'parameters'},'fit_probe':{'parameters'},'fit_lidar':{'parameters'},
             'select_experiment':{'source_design_id','design_id','target_observation_id','experiment_id','selection_reason'},
@@ -171,7 +272,7 @@ class SessionController:
         if action not in fields or set(command)!={'action','command_id','expected_version'}|fields[action]:
             raise ValueError('Unsupported session command fields')
         with self._db() as db:
-            state,_,_=self._read(db)
+            state,_,_,_=self._read(db)
             prior=db.execute('SELECT digest FROM commands WHERE session=? AND id=?',(self.session_id,command_id)).fetchone()
             if prior:
                 if prior[0]!=_hash(command):
