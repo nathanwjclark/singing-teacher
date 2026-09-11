@@ -33,7 +33,9 @@ test('motion audio timeline shows the time course, gaps with reasons and ambiguo
  const temporal=result.temporalAnalysis;
  expect(result.status).toBe('available');expect(result.modelUpdated).toBe(false);expect(temporal.status).toBe('available');
  await expect(group).toContainText(`Selection: top-3-by-frozen-snapshot-rank (${result.hypothesisSubset.rankingBasis}), fixed before the audio was scored.`);
- await expect(group).toContainText('Scored with the canonical-coarse-v1 objective; the baseline model was fitted with canonical-coarse-v1 (not recorded; legacy default).');
+ // The app's fit records its objective (coarse by default), so the analysis states it matches.
+ expect(result.objective).toMatchObject({rescoring:'canonical-coarse-v1',baseline:'canonical-coarse-v1',baselineDeclared:true,matchesBaseline:true});
+ await expect(group).toContainText('Scored with the canonical-coarse-v1 objective; the baseline model was fitted with canonical-coarse-v1.');
  for(const warning of result.warnings)await expect(group.getByRole('note').filter({hasText:warning.message})).toBeVisible();
 
  await group.getByText('Conditional temporal comparison',{exact:true}).click();

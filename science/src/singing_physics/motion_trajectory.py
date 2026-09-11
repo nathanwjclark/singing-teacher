@@ -4,6 +4,7 @@ import json
 import math
 
 from .pcm_inverse import FEATURES, fit_pcm
+from .pcm_spectral import COARSE_OBJECTIVE
 
 VERSION = 'motion-forward-bank-3'
 MAX_RECORDING_SECONDS = 30
@@ -15,8 +16,7 @@ GAIN_GRID = (1., 4.)
 MAX_SYNTHESIS_CALLS = 3*2*MAX_HYPOTHESES*len(JA_GRID)*len(GAIN_GRID)
 MAX_PITCH_DISTANCE_CENTS = 100.
 ANCHOR_PERCENTILES = (10, 50, 90)
-# Rescoring always uses the coarse canonical descriptors in FEATURES, whatever the baseline fit used.
-RESCORING_OBJECTIVE = 'canonical-coarse-v1'
+# Rescoring always uses the coarse canonical descriptors (COARSE_OBJECTIVE, FEATURES), whatever the baseline fit used.
 SCALE_POLICY = ('per window: declared engineering scale, widened only by that window\'s own reported '
                 'descriptor uncertainty (the fit_pcm per-trial rule)')
 
@@ -119,7 +119,7 @@ def score_forward_bank(engine, windows, hypotheses, pose, sample_rate, frame_sta
         'measurementPolicy': 'disjoint canonical frames on an evenly spaced recording-wide grid; no quality-based window selection',
         'interpretation': 'retrospective fixed-source candidate comparison; not a forecast or recovered movement',
         'objectiveInterpretation': 'per-window-scaled coarse-descriptor discrepancy against a reused fixed-source pitch bank; not a likelihood',
-        'objective': RESCORING_OBJECTIVE, 'objectiveFeatures': list(FEATURES), 'scalePolicy': SCALE_POLICY,
+        'objective': COARSE_OBJECTIVE, 'objectiveFeatures': list(FEATURES), 'scalePolicy': SCALE_POLICY,
         'bankSha256Scope': 'canonical JSON (sorted keys, compact separators) of the complete fit in each bank artifact',
         'banks': [], 'synthesisRequests': 0}
     if not usable:
@@ -145,7 +145,7 @@ def score_forward_bank(engine, windows, hypotheses, pose, sample_rate, frame_sta
             for h in hypotheses for ja in JA_GRID for gain in GAIN_GRID]
         row = {'pitchHz': pitch, 'representativeWindow': representative['index']}
         try:
-            fitted = fitter(engine, document, candidates=candidates, max_synthesis_calls=2*len(candidates))
+            fitted = fitter(engine, document, candidates=candidates, max_synthesis_calls=2*len(candidates), objective=COARSE_OBJECTIVE)
         except (ValueError, RuntimeError) as error:
             fitted = None
             row.update(status='failed', reason=str(error))
@@ -159,7 +159,7 @@ def score_forward_bank(engine, windows, hypotheses, pose, sample_rate, frame_sta
     available = [fitted for fitted in banks if fitted is not None]
     if available:
         metadata['comparisonSha256'] = _hash([available[0]['canonical_extractor'], available[0]['native_provenance'],
-            RESCORING_OBJECTIVE, SCALE_POLICY, {name: unit for name, (unit, _) in FEATURES.items()}])
+            COARSE_OBJECTIVE, SCALE_POLICY, {name: unit for name, (unit, _) in FEATURES.items()}])
     for row in usable:
         target = _values(row['measurement'])
         pitch = target['pitchHz']['value']
@@ -176,7 +176,7 @@ def score_forward_bank(engine, windows, hypotheses, pose, sample_rate, frame_sta
         scales = window_scales(row['measurement'])
         score = {'kind': banks[bank_index]['kind'], 'identifiability': banks[bank_index]['identifiability'],
             'bankIndex': bank_index, 'bankSha256': bank['sha256'], 'comparisonSha256': metadata['comparisonSha256'],
-            'objective': RESCORING_OBJECTIVE, 'featureScales': scales}
+            'objective': COARSE_OBJECTIVE, 'featureScales': scales}
         for model, table in bank['candidates'].items():
             candidates = []
             # Every comparator row uses the one reference anatomy, stated once per window.

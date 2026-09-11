@@ -17,7 +17,8 @@ import numpy as np
 from live_capture_jobs import HTTPBackend
 from singing_physics.engine import Engine
 from singing_physics.pcm_inverse import extract_pcm,fit_pcm
-from singing_physics.motion_trajectory import window_offsets,score_forward_bank,select_hypotheses,MAX_SYNTHESIS_CALLS,MAX_RECORDING_SECONDS,RESCORING_OBJECTIVE,VERSION
+from singing_physics.motion_trajectory import window_offsets,score_forward_bank,select_hypotheses,MAX_SYNTHESIS_CALLS,MAX_RECORDING_SECONDS,VERSION
+from singing_physics.pcm_spectral import COARSE_OBJECTIVE
 
 
 def sha(raw):return hashlib.sha256(raw).hexdigest()
@@ -80,11 +81,11 @@ def run(data_root,capture_id,pose,output,expected_model_id=None):
     # Declared from the frozen snapshot before any recording byte is decoded.
     selected,subset=select_hypotheses(snapshot);result.update(modelId=snapshot['model_id'],sessionId=session_id,hypothesisSubset=subset)
     # A baseline receipt without an objective predates selectable objectives and used the coarse descriptors.
-    baseline_objective=app.get('objective') or RESCORING_OBJECTIVE
-    result['objective']={'rescoring':RESCORING_OBJECTIVE,'baseline':baseline_objective,'baselineDeclared':'objective' in app,'matchesBaseline':baseline_objective==RESCORING_OBJECTIVE,
+    baseline_objective=app.get('objective') or COARSE_OBJECTIVE
+    result['objective']={'rescoring':COARSE_OBJECTIVE,'baseline':baseline_objective,'baselineDeclared':'objective' in app,'matchesBaseline':baseline_objective==COARSE_OBJECTIVE,
         'source':'baseline science run summary objective field; absent means the legacy coarse objective'}
-    if baseline_objective!=RESCORING_OBJECTIVE:
-        result['warnings'].append({'code':'objective-differs-from-baseline','message':f'The baseline model was fitted with {baseline_objective}; this analysis rescored it with {RESCORING_OBJECTIVE} coarse descriptors, so its ranking may differ from the baseline fit.'})
+    if baseline_objective!=COARSE_OBJECTIVE:
+        result['warnings'].append({'code':'objective-differs-from-baseline','message':f'The baseline model was fitted with {baseline_objective}; this analysis rescored it with {COARSE_OBJECTIVE} coarse descriptors, so its ranking may differ from the baseline fit.'})
     write(output/'model-snapshot.json',snapshot)
     # Decode only verified private bytes copied to this job, not a mutable original pathname.
     local=output/'source-media';local.write_bytes(media);local.chmod(0o600)
