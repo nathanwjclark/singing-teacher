@@ -1,6 +1,18 @@
 """Bounded read-only numerical replay of retained scoring inputs, never session actions."""
 from __future__ import annotations
 
+import signal
+import time
+
+# As a verifier process it ends itself (SIGALRM default action) at this deadline,
+# armed before the scientific imports. The server allows 300 seconds from spawn
+# (server/sessionRecompute.mjs), so the process is gone before the server stops
+# trusting its pid.
+HARD_SECONDS = 290
+PROCESS_STARTED = time.monotonic()
+if __name__ == '__main__':
+    signal.alarm(HARD_SECONDS)
+
 import argparse
 from datetime import datetime, timezone
 import hashlib
@@ -8,10 +20,7 @@ import json
 import os
 from pathlib import Path
 import re
-import signal
-import tempfile
 import subprocess
-import time
 
 import numpy as np
 
@@ -29,14 +38,14 @@ MAX_OPERATIONS = 16
 OUTCOMES = {'verified': 'matched', 'legacy_version_unverified': 'matched', 'numerical_disagreement': 'failed',
             'invalid_evidence': 'failed', 'missing_media': 'unavailable', 'missing_artifacts': 'unavailable',
             'version_mismatch': 'unsupported', 'runtime_unavailable': 'unsupported'}
+# A scoring row is bounded by its subprocess timeouts: up to three 30-second
+# extractor bridge calls plus numerical work. A row starts only while it can still
+# finish before HARD_SECONDS; later rows are skipped with time_limit.
+ROW_RESERVE_SECONDS = 100
+MAX_SECONDS = HARD_SECONDS - ROW_RESERVE_SECONDS
 # Faults of this computer's scoring runtime (missing Node, extractor timeout, native
 # engine failure) say nothing about the retained evidence.
 RUNTIME_FAULTS = (RuntimeError, OSError, subprocess.TimeoutExpired)
-MAX_SECONDS = 240
-# The process ends itself at this deadline (SIGALRM default action), so a verifier
-# orphaned by a server restart cannot outlive the attempt the server still tracks.
-# server/sessionRecompute.mjs uses the same deadline.
-HARD_SECONDS = 300
 
 
 def now():
@@ -103,10 +112,11 @@ def source_score(job):
             'evidence_scope': 'Exact received float32 frame retained in the controller request; no full-recording or capture-clock verification.'}
 
 
-def recompute_session(replay, *, session_id, max_operations=MAX_OPERATIONS):
+def recompute_session(replay, *, session_id, max_operations=MAX_OPERATIONS, started=None):
+    """Compare retained scores; `started` is the monotonic time the wall budget counts from."""
     if type(max_operations) is not int or not 1 <= max_operations <= MAX_OPERATIONS:
         raise ValueError('Choose between one and sixteen scoring operations')
-    started = time.monotonic()
+    started = time.monotonic() if started is None else started
     original_digest = digest(replay)
     verify_replay(replay, session_id, replay['ledger_sha256'])
     state = replay['state']
@@ -123,7 +133,7 @@ def recompute_session(replay, *, session_id, max_operations=MAX_OPERATIONS):
         'workerLedgerSha256': replay['ledger_sha256'], 'originalReplaySha256': hashlib.sha256(raw).hexdigest(),
         'originalReplayHashScope': 'Python canonical JSON of one authoritative replay response',
         'modelUpdated': False, 'rawMediaIncluded': False, 'operations': [],
-        'budget': {'maximumScoringOperations': max_operations, 'maximumWallSeconds': MAX_SECONDS,
+        'budget': {'maximumScoringOperations': max_operations, 'rowAdmissionSeconds': MAX_SECONDS, 'hardDeadlineSeconds': HARD_SECONDS,
                    'synthesisCalls': 0, 'geometryCalls': 0, 'canonicalExtractions': 0},
         'limitations': ['Recomputes retained scoring operations, not model fitting, synthesis, capture processing, or the complete causal session.',
             'An internally consistent private ledger is not independent authentication of historical events.',
@@ -145,7 +155,7 @@ def recompute_session(replay, *, session_id, max_operations=MAX_OPERATIONS):
             row.update(outcome='unavailable', status='missing_artifacts', reason='No successful original score is available.')
         elif job['job_id'] not in selected:
             row.update(outcome='skipped', status='operation_limit', reason='Operation limit: this run verifies the most recent selected scoring operations.')
-        elif time.monotonic() - started > MAX_SECONDS - 35:
+        elif time.monotonic() - started > MAX_SECONDS:
             row.update(outcome='skipped', status='time_limit', reason='Wall-time budget reached before this scoring operation.')
         else:
             try:
@@ -186,7 +196,7 @@ def recompute_session(replay, *, session_id, max_operations=MAX_OPERATIONS):
     return report
 
 
-def run(data_root, output, *, max_operations=MAX_OPERATIONS):
+def run(data_root, output, *, max_operations=MAX_OPERATIONS, started=None):
     root = Path(data_root); output = Path(output)
     request = load(output/'request.json')
     current = load(root/'science-current.json')
@@ -197,17 +207,10 @@ def run(data_root, output, *, max_operations=MAX_OPERATIONS):
         raise ValueError('Current session changed before replay capture; start a new verification')
     backend = HTTPBackend(os.environ.get('SCIENCE_URL'), os.environ.get('SCIENCE_TOKEN'), summary['sessionId'])
     # The worker's read-only ledger path: unlike the 'replay' session action it never
-    # dispatches a pending job or registers a model.
+    # dispatches a pending job or registers a model. No private replay or PCM is
+    # written to the artifact directory.
     replay = backend.ledger()
-    # No private replay or PCM is written to the artifact directory. A private
-    # scratch working directory bounds any numerical adapter temporary files.
-    with tempfile.TemporaryDirectory(prefix='session-score-replay-') as scratch:
-        previous = Path.cwd()
-        try:
-            os.chdir(scratch)
-            report = recompute_session(replay, session_id=summary['sessionId'], max_operations=max_operations)
-        finally:
-            os.chdir(previous)
+    report = recompute_session(replay, session_id=summary['sessionId'], max_operations=max_operations, started=started)
     report.update(runId=current['runId'], attemptId=output.name)
     raw = _encode(report)
     if len(raw) > 8 * 1024 * 1024:
@@ -223,9 +226,8 @@ def main():
     parser.add_argument('--output', required=True)
     parser.add_argument('--max-operations', type=int, default=MAX_OPERATIONS)
     args = parser.parse_args()
-    signal.alarm(HARD_SECONDS)
     try:
-        report = run(args.data_root, args.output, max_operations=args.max_operations)
+        report = run(args.data_root, args.output, max_operations=args.max_operations, started=PROCESS_STARTED)
         print(json.dumps({'status': report['status'], 'counts': report['counts']}))
         return 0
     except (KeyError, TypeError, ValueError, OSError, RuntimeError, subprocess.TimeoutExpired) as exc:

@@ -282,6 +282,15 @@ def test_runtime_faults_are_unsupported_not_failed(batch_replay, tmp_path, monke
     assert outcomes(report) == {('unsupported', 'runtime_unavailable')} and 'timed out' in next(r for r in report['operations'] if r['status'] == 'runtime_unavailable')['reason']
 
 
+def test_rows_past_the_admission_window_are_skipped_cleanly(batch_replay):
+    import time
+    from science.scripts.app_recompute import MAX_SECONDS
+    report = recompute_session(batch_replay, session_id='synthetic-replay-session', started=time.monotonic()-MAX_SECONDS-1)
+    skipped = [row for row in report['operations'] if row['outcome'] == 'skipped']
+    assert report['counts']['skipped'] == 2 and {row['status'] for row in skipped} == {'time_limit'}
+    assert report['budget']['canonicalExtractions'] == 0 and report['counts']['matched'] == 0
+
+
 def test_recompute_never_dispatches_a_pending_intent(batch_evidence, tmp_path, monkeypatch):
     """The 'replay' session action would submit a persisted intent and append job_dispatched."""
     import shutil, sqlite3, threading

@@ -82,16 +82,21 @@ def recompute(export_path, job_id, frame_path, *, original_replay=None, node_bin
                   'No model or session state is updated. Numerical agreement is not anatomical accuracy.']}
     fresh = None
     try:
-        document, document_raw = evidence(export_path, 64*1024*1024)
-        report['export_sha256'] = hashlib.sha256(document_raw).hexdigest()
+        if isinstance(export_path, dict) and export_path.get('replay') is original_replay:
+            # The app runner wraps one replay it already bounded and chain-verified for
+            # the whole run; re-encoding and re-hashing it for every row adds nothing.
+            document, replay = export_path, original_replay
+        else:
+            document, document_raw = evidence(export_path, 64*1024*1024)
+            report['export_sha256'] = hashlib.sha256(document_raw).hexdigest()
+            if original_replay is None or not isinstance(original_replay, dict) and not Path(original_replay).is_file():
+                report.update(status='missing_artifacts', reason='Retain and supply the unredacted original controller replay; JS export serialization cannot preserve Python canonical hashes.')
+                return report, None
+            replay, replay_raw = evidence(original_replay, 64*1024*1024)
+            verify_replay(replay, document['sessionId'], document['workerLedgerSha256'])
+            report['original_replay_sha256'] = hashlib.sha256(replay_raw).hexdigest()
         if document['schemaVersion'] != 'singing-session-export/1':
             raise ValueError('Unsupported export schema')
-        if original_replay is None or not isinstance(original_replay, dict) and not Path(original_replay).is_file():
-            report.update(status='missing_artifacts', reason='Retain and supply the unredacted original controller replay; JS export serialization cannot preserve Python canonical hashes.')
-            return report, None
-        replay, replay_raw = evidence(original_replay, 64*1024*1024)
-        verify_replay(replay, document['sessionId'], document['workerLedgerSha256'])
-        report['original_replay_sha256'] = hashlib.sha256(replay_raw).hexdigest()
         state = replay['state']
         if state['session_id'] != document['sessionId']:
             raise ValueError('Export session identity mismatch')
