@@ -27,8 +27,12 @@ async function retained(){
    if(bytes&&!(name.endsWith('.sqlite3-wal')&&bytes.length===0))files[name]=createHash('sha256').update(bytes).digest('hex');}}}
  await walk(data());return files;
 }
-async function worker(request:APIRequestContext,sessionId:string){return (await request.get(`/api/science/sessions/${sessionId}/replay`)).json()}
-async function recomputeStatus(request:APIRequestContext){return (await request.get('/api/session-recompute/status')).json()}
+// The API calls here are separated by minutes of browser-only work. Reusing a pooled keep-alive
+// socket after the server's 5 s idle timeout closed it fails with ECONNRESET (CI run 34638824958),
+// so each call asks for a fresh connection.
+async function api(request:APIRequestContext,path:string){return (await request.get(path,{headers:{connection:'close'}})).json()}
+async function worker(request:APIRequestContext,sessionId:string){return api(request,`/api/science/sessions/${sessionId}/replay`)}
+async function recomputeStatus(request:APIRequestContext){return api(request,'/api/session-recompute/status')}
 async function experiments(page:Page){await page.getByRole('button',{name:'Experiments',exact:true}).click()}
 
 test('a retained spectral recording is recomputed read-only through the real app',async({page,request})=>{
@@ -52,17 +56,17 @@ test('a retained spectral recording is recomputed read-only through the real app
  await science.getByLabel('Scoring objective').selectOption('multires-log-spectrum-v1');
  await science.getByLabel(/This latest recording contains only/).check();
  await science.getByRole('button',{name:'Fit latest iPhone capture'}).click();
- await expect.poll(async()=>(await (await request.get('/api/science/status')).json()).status,{timeout:240_000,intervals:[2000]}).toBe('succeeded');
+ await expect.poll(async()=>(await api(request,'/api/science/status')).status,{timeout:240_000,intervals:[2000]}).toBe('succeeded');
  // On success the app applies the fitted geometry and returns to the studio view.
  await expect(page.getByRole('button',{name:'Studio',exact:true})).toHaveAttribute('aria-pressed','true',{timeout:30_000});
- const result=(await (await request.get('/api/science/status')).json()).result;
+ const result=(await api(request,'/api/science/status')).result;
  const selected=result.forecast.rankings.find((row:{experiment:{experiment_id:string}})=>row.experiment.experiment_id===result.forecast.selected_experiment_id)?.experiment;
  expect(selected,'the spectral forecast selected a separating experiment').toBeTruthy();
  execFileSync('science/.venv/bin/python',['tests/fixtures/prepare_voice_browser.py',data(),'--later',selected.pose],{env:{...process.env,PYTHONPATH:'.:science/src'}});
  await experiments(page);
  await science.getByLabel(/The latest capture is a new/).check();
  await science.getByRole('button',{name:'Score latest iPhone capture'}).click();
- await expect.poll(async()=>(await (await request.get('/api/science/outcome')).json()).status,{timeout:180_000,intervals:[2000]}).toBe('succeeded');
+ await expect.poll(async()=>(await api(request,'/api/science/outcome')).status,{timeout:180_000,intervals:[2000]}).toBe('succeeded');
  // Everything the recompute must leave untouched, captured after the last scientific action.
  // The worker's replay route is a recovery read, so it runs before the file snapshot.
  const beforeReplay=await worker(request,result.sessionId),beforeFiles=await retained();
@@ -100,9 +104,9 @@ test('a retained spectral recording is recomputed read-only through the real app
  // Read-only: the worker ledger, the historical forecast and every retained file are byte-identical.
  expect(await retained()).toEqual(beforeFiles);
  expect(await worker(request,result.sessionId)).toEqual(beforeReplay);
- expect((await (await request.get('/api/science/status')).json()).result.forecast).toEqual(result.forecast);
+ expect((await api(request,'/api/science/status')).result.forecast).toEqual(result.forecast);
  // The session export carries the bound report with the same separate counts.
- const exported=await (await request.get('/api/session-export')).json();
+ const exported=await api(request,'/api/session-export');
  const artifact=exported.artifacts.find((item:{binding?:{role:string}})=>item.binding?.role==='read-only-score-recomputation');
  expect(artifact.binding).toEqual({sessionId:result.sessionId,role:'read-only-score-recomputation',modelUpdated:false,current:true});
  expect(artifact.data.counts).toEqual(counts);
