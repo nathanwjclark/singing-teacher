@@ -4,6 +4,7 @@ import { MELODY_HOP_MS, mirexHit, scoreMelody, validateMelody } from './melody.t
 import { compareLearning, evaluateLearning, freezeLearningProtocol } from './index.ts'
 import { exportLearningInterchange, learningInstruction } from '../../experiment/cues/interchange.ts'
 import { CUE_LIBRARY } from '../../experiment/cues/library.ts'
+import { canonicalJson, sha256 } from '../../contracts/index.ts'
 import type { LearningAttempt, LearningMelody, LearningPitchSample } from '../../experiment/cues/types.ts'
 
 // Synthetic pitch tracks (input data only): one sample every hop, centered at 10 + 20·i ms, content taken at the center.
@@ -187,6 +188,12 @@ test('frozen melody: prompted and transfer score the melody, recall stays single
   const perArm = [practice, variantPractice, censored, { ...censored, id:'censored-wrong', arm:'variant' as const, pitches:track(sung([220,440,275]), { tail: 0 }) }, { ...transfer, id:'variant-transfer', arm:'variant' as const }]
   const transferRow = compareLearning(perArm, await evaluateLearning(protocol, perArm)).find(row => row.phase === 'transfer')!
   assert.deepEqual(transferRow.arms.map(a => [a.arm,a.attempts,a.passed,a.excluded,a.endNotObserved]), [['baseline',1,0,1,1],['variant',2,1,1,1]])
+  // A melody frozen before a scorer field existed fails closed: melodic attempts are excluded with a reason, recall still scores, export works.
+  const { maximumBreathMs: _dropped, ...oldMelody } = melody, { digest: _digest, ...oldPayload } = { ...protocol, melody: oldMelody as LearningMelody }
+  const legacy = { ...oldPayload, digest: await sha256(canonicalJson(oldPayload)) }
+  const legacyScores = await evaluateLearning(legacy, [practice,recall,transfer].map(a => ({ ...a, protocolDigest: legacy.digest })))
+  assert.deepEqual(legacyScores.map(s => s.status), ['excluded','scored','excluded']); assert.match(legacyScores[0].reasons.join(), /Frozen melody cannot be scored by this version: Allow breaths/)
+  assert.equal((await exportLearningInterchange([legacy], [practice,transfer].map(a => ({ ...a, protocolDigest: legacy.digest })))).omissions.length, 0)
   const stopped = await evaluateLearning(protocol, [practice, { ...forgot, outcome:'stopped', failureReason:'Stopped for discomfort / rest' }])
   assert.deepEqual(stopped[1].reasons, ['Stopped for discomfort / rest'])
   assert.match(learningInstruction(protocol,'baseline','transfer'), /from memory/); assert.doesNotMatch(learningInstruction(protocol,'baseline','transfer'), /220|330|275/)

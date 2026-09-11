@@ -16,6 +16,9 @@ export interface LearningScore { attemptId:string; status:'scored'|'failed'|'exc
 export async function evaluateLearning(protocol:LearningProtocol, attempts:LearningAttempt[]):Promise<LearningScore[]> {
   const {digest,...payload}=protocol
   const valid=await sha256(canonicalJson(payload))===digest
+  // A melody this scorer cannot validate (for example a protocol frozen before a field was added) excludes its melodic attempts instead of throwing.
+  let melodyError:string|null=null
+  if(protocol.melody)try{validateMelody(protocol.melody,protocol.toleranceCents)}catch(e){melodyError=`Frozen melody cannot be scored by this version: ${e instanceof Error?e.message:String(e)}`}
   return attempts.map(attempt=>{
     const reasons:string[]=[]
     if(!valid)reasons.push('Frozen protocol digest changed')
@@ -31,10 +34,12 @@ export async function evaluateLearning(protocol:LearningProtocol, attempts:Learn
       const latest=Math.max(...earlier.map(a=>Date.parse(a.endedAt)))
       if(!earlier.length||attempt.sessionId===protocol.sessionId||Date.parse(attempt.startedAt)-latest<protocol.retentionHours*3600000)reasons.push('Later-session retention delay not met')
     }
-    const melody=protocol.melody&&isMelodic(attempt.phase)?scoreMelody(protocol.melody,attempt.pitches,protocol.toleranceCents):undefined
+    const melodic=!!protocol.melody&&isMelodic(attempt.phase)
+    if(melodic&&melodyError)reasons.push(melodyError)
+    const melody=melodic&&!melodyError?scoreMelody(protocol.melody!,attempt.pitches,protocol.toleranceCents):undefined
     const validPitch=attempt.pitches.filter(p=>p.hz!==null&&Number.isFinite(p.hz)&&p.hz>0)
     if(melody?.status==='unusable')reasons.push(...melody.reasons)
-    else if(!melody&&(validPitch.length<protocol.minimumVoicedWindows||validPitch.length/Math.max(1,attempt.pitches.length)<protocol.minimumVoicedFraction))reasons.push('Insufficient voiced audio')
+    else if(!melodic&&(validPitch.length<protocol.minimumVoicedWindows||validPitch.length/Math.max(1,attempt.pitches.length)<protocol.minimumVoicedFraction))reasons.push('Insufficient voiced audio')
     const errors=validPitch.map(p=>Math.abs(1200*Math.log2(p.hz!/protocol.targetHz))).sort((a,b)=>a-b)
     const middle=Math.floor(errors.length/2)
     const errorCents=errors.length?(errors.length%2?errors[middle]:(errors[middle-1]+errors[middle])/2):null
