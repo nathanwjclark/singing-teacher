@@ -125,3 +125,20 @@ test('a live process that reused the recorded pid is not taken for the verifier'
  await record('Thu Jan  1 00:00:00 1970');await route(request(null,'GET'),'reused',status);
  assert.equal(replies.get('reused').body.status,'failed');assert.equal(replies.get('reused').body.attemptId,first);
 });
+
+test('when the verifier exits, a child it left running is stopped with it',async t=>{
+ const {root,replies,options}=await fixture(t);
+ // A real verifier stand-in that starts a long-running child (like the Node extractor
+ // after a deadline kill) and exits without waiting for it.
+ const verifier=join(root,'verifier.sh'),record=join(root,'child.pid');
+ await writeFile(verifier,`#!/bin/sh\n/bin/sleep 60 &\necho $! > '${record}'\nexit 1\n`,{mode:0o755});
+ const real={...options,env:{...process.env,SINGING_PYTHON:verifier}};delete real.spawnImpl;
+ const route=createSessionRecomputeRoutes(real);
+ await route(request({requestId:first,maxOperations:1}),'start',run);assert.equal(replies.get('start').code,202);
+ await poll(()=>route(request(null,'GET'),'done',status),()=>replies.get('done')?.body.status==='failed');
+ const child=Number(await readFile(record,'utf8'));
+ t.after(()=>{try{process.kill(child,'SIGKILL');}catch{}});
+ let gone=false;
+ for(let i=0;i<100&&!gone;i++){try{process.kill(child,0);await new Promise(resolve=>setTimeout(resolve,20));}catch{gone=true;}}
+ assert.ok(gone,'the verifier\'s child is still running');
+});

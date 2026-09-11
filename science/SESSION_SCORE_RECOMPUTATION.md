@@ -84,12 +84,16 @@ job total:
 | skipped | `operation_limit`, `time_limit` | Outside this run's 16-operation or wall-time budget. |
 
 The run is bounded to 16 scoring operations, one extraction per audio score, zero
-synthesis and zero geometry calls. The verifier arms SIGALRM for 290 seconds before
-its scientific imports and ends there. A scoring row makes at most three 30-second
-extractor calls, so rows start only during the first 190 seconds after process
-start (a 100-second reserve per row); later rows are `skipped` with `time_limit`
-and the report is still written. The verifier leads its own process group, and the
-server stops that group 300 seconds after spawn. It runs with only `PATH`, `HOME`,
+synthesis and zero geometry calls. Before its scientific imports the verifier arms
+a 290-second timer thread that kills its whole process group, extractor children
+included (a thread still fires while native code runs). A scoring row makes at most
+three 30-second extractor calls, so rows start only during the first 190 seconds
+after process start (a 100-second reserve per row); later rows are `skipped` with
+`time_limit` and the report is still written. Source rows first run the phonation
+extractor once on a fixed generated tone, so a Node that cannot run the bridge is
+`runtime_unavailable` rather than a rejected frame. The verifier leads its own
+process group; the server kills that group when the verifier exits and 300 seconds
+after spawn at the latest. It runs with only `PATH`, `HOME`,
 `TMPDIR`, `SCIENCE_URL`, `SCIENCE_TOKEN` and `PYTHONPATH`; provider keys are not
 passed on. It writes no temporary files of its own. Raw replay and PCM are not
 written into downloadable artifacts.

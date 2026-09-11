@@ -10,7 +10,7 @@ const safeId=value=>typeof value==='string'&&/^[A-Za-z0-9_-]{1,160}$/.test(value
 export const REPORT_BYTES=8*1024*1024;
 const read=async(path,limit=REPORT_BYTES)=>{if((await stat(path)).size>limit)throw Error('Verification artifact exceeds size limit');return JSON.parse(await readFile(path,'utf8'));};
 const save=async(path,value)=>{const temp=path+'.'+randomUUID();await writeFile(temp,JSON.stringify(value),{mode:0o600});await rename(temp,path);};
-// science/scripts/app_recompute.py ends itself (SIGALRM) 290 seconds after it starts,
+// science/scripts/app_recompute.py kills its process group 290 seconds after it starts,
 // so a verifier left by an earlier server process is gone before this window closes.
 const DEADLINE_MS=300000;
 const execFileAsync=promisify(execFile);
@@ -99,8 +99,8 @@ export function createSessionRecomputeRoutes({repo,dataRoot,json,env=process.env
     throw Error('This earlier attempt was interrupted. Start a new verification attempt.');
    }catch(error){if(error.code!=='ENOENT')throw error;}
    await save(resolve(dir,'request.json'),request);running=attempt;
-   // Detached: the verifier leads its own process group, so the deadline stops its
-   // extractor subprocesses too. It is not killed when this server exits.
+   // Detached: the verifier leads its own process group, so the deadline and its exit
+   // stop its extractor subprocesses too. It is not killed when this server exits.
    const child=spawnImpl(env.SINGING_PYTHON||resolve(repo,'science/.venv/bin/python'),[resolve(repo,'science/scripts/app_recompute.py'),'--data-root',dataRoot,'--output',dir,'--max-operations',String(body.maxOperations)],{cwd:repo,env:verifierEnv(env,repo),stdio:['ignore','ignore','ignore'],detached:true});
    launched=true;
    // Listen before any await so a verifier that exits at once is still recorded.
@@ -108,7 +108,9 @@ export function createSessionRecomputeRoutes({repo,dataRoot,json,env=process.env
    const startedAt=new Date().toISOString(),processStartedAt=Number.isInteger(child.pid)?await processStart(child.pid):null;
    const value={status:'running',attemptId:attempt,...c,pid:child.pid,startedAt,processStartedAt},saved=save(index,value);
    const timer=setTimeout(()=>{try{process.kill(-child.pid,'SIGTERM');}catch{child.kill('SIGTERM');}},DEADLINE_MS);
-   void exited.then(async code=>{clearTimeout(timer);await saved.catch(()=>{});try{await finish(attempt,code);}catch{await save(index,{...value,status:'failed',reason:'Verification output unavailable or failed integrity validation.'}).catch(()=>{});}finally{if(running===attempt)running=null;}});
+   // The verifier leads its own group; anything it started (an extractor still
+   // running after a deadline kill) goes with it.
+   void exited.then(async code=>{clearTimeout(timer);try{process.kill(-child.pid,'SIGKILL');}catch{}await saved.catch(()=>{});try{await finish(attempt,code);}catch{await save(index,{...value,status:'failed',reason:'Verification output unavailable or failed integrity validation.'}).catch(()=>{});}finally{if(running===attempt)running=null;}});
    await saved;json(res,202,value);return true;
   }catch(error){json(res,409,{error:error.message||'Numerical verification unavailable'});return true;}finally{if(reserved&&!launched)running=null;}
  };

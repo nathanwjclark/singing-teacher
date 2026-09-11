@@ -1,23 +1,43 @@
 """Bounded read-only numerical replay of retained scoring inputs, never session actions."""
 from __future__ import annotations
 
+import os
 import signal
+import threading
 import time
 
-# As a verifier process it ends itself (SIGALRM default action) at this deadline,
+# As a verifier process it ends itself and everything it started at this deadline,
 # armed before the scientific imports. The server allows 300 seconds from spawn
 # (server/sessionRecompute.mjs), so the process is gone before the server stops
 # trusting its pid.
 HARD_SECONDS = 290
 PROCESS_STARTED = time.monotonic()
+
+
+def arm_deadline(seconds):
+    """Kill this process, and its process group when it leads one, after `seconds`.
+
+    A timer thread rather than SIGALRM: a Python signal handler waits for a native
+    call to return, and the default SIGALRM action kills only this process, leaving an
+    extractor child running. The server spawns the verifier detached, so it leads its
+    own group; run from a shell it does not, and only this process is killed."""
+    def expire():
+        if os.getpgrp() == os.getpid():
+            os.killpg(os.getpid(), signal.SIGKILL)
+        os.kill(os.getpid(), signal.SIGKILL)
+    timer = threading.Timer(seconds, expire)
+    timer.daemon = True
+    timer.start()
+    return timer
+
+
 if __name__ == '__main__':
-    signal.alarm(HARD_SECONDS)
+    arm_deadline(HARD_SECONDS)
 
 import argparse
 from datetime import datetime, timezone
 import hashlib
 import json
-import os
 from pathlib import Path
 import re
 import subprocess

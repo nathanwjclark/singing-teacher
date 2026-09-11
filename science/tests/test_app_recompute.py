@@ -383,3 +383,27 @@ def test_source_rows_report_runtime_faults_as_unsupported(source_replay, tmp_pat
         assert (row['outcome'], row['status']) == ('unsupported', 'runtime_unavailable') and report['counts']['failed'] == 0, row
         assert 'recomputed_scientific_result' not in row['details']
 
+
+def test_deadline_ends_the_verifier_and_its_extractor_child(tmp_path):
+    import os, signal, subprocess, sys, time
+    root = Path(__file__).resolve().parents[2]
+    # A detached verifier (its own process group, as the server spawns it) with a
+    # long-running child standing in for the Node extractor.
+    script = ('import subprocess, time\nfrom science.scripts.app_recompute import arm_deadline\n'
+              "child = subprocess.Popen(['/bin/sleep', '60']); print(child.pid, flush=True)\narm_deadline(1)\ntime.sleep(60)\n")
+    verifier = subprocess.Popen([sys.executable, '-c', script], cwd=root, env={**os.environ, 'PYTHONPATH': f'{root}:{root}/science/src'},
+                                stdout=subprocess.PIPE, text=True, start_new_session=True)
+    try:
+        child = int(verifier.stdout.readline())
+        assert verifier.wait(timeout=30) == -signal.SIGKILL
+        for _ in range(100):
+            try:
+                os.kill(child, 0)
+            except ProcessLookupError:
+                break
+            time.sleep(.05)
+        else:
+            raise AssertionError('The extractor child outlived the verifier deadline')
+    finally:
+        try: os.killpg(verifier.pid, signal.SIGKILL)
+        except ProcessLookupError: pass
