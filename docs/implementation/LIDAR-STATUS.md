@@ -28,6 +28,6 @@ The last successful result remains available across failed later attempts and re
 
 ## Verification scope
 
-Actual native-engine tests exercise original synthetic depth → projection → likelihood → changed or tied ordering, with baseline preservation, malformed/filtered/missing calibration rejection, budget limits and engine restoration. Session and app tests cover adoption, stale forecasts, original-byte changes, rejection, geometry export and restart. Browser checks inspect the actual app consumer separately from mathematical tests.
+Actual native-engine tests exercise original synthetic depth → projection → likelihood → changed or tied ordering, with baseline preservation, malformed/filtered/missing calibration rejection, budget limits and engine restoration. Session and app tests cover adoption, stale forecasts, original-byte changes, rejection, geometry export and restart. Browser checks inspect the actual app consumer separately from mathematical tests: `npx playwright test -c tests/lidar-runtime.config.ts` (also run in CI) continues in the browser from the data the app integration test leaves.
 
 The existing native Swift sources parse and project plist validation passed previously. This host lacks the full iOS SDK: parsing is not an iOS build. No physical phone capture, sensor comparison, physiological accuracy or recovered hidden cavity is claimed.

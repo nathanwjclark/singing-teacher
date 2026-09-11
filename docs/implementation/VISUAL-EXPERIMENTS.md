@@ -48,7 +48,8 @@ metric anatomy or hidden tissue. See the
 Two actual native app/browser flows passed using transparently generated video
 and projected correspondence labels: visible target scoring and occluded target
 scoring, including reload and unchanged baseline/forecast checks. These are
-software results, not validated human correspondences.
+software results, not validated human correspondences. Both run with
+`npx playwright test -c tests/visual-likelihood.config.ts`, and in CI.
 
 ## Illustrated teaching integration
 

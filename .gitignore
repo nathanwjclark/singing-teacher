@@ -40,6 +40,10 @@ dist-ssr
 .local-e2e-data/
 .local-e2e-spectral/
 .local-e2e-recompute/
+.local-e2e-visual/
+.local-e2e-motion-audio/
+.local-e2e-lidar/
+.local-e2e-source-bank/
 
 # Python bytecode from tests that import scripts/*.py
 __pycache__/

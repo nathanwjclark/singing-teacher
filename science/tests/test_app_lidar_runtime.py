@@ -91,7 +91,10 @@ def completed_lidar(call):
     raise AssertionError('LiDAR app fit did not complete')
 
 
-def test_original_rear_depth_changes_normal_native_model_through_app(tmp_path):
+def run_lidar_loop(tmp_path):
+    """Fit a baseline, adopt, reject and re-adopt rear-depth geometry through the app,
+    leaving the app data in tmp_path/app and the worker data in tmp_path/worker
+    (also the seed of tests/fixtures/prepare_lidar_runtime.py)."""
     with app_runtime(tmp_path, BOOTSTRAP) as (data, call, restart):
         assert call('/api/lidar/status')['capture'] is None
         original = capture(data)
@@ -228,3 +231,7 @@ def test_original_rear_depth_changes_normal_native_model_through_app(tmp_path):
         assert second_result['modelId'] != updated['snapshot']['model_id']
         assert second_result['modelId'] == call(session_path)['state']['snapshot']['model_id']
         assert (run / 'summary.json').read_bytes() == baseline_bytes
+
+
+def test_original_rear_depth_changes_normal_native_model_through_app(tmp_path):
+    run_lidar_loop(tmp_path)

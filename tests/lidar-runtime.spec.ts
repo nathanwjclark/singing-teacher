@@ -1,12 +1,11 @@
 import {test,expect} from '@playwright/test';
 import {createHash,randomUUID} from 'node:crypto';
 
-// Use a COPY of the app/worker artifacts produced by test_app_lidar_runtime.py.
-// Run a real local server and worker against that copy, enable LIDAR_FUSION_ENABLED,
-// and set LIDAR_QA_URL. No successful API result or geometry is intercepted.
+// Real app and scientific worker (tests/lidar-runtime.config.ts) with LIDAR_FUSION_ENABLED,
+// over the app/worker data that tests/fixtures/prepare_lidar_runtime.py leaves by running
+// test_app_lidar_runtime.py. No successful API result or geometry is intercepted.
 test('retained native LiDAR geometry applies and survives a rejected duplicate scan',async({page,request})=>{
- test.skip(!process.env.LIDAR_QA_URL,'Requires the retained native app/worker fixture on an isolated local server.');
- test.setTimeout(120000);
+ test.skip(!process.env.LIDAR_E2E_DATA,'Run with -c tests/lidar-runtime.config.ts');
  const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
  await page.route('**/api/astra/**',r=>r.fulfill({status:503,json:{error:'Paid provider disabled during browser QA'}}));
  const status=await (await request.get('/api/lidar/status')).json();

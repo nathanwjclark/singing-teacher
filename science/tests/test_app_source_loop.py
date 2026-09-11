@@ -186,7 +186,10 @@ def wait_source(call, kind, *, timeout=180, terminal='succeeded'):
     raise AssertionError(f'Source {kind} did not complete')
 
 
-def test_optional_source_fit_forecast_later_capture_score_and_restart(tmp_path):
+def run_source_loop(tmp_path):
+    """Fit, freeze, score and recover the optional source loop through the app,
+    leaving the app data in tmp_path/app and the worker data in tmp_path/worker
+    (also the seed of tests/fixtures/prepare_source_bank_runtime.py)."""
     with app_runtime(tmp_path, BOOTSTRAP) as (data, call, restart):
         empty = call('/api/source/status')
         assert empty['fit']['status'] == 'unsupported'
@@ -359,6 +362,10 @@ def test_optional_source_fit_forecast_later_capture_score_and_restart(tmp_path):
             if value['status'] == 'committed']
         assert len(committed_targets) == 1 and committed_targets[0] != target
         assert recovered['snapshot'] == baseline
+
+
+def test_optional_source_fit_forecast_later_capture_score_and_restart(tmp_path):
+    run_source_loop(tmp_path)
 
 
 def test_two_mass_app_mode_fit_bank_and_score_record_requested_and_simulated_f0(tmp_path, monkeypatch):

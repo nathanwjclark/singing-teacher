@@ -1,5 +1,9 @@
 # Source bank browser verification
 
+`npx playwright test -c tests/source-bank-runtime.config.ts` runs this check automatically, and CI runs it. The config starts the actual local application and scientific worker with `PHONATION_SOURCE_ENABLED=1` on data that `tests/fixtures/prepare_source_bank_runtime.py` seeds by running the two-round integration test (`science/tests/test_app_source_loop.py`) and then one forecast with the optional runner missing, which the app records as failed. The browser then freezes a new bank from that failed state and checks the retained ranking. No API response is intercepted and no paid model call is made. The seeded run's `astra-current.json` comes from the integration test's stand-in decision provider (`provider: 'test-only'` in its bootstrap), not from Astra; `science/scripts/app_source.py` reads it to choose the vowel of the frozen bank. The config uses the default geometric source family; two-mass mode (below) is still verified only by hand.
+
+The runs below predate that config; each used a manually started app over copied integration-test data and a Playwright config that has since been removed.
+
 Verified on the actual local application and scientific worker, using generated native audio retained from the two-round integration test. No successful API responses were mocked and no paid model calls were made.
 
 - Runtime: `0524095` (integration `28816c2` plus terminal source retry fixes `4175a45` and `c94793a`). Worker: `28816c2`.
@@ -11,7 +15,7 @@ Verified on the actual local application and scientific worker, using generated 
 - New bank SHA-256: `5069213a027ecef19c94a5ba2ec5ced5eee9e80963bddf1f43b69ce1e7ec1051`.
 - Preserved ranking: `source-ranking:332297b9c47475682ce7d0651ec6af2cdb0cd42812cf0fbb466f4dedf3ee8b0f`, version 2, from scored bank `008cab0fdcc50a5907065d434b82b514e987ef7470a87fb80c64ef5b932dae62`.
 
-Separate contract-fixture browser tests cover unavailable alternatives and legacy single forecasts: `CI=1 npx playwright test --config playwright.source-bank.config.ts tests/source-bank-states.spec.ts tests/source-inference.spec.ts` — **5 passed in 12.1s**. These fixture checks are UI coverage, not native evidence.
+Separate contract-fixture browser tests cover unavailable alternatives and legacy single forecasts: `tests/source-bank-states.spec.ts` and `tests/source-inference.spec.ts`, now in the default suite (`npx playwright test`); the recorded run gave **5 passed in 12.1s**. These fixture checks are UI coverage, not native evidence.
 
 Earlier real browser attempts exposed excessive concurrent session replay work and permanent reuse of a terminal failed source intent. The passing runtime includes verified-read performance/coalescing fixes and fresh explicit retry identities while preserving pending intents. Human anatomical accuracy is not established by this generated-data verification.
 

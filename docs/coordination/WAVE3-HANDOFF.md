@@ -70,7 +70,7 @@ The branches form one linear stack, in merge order, so each PR applies cleanly a
 | 14 | `claude/bundle-split` | Route and feature code splitting: `/phone` initial JS 443 → 91 kB gzip, studio first paint 443 → 319 kB | untested (software) | none |
 | 15 | `claude/pull-provenance` | USB pull receipt records device and archive hash; importers classify with it, so a pulled recording cannot pass as a fixture or physical reference | untested | Command-line physical-reference imports; devicectl field names need one check on an Xcode Mac |
 
-Worker-backed browser checks (spectral objective, motion timeline, session recompute) run in CI through their own configs after the default suite.
+Worker-backed browser checks (spectral objective, session recompute, motion timeline, motion audio, visual likelihood, LiDAR, source bank) run in CI through their own configs after the default suite; each seeds its own generated native data, so none is skipped.
 
 ## Wave 3 scientific work already learned
 
@@ -91,7 +91,7 @@ The native library exposes full tract sections and transmission-line matrices co
 3. **Measured probe calibration:** derive calibration arrays from a reference-microphone sweep, and have the USB pull record device and archive hash (or the iPhone sign the manifest) so provenance stops being self-declared.
 4. **Evaluation revisions:** spectral revision 3 (count unscorable kept candidates as unscorable, per-objective margins) and source revision 2 (a calibration condition both tracts can score, more two-mass generators), each frozen before its run.
 5. **Session ledger size:** every ledger event stores the full session state, so the replay grows quadratically with rounds and eventually exceeds the export limit, which drops every lane's receipts from the export. The cue-learning lane stores its own job payloads as digests (82% less state per round), but a four-forecast app loop still reaches 23.9 MB of the 25.2 MB export bound, mostly from the baseline search result and Astra designs copied into every event; a fifth Astra round would exceed it. The systemic fix is delta events or periodic checkpoints.
-6. **Test infrastructure:** automate the five fixture-gated browser specs so CI runs them; investigate the Linux numerical divergence.
+6. **Test infrastructure:** investigate the Linux numerical divergence.
 7. **Physical and human acceptance (blocked on people and devices):** signed iOS build on the iPhone 13 Pro Max and iPhone 15 Pro, rear-LiDAR and probe calibration, two real Astra-guided loops, and the held-out human evaluation matrix. This host has no full Xcode, and live Astra calls cost money.
 
 ## Shared integration contract

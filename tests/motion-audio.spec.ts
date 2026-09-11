@@ -1,5 +1,7 @@
 import {test,expect,type Page} from '@playwright/test';
 import {createHash,randomUUID} from 'node:crypto';
+import {join} from 'node:path';
+import {fitBaselineAndImportMotion} from './helpers/motion-fixture';
 async function syntheticMotion(page:Page){
  const bytes=Buffer.from(await page.evaluate(async()=>{
   const canvas=document.createElement('canvas');canvas.width=96;canvas.height=64;
@@ -19,10 +21,10 @@ async function open(page:Page){
  await page.goto('/');await page.getByRole('button',{name:'Experiments',exact:true}).click();
  return page.locator('.motion-capture');
 }
-const nativeCapture=process.env.MOTION_AUDIO_QA_CAPTURE_ID;
+const nativeData=process.env.MOTION_AUDIO_E2E_DATA;
 
 test('optional decoder or missing baseline explains unavailability and retains saved motion downloads',async({page,request})=>{
- test.skip(Boolean(nativeCapture),'Empty-data check runs separately from the prepared native fixture.');
+ test.skip(Boolean(nativeData),'Empty-data check runs in the default suite.');
  let panel=await open(page);const fixture=await syntheticMotion(page);
  const imported=await request.post('/api/motion/import',{multipart:{record:{name:'motion.json',mimeType:'application/json',buffer:fixture.json},media:{name:fixture.record.media.filename,mimeType:'video/webm',buffer:fixture.bytes}}});expect(imported.ok()).toBe(true);
  const capture=(await imported.json()).capture;
@@ -35,26 +37,23 @@ test('optional decoder or missing baseline explains unavailability and retains s
  const original=await request.get('/api/motion/media?id='+capture.id);expect(original.ok()).toBe(true);expect(await original.body()).toEqual(fixture.bytes);
 });
 
-// Native integration harness: seed the runtime QA app/worker data, start the real
-// local server against it, and set MOTION_AUDIO_QA_CAPTURE_ID to its encoded
-// generated-voice capture. Example invocation with an isolated-server config:
-// MOTION_AUDIO_QA_CAPTURE_ID=<retained-capture-id> npx playwright test tests/motion-audio.spec.ts --config <isolated-config>
-// Run without that variable against empty app data for decoder/no-baseline checks.
-// No successful result or motion endpoint is intercepted.
+// Real app and scientific worker (tests/motion-audio.config.ts) over the data seeded by
+// tests/fixtures/prepare_motion_timeline.py: the baseline is fitted through the app from a
+// generated native voice capture, then the encoded native motion recording is imported.
+// Synthetic evidence only. No successful result or motion endpoint is intercepted.
 test('prepared native motion audio runs from declaration to actual scientific result',async({page,request})=>{
- test.skip(!nativeCapture,'Requires isolated generated native baseline + encoded motion fixture (MOTION_AUDIO_QA_CAPTURE_ID).');test.setTimeout(120000);
- const record=await request.get('/api/motion/record?id='+nativeCapture),media=await request.get('/api/motion/media?id='+nativeCapture);expect(record.ok()).toBe(true);expect(media.ok()).toBe(true);
- const observation=await record.json();const selected=await request.post('/api/motion/import',{multipart:{record:{name:'motion.json',mimeType:'application/json',buffer:await record.body()},media:{name:observation.media.filename,mimeType:observation.media.mimeType,buffer:await media.body()}}});expect(selected.ok()).toBe(true);
+ test.skip(!nativeData,'Run with -c tests/motion-audio.config.ts');
+ const {captureId:nativeCapture,media}=await fitBaselineAndImportMotion(request,join(nativeData!,'fixture'));
  const panel=await open(page),group=panel.getByRole('group',{name:'Motion audio analysis'});const before=await request.get('/api/motion/analysis?captureId='+nativeCapture);expect((await before.json()).availability.available).toBe(true);
  const declaration=group.getByLabel('This saved audio contains my declared vowel with no external sound or played probe.'),button=group.getByRole('button',{name:'Analyze saved audio once'});
  await expect(button).toBeDisabled();await declaration.check();await expect(button).toBeEnabled();
  const accepted=page.waitForResponse(r=>r.url().endsWith('/api/motion/analyze'));await button.click();const started=await accepted;expect(started.status()).toBe(202);expect(started.request().postDataJSON()).toMatchObject({captureId:nativeCapture,pose:'a',containsExternalExcitation:false});
- await expect(group.getByRole('button',{name:'Analyzing saved audio…'})).toBeDisabled();await expect(group).toContainText('Analysis: succeeded',{timeout:100000});
+ await expect(group.getByRole('button',{name:'Analyzing saved audio…'})).toBeDisabled();await expect(group).toContainText('Analysis: succeeded',{timeout:240_000});
  const final=await (await request.get('/api/motion/analysis?captureId='+nativeCapture)).json();expect(final.result).not.toBeNull();expect(final.result.captureId).toBe(nativeCapture);expect(final.result.actualSynthesisCalls).toBeGreaterThan(0);expect(final.result.modelUpdated).toBe(false);
  await expect(group).toContainText(`Numerical result: ${final.result.status}`);await expect(group).toContainText(`${final.result.actualSynthesisCalls} synthesis calls`);await expect(group).toContainText('Baseline model unchanged; visual synchronization unknown');await expect(group).toContainText(`Used ${final.result.hypothesisSubset.selectedIds.length} of ${final.result.hypothesisSubset.totalRetained}`);
  await group.getByText('Model subset and fixed simulation assumptions',{exact:true}).click();await expect(group).toContainText(final.result.modelId);
  await group.getByText('Conditional temporal comparison',{exact:true}).click();
  await expect(group).toContainText('Anatomy stays fixed across the recording');
  if(final.result.temporalAnalysis.sensitivity.length){await group.getByText('Fixed-anatomy comparison without smoothing',{exact:true}).click();await expect(group).toContainText('acoustic cost');}
- await expect(panel.getByRole('link',{name:'Download saved video'})).toBeVisible();expect((await request.get('/api/motion/media?id='+nativeCapture)).ok()).toBe(true);
+ await expect(panel.getByRole('link',{name:'Download saved video'})).toBeVisible();expect(await (await request.get('/api/motion/media?id='+nativeCapture)).body()).toEqual(media);
 });
