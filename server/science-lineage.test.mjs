@@ -45,6 +45,11 @@ test('active decisions retain geometry provenance and reject stale prepared capt
     workerState=stateFor(3);workerState.designs.d3.status='completed';
     assert.equal((await call('status')).body.result.recordingAllowed,false);
     assert.match(result.body.result.recordingMessage,/no longer committed/);
+    workerState.designs.d3.status='unsupported';
+    assert.equal((await call('status')).body.result.recordingAllowed,false);
+    assert.match(result.body.result.recordingMessage,/No declared experiment separates/);
+    assert.equal((await call('outcome','POST')).status,409);
+    workerState.designs.d3.status='completed';
     await mkdir(join(dataRoot,'science-runs/run-test/outcomes/outcome-retained'),{recursive:true});
     await put('science-runs/run-test/outcomes/outcome-retained/summary.json',{status:'succeeded',modelUpdated:true});
     await put('science-runs/run-test/outcome-current.json',{status:'succeeded',outcomeId:'outcome-retained',designId:'d3'});

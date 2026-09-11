@@ -22,6 +22,7 @@ async function verifyRecording(result,fetchImpl){
     if(!response.ok)throw new Error('Worker unavailable');
     const {state}=await response.json(),design=state?.designs?.[result.designId];
     if(!state?.snapshot||state.snapshot.model_id!==result.modelId||design?.data?.model_id!==state.snapshot.model_id)return blocked('This forecast belongs to an earlier model. Ask Astra for a new recording decision.');
+    if(design.status==='unsupported')return blocked('No declared experiment separates the current model hypotheses, so there is no recording decision. Ask Astra to choose an experiment.');
     if(design.status!=='committed'||design.data.selected_experiment_id!==result.forecast?.selected_experiment_id||design.data.target_observation_id!==result.forecast?.target_observation_id)return blocked('This recording experiment is no longer committed. Ask Astra for a new recording decision.');
     if(state.pending)return blocked('A scientific job is updating this session. Wait for its result before recording.');
     return {...result,recordingAllowed:true,forecastHistorical:false};
