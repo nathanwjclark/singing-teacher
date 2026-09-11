@@ -276,9 +276,10 @@ class SessionController:
     def _read(self, db):
         return _ledger(db, self.session_id)
 
-    def _append(self, db, state, action, details):
+    def _append(self, db, state, action, details, read=None):
         # A format 2 event binds the state by its root node digest; nodes are stored once per session.
-        _,previous,_,stored=self._read(db)
+        # read: this transaction's own _read result, when the caller already has it.
+        _,previous,_,stored=read or self._read(db)
         state['version']+=1
         text=canonical(state)
         if len(text)>MAX_STATE_BYTES-(0 if action=='job_dispatched' else DISPATCH_HEADROOM): raise ValueError('Session state exceeds the ledger size bound')
@@ -298,7 +299,7 @@ class SessionController:
         # Persisted intent precedes this side effect. The stable key recovers a crash
         # after JobService submission but before the job ID was recorded here.
         with self._db() as db:
-            state,digest,events,nodes=self._read(db)
+            read=self._read(db); state,digest,events,nodes=read
             model=state['snapshot']['model_id'] if state['snapshot'] else 'session-unfitted:'+_hash(self.session_id)
             self.service.register_model(self.session_id,model)
             pending=state['pending']
@@ -324,7 +325,7 @@ class SessionController:
                     if pending['request']['operation']=='update_pcm':
                         for design in state['designs'].values():
                             if design['status']=='outcome_pending': design['status']='failed'
-                self._append(db,state,'job_dispatched',{'job_id':pending.get('job_id')})
+                self._append(db,state,'job_dispatched',{'job_id':pending.get('job_id')},read)
                 if ledger:state,digest,events,nodes=self._read(db)
             # Parsed state/events are detached request-local objects already.
             return (state,digest,events,nodes) if ledger else state
@@ -351,7 +352,7 @@ class SessionController:
         if action not in fields or set(command)!={'action','command_id','expected_version'}|fields[action]:
             raise ValueError('Unsupported session command fields')
         with self._db() as db:
-            state,_,_,_=self._read(db)
+            read=self._read(db); state=read[0]
             prior=db.execute('SELECT digest FROM commands WHERE session=? AND id=?',(self.session_id,command_id)).fetchone()
             if prior:
                 if prior[0]!=_hash(command):
@@ -360,7 +361,7 @@ class SessionController:
                 if type(command['expected_version']) is not int or command['expected_version']!=state['version']:
                     raise ValueError('stale_session_version')
                 details=self._apply(state,action,command)
-                self._append(db,state,action,details)
+                self._append(db,state,action,details,read)
                 db.execute('INSERT INTO commands VALUES(?,?,?)',(self.session_id,command_id,_hash(command)))
         return {'state':self._dispatch()}
 
