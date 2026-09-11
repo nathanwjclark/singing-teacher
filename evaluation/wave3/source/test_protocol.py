@@ -80,3 +80,14 @@ def test_decision_needs_six_wins_under_both_scores_and_counts_failures():
     assert m.decide([case('two_mass', 'two_mass')]*6+[case('geometric', 'geometric', ('two_mass',))]*2)['outcome'] == 'inconclusive'
     assert m.decide([case('two_mass', 'geometric')]*8)['outcome'] == 'inconclusive'
     assert m.decide([case('geometric', 'geometric')]*6+[case('two_mass', 'two_mass')]*2)['outcome'] == 'negative'
+
+
+def test_committed_results_match_this_protocol_and_the_frozen_decision_rule():
+    report = json.loads((Path(__file__).parent/'results/report.json').read_text())
+    assert report['provenance']['protocol_sha256'] == m.digest(P) and report['protocol_version'] == P['version']
+    assert report['provenance']['worktree']['dirty'] is False
+    assert m.decide(report['cases']) == report['decision'] and report['decision']['cases'] == 2*len(P['generators'])
+    assert report['native_calls'] <= P['budgets']['hard_total_native_calls']
+    for generator in P['generators']:
+        record = json.loads((Path(__file__).parent/'results'/f"{generator['id']}.json").read_text())
+        assert record['generator'] == generator['id'] and set(record['heldout']) == {h['pose'] for h in P['heldout_trials']}

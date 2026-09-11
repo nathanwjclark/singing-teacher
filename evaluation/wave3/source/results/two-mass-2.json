@@ -1,0 +1,129 @@
+{
+  "f0": [],
+  "family": "two_mass",
+  "fit": {
+    "actual_synthesis_calls": 0,
+    "best": {},
+    "joint": [],
+    "per_family_calls": {},
+    "reason": "Required observed phonation descriptors unavailable",
+    "status": "insufficient-quality"
+  },
+  "generator": "two-mass-2",
+  "generator_calibration_f0": {
+    "cal-a": {
+      "requested_f0_hz": 150.0,
+      "simulated_f0_hz": 136.9739367456405
+    },
+    "cal-u": {
+      "requested_f0_hz": 220.0,
+      "simulated_f0_hz": 169.02136745153865
+    }
+  },
+  "heldout": {
+    "e": {
+      "bank_coverage": null,
+      "bank_sha256": null,
+      "metrics": {
+        "pitch_excluded": {
+          "difference_two_mass_minus_geometric": null,
+          "failures": {
+            "geometric": true,
+            "two_mass": true
+          },
+          "heldout_discrepancy": {
+            "geometric": null,
+            "two_mass": null
+          },
+          "joint_ranking": [],
+          "nearest_grid_rank": null,
+          "selected": {
+            "geometric": null,
+            "two_mass": null
+          },
+          "true_family_rank": null,
+          "winner": "none"
+        },
+        "primary": {
+          "difference_two_mass_minus_geometric": null,
+          "failures": {
+            "geometric": true,
+            "two_mass": true
+          },
+          "heldout_discrepancy": {
+            "geometric": null,
+            "two_mass": null
+          },
+          "joint_ranking": [],
+          "nearest_grid_rank": null,
+          "selected": {
+            "geometric": null,
+            "two_mass": null
+          },
+          "true_family_rank": null,
+          "winner": "none"
+        },
+        "unscorable_alternatives": {
+          "geometric": 6,
+          "two_mass": 6
+        }
+      },
+      "score": null
+    },
+    "o": {
+      "bank_coverage": null,
+      "bank_sha256": null,
+      "metrics": {
+        "pitch_excluded": {
+          "difference_two_mass_minus_geometric": null,
+          "failures": {
+            "geometric": true,
+            "two_mass": true
+          },
+          "heldout_discrepancy": {
+            "geometric": null,
+            "two_mass": null
+          },
+          "joint_ranking": [],
+          "nearest_grid_rank": null,
+          "selected": {
+            "geometric": null,
+            "two_mass": null
+          },
+          "true_family_rank": null,
+          "winner": "none"
+        },
+        "primary": {
+          "difference_two_mass_minus_geometric": null,
+          "failures": {
+            "geometric": true,
+            "two_mass": true
+          },
+          "heldout_discrepancy": {
+            "geometric": null,
+            "two_mass": null
+          },
+          "joint_ranking": [],
+          "nearest_grid_rank": null,
+          "selected": {
+            "geometric": null,
+            "two_mass": null
+          },
+          "true_family_rank": null,
+          "winner": "none"
+        },
+        "unscorable_alternatives": {
+          "geometric": 6,
+          "two_mass": 6
+        }
+      },
+      "score": null
+    }
+  },
+  "native_calls": {
+    "fit": 0
+  },
+  "nearest_grid": "t1-two_mass-1",
+  "status": "evaluated",
+  "wall_s": 1.62
+}
