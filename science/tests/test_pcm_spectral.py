@@ -98,3 +98,20 @@ def test_native_spectral_fit_freeze_and_heldout_update(tmp_path):
     artifact=Artifact(_encode(legacy))
     with pytest.raises(ValueError,match='scoring policy'):
         update_pcm(artifact,snapshot,**{**kwargs,'expected_design_digest':artifact.sha256})
+
+
+def test_app_spectral_derivation_reads_hash_bound_original_and_preserves_import(tmp_path):
+    from science.scripts.live_capture_jobs import spectral_trials
+    frame=(.01*np.sin(2*np.pi*180*np.arange(4096)/44100)).astype('<f4')
+    raw=frame.tobytes();sha=hashlib.sha256(raw).hexdigest()
+    measurement=extract_pcm(frame,44100,measurement_id='measurement',observation_id='observation',artifact_id='original')['measurement']
+    trial={'id':'trial','pose':'a','measurement':measurement,'sample_rate_hz':44100,'frame_size':4096,'frame_start_sample':0,'duration_s':.1}
+    original=deepcopy(trial)
+    data={'segments':[{'derived_artifact':{'id':'original','uri':'segment-0.pcm.f32','sha256':sha,'byteLength':len(raw)},'measurement_ids':['measurement'],'sample_count':4096,'sample_rate_hz':44100}]}
+    (tmp_path/'import').mkdir();path=tmp_path/'import'/'segment-0.pcm.f32';path.write_bytes(raw)
+    enriched=spectral_trials(data,tmp_path,[trial])[0]
+    assert enriched['spectral_observation']['frame_sha256']==sha
+    assert trial==original
+    path.write_bytes(bytes([raw[0]^1])+raw[1:])
+    with pytest.raises(ValueError,match='digest changed'):
+        spectral_trials(data,tmp_path,[trial])
