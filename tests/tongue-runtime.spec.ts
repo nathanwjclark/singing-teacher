@@ -57,6 +57,7 @@ test('real public detector: continuous region, independent review export, real-s
   await page.goto(url);
   expect((await personal).status()).toBe(404);
   await expect.poll(()=>run(w=>w.check?.().tongue?.trackingMode),{timeout:60000}).toBe('region');
+  expect((await run(w=>w.check())).diagnostic.reason).toContain('(no personal tip model installed)');
 
   // Results used to expire 800 ms after their inference started; on slower devices every box expired on arrival.
   const continuity=await run(w=>w.continuity(4000));
@@ -105,7 +106,16 @@ test('real public detector: continuous region, independent review export, real-s
   await page.goto(url);expect((await forbidden).status()).toBe(403);
   await expect.poll(()=>run(w=>w.check?.().diagnostic.capability),{timeout:60000}).toBe('region');
   await expect.poll(()=>run(w=>w.check().tongue?.trackingMode),{timeout:30000}).toBe('region');
+  expect((await run(w=>w.check())).diagnostic.reason).toContain('(personal tip model is served only to the computer running the app)');
   await run(w=>w.stop());await page.unroute('**/api/tongue-neural/**');
+
+  // A partial personal install is an error with its cause, not a silent switch to the region detector.
+  await page.route('**/api/tongue-neural/manifest',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({schema:'personal-tongue-neural/v1',modelSha256:'0'.repeat(64)})}));
+  await page.route('**/api/tongue-neural/model',route=>route.fulfill({status:404,contentType:'application/json',body:JSON.stringify({error:'Personal tongue model unavailable'})}));
+  await page.goto(url);
+  await expect.poll(()=>run(w=>w.check?.().diagnostic),{timeout:10000}).toEqual({state:'lost',reason:'Personal tongue model is incomplete: weights unavailable (HTTP 404)',abstained:false});
+  await run(w=>w.stop());await page.unroute('**/api/tongue-neural/manifest');await page.unroute('**/api/tongue-neural/model');
+
 
   // No model at all: capture and labeling continue, and nothing is recorded as a region result.
   expectedMissing.push('/models/tonguesam/manifest.json');
