@@ -129,10 +129,12 @@ Enable fusion independently with `LIDAR_FUSION_ENABLED=1`. See
 uncertainty assumptions, bounded budgets and remaining iOS/device/reference checks.
 
 
-An offline [score recomputation adapter](../../science/SESSION_SCORE_RECOMPUTATION.md)
-can rerun one exported PCM update against a retained original frame and original
-controller replay. It reports numerical agreement separately from unverified
-legacy scoring-policy provenance; it does not fabricate missing media.
+[Score recomputation](../../science/SESSION_SCORE_RECOMPUTATION.md) reruns
+retained PCM, visual and source scores read-only, from the replay panel
+(**Recompute retained scores**) or offline for one exported PCM update. Each
+retained operation is reported as matched, failed, unavailable, unsupported or
+skipped by budget. Matches under a pinned scorer are counted apart from legacy
+unpinned designs. Missing media is reported, never reconstructed.
 
 The connected conditional visual workflow and independently gated illustrated
 teaching integration are described in [visual experiments](VISUAL-EXPERIMENTS.md).
