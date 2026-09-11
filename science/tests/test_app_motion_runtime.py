@@ -213,7 +213,7 @@ def test_encoded_motion_audio_ranks_native_windows_without_changing_baseline(tmp
         assert result['decode']['sampleRateHz'] == 48000
         assert result['decode']['codec'] == 'opus'
         assert 0 < result['actualSynthesisCalls'] <= 108
-        assert len(result['windows']) == 3
+        assert len(result['windows']) == 2
         scored = [row for row in result['windows'] if row['status'] == 'scored']
         assert len(scored) >= 1
         for row in scored:
@@ -237,7 +237,8 @@ def test_encoded_motion_audio_ranks_native_windows_without_changing_baseline(tmp
         exported = call('/api/session-export')
         assert exported['summary']['motionAnalysisCount'] == 1
         assert next(a for a in exported['artifacts'] if a.get('binding', {}).get('role') == 'conditional-motion-audio-analysis')['data']['temporalAnalysis'] == temporal
-        assert any(row['status'] == 'unavailable' for row in result['windows'])
+        assert result['analysisPolicy'] == 'motion-forward-bank-2'
+        assert result['trajectoryBank']['synthesisRequests'] <= 108
         assert call('/api/motion/status')['record']['timebase']['syncUncertaintyMs'] is None
         unchanged()
         restart()
