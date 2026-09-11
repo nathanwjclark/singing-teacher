@@ -13,6 +13,9 @@ test('Review remains capture-bound; later outcomes preserve original fit provena
  }});
  const request=async(method='GET',remote='127.0.0.1')=>{await handler({method,socket:{remoteAddress:remote}},{},new URL('http://localhost/api/astra-review'));return result};
  const settle=()=>new Promise(resolve=>setTimeout(resolve,30));
+ // The route exposes no completion hook, so wait on observable state instead of a fixed
+ // sleep: a loaded runner can take longer than one settle() to finish a review.
+ const until=async check=>{for(let attempt=0;attempt<200;attempt++){if(await check())return;await settle()}throw Error('Timed out waiting for the review')};
  try{
   await mkdir(run,{recursive:true});await write(join(dir,'science-current.json'),{status:'succeeded',runId});
   await write(join(run,'summary.json'),{status:'succeeded',sourceCaptureId:'first',forecast:{rankings:[{predictions:[{canonical:{measurement:{measurements:[{name:'pitchHz',value:220,unit:'Hz'}]}}}]}]}});
@@ -23,8 +26,10 @@ test('Review remains capture-bound; later outcomes preserve original fit provena
   await write(join(dir,'native-pull-latest.json'),{captureId:'second',sha256:'two'});release();await settle();assert.equal((await request()).body.status,'waiting');
   await mkdir(join(run,'outcomes','outcome-test'),{recursive:true});await write(join(run,'outcome-current.json'),{status:'succeeded',outcomeId:'outcome-test'});
   await write(join(run,'outcomes','outcome-test','summary.json'),{status:'ineligible',sourceCaptureId:'second',modelUpdated:false,reasons:['Insufficient audio']});
-  assert.equal((await request()).body.status,'ready');release=null;await request('POST');while(!release)await settle();
-  assert.equal(JSON.parse(payload.input).sourceCaptureId,'first');assert.equal(JSON.parse(payload.input).scoredOutcome.sourceCaptureId,'second');release();await settle();
+  assert.equal((await request()).body.status,'ready');release=null;
+  // A POST that arrives while the superseded review is still finishing is answered without starting a new one.
+  await until(async()=>{if(!release)await request('POST');return release});
+  assert.equal(JSON.parse(payload.input).sourceCaptureId,'first');assert.equal(JSON.parse(payload.input).scoredOutcome.sourceCaptureId,'second');release();await until(async()=>(await request()).body.status!=='running');
   assert.equal((await request()).body.status,'complete');await write(join(dir,'native-pull-latest.json'),{captureId:'second',sha256:'two',receivedAt:'later'});assert.equal((await request()).body.status,'complete');await request('POST');assert.equal(calls,2);
  }finally{await rm(dir,{recursive:true,force:true})}
 });
