@@ -18,8 +18,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v6
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: '24'
           cache: npm
@@ -27,3 +27,56 @@ jobs:
       - run: npm run lint
       - name: Typecheck and build
         run: npm run build
+
+  # The native build and the numerical suite are verified on macOS arm64
+  # (science/README.md). On Linux the library builds and the Node tests pass,
+  # but 15 science tests that pass on macOS fail, so Linux stays unsupported
+  # until that is investigated rather than masked here.
+  test:
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: science/pyproject.toml
+      - run: npm ci
+      - name: Install the science package
+        run: |
+          python -m venv science/.venv
+          science/.venv/bin/python -m pip install -e './science[test]'
+      - name: Identify the pinned native source
+        id: native
+        run: echo "revision=$(git rev-parse HEAD:science/vendor/vocaltractlab)" >> "$GITHUB_OUTPUT"
+      # The build script exports the pinned submodule revision, applies the
+      # versioned patch and runs the native tests, so these inputs fully
+      # determine the cached library. The engine re-checks its hash at load.
+      - name: Restore the native build
+        id: native-cache
+        uses: actions/cache@v6
+        with:
+          path: science/.build/native
+          key: vtl-${{ runner.os }}-${{ steps.native.outputs.revision }}-${{ hashFiles('science/patches/**', 'science/scripts/build_native.py', 'science/tests/anatomy_lifecycle.cpp') }}
+      - name: Build and test the native library
+        if: steps.native-cache.outputs.cache-hit != 'true'
+        run: science/.venv/bin/python science/scripts/build_native.py
+      - name: Node tests
+        run: npm test
+      - name: Science tests
+        run: npm run test:science -- -n auto
+      - name: Browser checks
+        run: npx playwright test
+      - if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-results
+          path: test-results/
+          retention-days: 7
