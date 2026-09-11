@@ -50,7 +50,8 @@ def test_real_source_tract_fit_equal_calls_and_heldout(tmp_path):
 def test_disabled_quality_budget_native_failure_and_source_controls(monkeypatch):
     with Engine() as engine:
         assert fit_phonation(engine,None,candidates=None)['status']=='disabled'
-        assert source_capability(engine)['source_model_family']=='prescribed geometric glottis'
+        capability=source_capability(engine)
+        assert capability['certified_source_family']==['Geometric glottis'] and set(capability['source_families'])=={'geometric','two_mass'}
         doc,candidates=fixture(engine);saved=engine.anatomy()
         for budget in (8,True):
             with pytest.raises(ValueError):fit_phonation(engine,doc,candidates=candidates,max_synthesis_calls=budget,enabled=True)
