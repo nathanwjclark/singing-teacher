@@ -225,3 +225,24 @@ def test_budget_is_bounded_and_timeout_stops_remaining_alternatives(learning):
     halted = [row for row in stopped['alternatives'] if row['status'] == 'stopped']
     assert halted and all(row['features'] is None and 'timed out' in row['reason'] for row in halted)
     assert stopped['conditional_predictions'][-1] == {'hypothesis_id': 'h1', 'anatomy_sha256': learning['anatomies'][1], 'status': 'incomplete', 'features': None}
+
+
+def test_job_service_runs_the_control_bank_in_its_isolated_worker(tmp_path, learning):
+    from singing_physics.service import JobService
+    snapshot = freeze([FIRST])
+    parameters = {'snapshot_json': snapshot.content.decode(), 'expected_digest': snapshot.sha256, 'cue': cue(),
+                  'context': CONTEXT, 'controls': CONTROLS, 'gain': GAIN, 'target_id': 'service-target', 'history': learning['history']}
+    with JobService(tmp_path / 'jobs') as service:
+        with pytest.raises(ValueError, match='Missing operation parameters'):
+            service.submit({'operation': 'forecast_control_pcm', 'parameters': {k: v for k, v in parameters.items() if k != 'history'}}, idempotency_key='no-history')
+        with pytest.raises(ValueError, match='does not match job model'):
+            service.submit({'operation': 'forecast_control_pcm', 'parameters': parameters, 'session_id': 's', 'model_id': 'other'}, idempotency_key='wrong-model')
+        job = service.submit({'operation': 'forecast_control_pcm', 'parameters': parameters}, idempotency_key='forecast')
+        assert service.wait(job, 60)['status'] == 'succeeded'
+        frozen = service.result(job)
+        assert frozen['artifact']['execution_support']['by_anatomy'] == {
+            learning['anatomies'][0]: learning['forecasts'][-1]['artifact']['execution_support']['by_anatomy'][learning['anatomies'][0]]}
+        scored = service.submit({'operation': 'score_control_pcm', 'parameters': {'frozen': frozen, 'pcm': frame(FIRST, CONTROLS[0], 11),
+                                 'metadata': metadata('service-target', 11)}}, idempotency_key='score')
+        assert service.wait(scored, 60)['status'] == 'succeeded'
+        assert service.result(scored)['artifact']['status'] == 'scored'
