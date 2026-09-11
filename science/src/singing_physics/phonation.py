@@ -143,7 +143,7 @@ def _status(status,reason):
 def _controls(value):
     if not isinstance(value,dict):raise ValueError('Declare native source controls for every trial')
     family=_family(value)
-    if family not in SOURCE_FAMILIES:raise ValueError('Unsupported source model')
+    if not isinstance(family,str) or family not in SOURCE_FAMILIES:raise ValueError('Unsupported source model')
     shape=SHAPE_BOUNDS[family]
     keys={'JA','F0','PR','gain'}|set(shape)|({'source_model'} if 'source_model' in value else set())
     if set(value)!=keys:raise ValueError('Declare exactly the selected family source controls for every trial')
@@ -256,7 +256,7 @@ def fit_phonation(engine,document,*,candidates,max_synthesis_calls=96,enabled=Fa
             raise ValueError('Invalid candidate identity or coverage')
         names.add(candidate['candidate_id'])
         trial_controls=[_controls(value) for value in candidate['trials'].values()]
-        if len({_hash(_source_shape(control)) for control in trial_controls})!=1:
+        if len({_hash({**_source_shape(control),'source_model':_family(control)}) for control in trial_controls})!=1:
             raise ValueError('A source hypothesis must retain one family and shape across calibration trials')
     required=3*len(choices)*len(observations)
     if required>max_synthesis_calls:raise ValueError('Equal three-family comparison exceeds synthesis budget')
@@ -269,6 +269,8 @@ def fit_phonation(engine,document,*,candidates,max_synthesis_calls=96,enabled=Fa
     try:
         for candidate in choices:engine.set_anatomy(candidate['anatomy'])
         for source_family,group in _by_family(choices,lambda candidate:_family(next(iter(candidate['trials'].values())))):
+            if expired():  # checked before the native family reload, which a checkpoint cannot interrupt
+                return {**_status('timed-out','Optional source fit cancelled or expired'),'actual_synthesis_calls':calls,'partial_comparisons':result}
             with engine.source_model(SOURCE_FAMILIES[source_family]):
                 for family,output in result.items():
                     for candidate in group:
@@ -371,7 +373,8 @@ def score_phonation_forecast(frozen,pcm,metadata):
     if observed['frameSha256'] in forecast['excluded_frame_hashes']:raise ValueError('Calibration frame reused as heldout')
     score,without_pitch=_scores(forecast['record'],observed)
     return {**_status('available' if score is not None else 'insufficient-quality','Conditional heldout discrepancy'),
-        'score':score,'score_excluding_pitch':without_pitch,'forecast_sha256':frozen['sha256'],'observation':observed,'model_updated':False}
+        'score':score,'score_excluding_pitch':without_pitch,'requested_f0_hz':forecast.get('requested_f0_hz'),'simulated_f0_hz':forecast.get('simulated_f0_hz'),
+        'forecast_sha256':frozen['sha256'],'observation':observed,'model_updated':False}
 
 
 def _bank_policy():
@@ -429,11 +432,15 @@ def forecast_phonation_bank(engine,fit_result,*,reference_trial_id,pose,controls
         if len(refs)!=1:entry['reason']='Fitted source reference unavailable';continue
         control=_controls({**controls,**_source_shape(refs[0]['controls'])})
         entry.update(controls=control,source_model=_family(control),requested_f0_hz=control['F0']);pending.append((entry,row))
+    def expired():return time.monotonic()>=deadline or cancelled is not None and cancelled.is_set()
     try:
         for source_family,group in _by_family(pending,lambda item:item[0]['source_model']):
+            if expired():  # skip the native family reload once the deadline has passed
+                for entry,_ in group:entry.update(status='timed-out',reason='Bank deadline or cancellation reached')
+                continue
             with engine.source_model(SOURCE_FAMILIES[source_family]):
                 for entry,row in group:
-                    if time.monotonic()>=deadline or cancelled is not None and cancelled.is_set():
+                    if expired():
                         entry.update(status='timed-out',reason='Bank deadline or cancellation reached');continue
                     engine.set_anatomy(row['anatomy'])
                     try:
@@ -497,7 +504,7 @@ def score_phonation_bank(frozen,pcm,metadata):
             score,without_pitch=_scores(row['record'],observed)
             if score is None:unavailable='Required observed or predicted descriptor unavailable'
         alternatives.append({key:row[key] for key in ('alternative_id','family','candidate_id','calibration_score')}|
-            {key:row.get(key) for key in ('source_model','requested_f0_hz','simulated_f0_hz')}|
+            {key:row.get(key) for key in ('calibration_score_excluding_pitch','source_model','requested_f0_hz','simulated_f0_hz')}|
             {'score':score,'score_excluding_pitch':without_pitch,'status':'scored' if score is not None else 'unavailable','reason':None if score is not None else unavailable or 'Frozen prediction unavailable',
              'calibration_rank':None,'heldout_rank':None,'heldout_rank_excluding_pitch':None,'rank_change':None})
     for field,rank in (('calibration_score','calibration_rank'),('score','heldout_rank'),('score_excluding_pitch','heldout_rank_excluding_pitch')):

@@ -73,6 +73,29 @@ def test_restoration_reloads_the_certified_file_and_restores_exact_state(monkeyp
         assert engine.anatomy()==anatomy
 
 
+def test_nested_family_contexts_restore_each_level_and_failed_restore_closes_the_engine(monkeypatch):
+    with Engine() as engine:
+        provenance=deepcopy(engine.provenance);base=engine.synthesize('u',duration_s=.1)
+        with engine.source_model('Two-mass model'):
+            outer=deepcopy(engine.provenance)
+            with engine.source_model('Two-mass model'):assert engine.provenance==outer  # same family: no reload
+            with engine.source_model('Geometric glottis'):
+                assert engine.source_model_family=='Geometric glottis' and 'selected_source_family' not in engine.provenance
+                np.testing.assert_array_equal(engine.synthesize('u',duration_s=.1),base)
+            assert engine.source_model_family=='Two-mass model' and engine.provenance==outer
+        assert engine.provenance==provenance
+        reload=engine._load_source_family
+        def failing(family,anatomy):
+            if family=='Geometric glottis':raise RuntimeError('injected restore failure')
+            return reload(family,anatomy)
+        monkeypatch.setattr(engine,'_load_source_family',failing)
+        with pytest.raises(RuntimeError,match='injected restore failure'):
+            with engine.source_model('Two-mass model'):pass
+        assert engine._closed
+        with pytest.raises(RuntimeError,match='closed'):engine.anatomy()
+    with Engine() as reopened:assert reopened.source_model_family=='Geometric glottis'
+
+
 def test_capability_is_family_aware_and_requires_certified_geometric_selection():
     with Engine() as engine:
         capability=source.source_capability(engine)
@@ -139,6 +162,20 @@ def test_rows_record_requested_and_simulated_f0_and_a_pitch_excluded_score(monke
         assert all(row['requested_f0_hz']==190. and row['source_model'] in ('geometric','two_mass') for row in scored['alternatives'])
         assert all((row['score'] is None)==(row['score_excluding_pitch'] is None)==(row['heldout_rank_excluding_pitch'] is None) for row in scored['alternatives'])
         assert scored['alternatives'][0]['simulated_f0_hz']==rows[0]['simulated_f0_hz']
+        single=source.forecast_phonation(engine,fitted,family='joint',candidate_id='mechanical',reference_trial_id='cal',pose='o',
+            controls={'JA':-3.,'F0':190.,'PR':8000.,'gain':2.},target_id='single')
+        assert single['forecast']['controls']['source_model']=='two_mass' and single['forecast']['requested_f0_hz']==190.
+        assert single['forecast']['simulated_f0_hz']==single['forecast']['record']['descriptors']['pitchHz']['value']
+        pcm,meta,_=frame(engine,'o',{'JA':-3.,'F0':190.,'PR':8000.,'gain':2.,**SHAPE},'single')
+        result=source.score_phonation_forecast(single,pcm,meta)
+        assert result['status']=='available' and result['score_excluding_pitch'] is not None and result['simulated_f0_hz']==single['forecast']['simulated_f0_hz']
+        import threading
+        stop=threading.Event();stop.set();loads.clear()
+        assert source.fit_phonation(engine,document,candidates=candidates,max_synthesis_calls=6,enabled=True,cancelled=stop)['status']=='timed-out'
+        cancelled=source.forecast_phonation_bank(engine,fitted,reference_trial_id='cal',pose='o',
+            controls={'JA':-3.,'F0':190.,'PR':8000.,'gain':2.},target_id='cancelled',cancelled=stop)['forecast']
+        assert cancelled['actual_synthesis_calls']==0 and [row['status'] for row in cancelled['alternatives']]==['timed-out']*6
+        assert len(loads)==2  # only the bank's capability audit reloads; no family group is entered after cancellation
 
 
 def test_app_grids_vary_one_declared_axis_and_family_gains_do_not_clip():
