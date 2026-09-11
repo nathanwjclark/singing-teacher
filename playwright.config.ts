@@ -6,6 +6,8 @@ import { defineConfig } from '@playwright/test';
 const port = 5190;
 export default defineConfig({
   testDir: './tests',
+  // Needs the scientific worker as well; it has its own config (tests/spectral-objective.config.ts).
+  testIgnore: ['spectral-objective.spec.ts'],
   use: { baseURL: `http://127.0.0.1:${port}`, browserName: 'chromium', channel: 'chrome' },
   webServer: {
     command: 'rm -rf .local-e2e-data && npm run build && node server/local.mjs',

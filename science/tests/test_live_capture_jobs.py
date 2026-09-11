@@ -17,10 +17,10 @@ spec=importlib.util.spec_from_file_location('live_capture_jobs',SCRIPT)
 live=importlib.util.module_from_spec(spec);spec.loader.exec_module(live)
 
 
-def capture(tmp_path):
+def capture(tmp_path,pose='a'):
     directory=tmp_path/'capture';directory.mkdir()
     with Engine() as engine:
-        audio=engine.synthesize('a',{'JA':-3.},f0_hz=180.,duration_s=.6)
+        audio=engine.synthesize(pose,{'JA':-3.},f0_hz=180.,duration_s=.6)
         samples,_=resample_native_pcm(audio,44100,48000)
     raw=samples.astype('<f4').tobytes();(directory/'audio.pcm.raw').write_bytes(raw)
     stamp=lambda n:dict(value=n,timescale=48000,epoch=0,flags=1,seconds=n/48000)

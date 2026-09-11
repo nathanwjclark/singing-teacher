@@ -2,7 +2,7 @@ import {useEffect,useState} from 'react';
 export interface ScientificResult {
  geometryModelId?:string;decisionId?:string;designId?:string;
  recordingAllowed?:boolean;recordingMessage?:string;restDecision?:{sessionId:string;decisionId:string;createdAt:string};
- schemaVersion:string;runId:string;sessionId?:string;modelId?:string;sourceCaptureId:string|null;createdAt:string;nativeCalls:number;calibrationWindows:number;eligibleWindows:number;candidateId:string;
+ schemaVersion:string;runId:string;objective?:string;sessionId?:string;modelId?:string;sourceCaptureId:string|null;createdAt:string;nativeCalls:number;calibrationWindows:number;eligibleWindows:number;candidateId:string;
  anatomy:Record<string,number>;referenceAnatomy:Record<string,number>;fitDiscrepancy:number;baselineDiscrepancy:number|null;interpretation:string;geometryRole:string;forecastRole:string;
  files:Record<string,{sha256:string;byteLength:number}>;
  forecast:{selected_experiment_id:string|null;target_observation_id:string;rankings:Array<{experiment:{pose:string;experiment_id:string};predictions:Array<{hypothesis_id:string;canonical?:{measurement:{measurements:Array<{name:string;value:number|null;unit:string}>}}}>}>};

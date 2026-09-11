@@ -52,7 +52,7 @@ test('app prepares captures and displays actual outcome scores without backend i
  let fitted=false,scored=false;const declarations:unknown[]=[];
  await page.route('**/api/science/status',r=>r.fulfill({json:fitted?{status:'succeeded',runId:'ui-test',result}:{status:'not-run'}}));
  await page.route('**/api/science/use-latest-capture',r=>{declarations.push(r.request().postDataJSON());return r.fulfill({json:{prepared:true}})});
- await page.route('**/api/science/run',r=>{expect(r.request().postData()).toBeNull();fitted=true;return r.fulfill({status:202,json:{status:'running'}})});
+ await page.route('**/api/science/run',r=>{expect(r.request().postDataJSON()).toEqual({objective:'canonical-coarse-v1'});fitted=true;return r.fulfill({status:202,json:{status:'running'}})});
  await page.route('**/api/science/outcome',r=>{
   if(r.request().method()==='POST'){expect(r.request().postData()).toBeNull();scored=true;return r.fulfill({status:202,json:{status:'running'}})}
   return r.fulfill({json:scored?{status:'succeeded',outcomeId:'outcome-test',result:{status:'succeeded',scientificStatus:'model_mismatch',modelUpdated:true,modelId:'model-after',sessionId:'session-test',scores:[{hypothesis_id:'h1',standardized_rms:4.125}],retainedHypotheses:2,previousHypotheses:2}}:{status:'not-run'}});

@@ -38,4 +38,5 @@ dist-ssr
 
 # Throwaway data for the browser-check server
 .local-e2e-data/
+.local-e2e-spectral/
 __pycache__/
