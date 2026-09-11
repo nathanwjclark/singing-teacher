@@ -234,13 +234,15 @@ def test_astra_two_round_native_loop_survives_restart_without_duplicate_update(t
                 assert updated['snapshot']['model_id'] != previous_model
                 retained = [h['hypothesis_id'] for h in updated['snapshot']['hypotheses']]
                 prior = [h['hypothesis_id'] for h in before['snapshot']['hypotheses']]
-                assert update['result']['status'] in ('conditional_support_updated', 'no_design_separation', 'model_mismatch')
-                assert set(retained) <= set(prior)
-                if update['result']['status'] != 'conditional_support_updated':
-                    assert retained == prior
+                # Astra selects the only fully predicted experiment, which cannot
+                # separate the retained support; a take synthesized from the fitted
+                # anatomy must not be reported as a model mismatch.
+                assert update['result']['status'] == 'no_design_separation', update['result']
+                assert retained == prior
                 assert committed['data']['target_observation_id'] in updated['snapshot']['evidence_ids']
                 assert scored['result']['modelId'] == updated['snapshot']['model_id']
-                assert call('/api/science/outcome', False)['outcomeId'] == outcome['outcomeId']
+                retry = call('/api/science/outcome', False)
+                assert retry['outcomeId'] == outcome['outcomeId'] and retry['status'] == 'succeeded'
                 assert call(session_path)['state']['version'] == updated['version']
                 assert summary_path.read_bytes() == initial_summary
                 previous_model = updated['snapshot']['model_id']
