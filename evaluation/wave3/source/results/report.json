@@ -1,0 +1,613 @@
+{
+  "cases": [
+    {
+      "generator": "geometric-1",
+      "pitch_excluded": {
+        "difference_two_mass_minus_geometric": null,
+        "failures": {
+          "geometric": false,
+          "two_mass": true
+        },
+        "heldout_discrepancy": {
+          "geometric": 2.987491674154829e-05,
+          "two_mass": null
+        },
+        "joint_ranking": [
+          "t0-geometric-0",
+          "t0-geometric-1",
+          "t0-geometric-2",
+          "t0-two_mass-2",
+          "t0-two_mass-0"
+        ],
+        "nearest_grid_rank": 2,
+        "selected": {
+          "geometric": "t0-geometric-0",
+          "two_mass": "t0-two_mass-1"
+        },
+        "true_family_rank": 1,
+        "winner": "geometric"
+      },
+      "pose": "e",
+      "primary": {
+        "difference_two_mass_minus_geometric": 0.1947779566049791,
+        "failures": {
+          "geometric": false,
+          "two_mass": false
+        },
+        "heldout_discrepancy": {
+          "geometric": 2.2563235890301704e-05,
+          "two_mass": 0.1948005198408694
+        },
+        "joint_ranking": [
+          "t0-geometric-0",
+          "t0-geometric-1",
+          "t0-geometric-2",
+          "t0-two_mass-2",
+          "t0-two_mass-0"
+        ],
+        "nearest_grid_rank": 2,
+        "selected": {
+          "geometric": "t0-geometric-0",
+          "two_mass": "t0-two_mass-0"
+        },
+        "true_family_rank": 1,
+        "winner": "geometric"
+      },
+      "unscorable_alternatives": {
+        "geometric": 3,
+        "two_mass": 4
+      }
+    },
+    {
+      "generator": "geometric-1",
+      "pitch_excluded": {
+        "difference_two_mass_minus_geometric": 0.2661089905958076,
+        "failures": {
+          "geometric": false,
+          "two_mass": false
+        },
+        "heldout_discrepancy": {
+          "geometric": 0.03328817163839549,
+          "two_mass": 0.2993971622342031
+        },
+        "joint_ranking": [
+          "t0-geometric-1",
+          "t0-geometric-0",
+          "t0-two_mass-2",
+          "t0-two_mass-1",
+          "t0-two_mass-0",
+          "t0-geometric-2"
+        ],
+        "nearest_grid_rank": 1,
+        "selected": {
+          "geometric": "t0-geometric-0",
+          "two_mass": "t0-two_mass-1"
+        },
+        "true_family_rank": 1,
+        "winner": "geometric"
+      },
+      "pose": "o",
+      "primary": {
+        "difference_two_mass_minus_geometric": 0.3682359544313826,
+        "failures": {
+          "geometric": false,
+          "two_mass": false
+        },
+        "heldout_discrepancy": {
+          "geometric": 0.024966157131453264,
+          "two_mass": 0.39320211156283585
+        },
+        "joint_ranking": [
+          "t0-geometric-1",
+          "t0-geometric-0",
+          "t0-two_mass-2",
+          "t0-two_mass-1",
+          "t0-two_mass-0",
+          "t0-geometric-2"
+        ],
+        "nearest_grid_rank": 1,
+        "selected": {
+          "geometric": "t0-geometric-0",
+          "two_mass": "t0-two_mass-0"
+        },
+        "true_family_rank": 1,
+        "winner": "geometric"
+      },
+      "unscorable_alternatives": {
+        "geometric": 3,
+        "two_mass": 3
+      }
+    },
+    {
+      "generator": "geometric-2",
+      "pitch_excluded": {
+        "difference_two_mass_minus_geometric": 0.051363483717419736,
+        "failures": {
+          "geometric": false,
+          "two_mass": false
+        },
+        "heldout_discrepancy": {
+          "geometric": 0.0027295054431125533,
+          "two_mass": 0.05409298916053229
+        },
+        "joint_ranking": [
+          "t0-geometric-0",
+          "t0-geometric-1",
+          "t0-two_mass-2",
+          "t0-geometric-2",
+          "t0-two_mass-0"
+        ],
+        "nearest_grid_rank": null,
+        "selected": {
+          "geometric": "t0-geometric-0",
+          "two_mass": "t0-two_mass-2"
+        },
+        "true_family_rank": 1,
+        "winner": "geometric"
+      },
+      "pose": "e",
+      "primary": {
+        "difference_two_mass_minus_geometric": 0.20994606508920324,
+        "failures": {
+          "geometric": false,
+          "two_mass": false
+        },
+        "heldout_discrepancy": {
+          "geometric": 0.0020477637096264992,
+          "two_mass": 0.21199382879882975
+        },
+        "joint_ranking": [
+          "t0-geometric-0",
+          "t0-geometric-1",
+          "t0-two_mass-2",
+          "t0-geometric-2",
+          "t0-two_mass-0"
+        ],
+        "nearest_grid_rank": null,
+        "selected": {
+          "geometric": "t0-geometric-0",
+          "two_mass": "t0-two_mass-0"
+        },
+        "true_family_rank": 1,
+        "winner": "geometric"
+      },
+      "unscorable_alternatives": {
+        "geometric": 3,
+        "two_mass": 4
+      }
+    },
+    {
+      "generator": "geometric-2",
+      "pitch_excluded": {
+        "difference_two_mass_minus_geometric": 0.4073138453042459,
+        "failures": {
+          "geometric": false,
+          "two_mass": false
+        },
+        "heldout_discrepancy": {
+          "geometric": 0.44249984193896913,
+          "two_mass": 0.849813687243215
+        },
+        "joint_ranking": [
+          "t0-two_mass-0",
+          "t0-geometric-1",
+          "t0-geometric-0",
+          "t0-two_mass-2",
+          "t0-two_mass-1",
+          "t0-geometric-2"
+        ],
+        "nearest_grid_rank": null,
+        "selected": {
+          "geometric": "t0-geometric-0",
+          "two_mass": "t0-two_mass-2"
+        },
+        "true_family_rank": 2,
+        "winner": "geometric"
+      },
+      "pose": "o",
+      "primary": {
+        "difference_two_mass_minus_geometric": -0.24594815705261097,
+        "failures": {
+          "geometric": false,
+          "two_mass": false
+        },
+        "heldout_discrepancy": {
+          "geometric": 0.3318749126622999,
+          "two_mass": 0.08592675560968895
+        },
+        "joint_ranking": [
+          "t0-two_mass-0",
+          "t0-geometric-1",
+          "t0-geometric-0",
+          "t0-two_mass-2",
+          "t0-two_mass-1",
+          "t0-geometric-2"
+        ],
+        "nearest_grid_rank": null,
+        "selected": {
+          "geometric": "t0-geometric-0",
+          "two_mass": "t0-two_mass-0"
+        },
+        "true_family_rank": 2,
+        "winner": "two_mass"
+      },
+      "unscorable_alternatives": {
+        "geometric": 3,
+        "two_mass": 3
+      }
+    },
+    {
+      "generator": "two-mass-1",
+      "pitch_excluded": {
+        "difference_two_mass_minus_geometric": null,
+        "failures": {
+          "geometric": false,
+          "two_mass": true
+        },
+        "heldout_discrepancy": {
+          "geometric": 0.03597505395196756,
+          "two_mass": null
+        },
+        "joint_ranking": [
+          "t0-geometric-1",
+          "t0-two_mass-0",
+          "t0-geometric-2",
+          "t0-geometric-0",
+          "t0-two_mass-2"
+        ],
+        "nearest_grid_rank": 2,
+        "selected": {
+          "geometric": "t0-geometric-0",
+          "two_mass": "t0-two_mass-1"
+        },
+        "true_family_rank": 2,
+        "winner": "geometric"
+      },
+      "pose": "e",
+      "primary": {
+        "difference_two_mass_minus_geometric": -0.035239755717948705,
+        "failures": {
+          "geometric": false,
+          "two_mass": false
+        },
+        "heldout_discrepancy": {
+          "geometric": 0.06829257772070407,
+          "two_mass": 0.03305282200275537
+        },
+        "joint_ranking": [
+          "t0-two_mass-0",
+          "t0-geometric-1",
+          "t0-geometric-2",
+          "t0-geometric-0",
+          "t0-two_mass-2"
+        ],
+        "nearest_grid_rank": 1,
+        "selected": {
+          "geometric": "t0-geometric-0",
+          "two_mass": "t0-two_mass-0"
+        },
+        "true_family_rank": 1,
+        "winner": "tie"
+      },
+      "unscorable_alternatives": {
+        "geometric": 3,
+        "two_mass": 4
+      }
+    },
+    {
+      "generator": "two-mass-1",
+      "pitch_excluded": {
+        "difference_two_mass_minus_geometric": 0.4251791428488163,
+        "failures": {
+          "geometric": false,
+          "two_mass": false
+        },
+        "heldout_discrepancy": {
+          "geometric": 0.16042886986467528,
+          "two_mass": 0.5856080127134916
+        },
+        "joint_ranking": [
+          "t0-geometric-1",
+          "t0-geometric-0",
+          "t0-two_mass-0",
+          "t0-two_mass-2",
+          "t0-two_mass-1",
+          "t0-geometric-2"
+        ],
+        "nearest_grid_rank": 3,
+        "selected": {
+          "geometric": "t0-geometric-0",
+          "two_mass": "t0-two_mass-1"
+        },
+        "true_family_rank": 3,
+        "winner": "geometric"
+      },
+      "pose": "o",
+      "primary": {
+        "difference_two_mass_minus_geometric": 0.05461519489537092,
+        "failures": {
+          "geometric": false,
+          "two_mass": false
+        },
+        "heldout_discrepancy": {
+          "geometric": 0.12568436871616892,
+          "two_mass": 0.18029956361153984
+        },
+        "joint_ranking": [
+          "t0-geometric-1",
+          "t0-geometric-0",
+          "t0-two_mass-0",
+          "t0-two_mass-2",
+          "t0-two_mass-1",
+          "t0-geometric-2"
+        ],
+        "nearest_grid_rank": 3,
+        "selected": {
+          "geometric": "t0-geometric-0",
+          "two_mass": "t0-two_mass-0"
+        },
+        "true_family_rank": 3,
+        "winner": "geometric"
+      },
+      "unscorable_alternatives": {
+        "geometric": 3,
+        "two_mass": 3
+      }
+    },
+    {
+      "generator": "two-mass-2",
+      "pitch_excluded": {
+        "difference_two_mass_minus_geometric": null,
+        "failures": {
+          "geometric": true,
+          "two_mass": true
+        },
+        "heldout_discrepancy": {
+          "geometric": null,
+          "two_mass": null
+        },
+        "joint_ranking": [],
+        "nearest_grid_rank": null,
+        "selected": {
+          "geometric": null,
+          "two_mass": null
+        },
+        "true_family_rank": null,
+        "winner": "none"
+      },
+      "pose": "e",
+      "primary": {
+        "difference_two_mass_minus_geometric": null,
+        "failures": {
+          "geometric": true,
+          "two_mass": true
+        },
+        "heldout_discrepancy": {
+          "geometric": null,
+          "two_mass": null
+        },
+        "joint_ranking": [],
+        "nearest_grid_rank": null,
+        "selected": {
+          "geometric": null,
+          "two_mass": null
+        },
+        "true_family_rank": null,
+        "winner": "none"
+      },
+      "unscorable_alternatives": {
+        "geometric": 6,
+        "two_mass": 6
+      }
+    },
+    {
+      "generator": "two-mass-2",
+      "pitch_excluded": {
+        "difference_two_mass_minus_geometric": null,
+        "failures": {
+          "geometric": true,
+          "two_mass": true
+        },
+        "heldout_discrepancy": {
+          "geometric": null,
+          "two_mass": null
+        },
+        "joint_ranking": [],
+        "nearest_grid_rank": null,
+        "selected": {
+          "geometric": null,
+          "two_mass": null
+        },
+        "true_family_rank": null,
+        "winner": "none"
+      },
+      "pose": "o",
+      "primary": {
+        "difference_two_mass_minus_geometric": null,
+        "failures": {
+          "geometric": true,
+          "two_mass": true
+        },
+        "heldout_discrepancy": {
+          "geometric": null,
+          "two_mass": null
+        },
+        "joint_ranking": [],
+        "nearest_grid_rank": null,
+        "selected": {
+          "geometric": null,
+          "two_mass": null
+        },
+        "true_family_rank": null,
+        "winner": "none"
+      },
+      "unscorable_alternatives": {
+        "geometric": 6,
+        "two_mass": 6
+      }
+    }
+  ],
+  "decision": {
+    "cases": 8,
+    "failures": {
+      "geometric": 2,
+      "two_mass": 2
+    },
+    "outcome": "inconclusive",
+    "threshold": 6,
+    "wins": {
+      "pitch_excluded": {
+        "geometric": 6,
+        "two_mass": 0
+      },
+      "primary": {
+        "geometric": 4,
+        "two_mass": 1
+      }
+    }
+  },
+  "evidence_source": "synthetic",
+  "f0_mismatch_hz": {
+    "geometric": {
+      "count": 45,
+      "max": 0.08070648274090786,
+      "mean": 0.026875783006927476,
+      "mean_absolute": 0.029336739069646633,
+      "median": 0.014005583228851037,
+      "min": -0.012327565204628854,
+      "missing_pitch": 27
+    },
+    "two_mass": {
+      "count": 45,
+      "max": 14.546126519892368,
+      "mean": -8.23661835122294,
+      "mean_absolute": 12.618039167479342,
+      "median": -9.35856662700715,
+      "min": -60.28133094675495,
+      "missing_pitch": 27
+    }
+  },
+  "finished_at": "2026-09-11T04:44:55.707584+00:00",
+  "generators": [
+    {
+      "family": "geometric",
+      "generator": "geometric-1",
+      "generator_calibration_f0": {
+        "cal-a": {
+          "requested_f0_hz": 150.0,
+          "simulated_f0_hz": 150.01135374352396
+        },
+        "cal-u": {
+          "requested_f0_hz": 220.0,
+          "simulated_f0_hz": 219.99269410296716
+        }
+      },
+      "native_calls": {
+        "bank-e": 24,
+        "bank-o": 24,
+        "fit": 72
+      },
+      "status": "evaluated",
+      "wall_s": 34.66
+    },
+    {
+      "family": "geometric",
+      "generator": "geometric-2",
+      "generator_calibration_f0": {
+        "cal-a": {
+          "requested_f0_hz": 150.0,
+          "simulated_f0_hz": 150.0109716831251
+        },
+        "cal-u": {
+          "requested_f0_hz": 220.0,
+          "simulated_f0_hz": 219.91675859288193
+        }
+      },
+      "native_calls": {
+        "bank-e": 24,
+        "bank-o": 24,
+        "fit": 72
+      },
+      "status": "evaluated",
+      "wall_s": 37.32
+    },
+    {
+      "family": "two_mass",
+      "generator": "two-mass-1",
+      "generator_calibration_f0": {
+        "cal-a": {
+          "requested_f0_hz": 150.0,
+          "simulated_f0_hz": 147.00983765491318
+        },
+        "cal-u": {
+          "requested_f0_hz": 220.0,
+          "simulated_f0_hz": 214.28770767407093
+        }
+      },
+      "native_calls": {
+        "bank-e": 24,
+        "bank-o": 24,
+        "fit": 72
+      },
+      "status": "evaluated",
+      "wall_s": 35.78
+    },
+    {
+      "family": "two_mass",
+      "generator": "two-mass-2",
+      "generator_calibration_f0": {
+        "cal-a": {
+          "requested_f0_hz": 150.0,
+          "simulated_f0_hz": 136.9739367456405
+        },
+        "cal-u": {
+          "requested_f0_hz": 220.0,
+          "simulated_f0_hz": 169.02136745153865
+        }
+      },
+      "native_calls": {
+        "fit": 0
+      },
+      "status": "evaluated",
+      "wall_s": 1.62
+    }
+  ],
+  "hard_total_native_calls": 592,
+  "native_calls": 376,
+  "protocol_version": "wave3-source-family-1",
+  "provenance": {
+    "capability_sha256": "73d0a9beb421bb8412974701109cc3fceabaa0c847f35fdf447b027d343e4323",
+    "extractor_signature": {
+      "science/scripts/phonation_bridge.ts": "3e0643156a7122c77f2ac3f2599d423e273e04c062e527c33e296a1642e4f7a8",
+      "src/contracts/contracts.test.ts": "7ff8e1cd57f40c00f39250ca04412e212ec5d220d9da9103cfc81f23c1704b66",
+      "src/contracts/index.ts": "d0a1b59cf877b78830e641cba56da6b4f11866bfe634d54c7fdf6d188d34007a",
+      "src/contracts/learning.ts": "925d7449ecc9430e00d0652ab50deb9852d7a9685f8abb4e481a248f28b28dd4",
+      "src/contracts/probes.ts": "2c9001d74f1e88dbf75cdee2ab3ac4a26b565d71cde354bde905eae2a401e898",
+      "src/lib/audio.ts": "7d80ec1a439e2db5c4bc76f2060ff11940837a2b3475f63b633cde52892808a5",
+      "src/phonation/measure.ts": "2a1397787f483f41a47985fd63deed8f1601c218dee6de2a69bc3d0664b06f5d",
+      "src/phonation/types.ts": "4120144604ddc7c296f536ba8a9f01aa24587867420db8ed4e2553a60d28dd52"
+    },
+    "native_provenance": {
+      "build_type": "Release",
+      "geometry_basis": "vtl-anatomy-params-reconstructed-v1",
+      "library_sha256": "0d064eab49a06ede2f16f07479544f1b2c196873465ba9ef53694b6540beed0a",
+      "patch_sha256": "8f3df0996b4444cd17810ea3f8e48b4feac2d86d51e06036ce9d4c676f8ad1ab",
+      "sanitized": false,
+      "speaker_sha256": "e1e592dae13991e981c17bcc326cccc7bce3705e3862eb77fdeaeb238418a503",
+      "upstream_revision": "df30392f18dc5e175b577c3ba734caaa65a3927f"
+    },
+    "protocol_sha256": "05d89a3e1894b094ad697ce0bb0162c5db64d81ad6f3b7acbb156bb1566d2bad",
+    "source_adapter_dependencies": {
+      "engine.py": "180e1d6c177900d64252e899aeff79b724022df7bc6c1ce997896f6fa73a1d2a",
+      "pcm_inverse.py": "2e0a3fb5a1ed8efba7c2955c8af3e8e48939ed28131e3c0df24c34a3cb476235"
+    },
+    "source_adapter_sha256": "d9707d31d66e5e01629fcbdf3a1cb821dc1b6f02f1aaef7fc10ac455f0bbc791",
+    "source_model_version": "vtl-finite-geometric-two-mass-v2",
+    "started_at": "2026-09-11T04:43:06.164662+00:00",
+    "worktree": {
+      "changed_paths": [],
+      "commit": "a622381f5004a4fed32c3917df21d3b36d4cfa8f",
+      "dirty": false
+    }
+  }
+}
