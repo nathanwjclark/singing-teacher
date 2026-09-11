@@ -1,4 +1,4 @@
-import hashlib,json,os,sys,threading
+import hashlib,json,os,shutil,sys,threading
 from datetime import datetime,timezone
 from pathlib import Path
 
@@ -11,12 +11,12 @@ sys.path.insert(0,str(Path(__file__).parents[1]/'scripts'))
 import app_motion
 
 
-def encoded_capture(data,temporary,ffmpeg='/opt/homebrew/bin/ffmpeg',silent=False):
+def encoded_capture(data,temporary,silent=False):
     with Engine() as engine:
         audio,_=synthesize_phonation(engine,pose='a',JA=-3,F0=180,PR=8000,PS=0,duration_s=1.)
     if silent:audio[:]=0
     raw=temporary/'source.f32';raw.write_bytes(audio.astype('<f4').tobytes());video=temporary/'source.webm'
-    app_motion.process([ffmpeg,'-v','error','-f','f32le','-ar','44100','-ac','1','-i',str(raw),'-c:a','libopus',str(video)])
+    app_motion.process([shutil.which('ffmpeg'),'-v','error','-f','f32le','-ar','44100','-ac','1','-i',str(raw),'-c:a','libopus',str(video)])
     media=video.read_bytes();mh=app_motion.sha(media)
     record={'kind':'motion-observation','id':'fixture-motion','attemptId':'attempt','media':{'sha256':mh,'byteLength':len(media),'mimeType':'video/webm'},'provenance':{'kind':'development-fixture','sourceHashes':[mh]},'timebase':{'syncUncertaintyMs':None},'samples':[]}
     rb=json.dumps(record).encode();rh=app_motion.sha(rb);identity=app_motion.sha((rh+mh).encode());root=data/'motion-captures'/identity;root.mkdir(parents=True)

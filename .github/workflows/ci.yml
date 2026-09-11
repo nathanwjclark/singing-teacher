@@ -72,6 +72,10 @@ jobs:
       - name: Build and test the native library
         if: steps.native-cache.outputs.cache-hit != 'true'
         run: science/.venv/bin/python science/scripts/build_native.py
+      # The media tests decode real encoded audio and video; without these
+      # tools they would be skipped and CI would not exercise them.
+      - name: Media decoder
+        run: if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then HOMEBREW_NO_AUTO_UPDATE=1 brew install ffmpeg; fi
       - name: Node tests
         run: npm test
       - name: Science tests
