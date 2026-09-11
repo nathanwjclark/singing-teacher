@@ -65,13 +65,15 @@ historical evidence. It must not be presented as a current-model estimate.
 FFmpeg/ffprobe are optional existing executables (`SINGING_FFMPEG` and
 `SINGING_FFPROBE` can select paths). Missing decoding capability reports an
 unavailable analysis while saving and replay remain usable. No install is
-performed automatically. The runner reads at most 30 seconds and analyzes three
-declared audio windows under a finite maximum of 108 native synthesis calls.
+performed automatically. The runner reads at most 30 seconds and analyzes up to
+120 disjoint quarter-second windows on an evenly spaced grid, with at most 108
+native synthesis requests declared before any synthesis
+([temporal comparisons](../../science/MOTION_PATH.md)).
 The outer process group is terminated after four minutes; interrupted native
 computation can be retried in the app because it has no model mutation.
 
 Candidate articulation is conditional on a declared vowel, source assumptions
-and at most three selected retained anatomy hypotheses; excluded support and
+and the top three anatomy hypotheses in the frozen baseline snapshot's rank order; excluded support and
 invalid windows remain explicit. The original 2D points never enter the physical
 objective. Audio offsets and inferred states are not synchronized measured video
 motion: audiovisual uncertainty remains unknown. The output cannot establish
