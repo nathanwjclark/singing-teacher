@@ -1,6 +1,6 @@
 # Bounded canonical PCM anatomy search
 
-`singing_physics.pcm_search.search_pcm(engine, document, *, anatomy_bounds, nuisance_profiles, max_synthesis_calls=128, rounds=3, seed=1, node_binary=None)` adaptively proposes anatomy and uses the existing `fit_pcm` path to synthesize audio and extract **the actual canonical PCM descriptors**. It does not substitute tract transfer spectra or invent a new audio feature extractor.
+`singing_physics.pcm_search.search_pcm(engine, document, *, anatomy_bounds, nuisance_profiles, max_synthesis_calls=128, rounds=3, seed=1, node_binary=None, objective='canonical-coarse-v1')` adaptively proposes anatomy and uses the existing `fit_pcm` path to synthesize audio and extract **the actual canonical PCM descriptors**. It does not substitute tract transfer spectra or invent a new audio feature extractor.
 
 This is a small conditional search over explicit hypotheses. It does not establish identified anatomy, a posterior, microphone calibration, or the unknown room response.
 
@@ -26,17 +26,17 @@ All other anatomy remains at the fixed native reference. Shared anatomy applies 
 
 Each profile must bind every trial, with explicit JA, F0 and scalar gain. These are complete finite combinations, not independent continuous nuisance optimizers. Duplicate control profiles under new names are rejected. Native support bounds are JA −5 to −1 degrees, F0 65–1000 Hz and gain 0.001–100. The search cannot infer arbitrary glottal mechanics, microphone coloration, reverberation or phase from these nuisance choices.
 
-The service passes observation data as `document` and the required bounds/profiles as parameters. Optional parameters are integer `max_synthesis_calls` (1–4096), `rounds` (1–8) and a nonnegative 32-bit `seed`; `node_binary` is a local runtime selection, not an external user path requirement.
+The service passes observation data as `document` and the required bounds/profiles as parameters. Optional parameters are integer `max_synthesis_calls` (1–4096), `rounds` (1–8), a nonnegative 32-bit `seed` and `objective` (`canonical-coarse-v1` or `multires-log-spectrum-v1`); `node_binary` is a local runtime selection, not an external user path requirement.
 
 ## Search and hard budget
 
 The initial normalized design contains the midpoint plus a seeded Latin-hypercube design: three points in one dimension or five in two. Later rounds examine shrinking coordinate neighborhoods of the best scored anatomy. All points are clipped to the declared box and duplicates are removed. Ties use stable candidate IDs. Seed affects the initial spatial coverage; evaluated proposals and SciPy version are recorded for replay.
 
-Every anatomy point receives **all** predeclared nuisance profiles. Batches preserve complete nuisance sets and stay within `fit_pcm`'s 32-candidate limit. The initial complete design must fit within the budget before any synthesis occurs. Later proposals that cannot fit are explicitly recorded as omitted for budget; the algorithm never buys extra compute implicitly.
+Every anatomy point receives **all** predeclared nuisance profiles. Profiles that differ only by gain share one native waveform per anatomy point and trial (`fit_pcm` applies gain after synthesis), so one point costs twice the number of distinct pose/JA/F0/duration waveforms: once per model. With the app's three gain-only profiles and two windows that is 4 calls per point instead of 12. Batches preserve complete nuisance sets and stay within `fit_pcm`'s 32-candidate limit. The initial complete design must fit within the budget before any synthesis occurs. Later proposals that cannot fit are explicitly recorded as omitted for budget; the algorithm never buys extra compute implicitly.
 
 A counted engine forwards real synthesis calls and enforces one cap across every round and both joint and fixed-anatomy evaluations. Calls that raise during synthesis are counted as attempted invocations, so failures cannot bypass the budget. Complete fit batches must return exactly the expected call count. If a later synthesis/extraction/operator error interrupts a batch, its consumed calls and error are retained and the incomplete comparison is excluded from ranking. Previously completed candidates remain available. Native anatomy is restored on success and failure.
 
-The fixed-anatomy model receives identical finite nuisance coverage and equal literal synthesis calls for every completed batch. Once all nuisance profiles have been evaluated, its repeated calls add **no new unique exploration**. Results explicitly report unique nuisance calls and redundant baseline calls; equal counts do not imply equal optimizer effectiveness or new statistical evidence. The baseline optimum is conditional on the same finite nuisance support.
+The fixed-anatomy model receives identical finite nuisance coverage and equal literal synthesis calls for every completed batch. Once all nuisance profiles have been evaluated, its repeated calls add **no new unique exploration**. Results explicitly report the distinct fixed-anatomy waveforms (`baseline_unique_nuisance_synthesis_calls`) and the redundant baseline calls repeated for later points; equal counts do not imply equal optimizer effectiveness or new statistical evidence. The baseline optimum is conditional on the same finite nuisance support.
 
 ## Results and interpretation
 
