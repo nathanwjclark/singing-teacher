@@ -80,6 +80,12 @@ def test_unusable_saved_setup_keeps_review_with_explicit_reason(tmp_path,receipt
     assert (root/'probe-imports'/'one'/result['measurementPath']).exists()
 
 
+def test_malformed_setup_pointer_keeps_review(tmp_path):
+    root,_=archive_fixture(tmp_path);(root/'probe-setup-current.json').write_text('[]')
+    result=prepare(root,root/'probe-imports'/'one')
+    assert not result['eligible'] and 'could not be verified' in result['reasons'][-1]
+
+
 @pytest.mark.parametrize('crash_after,app_setup',[(None,False),(None,True),('fit_probe',False),('collect_job',False),('cancelled_submit',False)])
 def test_original_probe_runs_joint_session_adoption(tmp_path, monkeypatch,crash_after,app_setup):
     import os
