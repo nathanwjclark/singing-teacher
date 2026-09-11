@@ -175,6 +175,21 @@ inline or `["h", digest]`. The writer stores every value whose canonical JSON
 reaches 1024 bytes as its own node, plus the root. Readers accept any valid tree,
 so the threshold can change without a new format. Unchanged values keep their
 digest from version to version, so an event adds only the nodes that changed.
+A list or object whose elements are each under 1024 bytes keeps them inline, so
+that whole node is stored again whenever one element changes; lists that grow by
+small records (control jobs and receipts, for example) make the per-round growth
+rise slowly (see the measurements below).
+
+Before an event is written, the writer proves inside the same transaction that
+the stored tree rebuilds exactly the state being written and that the rebuilt
+text parses; otherwise the command fails and nothing is committed. Readers
+rebuild a state's canonical text without recursion and parse it once, as they
+parsed a full-state event, so every depth canonical JSON can hold stays readable.
+A state may not exceed 64 MiB of canonical JSON (`MAX_STATE_BYTES`, the largest
+replay `app_recompute.py` and `recompute_session_score` accept): the writer
+refuses such a state, and a read stops rebuilding any value that grows past it,
+so a few crafted nodes that reference each other repeatedly cannot force
+unbounded work.
 
 Every read (`state`, `replay`, `GET /sessions/:id/ledger`, and
 `recompute_session_score.verify_replay` for a supplied replay) runs the same
@@ -196,17 +211,21 @@ child entry, which for a stored child is its `["h", digest]` reference.
 Measured on the real app loop (`science/tests/test_app_control_loop.py`: baseline
 search, Astra decisions, four control forecasts, three scores; 33 events) and on
 `science/scripts/measure_control_ledger.py --anatomies 4 --rounds 6` (38 events).
-Timings are from one development Mac: "append" re-appends every recorded state in
-order with `_append`, which verifies the whole ledger first; "read" is one
-verified `read_ledger` of the final ledger.
+Timings come from one interleaved run of both formats on one development Mac:
+"append" re-appends every recorded state in order with `_append`, which verifies
+the whole ledger first; "read" is one verified `read_ledger` of the final ledger.
 
 | Ledger | Stored v1 → format 2 | Replay response v1 → format 2 | Append, mean (max) | Verified read |
 |---|---|---|---|---|
-| App loop | 23.95 MB → 0.92 MB | 24.96 MB → 1.98 MB | 112 (264) ms → 50 (99) ms | 172 ms → 23 ms |
-| Measurement, 6 rounds | 6.73 MB → 0.94 MB | 7.00 MB → 1.23 MB | 25 (72) ms → 13 (30) ms | 46 ms → 18 ms |
+| App loop | 23.95 MB → 0.92 MB | 24.96 MB → 1.98 MB | 95 (209) ms → 63 (89) ms | 165 ms → 21 ms |
+| Measurement, 6 rounds | 6.73 MB → 0.94 MB | 7.00 MB → 1.23 MB | 22 (52) ms → 19 (39) ms | 43 ms → 12 ms |
 
 In the app loop each further Astra round (decision, forecast, score) adds about
 0.29 MB to the replay; with v1 events each round added 6-7 MB, more every round.
+That increment is not constant: over 20 rounds of the measurement script it rose
+by about 5 KB per round, from 194 KB to 283 KB (replay 4.77 MB after 20 rounds).
+Extrapolating the app loop's 0.29 MB with the same rise, its replay reaches the
+exporter's 24 MiB bound after about 54 more Astra rounds in one session.
 
 Rollback: code from before format 2 cannot read a format 2 event (it reports the
 session as not found). Returning to it after the first new write needs a backup
