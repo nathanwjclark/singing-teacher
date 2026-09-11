@@ -84,6 +84,22 @@ def visual_score(job):
             'evidence_scope': 'Retained annotation numbers and frozen projections; original video is not redecoded or correspondence revalidated.'}
 
 
+def source_extractor_check():
+    """Run the phonation extractor on a fixed generated tone before any retained frame.
+
+    measure_phonation reports a Node that cannot run the bridge as ValueError, the same
+    type as a rejected frame. This input carries no evidence, so any failure here is
+    about this computer's runtime. (phonation.py and the bridge sources are hashed into
+    stored source forecasts, so the scorer itself is left unchanged.)"""
+    from singing_physics import phonation
+    tone = (.1*np.sin(2*np.pi*200*np.arange(4096)/48000)).astype('<f4')
+    metadata = phonation._metadata('recompute-extractor-check', 48000, hashlib.sha256(tone.tobytes()).hexdigest(), 'engine-generated')
+    try:
+        phonation.measure_phonation(tone, 48000, metadata)
+    except ValueError as exc:
+        raise RuntimeError(str(exc)) from exc
+
+
 def source_score(job):
     from singing_physics import phonation
     params = job['request']['parameters']; original = job['result']; frozen = params['frozen']
@@ -93,6 +109,7 @@ def source_score(job):
         return {'status': 'missing_media', 'reason': 'Original controller request no longer contains its source frame.'}
     if not original.get('observation'):
         return {'status': 'missing_artifacts', 'reason': 'Original source score has no received observation receipt.'}
+    source_extractor_check()
     pcm = np.asarray(params['pcm'], dtype='<f4')
     if pcm.ndim != 1 or not 1 <= len(pcm) <= 8192 or not np.isfinite(pcm).all():
         raise ValueError('Invalid retained source frame')

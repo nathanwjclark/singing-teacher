@@ -343,3 +343,43 @@ def test_recompute_never_dispatches_a_pending_intent(batch_evidence, tmp_path, m
             assert dispatched['state']['version'] == state['version'] + 1 and dispatched['events'][-1]['action'] == 'job_dispatched'
         finally:
             server.shutdown(); thread.join(timeout=5)
+
+
+@pytest.fixture(scope='module')
+def source_replay(tmp_path_factory):
+    """A real session with one optional source forecast scored against a later generated frame."""
+    from singing_physics.phonation import synthesize_phonation, _metadata, _frame
+    from test_session_source import fitted
+    root = tmp_path_factory.mktemp('source-recompute')
+    with JobService(root/'jobs') as service:
+        controller = SessionController(root/'sessions', service, 'session')
+        baseline, _, _, _ = fitted(controller, service)
+        send(controller, 'forecast_source', parameters={'family': 'joint', 'candidate_id': '0.2', 'reference_trial_id': 'source-cal',
+            'pose': 'a', 'controls': {'JA': -3, 'F0': 200, 'PR': 8000, 'gain': 1.}, 'target_id': 'source-later'})
+        collect(controller, service)
+        with Engine() as engine:
+            engine.set_anatomy(baseline['hypotheses'][0]['anatomy'])
+            audio, _ = synthesize_phonation(engine, pose='a', JA=-3, F0=200, PR=8000, PS=.2)
+            frame, _ = _frame(audio, 48000)
+        metadata = _metadata('source-later', 48000, hashlib.sha256(frame.astype('<f4').tobytes()).hexdigest(), 'engine-generated'); metadata['sessionId'] = 'session'
+        send(controller, 'score_source', forecast_id='source-later', pcm=frame.tolist(), metadata=metadata)
+        collect(controller, service)
+        return controller.execute({'action': 'replay'})
+
+
+def test_source_rows_report_runtime_faults_as_unsupported(source_replay, tmp_path, monkeypatch):
+    def source_row(report):
+        return next(row for row in rows(report).values() if row['operation'] == 'score_phonation')
+    row = source_row(recompute_session(source_replay, session_id='session'))
+    assert (row['outcome'], row['status'], row['numericalAgreement']) == ('matched', 'verified', True), row
+    # measure_phonation reports a Node that cannot run its bridge as ValueError, like a
+    # rejected frame; the evidence-free extractor check keeps that out of 'failed'.
+    (tmp_path/'broken').mkdir(); node = tmp_path/'broken'/'node'
+    node.write_text('#!/bin/sh\nexit 9\n'); node.chmod(0o755)
+    for path in (tmp_path/'broken', tmp_path/'empty'):
+        monkeypatch.setenv('PATH', str(path))
+        report = recompute_session(source_replay, session_id='session')
+        row = source_row(report)
+        assert (row['outcome'], row['status']) == ('unsupported', 'runtime_unavailable') and report['counts']['failed'] == 0, row
+        assert 'recomputed_scientific_result' not in row['details']
+
