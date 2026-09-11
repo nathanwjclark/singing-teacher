@@ -16,6 +16,7 @@ from singing_physics.session import SessionController
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]/'scripts'))
 from recompute_session_score import recompute as raw_recompute, digest
+from test_app_recompute import reroot
 
 
 def recompute(path, job, frame, **kwargs):
@@ -106,6 +107,11 @@ def test_original_ledger_tamper_and_frozen_extractor_version_mismatch(exported, 
     altered['events'][0]['action'] = 'changed'
     replay_path = tmp_path/'replay.json'; replay_path.write_text(json.dumps(altered))
     assert raw_recompute(path, job, frame, original_replay=replay_path)[0]['status'] == 'invalid_evidence'
+    # A state node that no longer matches its digest invalidates the whole replay.
+    altered = deepcopy(original)
+    altered['nodes'][next(iter(altered['nodes']))] = ['v', 'changed']
+    replay_path.write_text(json.dumps(altered))
+    assert raw_recompute(path, job, frame, original_replay=replay_path)[0]['status'] == 'invalid_evidence'
     # Explicit old-version transcript derived from the genuine run. Rehash the
     # test ledger; this tests rejection, not an independently authenticated history.
     altered = deepcopy(original)
@@ -119,7 +125,7 @@ def test_original_ledger_tamper_and_frozen_extractor_version_mismatch(exported, 
     result = row['result']; result['design_sha256'] = design_hash
     result['observation_receipt']['design_sha256'] = design_hash
     result['observation_receipt_sha256'] = digest(result['observation_receipt'])
-    altered['events'][-1]['state'] = deepcopy(altered['state'])
+    reroot(altered)
     previous = '0'*64
     for event in altered['events']:
         event.pop('sha256'); event['previous_sha256'] = previous

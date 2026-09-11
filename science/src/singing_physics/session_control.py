@@ -8,6 +8,7 @@ from copy import deepcopy
 
 from .control_pcm import bank_binding
 from .prediction import Artifact, _encode
+from .session import state_fields
 from .session_source import _hash, _identity, _metadata, _now, _time
 
 FORECAST_PARAMETERS = {'profile', 'feature_scales', 'max_synthesis_calls', 'timeout_s'}
@@ -38,23 +39,22 @@ def history(state, binding):
 def job_record(record):
     """Ledger job entry for a control job: digests of its parameters and result only.
 
-    The sealed artifacts already live in control_forecasts and control_receipts. Every event
-    stores the whole state, so a second copy of the PCM frame, frozen bank and history in
-    each job would multiply the ledger size with every attempt."""
+    The sealed artifacts already live in control_forecasts and control_receipts. A second copy
+    of the PCM frame, frozen bank and history in each job would grow every state that the
+    ledger stores and returns."""
     request, result = record['request'], record.get('result')
     return {**record, 'request': {**request, 'parameters': {'sha256': _hash(request['parameters'])}},
             'result': None, 'result_sha256': None if result is None else _hash(result)}
 
 
-def verify_ledger(state, events):
+def verify_ledger(state, events, nodes):
     """Fail closed when a control job digest disagrees with the ledger's own copies.
 
     Parameters are checked against the full request the ledger recorded while the job was
     pending; results against the sealed artifact in control_forecasts or control_receipts.
     A reply the session rejected is kept only by the worker, so its digest is not checkable here."""
     requests = {}
-    for event in events:
-        pending = event['state'].get('pending')
+    for pending in state_fields(events, nodes, 'pending'):
         if pending and pending.get('control_binding'): requests.setdefault(pending['key'], pending['request']['parameters'])
     receipts = {row['job_id']: row for row in state.get('control_receipts', []) if row.get('job_id')}
     for job in state.get('jobs', []):

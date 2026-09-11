@@ -12,6 +12,11 @@ export const MAX_FILE_BYTES = 2 * 1024 * 1024;
 const MAX_FILES = 100;
 const sensitive = /^(authorization|api[_-]?key|openai_api_key|science_token|token|access_token|refresh_token|password|secret|credential)$/i;
 const media = /^(pcm|base64|pcm_base64|audio_base64|data_base64|imageDataUrl|audioDataUrl)$/i;
+const plain = value => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+// Format 2 replay events name their state by root digest; stored nodes are ["v",value], ["d",{key:child}]
+// or ["l",[child]], and a child is ["v",value] inline or ["h",digest]. The worker verified every hash.
+const node = (nodes, entry) => { const value = entry?.[0] === 'h' && Object.hasOwn(nodes, entry[1]) ? nodes[entry[1]] : entry; return Array.isArray(value) ? value : []; };
+const references = ([tag, value]) => (tag === 'd' && plain(value) ? Object.values(value) : tag === 'l' && Array.isArray(value) ? value : []).filter(child => child?.[0] === 'h');
 
 function local(req) {
   try {
@@ -95,6 +100,8 @@ export function createSessionExportRoutes({dataRoot, json, fetchImpl = fetch, en
         const bytes = await responseBytes(response);
         replay = JSON.parse(bytes.toString('utf8'));
         if (replay.state?.session_id !== sessionId || !Number.isSafeInteger(replay.state.version) || !Array.isArray(replay.events) || !/^[a-f0-9]{64}$/.test(replay.ledger_sha256 || '')) throw Error('Worker replay identity is invalid');
+        if (replay.nodes !== undefined && !plain(replay.nodes)) throw Error('Worker replay nodes are invalid');
+        if (!replay.events.every(event => plain(event) && ('state' in event ? plain(event.state) : event.format === 2 && typeof event.state_root === 'string' && Object.hasOwn(replay.nodes || {}, event.state_root)))) throw Error('Worker replay events are invalid');
         workerLedgerSha256 = replay.ledger_sha256;
       } catch { replay = null; missing.push({source: 'worker/session-replay', reason: 'Authoritative worker replay unavailable or invalid. Saved receipts are historical; current model and event chain are unconfirmed.'}); }
       const inSession = value => value.sessionId === sessionId;
@@ -113,8 +120,13 @@ export function createSessionExportRoutes({dataRoot, json, fetchImpl = fetch, en
         try { const artifact = await read(source); if (inSession(artifact.data) && artifacts.length < MAX_FILES) artifacts.push(artifact); } catch { /* Incomplete optional probe fits remain represented by the authoritative job ledger. */ }
       }
       const state = replay?.state;
-      const knownModels = new Set([original.data.modelId, state?.snapshot?.model_id,
-        ...(replay?.events || []).map(event => event.state?.snapshot?.model_id)].filter(Boolean));
+      const field = (entry, key) => { const [tag, value] = node(replay.nodes, entry); return tag === 'd' ? value?.[key] : tag === 'v' ? ['v', value?.[key]] : undefined; };
+      const eventModel = event => {
+        if (event.state) return event.state.snapshot?.model_id;
+        const [tag, value] = node(replay.nodes, field(field(['h', event.state_root], 'snapshot'), 'model_id'));
+        return tag === 'v' ? value : undefined;
+      };
+      const knownModels = new Set([original.data.modelId, state?.snapshot?.model_id, ...(replay?.events || []).map(eventModel)].filter(Boolean));
       let verifiedMotionBytes = 0, inspectedMotionAnalyses = 0;
       const verifiedCaptures = new Map();
       async function digestOriginal(source, limit) {
@@ -338,6 +350,19 @@ export function createSessionExportRoutes({dataRoot, json, fetchImpl = fetch, en
         }));
       }
       const cleanReplay = redact(replay, '/replay');
+      if (cleanReplay?.nodes) {
+        // A node whose only references sat under an omitted media or credential field would still carry
+        // that value (a PCM leaf node, for example), so keep only nodes the redacted events still reach.
+        const reachable = new Set(), queue = cleanReplay.events.filter(event => event.format === 2).map(event => event.state_root);
+        while (queue.length) {
+          const digest = queue.pop();
+          if (reachable.has(digest) || !Object.hasOwn(cleanReplay.nodes, digest)) continue;
+          reachable.add(digest); queue.push(...references(node(cleanReplay.nodes, ['h', digest])).map(child => child[1]));
+        }
+        for (const digest of Object.keys(cleanReplay.nodes)) if (!reachable.has(digest)) {
+          delete cleanReplay.nodes[digest]; omissions.push({path: '/replay/nodes/' + digest, reason: 'State node reachable only through an omitted media or credential field; omitted'});
+        }
+      }
       const cleanArtifacts = artifacts.map((artifact, i) => ({...artifact, data: redact(artifact.data, '/artifacts/' + i + '/data')}));
       const result = {
         schemaVersion: 'singing-session-export/1', exportedAt: new Date().toISOString(), runId, sessionId,

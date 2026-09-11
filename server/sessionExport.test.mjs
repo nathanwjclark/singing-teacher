@@ -292,3 +292,37 @@ test('binds cue-execution forecast, score and stop receipts to the ledger and th
  // Only the copy whose retained originals still verify remains bound.
  assert.deepEqual(output.data.artifacts.filter(a=>a.binding?.role==='cue-execution-score').map(a=>a.source),[`${attempts}/score-two/result.json`]);
 });
+
+test('format 2 replay: historical models resolve through stored nodes and media-only nodes never leave',async t=>{
+ const {root,put}=await fixture(t),hash=x=>createHash('sha256').update(x).digest('hex'),digest=node=>hash(JSON.stringify(node));
+ // Input data shaped like the worker's format 2 replay (the worker verifies every hash before sending it).
+ const pcm=['v',Array.from({length:300},(_,i)=>0.123456789+i)],snapshot=['v',{model_id:'historical-model',hypotheses:[{hypothesis_id:'h0'}]}];
+ const pending=['d',{key:['v','session:fictional'],pcm:['h',digest(pcm)]}];
+ const first=['d',{session_id:['v','session-one'],version:['v',1],snapshot:['h',digest(snapshot)],pending:['v',null]}];
+ const second=['d',{session_id:['v','session-one'],version:['v',2],snapshot:['v',{model_id:'updated-model'}],pending:['h',digest(pending)]}];
+ const nodes=Object.fromEntries([pcm,snapshot,pending,first,second].map(node=>[digest(node),node]));
+ const event=(version,root,sha256,previous)=>({format:2,session_id:'session-one',version,previous_sha256:previous,action:'fictional',received_at:'2026-01-01T00:00:00+00:00',details:{},state_root:digest(root),sha256});
+ const scientific={state:{session_id:'session-one',version:2,snapshot:{model_id:'updated-model'},pending:{key:'session:fictional',pcm:pcm[1]}},
+  events:[event(1,first,'b'.repeat(64),'0'.repeat(64)),event(2,second,'a'.repeat(64),'b'.repeat(64))],nodes,ledger_sha256:'a'.repeat(64)};
+ const record=Buffer.from('{"kind":"motion-observation"}'),media=Buffer.from('fixture media bytes'),id=hash(hash(record)+hash(media));
+ await put(`motion-captures/${id}/summary.json`,{id,recordSha256:hash(record),mediaSha256:hash(media),mediaByteLength:media.length});
+ await writeFile(join(root,`motion-captures/${id}/record.json`),record);await writeFile(join(root,`motion-captures/${id}/media`),media);
+ await put(`motion-analyses/${id}/analysis-one/summary.json`,{kind:'motion-pcm-fit-1',captureId:id,sessionId:'session-one',modelId:'historical-model',modelUpdated:false,
+  sourceHashes:{record:hash(record),media:hash(media),receipt:hash(await readFile(join(root,`motion-captures/${id}/summary.json`)))}});
+ let output,current=scientific;
+ const route=createSessionExportRoutes({dataRoot:root,env,json:(_r,status,data)=>{output={status,data};},fetchImpl:async()=>Response.json(current)});
+ await request(route);assert.equal(output.status,200);assert.ok(!output.data.missing.some(row=>row.source==='worker/session-replay'));
+ // The model named only inside the version-1 snapshot node still binds the receipt made against it.
+ const [bound]=output.data.artifacts.filter(a=>a.binding?.role==='conditional-motion-audio-analysis');
+ assert.deepEqual([bound.binding.modelId,bound.binding.current],['historical-model',false]);
+ // The PCM leaf is reachable only through an omitted pcm field, so it is dropped and recorded.
+ assert.deepEqual(Object.keys(output.data.replay.nodes).sort(),[first,second,snapshot,pending].map(digest).sort());
+ assert.deepEqual(output.data.omissions.filter(row=>row.reason.startsWith('State node')),[{path:'/replay/nodes/'+digest(pcm),reason:'State node reachable only through an omitted media or credential field; omitted'}]);
+ assert.equal(output.data.replay.nodes[digest(pending)][1].pcm.omitted,true);
+ assert.ok(!JSON.stringify(output.data).includes('0.123456789'));
+ // A root missing from the nodes, nodes that are not an object, or an event of neither format is no authoritative replay.
+ for(const broken of [{...scientific,nodes:{...nodes,[digest(second)]:undefined}},{...scientific,nodes:[]},{...scientific,events:[{...scientific.events[0],format:3},scientific.events[1]]}]){
+  current=JSON.parse(JSON.stringify(broken));await request(route);
+  assert.equal(output.status,200);assert.equal(output.data.replay,null);assert.ok(output.data.missing.some(row=>row.source==='worker/session-replay'));
+ }
+});

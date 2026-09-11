@@ -18,7 +18,7 @@ The output directory must be new. The report and freshly recomputed update are p
 ## Required originals and integrity boundary
 
 - Select exactly one succeeded `update_pcm` in the exported session's jobs. Other scientific operations are outside this adapter.
-- Supply the original, unredacted controller replay saved by the outcome runner (`replay.json`). Every event's canonical hash, order, session identity, previous hash, final state, and final ledger digest are checked against the exported `workerLedgerSha256`.
+- Supply the original, unredacted controller replay saved by the outcome runner (`replay.json`). The session ledger's own verifier checks every event's canonical hash, order, session identity and previous hash, every state node of format 2 events (hash, shape, references, none unreachable), and the final state; the final ledger digest must equal the exported `workerLedgerSha256`.
 - Supply the exact mono little-endian float32 frame received by that update, saved independently before or at original scoring. The byte length and SHA-256 must match the receipt and the float32 conversion of the original request PCM. The adapter never synthesizes or reconstructs missing originals.
 - Frozen snapshot/design canonical hashes, request/model/result/receipt bindings, receipt hash and updated snapshot hash are checked. Exported result and non-media request values must agree with the original ledger. The existing `update_pcm` then repeats its canonical prediction, feature, timing, profile, evidence and threshold validation.
 - The supplied native library must be certified by `Engine` and have exactly the recorded provenance. Canonical extractor and contract hashes/versions must match the frozen design before scoring.

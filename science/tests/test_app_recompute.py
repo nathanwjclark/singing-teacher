@@ -13,7 +13,7 @@ from singing_physics.pcm_inverse import FEATURES
 from singing_physics.pcm_spectral import SPECTRAL_OBJECTIVE
 from singing_physics.prediction import Artifact, _encode
 from singing_physics.service import JobService
-from singing_physics.session import SessionController
+from singing_physics.session import SessionController, _root, join
 from test_session import send, collect
 from science.scripts.app_recompute import recompute_session, source_score, visual_score
 from science.scripts.recompute_session_score import digest
@@ -82,6 +82,14 @@ def updates(replay):
             for j in replay['state']['jobs'] if j['request']['operation'] == 'update_pcm'}
 
 
+def reroot(replay):
+    """Store the edited final state as the last event's state, rebuilding the node set from every version."""
+    states = [join(event['state_root'], replay['nodes']) for event in replay['events']]
+    states[-1] = replay['state']; nodes = {}
+    for event, state in zip(replay['events'], states): event['state_root'] = _root(state, nodes)
+    replay['nodes'] = {key: json.loads(body) for key, body in nodes.items()}
+
+
 def reseal(replay, changes):
     """Rewrite a copy of a genuine ledger as an explicitly altered transcript.
 
@@ -91,7 +99,7 @@ def reseal(replay, changes):
     for job in altered['state']['jobs']:
         if job['job_id'] in changes:
             changes[job['job_id']](job)
-    altered['events'][-1]['state'] = deepcopy(altered['state'])
+    reroot(altered)
     previous = '0'*64
     for event in altered['events']:
         event.pop('sha256'); event['previous_sha256'] = previous
@@ -315,23 +323,20 @@ def test_recompute_never_dispatches_a_pending_intent(batch_evidence, tmp_path, m
     """The 'replay' session action would submit a persisted intent and append job_dispatched."""
     import shutil, sqlite3, threading
     from singing_physics.http_service import ScientificHTTPServer
-    from singing_physics.service import canonical
-    from singing_physics.session import _hash, _ledger
     from science.scripts.app_recompute import run
     from science.scripts.live_capture_jobs import HTTPBackend
     root, original = batch_evidence
     shutil.copytree(root/'worker', tmp_path/'worker')
-    sessions, jobs = tmp_path/'worker/sessions/sessions.sqlite3', tmp_path/'worker/jobs.sqlite3'
+    jobs = tmp_path/'worker/jobs.sqlite3'
     # Input data: the ledger as left by a crash after an intent was persisted and
-    # before JobService returned its job id (written exactly as _append writes).
-    with sqlite3.connect(sessions) as db:
-        state, previous, _ = _ledger(db, 'synthetic-replay-session')
-        state['version'] += 1
+    # before JobService returned its job id (written by the controller's own _append).
+    controller = SessionController(tmp_path/'worker/sessions', None, 'synthetic-replay-session')
+    with controller._db() as db:
+        state = controller._read(db)[0]
         model = state['snapshot']['model_id']
         state['pending'] = {'request': {'operation': 'forward', 'parameters': {'pose': 'a', 'duration_s': .1}, 'session_id': 'synthetic-replay-session', 'model_id': model},
                             'key': 'session:'+'c'*64, 'job_id': None, 'base_model_id': model}
-        event = {'session_id': 'synthetic-replay-session', 'previous_sha256': previous, 'action': 'search', 'received_at': datetime.now(timezone.utc).isoformat(), 'details': {}, 'state': deepcopy(state)}
-        db.execute('INSERT INTO events VALUES(?,?,?,?)', ('synthetic-replay-session', state['version'], canonical(event), _hash(event)))
+        controller._append(db, state, 'search', {})
     def models():
         with sqlite3.connect(jobs.as_uri()+'?mode=ro', uri=True) as db:
             return db.execute('SELECT * FROM models ORDER BY session_id').fetchall()

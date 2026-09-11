@@ -7,7 +7,7 @@ import pytest
 
 from singing_physics.pcm_design import _hash, freeze_pcm_hypotheses
 from singing_physics.service import JobService
-from singing_physics.session import SessionController
+from singing_physics.session import SessionController, state_fields
 from singing_physics.session_control import prepare, verify_ledger
 from science.scripts.app_recompute import recompute_session
 from test_control_pcm import CONTEXT, CONTROLS, FIRST, GAIN, SECOND, cue, frame
@@ -73,7 +73,8 @@ def test_ledger_history_changes_the_fourth_forecast_and_survives_pruning(tmp_pat
         replay = controller.execute({'action': 'replay'})
         state, jobs = replay['state'], [job for job in replay['state']['jobs'] if job.get('control_binding')]
         assert len(jobs) == 7 and all(set(job['request']['parameters']) == {'sha256'} and job['result'] is None for job in jobs)
-        requests = {e['state']['pending']['key']: e['state']['pending']['request']['parameters'] for e in replay['events'] if (e['state'].get('pending') or {}).get('control_binding')}
+        nodes = replay['nodes']
+        requests = {row['key']: row['request']['parameters'] for row in state_fields(replay['events'], nodes, 'pending') if (row or {}).get('control_binding')}
         receipts = {r['job_id']: r for r in state['control_receipts']}
         for job in jobs:
             assert job['request']['parameters']['sha256'] == _hash(requests[job['key']])
@@ -84,7 +85,7 @@ def test_ledger_history_changes_the_fourth_forecast_and_survives_pruning(tmp_pat
         for field, value in (('result_sha256', '0' * 64), ('request', {**jobs[0]['request'], 'parameters': {'sha256': '0' * 64}})):
             tampered = deepcopy(state); next(job for job in tampered['jobs'] if job['key'] == jobs[0]['key'])[field] = value
             with pytest.raises(RuntimeError, match='digest does not match'):
-                verify_ledger(tampered, replay['events'])
+                verify_ledger(tampered, replay['events'], nodes)
 
         # Callers cannot supply history, a snapshot or extra command fields.
         state = controller.execute({'action': 'state'})['state']

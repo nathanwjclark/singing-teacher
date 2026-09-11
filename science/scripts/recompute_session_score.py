@@ -15,6 +15,8 @@ import numpy as np
 from singing_physics.engine import Engine
 from singing_physics.pcm_design import SCORER_PIN, _extractor, _profile, _require_pin, update_pcm
 from singing_physics.prediction import Artifact, _encode
+from singing_physics.service import canonical
+from singing_physics.session import _verify
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -57,13 +59,16 @@ def evidence(value, limit):
 
 
 def verify_replay(replay, session_id, expected_ledger):
-    previous = '0'*64
-    for version, row in enumerate(replay['events'], 1):
-        event = dict(row); expected = event.pop('sha256')
-        if digest(event) != expected or event['previous_sha256'] != previous or event['session_id'] != session_id or event['state']['version'] != version:
-            raise ValueError('Original replay event hash-chain mismatch')
-        previous = expected
-    if not replay['events'] or digest(replay['events'][-1]['state']) != digest(replay['state']) or previous != replay['ledger_sha256'] or previous != expected_ledger:
+    """Recheck a supplied replay with the session ledger's own verifier; any defect is a chain mismatch."""
+    try:
+        rows = [(version, canonical({k: v for k, v in row.items() if k != 'sha256'}), row['sha256']) for version, row in enumerate(replay['events'], 1)]
+        nodes = {key: canonical(node) for key, node in replay.get('nodes', {}).items()}
+        state, previous, _, verified = _verify(session_id, rows, nodes.items)
+        # Nodes belong only to a replay with format 2 events; stray ones would still count in its hash.
+        if 'nodes' in replay and not verified: raise ValueError('Replay nodes without a format 2 event')
+    except (RuntimeError, AttributeError, KeyError, TypeError, ValueError) as exc:
+        raise ValueError('Original replay event hash-chain mismatch') from exc
+    if not replay['events'] or digest(state) != digest(replay['state']) or previous != replay['ledger_sha256'] or previous != expected_ledger:
         raise ValueError('Original replay does not bind the exported ledger')
     return previous
 

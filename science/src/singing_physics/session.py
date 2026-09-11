@@ -31,21 +31,185 @@ def _id(value):
     return value
 
 
-def _ledger(db, session_id):
+INLINE_BYTES = 1024
+# A replay carries its state twice (the state and the nodes it is stored in). The app's export drops the
+# replay above 24 MiB (about 12 MiB of state), and app_recompute.py and recompute_session_score stop at a
+# 64 MiB replay, so a state above 32 MiB can no longer be verified. The same bound on writes and reads
+# stops crafted shared references from expanding without limit and caps a rebuild's memory.
+MAX_STATE_BYTES = 32 * 1024 * 1024
+# A read that dispatches a persisted intent appends job_dispatched: it adds the job id or, when submission
+# fails, moves the intent into jobs with a status, error and receipt (a few KiB). Every other append stays
+# this far below the bound, so that bookkeeping append always fits and a read never fails on size.
+DISPATCH_HEADROOM = 1024 * 1024
+EVENT_KEYS = {'format','session_id','version','previous_sha256','action','received_at','details','state_root'}
+INTEGRITY_ERRORS = (KeyError, IndexError, TypeError, ValueError, AttributeError, RecursionError)
+
+
+def _put(nodes, body):
+    digest = hashlib.sha256(body.encode()).hexdigest(); nodes[digest] = body
+    return digest
+
+
+def _split(value, nodes):
+    """Child entry of value: (canonical text if inline else None, stored node digest or None, canonical length).
+
+    value is JSON data as json.loads returns it (lists, string keys). Iterative and bottom-up, so any depth canonical() can serialize can be stored. A value whose
+    canonical JSON reaches INLINE_BYTES is stored once in nodes as ["v",value], ["d",{key:child}] or
+    ["l",[child]]; smaller values stay inline in their parent, so no text is copied more than once per node."""
+    def leaf(text):
+        return (text, None, len(text)) if len(text) < INLINE_BYTES else (None, _put(nodes, '["v",'+text+']'), len(text))
+    def opened(value, out):
+        """A frame [keys, items, next index, parts, out] for a container holding containers; any other value is finished into out."""
+        keys = sorted(value) if isinstance(value, dict) else None
+        items = [value[key] for key in keys] if keys is not None else value if isinstance(value, list) else ()
+        if any(isinstance(item, (dict, list)) for item in items): return [keys, items, 0, [], out]
+        out.append(leaf(canonical(value)))
+    top = []; frames = [frame for frame in (opened(value, top),) if frame]
+    while frames:
+        frame = frames[-1]; keys, items, index, parts, out = frame
+        while index < len(items) and not isinstance(items[index], (dict, list)):
+            parts.append(leaf(canonical(items[index]))); index += 1
+        if index < len(items):
+            frame[2] = index+1; child = opened(items[index], parts)
+            if child: frames.append(child)
+            continue
+        frames.pop()
+        labels = [json.dumps(key)+':' for key in keys] if keys is not None else ['']*len(parts)
+        opening, closing = '{}' if keys is not None else '[]'
+        length = 1+len(parts)+sum(len(label)+size for label, (_, _, size) in zip(labels, parts))
+        if length < INLINE_BYTES or all(digest is None for _, digest, _ in parts):
+            text = opening+','.join(label+part for label, (part, _, _) in zip(labels, parts))+closing
+            out.append((text, None, length) if length < INLINE_BYTES else (None, _put(nodes, '["v",'+text+']'), length))
+        else:
+            entries = ','.join(label+('["h","'+digest+'"]' if digest else '["v",'+part+']') for label, (part, digest, _) in zip(labels, parts))
+            out.append((None, _put(nodes, '["'+('d' if keys is not None else 'l')+'",'+opening+entries+closing+']'), length))
+    return top[0]
+
+
+def _root(state, nodes):
+    """Digest of the state's root node, which is stored however small the state is."""
+    text, digest, _ = _split(state, nodes)
+    return digest or _put(nodes, '["v",'+text+']')
+
+
+def _entries(node):
+    tag, value = node
+    return value.values() if tag == 'd' else value if tag == 'l' else ()
+
+
+def _node(body):
+    """Parsed node after checking its shape: ["v",value], ["d",{key:child}] or ["l",[child]], every child tagged."""
+    node = json.loads(body)
+    if type(node) is not list or len(node) != 2 or not (node[0] == 'v' or node[0] == 'd' and type(node[1]) is dict or node[0] == 'l' and type(node[1]) is list):
+        raise ValueError('Invalid ledger node')
+    if not all(type(c) is list and len(c) == 2 and (c[0] == 'v' or c[0] == 'h' and type(c[1]) is str) for c in _entries(node)):
+        raise ValueError('Invalid ledger node')
+    return node
+
+
+def _text(entry, nodes):
+    """Canonical JSON text of a child entry over verified parsed nodes, built in one pass without recursion.
+
+    A node referenced more than once below the entry is expanded once and its text reused, and the
+    text may not exceed MAX_STATE_BYTES, so crafted shared references cost at most one bounded expansion."""
+    references, queue = {}, [entry]
+    while queue:
+        tag, value = queue.pop()
+        if tag == 'h':
+            references[value] = references.get(value, 0)+1
+            if references[value] == 1: queue.extend(_entries(nodes[value]))
+    out, texts, work, length = [], {}, [entry], 0
+    while work:
+        item = work.pop()
+        if type(item) is tuple:  # A shared node's text is complete: keep it for its other references.
+            digest, start = item; texts[digest] = ''.join(out[start:]); del out[start:]; out.append(texts[digest]); continue
+        if type(item) is str: piece = item
+        elif item[0] == 'h' and item[1] in texts: piece = texts[item[1]]
+        else:
+            if item[0] == 'h' and references[item[1]] > 1: work.append((item[1], len(out)))
+            tag, value = item if item[0] == 'v' else nodes[item[1]]
+            if tag != 'v':
+                keys = sorted(value) if tag == 'd' else range(len(value))
+                sequence = ['{' if tag == 'd' else '[']
+                for index, key in enumerate(keys): sequence += [(',' if index else '')+(json.dumps(key)+':' if tag == 'd' else ''), value[key]]
+                sequence.append('}' if tag == 'd' else ']')
+                work.extend(reversed(sequence)); continue
+            piece = canonical(value)
+        out.append(piece); length += len(piece)
+        if length > MAX_STATE_BYTES: raise ValueError('state size')
+    return ''.join(out)
+
+
+def join(digest, nodes):
+    """Value of a verified stored node: its canonical text parsed once, so shared nodes never alias."""
+    return json.loads(_text(['h', digest], nodes))
+
+
+def state_fields(events, nodes, key):
+    """Yield one top-level field of each verified event's state (None when absent), without joining whole states.
+
+    Consecutive events that name the same stored value share one parsed, read-only object, so a value
+    is expanded once per run and only one is held at a time; every failure is a ledger integrity failure."""
+    shared = value = None
+    try:
+        for event in events:
+            if 'state' in event: yield event['state'].get(key); continue
+            tag, root = nodes[event['state_root']]
+            entry = ['v', root.get(key)] if tag == 'v' else root.get(key, ['v', None])
+            if entry[0] != 'h' or entry[1] != shared:
+                value, shared = json.loads(_text(entry, nodes)), entry[1] if entry[0] == 'h' else None
+            yield value
+    except INTEGRITY_ERRORS as exc:
+        raise RuntimeError('Session ledger integrity failure') from exc
+
+
+def _verify(session_id, rows, load_nodes):
+    """The one integrity check for stored rows and supplied replays: (state, ledger digest, events, parsed nodes).
+
+    rows are (version, canonical event body, digest). Full-state (v1) events carry their
+    state; format 2 events carry the digest of their state's root node. load_nodes() yields
+    (digest, body) and is only called once a format 2 event exists, so databases written
+    before the nodes table still open read-only."""
     state = {'session_id':session_id,'version':0,'snapshot':None,'calibration':None,
              'pending':None,'designs':{},'attempts':[],'sensations':[],'jobs':[]}
-    previous = '0'*64
-    events=[]
-    for version, body, digest in db.execute('SELECT version,body,digest FROM events WHERE session=? ORDER BY version',(session_id,)):
-        # _append stores exactly canonical(event), so verify those original
-        # bytes without serializing every historical state a second time.
-        if hashlib.sha256(body.encode()).hexdigest()!=digest:
-            raise RuntimeError('Session ledger integrity failure')
-        event=json.loads(body)
-        if version!=state['version']+1 or event['previous_sha256']!=previous or event['session_id']!=session_id or event['state']['version']!=version:
-            raise RuntimeError('Session ledger integrity failure')
-        state=event['state']; previous=digest; events.append({**event,'sha256':digest})
-    return state,previous,events
+    previous = '0'*64; events = []; nodes = {}
+    try:
+        for version, body, digest in rows:
+            # Verify the original stored bytes without serializing any state again.
+            if hashlib.sha256(body.encode()).hexdigest() != digest: raise ValueError('digest')
+            event = json.loads(body)
+            if version != len(events)+1 or event['previous_sha256'] != previous or event['session_id'] != session_id: raise ValueError('chain')
+            if 'format' in event:
+                if event['format'] != 2 or set(event) != EVENT_KEYS or event['version'] != version: raise ValueError('format')
+            elif events and 'format' in events[-1] or event['state']['version'] != version: raise ValueError('v1 event')
+            previous = digest; events.append({**event,'sha256':digest})
+        upgraded = [event for event in events if 'format' in event]
+        if upgraded:
+            for digest, body in load_nodes():
+                if hashlib.sha256(body.encode()).hexdigest() != digest: raise ValueError('node digest')
+                nodes[digest] = _node(body)
+            reachable = set(); queue = [event['state_root'] for event in upgraded]
+            while queue:
+                digest = queue.pop()
+                if digest not in reachable: reachable.add(digest); queue.extend(c[1] for c in _entries(nodes[digest]) if c[0] == 'h')
+            if reachable != set(nodes): raise ValueError('unreachable node')
+            for event in upgraded:
+                # The writer always inlines both fields in the root, so checking them expands nothing:
+                # a root that names them through a stored node could make every event cost a full expansion.
+                tag, root = nodes[event['state_root']]
+                version, identity = ((['v', root[key]] if tag == 'v' else root[key]) for key in ('version', 'session_id'))
+                if version[0] != 'v' or identity[0] != 'v' or version[1] != event['version'] or identity[1] != session_id: raise ValueError('root')
+            state = join(upgraded[-1]['state_root'], nodes)
+        elif events: state = events[-1]['state']
+    except INTEGRITY_ERRORS as exc:
+        raise RuntimeError('Session ledger integrity failure') from exc
+    return state, previous, events, nodes
+
+
+def _ledger(db, session_id):
+    # Fetch all rows first: a cursor left open by a failed check would keep the database read-locked.
+    return _verify(session_id, db.execute('SELECT version,body,digest FROM events WHERE session=? ORDER BY version',(session_id,)).fetchall(),
+                   lambda: db.execute('SELECT digest,body FROM nodes WHERE session=?',(session_id,)).fetchall())
 
 
 def read_ledger(root, session_id):
@@ -61,14 +225,19 @@ def read_ledger(root, session_id):
     db = sqlite3.connect(path.as_uri()+'?mode=ro', uri=True, timeout=15)
     try:
         db.execute('BEGIN DEFERRED')
-        state,digest,events=_ledger(db, session_id)
+        state,digest,events,nodes=_ledger(db, session_id)
     except sqlite3.Error as exc:
         raise RuntimeError('Session ledger unavailable') from exc
     finally:
         db.close()
     if not events:
         raise KeyError(session_id)  # No recorded session; never an empty stand-in.
-    return {'state':state,'ledger_sha256':digest,'events':events}
+    return _response(state,digest,events,nodes)
+
+
+def _response(state, digest, events, nodes):
+    # Nodes appear only once a format 2 event exists, so full-state ledgers read back unchanged.
+    return {'state':state,'ledger_sha256':digest,'events':events,**({'nodes':nodes} if nodes else {})}
 
 
 class SessionController:
@@ -89,6 +258,7 @@ class SessionController:
         with self._db() as db:
             db.execute('CREATE TABLE IF NOT EXISTS events(session TEXT, version INTEGER, body TEXT, digest TEXT, PRIMARY KEY(session,version))')
             db.execute('CREATE TABLE IF NOT EXISTS commands(session TEXT, id TEXT, digest TEXT, PRIMARY KEY(session,id))')
+            db.execute('CREATE TABLE IF NOT EXISTS nodes(session TEXT, digest TEXT, body TEXT, PRIMARY KEY(session,digest))')
         os.chmod(self.path, 0o600)
 
     @contextmanager
@@ -107,18 +277,30 @@ class SessionController:
     def _read(self, db):
         return _ledger(db, self.session_id)
 
-    def _append(self, db, state, action, details):
-        _,previous,_=self._read(db)
+    def _append(self, db, state, action, details, read=None):
+        # A format 2 event binds the state by its root node digest; nodes are stored once per session.
+        # read: this transaction's own _read result, when the caller already has it.
+        _,previous,_,stored=read or self._read(db)
         state['version']+=1
-        event={'session_id':self.session_id,'previous_sha256':previous,'action':action,'received_at':_now(),
-               'details':details,'state':deepcopy(state)}
+        text=canonical(state)
+        if len(text)>MAX_STATE_BYTES-(0 if action=='job_dispatched' else DISPATCH_HEADROOM): raise ValueError('Session state exceeds the ledger size bound')
+        # Store the form readers get back (as a v1 reload did: string keys, tuples as lists, surrogate pairs
+        # joined), then prove before anything is written that the stored tree rebuilds exactly its canonical
+        # text. A state readers or verify_replay could not reproduce rolls the command back.
+        value=json.loads(text); text=canonical(value)
+        nodes={}; root=_root(value,nodes)
+        tree=_text(['h',root],{**stored,**{key:_node(body) for key,body in nodes.items() if key not in stored}})
+        if tree!=text: raise ValueError('Session state cannot be stored readably')
+        db.executemany('INSERT OR IGNORE INTO nodes VALUES(?,?,?)',[(self.session_id,key,body) for key,body in nodes.items() if key not in stored])
+        event={'format':2,'session_id':self.session_id,'version':state['version'],'previous_sha256':previous,'action':action,
+               'received_at':_now(),'details':details,'state_root':root}
         db.execute('INSERT INTO events VALUES(?,?,?,?)',(self.session_id,state['version'],canonical(event),_hash(event)))
 
     def _dispatch(self, *, ledger=False):
         # Persisted intent precedes this side effect. The stable key recovers a crash
         # after JobService submission but before the job ID was recorded here.
         with self._db() as db:
-            state,digest,events=self._read(db)
+            read=self._read(db); state,digest,events,nodes=read
             model=state['snapshot']['model_id'] if state['snapshot'] else 'session-unfitted:'+_hash(self.session_id)
             self.service.register_model(self.session_id,model)
             pending=state['pending']
@@ -144,10 +326,10 @@ class SessionController:
                     if pending['request']['operation']=='update_pcm':
                         for design in state['designs'].values():
                             if design['status']=='outcome_pending': design['status']='failed'
-                self._append(db,state,'job_dispatched',{'job_id':pending.get('job_id')})
-                if ledger:state,digest,events=self._read(db)
+                self._append(db,state,'job_dispatched',{'job_id':pending.get('job_id')},read)
+                if ledger:state,digest,events,nodes=self._read(db)
             # Parsed state/events are detached request-local objects already.
-            return (state,digest,events) if ledger else state
+            return (state,digest,events,nodes) if ledger else state
 
     def execute(self, command):
         if not isinstance(command,dict) or len(canonical(command).encode())>2_000_000:
@@ -156,11 +338,11 @@ class SessionController:
         if action in ('state','replay'):
             if set(command)!={'action'}:
                 raise ValueError('Unexpected read parameters')
-            state,digest,events=self._dispatch(ledger=True)
+            state,digest,events,nodes=self._dispatch(ledger=True)
             if state.get('control_receipts'):
                 from .session_control import verify_ledger
-                verify_ledger(state,events)
-            return {'state':state,'ledger_sha256':digest, **({'events':events} if action=='replay' else {})}
+                verify_ledger(state,events,nodes)
+            return _response(state,digest,events,nodes) if action=='replay' else {'state':state,'ledger_sha256':digest}
         command_id=_id(command.get('command_id'))
         fields={'forecast_visual':{'forecast_id','parameters'},'score_visual':{'forecast_id','parameters'},'register_model':{'snapshot'},'ingest_calibration':{'document'},'search':{'parameters'},'fit_probe':{'parameters'},'fit_lidar':{'parameters'},
             'select_experiment':{'source_design_id','design_id','target_observation_id','experiment_id','selection_reason'},
@@ -171,7 +353,7 @@ class SessionController:
         if action not in fields or set(command)!={'action','command_id','expected_version'}|fields[action]:
             raise ValueError('Unsupported session command fields')
         with self._db() as db:
-            state,_,_=self._read(db)
+            read=self._read(db); state=read[0]
             prior=db.execute('SELECT digest FROM commands WHERE session=? AND id=?',(self.session_id,command_id)).fetchone()
             if prior:
                 if prior[0]!=_hash(command):
@@ -180,7 +362,7 @@ class SessionController:
                 if type(command['expected_version']) is not int or command['expected_version']!=state['version']:
                     raise ValueError('stale_session_version')
                 details=self._apply(state,action,command)
-                self._append(db,state,action,details)
+                self._append(db,state,action,details,read)
                 db.execute('INSERT INTO commands VALUES(?,?,?)',(self.session_id,command_id,_hash(command)))
         return {'state':self._dispatch()}
 

@@ -154,14 +154,15 @@ def recompute_session(replay, *, session_id, max_operations=MAX_OPERATIONS, star
     if type(max_operations) is not int or not 1 <= max_operations <= MAX_OPERATIONS:
         raise ValueError('Choose between one and sixteen scoring operations')
     started = time.monotonic() if started is None else started
-    original_digest = digest(replay)
+    # Bound the replay before verifying it, so an oversized one never reaches the verifier.
+    raw = _encode(replay)
+    if len(raw) > 64 * 1024 * 1024:
+        raise ValueError('Authoritative replay exceeds 64 MiB verification limit')
+    original_digest = hashlib.sha256(raw).hexdigest()
     verify_replay(replay, session_id, replay['ledger_sha256'])
     state = replay['state']
     if state['session_id'] != session_id:
         raise ValueError('Replay belongs to another session')
-    raw = _encode(replay)
-    if len(raw) > 64 * 1024 * 1024:
-        raise ValueError('Authoritative replay exceeds 64 MiB verification limit')
     jobs = state['jobs']
     if len(jobs) > 2000 or len({row['job_id'] for row in jobs}) != len(jobs):
         raise ValueError('Replay job inventory is excessive or ambiguous')
