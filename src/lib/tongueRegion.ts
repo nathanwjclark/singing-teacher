@@ -1,6 +1,6 @@
 export type TongueRegion={box:[number,number,number,number]|null;score:number};
 /** TongueSAM's prompt detector outputs boxes, never a tongue contour or tip. */
-export function selectTongueRegion(data:ArrayLike<number>,threshold=.7):TongueRegion{
+export function selectTongueRegion(data:ArrayLike<number>,threshold:number):TongueRegion{
  if(data.length%5)throw Error('Invalid tongue detector output');
  let result:TongueRegion={box:null,score:0};
  for(let i=0;i<data.length;i+=5){
