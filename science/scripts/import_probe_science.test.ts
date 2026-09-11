@@ -144,6 +144,52 @@ test('relabelling an iPhone recording as a fixture or reference object does not 
   assert.equal(r.receipt.eligible_for_fit, false); assert.match(r.receipt.reasons.join(), /lacks the software fixture generator's marker/)
 })
 
+// The app's USB pull output: `original.zip` and its `usb-receipt.json`. The importer hashes the archive; it never unzips it.
+async function pulled(root: string, acquisition: unknown, archive = Buffer.from('archive bytes for the pull-receipt tests')) {
+  const receipt = { schemaVersion: 'native-pull-receipt-2', name: 'probe-12345678-1234-1234-1234-123456789abc.zip', bytes: archive.length, sha256: createHash('sha256').update(archive).digest('hex'), ...(acquisition === undefined ? {} : { acquisition }) }
+  await writeFile(join(root, 'original.zip'), archive); await writeFile(join(root, 'usb-receipt.json'), JSON.stringify(receipt))
+  return join(root, 'usb-receipt.json')
+}
+const devicectl = { transport: 'devicectl', connection: { transportType: 'wired', tunnelState: 'connected' }, container: { domainType: 'appDataContainer', bundleId: 'com.singingteacher.depth', path: 'Documents/probe-12345678-1234-1234-1234-123456789abc.zip' },
+  device: { coreDeviceId: '0B1C2D3E-4F50-4A6B-8C7D-9E0F1A2B3C4D', udid: '00008130-000A1B2C3D4E5F60', productType: 'iPhone16,1', osVersion: '26.0' } }
+
+test('a pull receipt decides whether a fixture label counts, and must match its archive', async t => {
+  const { root, capture, configPath } = owned(t, await setupFixture())
+  // A repository-fixture receipt on a marked fixture keeps the synthetic path and is recorded.
+  const fixtureReceipt = await pulled(root, { transport: 'repository-fixture', generator: 'science/scripts/import_probe_science.test.ts' })
+  let r = await importProbeScience(capture, join(root, 'fixture'), configPath, fixtureReceipt)
+  assert.equal(r.receipt.eligible_for_fit, true); assert.equal(r.receipt.attestation, 'repository-fixture-receipt'); assert.deepEqual(r.receipt.acquisition, { transport: 'repository-fixture', generator: 'science/scripts/import_probe_science.test.ts' })
+  // The attack: the same stripped, marked manifest arriving through a devicectl pull is a human recording.
+  r = await importProbeScience(capture, join(root, 'pulled'), configPath, await pulled(root, devicectl))
+  assert.equal(r.receipt.eligible_for_fit, false); assert.equal(r.probe_document, null); assert.equal(r.receipt.provenance, 'human-recording'); assert.equal(r.receipt.declared_provenance, 'software-fixture')
+  assert.equal(r.receipt.attestation, 'devicectl-receipt'); assert.deepEqual(r.receipt.acquisition, devicectl)
+  assert.deepEqual(r.receipt.reasons.slice(0, 2), [DECLARED_CALIBRATION_REASON, 'Manifest says software-fixture but its pull receipt shows it was copied from an iPhone by devicectl; it is treated as a human recording.'])
+  // A receipt from before transport recording cannot vouch for a fixture either.
+  r = await importProbeScience(capture, join(root, 'legacy'), configPath, await pulled(root, undefined))
+  assert.equal(r.receipt.eligible_for_fit, false); assert.equal(r.receipt.attestation, 'legacy-receipt'); assert.equal(r.receipt.acquisition, null); assert.match(r.receipt.reasons.join(), /does not name a known transport/)
+  // Without a receipt (direct command-line import) the manifest-only rule applies and says so.
+  r = await importProbeScience(capture, join(root, 'direct'), configPath)
+  assert.equal(r.receipt.eligible_for_fit, true); assert.equal(r.receipt.attestation, 'none'); assert.equal(r.receipt.acquisition, null)
+  // An archive that differs from its receipt is refused before any output is written.
+  const receipt = await pulled(root, devicectl), archive = await readFile(join(root, 'original.zip')); archive[0] ^= 1; await writeFile(join(root, 'original.zip'), archive)
+  await assert.rejects(importProbeScience(capture, join(root, 'changed'), configPath, receipt), /does not match its pull receipt/)
+  await writeFile(join(root, 'usb-receipt.json'), JSON.stringify({ name: 'probe.zip', acquisition: devicectl }))
+  await assert.rejects(importProbeScience(capture, join(root, 'no-hash'), configPath, receipt), /lacks the archive hash/)
+  await assert.rejects(stat(join(root, 'changed')), { code: 'ENOENT' })
+})
+
+test('a repository-fixture receipt that contradicts the manifest refuses the import', async t => {
+  const human = owned(t, await declaredMeasuredPackage('human-recording')), repository = { transport: 'repository-fixture', generator: 'science/scripts/import_probe_science.test.ts' }
+  await assert.rejects(importProbeScience(human.capture, join(human.root, 'human'), human.configPath, await pulled(human.root, repository)), /Repository-fixture pull receipt contradicts the capture manifest/)
+  const reference = owned(t, await declaredMeasuredPackage('physical-reference'))
+  await assert.rejects(importProbeScience(reference.capture, join(reference.root, 'reference'), reference.configPath, await pulled(reference.root, repository)), /contradicts the capture manifest/)
+  // A devicectl receipt keeps a reference-object label as declared.
+  assert.equal((await importProbeScience(reference.capture, join(reference.root, 'pulled'), reference.configPath, await pulled(reference.root, devicectl))).receipt.provenance, 'physical-reference')
+  const phoneShaped = owned(t, await setupFixture()); await relabelled(phoneShaped, 'software-fixture')
+  await assert.rejects(importProbeScience(phoneShaped.capture, join(phoneShaped.root, 'phone'), phoneShaped.configPath, await pulled(phoneShaped.root, repository)), /contradicts the capture manifest/)
+  await assert.rejects(stat(join(human.root, 'human')), { code: 'ENOENT' })
+})
+
 // This test runs the genuine native consumer; the Python runtime must have science dependencies.
 import { execFileSync } from 'node:child_process'
 test('original known-filter PCM traverses joint native fitter and reports nonzero mismatch', async t => {

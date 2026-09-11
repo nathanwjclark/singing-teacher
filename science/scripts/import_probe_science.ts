@@ -28,7 +28,9 @@ function requireValue(ok: unknown, message: string): asserts ok { if (!ok) throw
  * package's calibration, processing and placement are declarations. Hashing its evidence files is not measurement. */
 export const DECLARED_CALIBRATION_REASON = 'Calibration is declared, not measured; no measured-calibration evidence was derived. Human recordings stay ineligible for scientific fitting until calibration is derived from measurement recordings.'
 
-export async function importProbeScience(captureDirectory: string, outputDirectory: string, configPath: string) {
+/** `receiptPath` names the app's `usb-receipt.json`, with the pulled `original.zip` beside it. Without it the
+ * source is classified from the manifest alone (attestation `none`), as for a direct command-line import. */
+export async function importProbeScience(captureDirectory: string, outputDirectory: string, configPath: string, receiptPath?: string) {
   const root = await realpath(captureDirectory), configRoot = await realpath(dirname(resolve(configPath)))
   const configBytes = await read(configRoot, basename(configPath), 2 * 1024 * 1024)
   const config = JSON.parse(configBytes.toString())
@@ -69,8 +71,17 @@ export async function importProbeScience(captureDirectory: string, outputDirecto
     }
   }
   await verifyOriginals()
-  // The gate uses the source kind the manifest's own fields support, never the bare provenance label.
-  const source = probeSource(native), human = source.kind === 'human-recording', fixture = source.kind === 'software-fixture'
+  let pull: any
+  if (receiptPath !== undefined) {
+    const pullRoot = await realpath(dirname(resolve(receiptPath)))
+    pull = JSON.parse((await read(pullRoot, basename(receiptPath), 1024 * 1024)).toString())
+    requireValue(pull && typeof pull === 'object' && sha(pull.sha256) && Number.isSafeInteger(pull.bytes), 'Pull receipt lacks the archive hash and byte count')
+    const archive = await read(pullRoot, 'original.zip', 512 * 1024 * 1024)
+    requireValue(archive.length === pull.bytes && hash(archive) === pull.sha256, 'Pulled archive does not match its pull receipt')
+  }
+  // The gate uses the source kind the manifest's own fields and pull receipt support, never the bare provenance label.
+  const source = probeSource(native, pull ? pull.acquisition ?? null : undefined), human = source.kind === 'human-recording', fixture = source.kind === 'software-fixture'
+  requireValue(source.attestation !== 'contradicted-fixture-receipt', 'Repository-fixture pull receipt contradicts the capture manifest: only a marked software fixture without iPhone recorder fields may carry one')
   requireValue(human || fixture || cal.kind === 'measured', 'Physical reference capture requires measured instrument calibration evidence')
   requireValue(!cal.source_hashes.includes(native.received.sha256) && !config.nuisance_prior.source_hashes.includes(native.received.sha256), 'Target response cannot calibrate itself')
   const out = resolve(outputDirectory)
@@ -87,7 +98,10 @@ export async function importProbeScience(captureDirectory: string, outputDirecto
   const full = JSON.parse(responseBytes.toString())
   requireValue(full.units === 'recorded-PCM-per-digital-drive' && full.sourceHashes.drive === native.drive.sha256 && full.sourceHashes.received === native.received.sha256, 'Full response source/units mismatch')
   const reasons: string[] = human ? [DECLARED_CALIBRATION_REASON] : []
-  if (source.kind !== source.declared) reasons.push(`Manifest says ${String(source.declared)} but ${source.nativeCaptureFields.length ? `carries iPhone recorder fields (${source.nativeCaptureFields.join(', ')})` : "lacks the software fixture generator's marker"}; it is treated as a human recording.`)
+  const contradiction = source.nativeCaptureFields.length ? `carries iPhone recorder fields (${source.nativeCaptureFields.join(', ')})`
+    : source.attestation === 'devicectl-receipt' ? 'its pull receipt shows it was copied from an iPhone by devicectl'
+    : source.attestation === 'legacy-receipt' ? 'its pull receipt does not name a known transport' : "lacks the software fixture generator's marker"
+  if (source.kind !== source.declared) reasons.push(`Manifest says ${String(source.declared)} but ${contradiction}; it is treated as a human recording.`)
   const binding = config.capture_binding
   const bound = binding && binding.manifest_sha256 === hash(originalManifest) && binding.pose === config.pose && binding.placement_id === p.placement_id && binding.route_id === cal.route_id
   if (!bound) reasons.push('Capture manifest/pose/route/placement binding missing or mismatched')
@@ -128,7 +142,8 @@ export async function importProbeScience(captureDirectory: string, outputDirecto
     original_artifacts: originals, full_response_artifact: artifact, full_response_bins: full.frequencyHz.length,
     selected_indices: config.selected_indices, configuration_sha256: hash(configBytes), supplemental_evidence: evidence,
     extractor: measurement.extractor, timing: measurement.timing, quality: measurement.quality,
-    provenance: source.kind, declared_provenance: source.declared, native_capture_fields: source.nativeCaptureFields, processing: processing ?? null, capture_binding: binding ?? null, calibration_authenticity_verified: false,
+    provenance: source.kind, declared_provenance: source.declared, native_capture_fields: source.nativeCaptureFields,
+    attestation: source.attestation, acquisition: pull ? pull.acquisition ?? null : null, processing: processing ?? null, capture_binding: binding ?? null, calibration_authenticity_verified: false,
     limitations: ['Evidence bytes verified; physical calibration validity is caller-supported, not authenticated.', 'Immutable B measurement remains includedInFit=false; only an actual fitter may report evidence use.', 'No sampled summary, additional DSP, generated phase alignment or anatomical recovery claim.'] }
   await writeFile(resolve(out, 'probe-science-document.json'), JSON.stringify(probe_document, null, 2), { flag: 'wx', mode: 0o600 })
   await writeFile(resolve(out, 'probe-science-receipt.json'), JSON.stringify(receipt, null, 2), { flag: 'wx', mode: 0o600 })
@@ -136,8 +151,8 @@ export async function importProbeScience(captureDirectory: string, outputDirecto
   return { probe_document, receipt, measurement }
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
-  const [capture, output, config] = process.argv.slice(2)
-  if (!capture || !output || !config) throw Error('Usage: import_probe_science.ts RAW_CAPTURE FRESH_PRIVATE_OUTPUT CONFIG_JSON')
-  const result = await importProbeScience(capture, output, config)
+  const [capture, output, config, receipt] = process.argv.slice(2)
+  if (!capture || !output || !config) throw Error('Usage: import_probe_science.ts RAW_CAPTURE FRESH_PRIVATE_OUTPUT CONFIG_JSON [USB_RECEIPT_JSON]')
+  const result = await importProbeScience(capture, output, config, receipt)
   console.log(JSON.stringify(result.receipt, null, 2))
 }
