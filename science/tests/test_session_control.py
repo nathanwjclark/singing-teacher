@@ -65,6 +65,9 @@ def test_ledger_history_changes_the_fourth_forecast_and_survives_pruning(tmp_pat
         learned = forecast(controller, service, 'target-3')
         assert by_anatomy(learned)[first]['status'] == 'empirical' and by_anatomy(learned)[first]['leading_control_ids'] == ['open']
         assert state['snapshot']['model_id'] == 'baseline'
+        # Control job entries keep digests only; the sealed artifacts live in the control fields.
+        jobs = [job for job in controller.execute({'action': 'state'})['state']['jobs'] if job['request']['operation'].endswith('control_pcm')]
+        assert len(jobs) == 7 and all(set(job['request']['parameters']) == {'sha256'} and job['result'] is None and len(job['result_sha256']) == 64 for job in jobs)
 
         # Callers cannot supply history, a snapshot or extra command fields.
         state = controller.execute({'action': 'state'})['state']

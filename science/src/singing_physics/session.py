@@ -126,7 +126,11 @@ class SessionController:
                 try:
                     pending['job_id']=self.service.submit(pending['request'],idempotency_key=pending['key'])
                 except (ValueError, RuntimeError) as exc:
-                    state['jobs'].append({**pending,'status':'submission_failed','error':str(exc)})
+                    record={**pending,'status':'submission_failed','error':str(exc)}
+                    if pending.get('control_binding'):
+                        from .session_control import job_record
+                        record=job_record(record)
+                    state['jobs'].append(record)
                     state['pending']=None
                     if pending.get('visual_binding'):
                         from .session_visual import collect
@@ -431,7 +435,11 @@ class SessionController:
             if operation=='update_pcm':
                 state['attempts'].append({'attempt_id':pending['request']['parameters']['observation_id'],
                     'status':status['status'],'job_id':c['job_id'],'scientific_status':result.get('status') if result else None})
-            state['jobs'].append({**pending,'status':status['status'],'error':status.get('error'),'result':result})
+            record={**pending,'status':status['status'],'error':status.get('error'),'result':result}
+            if pending.get('control_binding'):
+                from .session_control import job_record
+                record=job_record(record)
+            state['jobs'].append(record)
             state['pending']=None
         elif action=='record_attempt':
             if c['status'] not in ('stopped','failed') or not isinstance(c['reason'],str) or not 1<=len(c['reason'])<=2000:

@@ -35,6 +35,17 @@ def history(state, binding):
     return rows
 
 
+def job_record(record):
+    """Ledger job entry for a control job: digests of its parameters and result only.
+
+    The sealed artifacts already live in control_forecasts and control_receipts. Every event
+    stores the whole state, so a second copy of the PCM frame, frozen bank and history in
+    each job would multiply the ledger size with every attempt."""
+    request, result = record['request'], record.get('result')
+    return {**record, 'request': {**request, 'parameters': {'sha256': _hash(request['parameters'])}},
+            'result': None, 'result_sha256': None if result is None else _hash(result)}
+
+
 def invalidate_stale(state):
     baseline = (state.get('snapshot') or {}).get('model_id')
     for forecast in state.get('control_forecasts', {}).values():
@@ -141,7 +152,7 @@ def collect(state, pending, job_status, result):
     else:
         forecast = state['control_forecasts'][binding['forecast_id']]
         if artifact and _score_bound(binding, artifact, forecast['artifact']):
-            forecast.update(status='unscorable' if artifact['status'] == 'unscorable' else 'scored', score_sha256=sealed['sha256'])
+            forecast.update(status='scored' if artifact['status'] in ('scored', 'partial') else artifact['status'], score_sha256=sealed['sha256'])
             receipt.update(status=artifact['status'], reason=artifact['reason'], result=deepcopy(sealed), result_sha256=_hash(sealed))
         else:
             if artifact: receipt['reason'] = 'Control score did not retain every committed alternative and its forecast binding'

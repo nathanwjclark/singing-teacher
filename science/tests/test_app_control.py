@@ -40,7 +40,7 @@ def test_free_text_cue_builds_a_content_derived_plus_bank_around_the_selected_ex
     assert binding['context'] == {'capture_context_id': 'native-usb-pcm', 'source_kind': 'development-fixture', 'pitch_hz': 181.2,
                                   'vowel': 'a', 'level': 'comfortable', 'posture': 'not-instructed'}
     assert [(c['control_id'], c['JA'], c['f0_hz']) for c in binding['controls']] == [
-        ('selected', -3., 181.2), ('jaw-less-open', -2., 181.2), ('jaw-more-open', -4., 181.2), ('pitch-lower', -3., 171.0), ('pitch-higher', -3., 192.0)]
+        ('reference', -3., 181.2), ('jaw-less-open', -2., 181.2), ('jaw-more-open', -4., 181.2), ('pitch-lower', -3., 171.0), ('pitch-higher', -3., 192.0)]
     assert binding['gain'] == 4. and profile == DESIGN['profile'] and pointer['decisionId'] == 'decision'
     again = setup(tmp_path / 'again')()
     assert again[0] == identity and identity.startswith('cue-')

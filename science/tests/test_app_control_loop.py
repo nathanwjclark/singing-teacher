@@ -93,14 +93,6 @@ def test_repeated_delivered_cue_changes_the_fourth_forecast(tmp_path):
             if round == 0:
                 # The decision's prediction is used; freezing again needs a new Astra decision.
                 assert 'already used' in call('/api/control/forecast', False, expected=409)['error']
-                # Export while the ledger replay is within the exporter's 24 MiB bound; every event
-                # stores the full session state, so a long session exceeds it (see CONTROL_PCM.md).
-                exported = call('/api/session-export')
-                assert all(row['reason'] == 'Not recorded' for row in exported['missing']), exported['missing']
-                assert exported['summary']['controlScoreCount'] == 1
-                bound = {a['binding']['role']: a['binding'] for a in exported['artifacts'] if a.get('binding', {}).get('role', '').startswith('cue-execution-')}
-                assert set(bound) == {'cue-execution-forecast', 'cue-execution-score'}
-                assert bound['cue-execution-score']['originalBytesVerified'] is True and bound['cue-execution-score']['modelUpdated'] is False
 
         state = call(session_path)['state']
         assert state['snapshot'] == baseline
@@ -122,3 +114,13 @@ def test_repeated_delivered_cue_changes_the_fourth_forecast(tmp_path):
         [binding] = status['bindings']
         assert binding['attempts']['scored'] == 3 and binding['latestForecast']['current'] is True
         assert all(row['forecastMatchedAttempts'] == 3 and row['supportStatus'] == 'empirical' for row in binding['latestForecast']['anatomies'])
+
+        # After four forecasts and three scores the ledger replay still fits the exporter's bound,
+        # so every lane's receipts stay bound (control jobs keep digests, not payload copies).
+        exported = call('/api/session-export')
+        assert not any(row['source'] == 'worker/session-replay' for row in exported['missing']), exported['missing']
+        assert all(row['reason'] == 'Not recorded' for row in exported['missing']), exported['missing']
+        assert exported['summary']['controlScoreCount'] == 3
+        bound = [a['binding'] for a in exported['artifacts'] if a.get('binding', {}).get('role', '').startswith('cue-execution-')]
+        assert sorted(b['role'] for b in bound) == ['cue-execution-forecast'] * 4 + ['cue-execution-score'] * 3
+        assert all(b['originalBytesVerified'] and b['modelUpdated'] is False for b in bound if b['role'] == 'cue-execution-score')

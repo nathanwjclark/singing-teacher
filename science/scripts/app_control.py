@@ -61,7 +61,8 @@ def delivered_binding(root, directory, state, summary):
         if not -4. <= ja <= -2.: raise ValueError('Selected experiment jaw angle leaves no room for the JA alternatives')
         lower, higher = round(pitch / SEMITONE, 1), round(pitch * SEMITONE, 1)
         if not (65. <= lower and higher <= 1000.): raise ValueError(f'Calibration pitch {pitch} Hz leaves no room for one-semitone F0 alternatives within 65-1000 Hz')
-        controls = [{'control_id': 'selected', 'JA': ja, 'f0_hz': pitch}, {'control_id': 'jaw-less-open', 'JA': ja + 1, 'f0_hz': pitch},
+        # 'reference' is the selected experiment's JA at the calibration-measured pitch, not the experiment's simulator F0.
+        controls = [{'control_id': 'reference', 'JA': ja, 'f0_hz': pitch}, {'control_id': 'jaw-less-open', 'JA': ja + 1, 'f0_hz': pitch},
                     {'control_id': 'jaw-more-open', 'JA': ja - 1, 'f0_hz': pitch},
                     {'control_id': 'pitch-lower', 'JA': ja, 'f0_hz': lower}, {'control_id': 'pitch-higher', 'JA': ja, 'f0_hz': higher}]
         binding = {'cue': {'cue_id': 'astra-delivered-cue', 'cue_version': '1', 'wording': wording,
@@ -100,7 +101,10 @@ def run(root, phase, output):
         commands, receipt = existing['commands'], existing['receipt']
     elif phase == 'forecast':
         binding_id, binding, pointer, profile = delivered_binding(root, directory, state, summary)
-        commands = [{'action': 'declare_control_binding', 'binding_id': binding_id, 'binding': binding},
+        declared = state.get('control_bindings', {}).get(binding_id)
+        # A repeated binding needs no second declaration; skipping it saves a full-state ledger event.
+        commands = ([] if declared and {key: declared[key] for key in binding} == binding else
+                    [{'action': 'declare_control_binding', 'binding_id': binding_id, 'binding': binding}]) + [
                     {'action': 'forecast_control', 'binding_id': binding_id, 'target_id': identity,
                      'parameters': {'profile': profile, 'max_synthesis_calls': MAX_CALLS, 'timeout_s': 90.}}]
         receipt = {'bindingId': binding_id, 'forecastId': identity, 'decisionId': pointer['decisionId'], 'designId': pointer['designId'],
@@ -130,8 +134,13 @@ def run(root, phase, output):
         key = 'session:' + hashlib.sha256(canonical([session_id, commands[-1]['command_id']]).encode()).hexdigest()
         state = collect_pending(backend, state)
         job = next(j for j in state['jobs'] if j['key'] == key)
-        receipt.update(jobId=job['job_id'], workerStatus=job['status'], workerError=job.get('error'), result=job['result'])
-    control = next(r for r in reversed(state['control_receipts']) if r['forecast_id'] == receipt['forecastId'])
+        receipt.update(jobId=job['job_id'], workerStatus=job['status'], workerError=job.get('error'))
+    control = next(r for r in reversed(state['control_receipts']) if r['forecast_id'] == receipt['forecastId'] and r['operation'] != 'supersede_control_forecast')
+    # The ledger keeps only digests in its job entries; the sealed artifacts live in the control fields.
+    if commands[-1]['action'] == 'forecast_control':
+        committed = state['control_forecasts'].get(receipt['forecastId'])
+        receipt['result'] = committed['artifact'] if committed and control.get('forecast_sha256') == committed['artifact']['sha256'] else None
+    elif commands[-1]['action'] == 'score_control': receipt['result'] = control['result']
     save(output / 'result.json', {**receipt, 'phase': phase, 'status': control['status'], 'reason': control['reason'],
         'sessionId': session_id, 'baselineModelId': baseline, 'sessionVersion': state['version'], 'modelUpdated': False})
     if control['status'] in ('failed', 'cancelled', 'submission_failed', 'rejected'):
