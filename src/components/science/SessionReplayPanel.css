@@ -1,6 +1,6 @@
 .session-replay{border:1px solid #3b5346;border-radius:6px;padding:16px;background:#172720;color:#cee0d4;margin-bottom:16px;font-size:12px}.session-replay h3{margin:0 0 8px}.session-replay-actions{display:flex;flex-wrap:wrap;gap:8px}.session-replay dl{display:grid;grid-template-columns:auto 1fr;gap:6px 10px}.session-replay dd{margin:0}.session-replay p,.session-replay li,.session-replay dd{overflow-wrap:anywhere}
-.session-recomputation { margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid #ccd4d8; }
+.session-recomputation { margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid #3b5346; }
 .session-replay-table { max-width: 100%; overflow-x: auto; }
 .session-replay-table table { border-collapse: collapse; width: 100%; text-align: left; }
-.session-replay-table th, .session-replay-table td { padding: .5rem; border-bottom: 1px solid #ccd4d8; vertical-align: top; }
+.session-replay-table th, .session-replay-table td { padding: .5rem; border-bottom: 1px solid #3b5346; vertical-align: top; }
 .session-replay-table td { overflow-wrap: anywhere; }

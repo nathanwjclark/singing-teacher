@@ -12,14 +12,23 @@ async function open(page:Page){
 }
 
 test('session replay preserves partial counts, missing sources and media omissions in download',async({page})=>{
- let fail=false;
+ let fail=false;const problems:string[]=[];
+ // Expected: the 503s this spec stubs (Astra disabled, the failing export) and the audio
+ // panel's pre-existing AudioContext warning before a gesture.
+ const known=[/^error: Failed to load resource: the server responded with a status of 503 \(Service Unavailable\) http:\/\/127\.0\.0\.1:\d+\/api\/(astra\/status|session-export)$/,/^warning: The AudioContext was not allowed to start\./];
+ page.on('console',message=>{const text=`${message.type()}: ${message.text()} ${message.location().url}`;if(['error','warning'].includes(message.type())&&!known.some(pattern=>pattern.test(text)))problems.push(text)});page.on('pageerror',error=>problems.push(error.message));
  await page.route('**/api/session-export',r=>r.fulfill(fail?{status:503,json:{error:'Worker export unavailable'}}:{json:replay}));await open(page);
  const panel=page.getByRole('region',{name:'Scientific session replay'}),button=panel.getByRole('button',{name:'Download session replay JSON'});
+ // The recompute route is the real server's: with no baseline model it reports that plainly.
+ await expect(panel.getByLabel('Numerical score verification').getByRole('status')).toHaveText('Numerical verification: unavailable. Complete a baseline voice model first');
+ await expect(panel.getByRole('button',{name:'Download verification report'})).toBeDisabled();
  await expect(panel).toContainText('Export: partial');await expect(panel).toContainText('9 session events · 2 decisions · 3 attempts · 1 scores · 0 probe fits');await expect(panel).toContainText('worker-ledger: Worker session unavailable');await expect(panel).toContainText('worker ledger is unavailable');
  await panel.getByText('Included evidence and export omissions',{exact:true}).click();await expect(panel).toContainText('Omitted captures/audio.raw: Raw media omitted');
  const downloaded=page.waitForEvent('download');await button.click();const artifact=await downloaded;expect(artifact.suggestedFilename()).toBe('tractstar-session-replay.json');expect(await json(artifact)).toEqual(replay);
  fail=true;await panel.getByRole('button',{name:'Refresh session replay'}).click();await expect(panel.getByRole('alert')).toContainText('Worker export unavailable');await expect(button).toBeDisabled();await expect(panel).not.toContainText('9 session events');
  fail=false;await panel.getByRole('button',{name:'Refresh session replay'}).click();await expect(button).toBeEnabled();
+ await panel.getByLabel('Numerical score verification').scrollIntoViewIfNeeded();await page.screenshot({path:'test-results/session-replay-recompute-unavailable.png',fullPage:true});
+ expect(problems).toEqual([]);
 });
 
 test('saved Astra cue requires review, freezes lineage and hides local assistance during recall',async({page})=>{

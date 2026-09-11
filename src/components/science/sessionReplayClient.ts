@@ -18,15 +18,17 @@ export async function readSessionReplay(signal?:AbortSignal):Promise<SessionRepl
 }
 export const sessionReplayJson=(value:SessionReplayExport)=>JSON.stringify(value,null,2)+'\n';
 
+export const recomputationOutcomes=['matched','failed','unavailable','unsupported','skipped'] as const;
+export type RecomputationOutcome=typeof recomputationOutcomes[number];
 export interface SessionRecomputationOperation {
- jobId:string;operation:string;originalStatus:string;status:string;reason?:string;
- numericalAgreement:boolean|null;policyVerification:string;
+ jobId:string;operation:string;originalStatus:string;outcome:RecomputationOutcome;status:string;reason?:string;
+ numericalAgreement:boolean|null;policyVerification:'verified'|'legacy_version_unverified'|'unverified';
  requestSha256:string;originalResultSha256:string;details?:Record<string,unknown>;
 }
 export interface SessionRecomputationReport {
  schemaVersion:'session-recomputation/1';attemptId:string;sessionId:string;runId:string;createdAt:string;
  workerLedgerSha256:string;modelUpdated:false;rawMediaIncluded:false;
- counts:{total:number;scoring:number;compared:number;agreed:number;disagreed:number;skipped:number;unavailable:number;policyVerified:number};
+ counts:Record<RecomputationOutcome,number>&{total:number;scoring:number;policyVerified:number;legacyVersionUnverified:number};
  operations:SessionRecomputationOperation[];limitations:string[];
  budget:{maximumScoringOperations:number;maximumWallSeconds:number;synthesisCalls:0;geometryCalls:0;canonicalExtractions:number;elapsedSeconds:number};
 }
@@ -37,7 +39,10 @@ export interface SessionRecomputationStatus {
 async function recomputationResponse(response:Response):Promise<SessionRecomputationStatus>{
  const value=await response.json();if(!response.ok)throw Error(value.error||'Numerical verification unavailable');
  if(!['not-run','running','completed','failed','unavailable'].includes(value.status))throw Error('Invalid numerical verification status');
- if(value.status==='completed'&&(!value.report||value.report.schemaVersion!=='session-recomputation/1'||!Array.isArray(value.report.operations)||!value.report.counts||value.report.modelUpdated!==false||value.report.rawMediaIncluded!==false||value.report.attemptId!==value.attemptId||value.report.sessionId!==value.sessionId))throw Error('Invalid numerical verification report');
+ const report=value.report;
+ // Every retained operation falls in exactly one outcome, so the counts must add up.
+ if(value.status==='completed'&&(!report||report.schemaVersion!=='session-recomputation/1'||!Array.isArray(report.operations)||!report.counts||report.modelUpdated!==false||report.rawMediaIncluded!==false||report.attemptId!==value.attemptId||report.sessionId!==value.sessionId
+  ||recomputationOutcomes.some(name=>!Number.isInteger(report.counts[name]))||recomputationOutcomes.reduce((sum,name)=>sum+report.counts[name],0)!==report.counts.total||report.operations.length!==report.counts.total))throw Error('Invalid numerical verification report');
  return value;
 }
 export async function readSessionRecomputation(signal?:AbortSignal):Promise<SessionRecomputationStatus>{

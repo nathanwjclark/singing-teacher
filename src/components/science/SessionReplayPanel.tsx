@@ -1,7 +1,11 @@
 import {useEffect,useState} from 'react';
 import {readSessionReplay,sessionReplayJson,readSessionRecomputation,startSessionRecomputation} from './sessionReplayClient';
-import type {SessionReplayExport,SessionRecomputationStatus} from './sessionReplayClient';
+import type {SessionReplayExport,SessionRecomputationStatus,SessionRecomputationOperation} from './sessionReplayClient';
 import './SessionReplayPanel.css';
+
+const outcomeLabel={matched:'Matched',failed:'Failed',unavailable:'Unavailable',unsupported:'Unsupported',skipped:'Skipped (budget)'};
+const codeLabel={verified:'Pinned code matches',legacy_version_unverified:'No pin (legacy); not verified',unverified:'Not verified'};
+const agreementLabel=(row:SessionRecomputationOperation)=>row.numericalAgreement===null?'Not compared':row.numericalAgreement?'Agrees':'Differs';
 
 export default function SessionReplayPanel(){
  const [verification,setVerification]=useState<SessionRecomputationStatus|null>(null),[verificationError,setVerificationError]=useState(''),[starting,setStarting]=useState(false);
@@ -54,11 +58,13 @@ export default function SessionReplayPanel(){
    <p>Check up to the latest 16 PCM, visual and source scoring operations against their recorded results. This uses retained inputs locally, makes no model updates, and performs no synthesis.</p>
    <div className="session-replay-actions"><button type="button" onClick={()=>void verify()} disabled={starting||verification?.status==='running'||!record}>{starting||verification?.status==='running'?'Recomputing scores…':'Recompute retained scores'}</button><button type="button" onClick={downloadVerification} disabled={!verification?.report}>Download verification report</button></div>
    {verificationError&&<p role="alert">{verificationError}</p>}
-   {verification&&<p role="status">Numerical verification: <strong>{verification.status}</strong>{verification.reason?' — '+verification.reason:''}</p>}
+   {verification&&<p role="status">Numerical verification: <strong>{verification.status}</strong>{verification.reason?'. '+verification.reason:''}</p>}
    {verification?.report&&<>
-    <p>{verification.report.counts.compared} compared · {verification.report.counts.agreed} agree · {verification.report.counts.disagreed} differ · {verification.report.counts.unavailable} unavailable · {verification.report.counts.skipped} skipped. Historical scoring policy verified for {verification.report.counts.policyVerified} operations.</p>
+    <p>Of {verification.report.counts.total} retained operations: {verification.report.counts.matched} matched · {verification.report.counts.failed} failed · {verification.report.counts.unavailable} unavailable · {verification.report.counts.unsupported} unsupported · {verification.report.counts.skipped} skipped by budget.</p>
+    <p>Matched with pinned scoring code: {verification.report.counts.policyVerified}. Matched without a scoring-code pin (legacy, not verified): {verification.report.counts.legacyVersionUnverified}.</p>
+    <p>Failed means the recomputed score differs or the retained evidence is inconsistent. Unavailable means the original score, frame or receipt is missing; nothing is reconstructed. Unsupported means the operation is not a score, or its frozen scoring code or runtime differs from this one.</p>
     <p>Results refer to the captured ledger {verification.report.workerLedgerSha256}. New experiments require another verification.</p>
-    <div className="session-replay-table"><table><caption>Each retained operation and its verification coverage</caption><thead><tr><th>Operation</th><th>Result</th><th>Agreement</th><th>Historical policy</th></tr></thead><tbody>{verification.report.operations.map(row=><tr key={row.jobId}><td><details><summary>{row.operation}</summary>{row.jobId}<p>{row.reason||'Numerical comparison completed.'}</p></details></td><td>{row.status}</td><td>{row.numericalAgreement===null?'Not compared':row.numericalAgreement?'Agrees':'Differs'}</td><td>{row.policyVerification}</td></tr>)}</tbody></table></div>
+    <div className="session-replay-table"><table><caption>Each retained operation and its verification outcome</caption><thead><tr><th>Operation</th><th>Outcome</th><th>Agreement</th><th>Scoring code</th></tr></thead><tbody>{verification.report.operations.map(row=><tr key={row.jobId}><td><details><summary>{row.operation}</summary>{row.jobId}<p>{row.status}: {row.reason||'Numerical comparison completed.'}</p></details></td><td>{outcomeLabel[row.outcome]}</td><td>{agreementLabel(row)}</td><td>{codeLabel[row.policyVerification]}</td></tr>)}</tbody></table></div>
     <p>{verification.report.budget.canonicalExtractions} canonical extractions · 0 synthesis calls · 0 geometry calls.</p>
     <ul>{verification.report.limitations.map(item=><li key={item}>{item}</li>)}</ul>
    </>}
