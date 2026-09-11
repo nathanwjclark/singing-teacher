@@ -38,6 +38,7 @@ const handleSessionRecompute=createSessionRecomputeRoutes({repo:resolve(import.m
 const handleMotion=createMotionRoutes({dataRoot,json});
 let handlePhonation;
 let handleSource;
+let handleControl;
 let handleLidar;
 let handleVisual;
 try{const {createVisualLikelihoodRoutes}=await import('./visualLikelihood.mjs');handleVisual=createVisualLikelihoodRoutes({repo:resolve(import.meta.dirname,'..'),dataRoot,json});}
@@ -49,6 +50,8 @@ try{const {createLidarRoutes}=await import('./lidar.mjs');handleLidar=createLida
 catch{handleLidar=async(req,res,url)=>{if(!url.pathname.startsWith('/api/lidar/'))return false;json(res,req.method==='GET'?200:503,{enabled:false,running:false,reason:'Optional LiDAR module is unavailable',baselinePreserved:true});return true;};}
 try{const {createSourceInferenceRoutes}=await import('./sourceInference.mjs');handleSource=createSourceInferenceRoutes({repo:resolve(import.meta.dirname,'..'),dataRoot,json});}
 catch{handleSource=async(req,res,url)=>{if(!url.pathname.startsWith('/api/source/'))return false;json(res,req.method==='GET'?200:503,{enabled:false,running:false,reason:'Optional source module is unavailable',baselinePreserved:true});return true;};}
+try{const {createControlLearningRoutes}=await import('./controlLearning.mjs');handleControl=createControlLearningRoutes({repo:resolve(import.meta.dirname,'..'),dataRoot,json});}
+catch{handleControl=async(req,res,url)=>{if(!url.pathname.startsWith('/api/control/'))return false;json(res,req.method==='GET'?200:503,{status:'unsupported',running:false,bindings:[],reason:'Cue-execution learning module is unavailable',modelUpdated:false});return true;};}
 try{const {createPhonationRoutes}=await import('./phonation.mjs');handlePhonation=createPhonationRoutes({repo:resolve(import.meta.dirname,'..'),dataRoot,json});}
 catch{handlePhonation=async(req,res,url)=>{if(!url.pathname.startsWith('/api/phonation/'))return false;json(res,req.method==='GET'?200:503,{measurement:{status:'unsupported',reason:'Optional phonation module is unavailable'},inference:{status:'disabled'},coaching:{status:'disabled'},baselineScoring:'unchanged'});return true;};}
 const engineAvailable=await access(process.env.SINGING_PYTHON||resolve(import.meta.dirname,'../science/.venv/bin/python')).then(()=>true).catch(()=>false);
@@ -68,6 +71,7 @@ const serverHandler=async(req,res)=>{try{
   if(await handleSessionRecompute(req,res,url))return;
   if(await handlePhonation(req,res,url))return;
   if(await handleSource(req,res,url))return;
+  if(await handleControl(req,res,url))return;
   if(await handleLidar(req,res,url))return;
   if(await handleVisual(req,res,url))return;
   if(await handleTeaching(req,res,url))return;
