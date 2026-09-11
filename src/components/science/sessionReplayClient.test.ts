@@ -16,3 +16,28 @@ test('missing session and malformed export are errors rather than empty success'
   await assert.rejects(readSessionReplay(),/Invalid session export/);
  }finally{globalThis.fetch=original}
 });
+
+import {readSessionRecomputation,startSessionRecomputation} from './sessionReplayClient.ts';
+test('verification client keeps legacy and skipped outcomes and sends only bounded request identity',async()=>{
+ const original=globalThis.fetch;
+ try{
+  globalThis.fetch=async(input,init)=>{assert.equal(input,'/api/session-recompute/run');assert.deepEqual(JSON.parse(String(init?.body)),{requestId:'replay-request',maxOperations:3});return Response.json({status:'running',attemptId:'replay-request'})};
+  assert.equal((await startSessionRecomputation('replay-request',3)).status,'running');
+  const report={schemaVersion:'session-recomputation/1',attemptId:'a',sessionId:'s',modelUpdated:false,rawMediaIncluded:false,
+   counts:{total:2,scoring:2,matched:1,failed:0,unavailable:0,unsupported:0,skipped:1,policyVerified:0,legacyVersionUnverified:1},
+   operations:[{outcome:'matched',status:'legacy_version_unverified',numericalAgreement:true,policyVerification:'legacy_version_unverified'},{outcome:'skipped',status:'operation_limit',numericalAgreement:null,policyVerification:'unverified'}]};
+  globalThis.fetch=async()=>Response.json({status:'completed',attemptId:'a',sessionId:'s',report});
+  assert.deepEqual((await readSessionRecomputation()).report,report);
+  globalThis.fetch=async()=>Response.json({status:'completed',attemptId:'different',sessionId:'s',report});
+  await assert.rejects(readSessionRecomputation(),/Invalid numerical verification report/);
+  // Counts must equal a recount of the rows, and every row must be a known, coherent outcome.
+  const [match,skip]=report.operations;
+  for(const bad of [{counts:{...report.counts,skipped:0}},{counts:{...report.counts,failed:undefined}},
+   {counts:{...report.counts,matched:0,failed:1}},{counts:{...report.counts,policyVerified:1,legacyVersionUnverified:0}},
+   {operations:[{...match,outcome:'agreed'},skip]},{operations:[match,{...skip,policyVerification:'pinned'}]},
+   {operations:[{...match,numericalAgreement:false},skip]},{operations:[{...match,policyVerification:'unverified'},skip]}]){
+   globalThis.fetch=async()=>Response.json({status:'completed',attemptId:'a',sessionId:'s',report:{...report,...bad}});
+   await assert.rejects(readSessionRecomputation(),/Invalid numerical verification report/,JSON.stringify(bad).slice(0,120));
+  }
+ }finally{globalThis.fetch=original}
+});

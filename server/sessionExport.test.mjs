@@ -6,7 +6,8 @@ import {join, resolve} from 'node:path';
 import {createHash} from 'node:crypto';
 import {spawn} from 'node:child_process';
 import {createServer} from 'node:net';
-import {createSessionExportRoutes} from './sessionExport.mjs';
+import {MAX_FILE_BYTES, createSessionExportRoutes} from './sessionExport.mjs';
+import {REPORT_BYTES} from './sessionRecompute.mjs';
 
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
 async function fixture(t) {
@@ -73,7 +74,7 @@ test('cross-origin/nonlocal writes and changing current run cannot export mislea
 
 test('oversized optional receipt remains missing without breaking baseline replay', async t => {
   const {root, put} = await fixture(t);
-  await put('learning-memory/session-one.json', {sessionId: 'session-one', text: 'x'.repeat(2 * 1024 * 1024)});
+  await put('learning-memory/session-one.json', {sessionId: 'session-one', text: 'x'.repeat(MAX_FILE_BYTES)});
   let result;
   const route = createSessionExportRoutes({dataRoot: root, env, fetchImpl: async () => Response.json(replay()), json: (_r, _s, data) => {result = data;}});
   await request(route); assert.equal(result.summary.modelId, 'updated-model'); assert.ok(result.missing.some(row => row.source.startsWith('learning-memory/')));
@@ -208,4 +209,41 @@ test('exports only session-bound visual results with freshly verified original m
  await writeFile(join(root,prefix,'media'),'changed');await request(route);
  assert.equal(output.data.summary.visualResultCount,0);
  assert.ok(output.data.missing.some(r=>r.source==='visual-runs/visual-one/summary.json'));
+});
+
+test('exports the latest score recomputation only while its report matches the receipt',async t=>{
+  const {root,put}=await fixture(t);
+  const attempt='replay-11111111-1111-4111-8111-111111111111',dir=`replay-verifications/${attempt}`;
+  const report={schemaVersion:'session-recomputation/1',attemptId:attempt,runId:'run-one',sessionId:'session-one',workerLedgerSha256:'c'.repeat(64),modelUpdated:false,rawMediaIncluded:false,
+    counts:{total:3,matched:1,failed:1,unavailable:0,unsupported:1,skipped:0,policyVerified:1,legacyVersionUnverified:0},operations:[]};
+  const bytes=JSON.stringify(report),receipt={status:'completed',attemptId:attempt,runId:'run-one',sessionId:'session-one',workerLedgerSha256:'c'.repeat(64),
+    reportSha256:createHash('sha256').update(bytes).digest('hex'),reportByteLength:Buffer.byteLength(bytes)};
+  await put(dir+'/report.json',report);await put(dir+'/receipt.json',receipt);await put('session-recompute-current.json',receipt);
+  const exported=async()=>{let output;await request(createSessionExportRoutes({dataRoot:root,env,json:(_r,status,data)=>{output={status,data};},fetchImpl:async()=>Response.json(replay())}));assert.equal(output.status,200);return output.data;};
+  let data=await exported(),artifact=data.artifacts.find(a=>a.source===dir+'/report.json');
+  assert.deepEqual(artifact.data.counts,report.counts);
+  assert.deepEqual(artifact.binding,{sessionId:'session-one',role:'read-only-score-recomputation',modelUpdated:false,current:false});
+  assert.ok(!data.missing.some(row=>row.source.startsWith('replay-verifications')));
+  // A report edited after its receipt was written is excluded and reported missing.
+  await put(dir+'/report.json',{...report,counts:{...report.counts,matched:2,failed:0}});
+  data=await exported();
+  assert.ok(!data.artifacts.some(a=>a.source.startsWith('replay-verifications/')));
+  assert.match(data.missing.find(row=>row.source===dir).reason,/invalid, unbound/);
+  // A completed index whose report file is gone is recorded as missing, not skipped.
+  await put(dir+'/report.json',report);await rm(join(root,dir,'report.json'));
+  data=await exported();
+  assert.ok(!data.artifacts.some(a=>a.source.startsWith('replay-verifications/')));
+  assert.deepEqual(data.missing.find(row=>row.source===dir),{source:dir,reason:'Completed score recomputation receipt or report is missing'});
+  // Reports may reach the verifier's cap (REPORT_BYTES), above the limit for other receipts.
+  const large={...report,operations:[{jobId:'x',padding:'p'.repeat(MAX_FILE_BYTES)}]},largeBytes=JSON.stringify(large);
+  assert.ok(MAX_FILE_BYTES<Buffer.byteLength(largeBytes)&&Buffer.byteLength(largeBytes)<=REPORT_BYTES);
+  const largeReceipt={...receipt,reportSha256:createHash('sha256').update(largeBytes).digest('hex'),reportByteLength:Buffer.byteLength(largeBytes)};
+  await put(dir+'/report.json',large);await put(dir+'/receipt.json',largeReceipt);await put('session-recompute-current.json',largeReceipt);
+  data=await exported();
+  assert.equal(data.artifacts.find(a=>a.source===dir+'/report.json').byteLength,largeReceipt.reportByteLength);
+  // A receipt for another session is not this session's check and not missing evidence.
+  await put('session-recompute-current.json',{...largeReceipt,sessionId:'session-two'});
+  data=await exported();
+  assert.ok(!data.artifacts.some(a=>a.source.startsWith('replay-verifications/')));
+  assert.ok(!data.missing.some(row=>row.source.startsWith('replay-verifications')));
 });

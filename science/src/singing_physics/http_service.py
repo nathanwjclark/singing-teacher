@@ -234,10 +234,12 @@ class Handler(BaseHTTPRequestHandler):
                     raise ValueError('Model registration requires session_id and model_id')
                 self.server.jobs.register_model(**body)
                 self._respond(200, {'registered': True}); return
-            session = re.fullmatch(r'/sessions/([A-Za-z0-9_-]{1,160})(?:/(commands|state|replay))?', path.path)
+            session = re.fullmatch(r'/sessions/([A-Za-z0-9_-]{1,160})(?:/(commands|state|replay|ledger))?', path.path)
             if session:
-                from .session import SessionController
+                from .session import SessionController, read_ledger
                 identity, operation = session.groups()
+                if method == 'GET' and operation == 'ledger':
+                    self._respond(200, read_ledger(self.server.jobs.root / 'sessions', identity)); return
                 if method == 'GET' and operation in (None, 'state', 'replay'):
                     command = {'action': 'replay' if operation == 'replay' else 'state'}
                 elif method == 'POST' and operation == 'commands':

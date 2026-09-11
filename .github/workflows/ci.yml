@@ -84,6 +84,7 @@ jobs:
         run: |
           npx playwright test
           npx playwright test -c tests/spectral-objective.config.ts
+          npx playwright test -c tests/session-recompute.config.ts
       - if: failure()
         uses: actions/upload-artifact@v7
         with:

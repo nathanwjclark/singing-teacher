@@ -1,6 +1,7 @@
 import './environment.mjs';
 import {createMotionRoutes} from './motion.mjs';
 import {createSessionExportRoutes} from './sessionExport.mjs';
+import {createSessionRecomputeRoutes} from './sessionRecompute.mjs';
 import {createProbeRoutes} from './probe.mjs';
 import {createAstraRoutes} from './astra.mjs';
 import {createLearningRoutes} from './learningMemory.mjs';
@@ -33,6 +34,7 @@ const handleLearning=createLearningRoutes({repo:resolve(import.meta.dirname,'..'
 const handleAstra=createAstraRoutes({repo:resolve(import.meta.dirname,'..'),dataRoot,json});
 const handleProbe=createProbeRoutes({repo:resolve(import.meta.dirname,'..'),dataRoot,json});
 const handleSessionExport=createSessionExportRoutes({dataRoot,json});
+const handleSessionRecompute=createSessionRecomputeRoutes({repo:resolve(import.meta.dirname,'..'),dataRoot,json});
 const handleMotion=createMotionRoutes({dataRoot,json});
 let handlePhonation;
 let handleSource;
@@ -63,6 +65,7 @@ const serverHandler=async(req,res)=>{try{
   if(await handleAstra(req,res,url))return;
   if(await handleProbe(req,res,url))return;
   if(await handleSessionExport(req,res,url))return;
+  if(await handleSessionRecompute(req,res,url))return;
   if(await handlePhonation(req,res,url))return;
   if(await handleSource(req,res,url))return;
   if(await handleLidar(req,res,url))return;

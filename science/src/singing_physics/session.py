@@ -31,6 +31,46 @@ def _id(value):
     return value
 
 
+def _ledger(db, session_id):
+    state = {'session_id':session_id,'version':0,'snapshot':None,'calibration':None,
+             'pending':None,'designs':{},'attempts':[],'sensations':[],'jobs':[]}
+    previous = '0'*64
+    events=[]
+    for version, body, digest in db.execute('SELECT version,body,digest FROM events WHERE session=? ORDER BY version',(session_id,)):
+        # _append stores exactly canonical(event), so verify those original
+        # bytes without serializing every historical state a second time.
+        if hashlib.sha256(body.encode()).hexdigest()!=digest:
+            raise RuntimeError('Session ledger integrity failure')
+        event=json.loads(body)
+        if version!=state['version']+1 or event['previous_sha256']!=previous or event['session_id']!=session_id or event['state']['version']!=version:
+            raise RuntimeError('Session ledger integrity failure')
+        state=event['state']; previous=digest; events.append({**event,'sha256':digest})
+    return state,previous,events
+
+
+def read_ledger(root, session_id):
+    """Verified replay that never dispatches a pending job or registers a model.
+
+    The 'state' and 'replay' session actions drive recovery (they submit a persisted
+    intent and append job_dispatched). This path opens the database read-only in one
+    deferred transaction, so it cannot change the ledger or the job service."""
+    path = Path(root).absolute() / 'sessions.sqlite3'
+    _id(session_id)
+    if path.is_symlink() or not path.is_file():
+        raise KeyError(session_id)
+    db = sqlite3.connect(path.as_uri()+'?mode=ro', uri=True, timeout=15)
+    try:
+        db.execute('BEGIN DEFERRED')
+        state,digest,events=_ledger(db, session_id)
+    except sqlite3.Error as exc:
+        raise RuntimeError('Session ledger unavailable') from exc
+    finally:
+        db.close()
+    if not events:
+        raise KeyError(session_id)  # No recorded session; never an empty stand-in.
+    return {'state':state,'ledger_sha256':digest,'events':events}
+
+
 class SessionController:
     """Synchronous JSON commands; numerical work is always submitted to JobService."""
     def __init__(self, root, service, session_id):
@@ -65,20 +105,7 @@ class SessionController:
             db.close()
 
     def _read(self, db):
-        state = {'session_id':self.session_id,'version':0,'snapshot':None,'calibration':None,
-                 'pending':None,'designs':{},'attempts':[],'sensations':[],'jobs':[]}
-        previous = '0'*64
-        events=[]
-        for version, body, digest in db.execute('SELECT version,body,digest FROM events WHERE session=? ORDER BY version',(self.session_id,)):
-            # _append stores exactly canonical(event), so verify those original
-            # bytes without serializing every historical state a second time.
-            if hashlib.sha256(body.encode()).hexdigest()!=digest:
-                raise RuntimeError('Session ledger integrity failure')
-            event=json.loads(body)
-            if version!=state['version']+1 or event['previous_sha256']!=previous or event['session_id']!=self.session_id or event['state']['version']!=version:
-                raise RuntimeError('Session ledger integrity failure')
-            state=event['state']; previous=digest; events.append({**event,'sha256':digest})
-        return state,previous,events
+        return _ledger(db, self.session_id)
 
     def _append(self, db, state, action, details):
         _,previous,_=self._read(db)

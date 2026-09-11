@@ -1,4 +1,5 @@
 import {verifiedVisualForecasts} from './visualContext.mjs';
+import {REPORT_BYTES, boundReport, recomputeAttempt} from './sessionRecompute.mjs';
 import {open, readdir, realpath} from 'node:fs/promises';
 import {resolve, sep} from 'node:path';
 import {createHash} from 'node:crypto';
@@ -7,7 +8,7 @@ import {isDeepStrictEqual} from 'node:util';
 const safeId = value => typeof value === 'string' && /^[A-Za-z0-9_-]{1,160}$/.test(value);
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 const MAX_BYTES = 24 * 1024 * 1024;
-const MAX_FILE_BYTES = 2 * 1024 * 1024;
+export const MAX_FILE_BYTES = 2 * 1024 * 1024;
 const MAX_FILES = 100;
 const sensitive = /^(authorization|api[_-]?key|openai_api_key|science_token|token|access_token|refresh_token|password|secret|credential)$/i;
 const media = /^(pcm|base64|pcm_base64|audio_base64|data_base64|imageDataUrl|audioDataUrl)$/i;
@@ -45,13 +46,13 @@ export function createSessionExportRoutes({dataRoot, json, fetchImpl = fetch, en
     try {
       const root = await realpath(dataRoot);
       let totalBytes = 0;
-      async function read(source) {
+      async function read(source, limit = MAX_FILE_BYTES) {
         const path = await realpath(resolve(root, source));
         if (path !== root && !path.startsWith(root + sep)) throw Error('Artifact leaves private data root');
         const handle = await open(path, 'r');
         try {
           const stat = await handle.stat();
-          if (!stat.isFile() || stat.size > MAX_FILE_BYTES || totalBytes + stat.size > MAX_BYTES) throw Error('Artifact exceeds export size limit');
+          if (!stat.isFile() || stat.size > limit || totalBytes + stat.size > MAX_BYTES) throw Error('Artifact exceeds export size limit');
           const buffer = Buffer.alloc(stat.size + 1);
           const {bytesRead} = await handle.read(buffer, 0, buffer.length, 0);
           if (bytesRead !== stat.size) throw Error('Artifact changed during export');
@@ -221,6 +222,26 @@ export function createSessionExportRoutes({dataRoot, json, fetchImpl = fetch, en
           artifacts.push({...artifact,binding:{sessionId,modelId:result.baselineModelId,
             current:result.baselineModelId === state.snapshot?.model_id,role:'conditional-visual-annotation-holdout',originalBytesVerified:true,modelUpdated:false}});
         } catch { missing.push({source,reason:'Visual receipt or original video does not match authoritative session; excluded'}); }
+      }
+      // The latest read-only score recomputation for this run and session, when its
+      // report still matches the receipt hash. Never running one (no index) is not
+      // missing evidence; an index that names a completed attempt whose files are
+      // absent, changed or oversized is.
+      let recomputation = null;
+      try { recomputation = (await read('session-recompute-current.json')).data; }
+      catch (error) { if (error.code !== 'ENOENT') missing.push({source: 'session-recompute-current.json', reason: 'Score recomputation index is unreadable; excluded'}); }
+      if (recomputation?.status === 'completed' && recomputation.runId === runId && recomputation.sessionId === sessionId) {
+        const source = recomputeAttempt(recomputation.attemptId) ? `replay-verifications/${recomputation.attemptId}` : 'replay-verifications';
+        try {
+          if (source === 'replay-verifications' || !isDeepStrictEqual((await read(source + '/receipt.json')).data, recomputation)) throw Error('Verification index differs from its receipt');
+          const artifact = await read(source + '/report.json', REPORT_BYTES);
+          boundReport(recomputation, {sha256: artifact.sha256, byteLength: artifact.byteLength, report: artifact.data});
+          if (artifacts.length >= MAX_FILES) missing.push({source: source + '/report.json', reason: 'Artifact count limit reached'});
+          else artifacts.push({...artifact, binding: {sessionId, role: 'read-only-score-recomputation', modelUpdated: false,
+            current: workerLedgerSha256 ? artifact.data.workerLedgerSha256 === workerLedgerSha256 : null}});
+        } catch (error) {
+          missing.push({source, reason: error.code === 'ENOENT' ? 'Completed score recomputation receipt or report is missing' : 'Latest score recomputation report is invalid, unbound to its receipt or exceeds the export size; excluded'});
+        }
       }
       const summary = {
         modelId: state?.snapshot?.model_id || null,
