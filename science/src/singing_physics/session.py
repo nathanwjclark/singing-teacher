@@ -104,50 +104,36 @@ def _node(body):
     return node
 
 
-def _sizes(nodes):
-    """Canonical length of every verified node's value, each computed once, so shared references cost nothing extra."""
-    sizes = {}
-    for start in nodes:
-        work = [start]
-        while work:
-            digest = work[-1]
-            if digest in sizes: work.pop(); continue
-            node = nodes[digest]; entries = list(_entries(node))
-            waiting = [c[1] for c in entries if c[0] == 'h' and c[1] not in sizes]
-            if waiting: work.extend(waiting); continue
-            inner = sum(len(canonical(c[1])) if c[0] == 'v' else sizes[c[1]] for c in entries)
-            sizes[digest] = (len(canonical(node[1])) if node[0] == 'v' else 1+max(len(entries), 1)+inner
-                             +(sum(len(json.dumps(key))+1 for key in node[1]) if node[0] == 'd' else 0))
-            work.pop()
-    return sizes
-
-
 def _text(entry, nodes):
     """Canonical JSON text of a child entry over verified parsed nodes, built in one pass without recursion.
 
-    A node referenced more than once below the entry is expanded once and its text reused, so the
-    work is proportional to the distinct nodes plus the output (bounded by MAX_STATE_BYTES)."""
+    A node referenced more than once below the entry is expanded once and its text reused, and the
+    text may not exceed MAX_STATE_BYTES, so a few crafted shared references cannot force unbounded work."""
     references, queue = {}, [entry]
     while queue:
         tag, value = queue.pop()
         if tag == 'h':
             references[value] = references.get(value, 0)+1
             if references[value] == 1: queue.extend(_entries(nodes[value]))
-    out, texts, work = [], {}, [entry]
+    out, texts, work, length = [], {}, [entry], 0
     while work:
         item = work.pop()
-        if type(item) is str: out.append(item); continue
         if type(item) is tuple:  # A shared node's text is complete: keep it for its other references.
             digest, start = item; texts[digest] = ''.join(out[start:]); del out[start:]; out.append(texts[digest]); continue
-        if item[0] == 'h' and item[1] in texts: out.append(texts[item[1]]); continue
-        if item[0] == 'h' and references[item[1]] > 1: work.append((item[1], len(out)))
-        tag, value = item if item[0] == 'v' else nodes[item[1]]
-        if tag == 'v': out.append(canonical(value)); continue
-        keys = sorted(value) if tag == 'd' else range(len(value))
-        sequence = ['{' if tag == 'd' else '[']
-        for index, key in enumerate(keys): sequence += [(',' if index else '')+(json.dumps(key)+':' if tag == 'd' else ''), value[key]]
-        sequence.append('}' if tag == 'd' else ']')
-        work.extend(reversed(sequence))
+        if type(item) is str: piece = item
+        elif item[0] == 'h' and item[1] in texts: piece = texts[item[1]]
+        else:
+            if item[0] == 'h' and references[item[1]] > 1: work.append((item[1], len(out)))
+            tag, value = item if item[0] == 'v' else nodes[item[1]]
+            if tag != 'v':
+                keys = sorted(value) if tag == 'd' else range(len(value))
+                sequence = ['{' if tag == 'd' else '[']
+                for index, key in enumerate(keys): sequence += [(',' if index else '')+(json.dumps(key)+':' if tag == 'd' else ''), value[key]]
+                sequence.append('}' if tag == 'd' else ']')
+                work.extend(reversed(sequence)); continue
+            piece = canonical(value)
+        out.append(piece); length += len(piece)
+        if length > MAX_STATE_BYTES: raise ValueError('state size')
     return ''.join(out)
 
 
@@ -203,8 +189,6 @@ def _verify(session_id, rows, load_nodes):
                 digest = queue.pop()
                 if digest not in reachable: reachable.add(digest); queue.extend(c[1] for c in _entries(nodes[digest]) if c[0] == 'h')
             if reachable != set(nodes): raise ValueError('unreachable node')
-            # Sizes before any expansion: a root may not expand past what the writer could have stored.
-            if max(_sizes(nodes).values()) > MAX_STATE_BYTES: raise ValueError('state size')
             versions, identities = state_fields(upgraded, nodes, 'version'), state_fields(upgraded, nodes, 'session_id')
             if versions != [event['version'] for event in upgraded] or any(identity != session_id for identity in identities): raise ValueError('root')
             state = join(upgraded[-1]['state_root'], nodes)
@@ -290,11 +274,12 @@ class SessionController:
         _,previous,_,stored=self._read(db)
         state['version']+=1
         nodes={}; root=_root(state,nodes); text=canonical(state)
+        if len(text)>MAX_STATE_BYTES: raise ValueError('Session state exceeds the ledger size bound')
         # Prove, before anything is written, that readers rebuild exactly this state from the stored tree:
         # a state they could not read back rolls the whole command back instead of bricking the session.
         tree=_text(['h',root],{**stored,**{key:_node(body) for key,body in nodes.items()}})
         if tree!=text: text=canonical(json.loads(text))  # Non-string keys sort as strings once stored, as v1 reads did.
-        if len(text)>MAX_STATE_BYTES or tree!=text: raise ValueError('Session state cannot be stored readably')
+        if tree!=text: raise ValueError('Session state cannot be stored readably')
         json.loads(text)
         db.executemany('INSERT OR IGNORE INTO nodes VALUES(?,?,?)',[(self.session_id,key,body) for key,body in nodes.items() if key not in stored])
         event={'format':2,'session_id':self.session_id,'version':state['version'],'previous_sha256':previous,'action':action,

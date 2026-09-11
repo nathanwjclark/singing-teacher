@@ -19,7 +19,7 @@ import pytest
 
 from singing_physics.http_service import ScientificHTTPServer
 from singing_physics.service import JobService, canonical
-from singing_physics.session import MAX_STATE_BYTES, SessionController, _node, _put, _root, _sizes, _split, _verify, join, read_ledger
+from singing_physics.session import SessionController, _node, _put, _root, _split, _verify, join, read_ledger
 from test_session import calibration, send
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]/'scripts'))
@@ -227,8 +227,6 @@ def test_shared_references_cannot_expand_past_the_state_bound():
     with pytest.raises(RuntimeError, match='Session ledger integrity failure') as failure:
         _verify('s', [(1, body, sha(body.encode()))], bodies.items)
     assert str(failure.value.__cause__) == 'state size' and time.perf_counter()-started < 1
-    # Below the bound the same shape expands once per distinct node, not once per path.
-    assert _sizes({key: _node(value) for key, value in bodies.items()})[root] > MAX_STATE_BYTES
 
 
 def test_a_state_readers_would_refuse_is_never_committed(tmp_path, monkeypatch):
@@ -240,7 +238,7 @@ def test_a_state_readers_would_refuse_is_never_committed(tmp_path, monkeypatch):
         state['sensations'] = ['x'*5000]
         with controller._db() as db: controller._append(db, state, 'fits', {})
         state['sensations'] = ['x'*5000]*5
-        with pytest.raises(ValueError, match='cannot be stored readably'), controller._db() as db: controller._append(db, state, 'too-large', {})
+        with pytest.raises(ValueError, match='exceeds the ledger size bound'), controller._db() as db: controller._append(db, state, 'too-large', {})
         assert events(tmp_path) == 1 and read_ledger(tmp_path/'sessions', 'bounded')['state']['version'] == 1
 
 
