@@ -12,8 +12,10 @@ import hashlib
 import json
 import math
 from numbers import Real
+import os
 from pathlib import Path
 import re
+import shutil
 import sys
 import threading
 import tempfile
@@ -43,6 +45,7 @@ ANATOMY = [
 DOUBLE = ct.POINTER(ct.c_double)
 _ownership = threading.Lock()
 GLOTTIS_HEADER = re.compile(rb'<glottis_model type="([^"]+)" selected="([01])">')
+SPEAKER_COPY_PREFIX = "singing-source-family-"
 
 
 def digest(path: Path) -> str:
@@ -71,6 +74,27 @@ def select_speaker_source(raw, family):
     return bytes(selected)
 
 
+def _process_exists(pid):
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def remove_stale_speaker_copies():
+    """Delete speaker copies whose creating process is gone (for example after SIGKILL).
+
+    Called while this process owns the Engine, so copies named with its own PID are stale too.
+    """
+    for path in Path(tempfile.gettempdir()).glob(SPEAKER_COPY_PREFIX + "*"):
+        owner = path.name[len(SPEAKER_COPY_PREFIX):].split("-", 1)[0]
+        if owner.isdigit() and (int(owner) == os.getpid() or not _process_exists(int(owner))):
+            shutil.rmtree(path, ignore_errors=True)
+
+
 def finite(value, label):
     if isinstance(value, bool) or not isinstance(value, Real) or not math.isfinite(value):
         raise ValueError(f"{label} must be a finite number")
@@ -95,8 +119,9 @@ class Engine:
             if suffix is None:
                 raise RuntimeError("This build adapter currently supports macOS and Linux")
             library = BUILD / f"source/lib/Release/libVocalTractLabApi.{suffix}"
-            speaker = BUILD / "source/resources/JD3.speaker"
-            if digest(speaker) != self.provenance["speaker_sha256"]:
+            # Read the speaker once; every native load uses these verified bytes.
+            self.speaker_bytes = (BUILD / "source/resources/JD3.speaker").read_bytes()
+            if hashlib.sha256(self.speaker_bytes).hexdigest() != self.provenance["speaker_sha256"]:
                 raise RuntimeError("Reference speaker differs from the build manifest")
             if digest(ROOT / "patches/anatomy-tongue-bounds.patch") != self.provenance["patch_sha256"]:
                 raise RuntimeError("Native patch differs from the build manifest")
@@ -127,10 +152,11 @@ class Engine:
                 method = getattr(self.lib, name)
                 method.argtypes = signature
                 method.restype = ct.c_int
-            self._check(self.lib.vtlInitialize(str(speaker).encode()), "initialize")
+            remove_stale_speaker_copies()
+            self._initialize_speaker(self.speaker_bytes, "initialize")
             initialized = True
             self._native_initialized = True
-            self.certified_source_family = next(name for name, selected in speaker_source_selection(speaker.read_bytes()) if selected)
+            self.certified_source_family = next(name for name, selected in speaker_source_selection(self.speaker_bytes) if selected)
             self.source_model_family = self.certified_source_family
             values = [ct.c_int() for _ in range(5)]
             internal_rate = ct.c_double()
@@ -142,7 +168,7 @@ class Engine:
             self.base_anatomy = self.anatomy()
             self.source_info = self._param_info("vtlGetGlottisParamInfo", self.glottis_count)
             self._certified_source_info = deepcopy(self.source_info)
-            names = [x.attrib["name"] for x in ET.parse(speaker).findall("./vocal_tract_model/shapes/shape")]
+            names = [x.attrib["name"] for x in ET.fromstring(self.speaker_bytes).findall("./vocal_tract_model/shapes/shape")]
             self.poses = {}
             for name in names:
                 buf = (ct.c_double * self.tract_count)()
@@ -163,6 +189,13 @@ class Engine:
             self._closed = True
             _ownership.release()
             raise
+
+    def _initialize_speaker(self, raw, operation):
+        """Initialize native state from exactly these bytes via a private temporary copy."""
+        with tempfile.TemporaryDirectory(prefix=f"{SPEAKER_COPY_PREFIX}{os.getpid()}-") as directory:
+            path = Path(directory) / "speaker.speaker"
+            path.write_bytes(raw)
+            self._check(self.lib.vtlInitialize(str(path).encode()), operation)
 
     @staticmethod
     def _check(code, operation):
@@ -195,25 +228,15 @@ class Engine:
     def _load_source_family(self, family, anatomy):
         """Reinitialize native state with one glottis model selected.
 
-        The certified family loads the certified speaker file itself. Any other
-        family loads a copy whose only differing bytes are the selection digits.
+        The certified family loads the start-up-verified certified bytes. Any
+        other family loads a copy whose only differing bytes are the selection digits.
         """
-        speaker = BUILD / "source/resources/JD3.speaker"
-        raw = speaker.read_bytes()
-        if hashlib.sha256(raw).hexdigest() != self.provenance["speaker_sha256"]:
-            raise RuntimeError("Reference speaker changed before source selection")
         certified = family == self.certified_source_family
-        selected = raw if certified else select_speaker_source(raw, family)
+        selected = self.speaker_bytes if certified else select_speaker_source(self.speaker_bytes, family)
         if self._native_initialized:
             self._check(self.lib.vtlClose(), "close before source selection")
             self._native_initialized = False
-        if certified:
-            self._check(self.lib.vtlInitialize(str(speaker).encode()), "source model initialize")
-        else:
-            with tempfile.TemporaryDirectory(prefix="singing-source-family-") as directory:
-                path = Path(directory) / "selected.speaker"
-                path.write_bytes(selected)
-                self._check(self.lib.vtlInitialize(str(path).encode()), "source model initialize")
+        self._initialize_speaker(selected, "source model initialize")
         self._native_initialized = True
         values = [ct.c_int() for _ in range(5)]
         internal_rate = ct.c_double()

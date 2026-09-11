@@ -13,7 +13,7 @@ import xml.etree.ElementTree as ET
 
 import numpy as np
 
-from .engine import Engine, finite, BUILD, digest, speaker_source_selection
+from .engine import Engine, finite, digest, speaker_source_selection
 from .pcm_inverse import resample_native_pcm
 
 ROOT=Path(__file__).resolve().parents[3]
@@ -35,7 +35,7 @@ def adapter_dependencies():
 
 def source_capability(engine):
     """Per-family native control audit; the certified speaker must select the geometric glottis."""
-    raw=(BUILD/'source/resources/JD3.speaker').read_bytes()
+    raw=engine.speaker_bytes
     selection=speaker_source_selection(raw);certified=[name for name,selected in selection if selected]
     reason=None
     if hashlib.sha256(raw).hexdigest()!=engine.provenance['speaker_sha256'] or certified!=[SOURCE_FAMILIES['geometric']] or engine.certified_source_family!=certified[0]:
