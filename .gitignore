@@ -46,3 +46,6 @@ __pycache__/
 
 # Manual pytest --basetemp artifacts
 .local-tests/
+
+# Throwaway data for the motion timeline browser check
+.local-e2e-motion/
