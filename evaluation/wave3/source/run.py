@@ -130,33 +130,45 @@ def decide(cases):
     return {'outcome': outcome, 'wins': wins, 'failures': failures, 'cases': len(cases), 'threshold': threshold}
 
 
+COMPARISONS = ('joint', 'fixed_source', 'fixed_anatomy')
+
+
+def reasons(record):
+    """Extractor reasons for unavailable descriptors, so failure causes stay in the committed record."""
+    return {name: d['reason'] for name, d in record['descriptors'].items() if d['reason']} if record else None
+
+
 def f0_rows(fit, banks):
-    """Requested and simulated F0 for every calibration prediction and bank alternative."""
+    """Requested and simulated F0 for every calibration prediction and bank alternative, all comparison families."""
     rows = []
-    for row in (fit or {}).get('joint', {}).get('candidates', []):
-        for prediction in row['predictions']:
-            rows.append({'stage': 'calibration:'+prediction['trial_id'], 'candidate_id': row['candidate_id'], 'family': family_of(row['candidate_id']),
-                'requested_f0_hz': prediction['requested_f0_hz'], 'simulated_f0_hz': prediction['simulated_f0_hz']})
+    for comparison in COMPARISONS:
+        for row in (fit or {}).get(comparison, {}).get('candidates', []):
+            for prediction in row['predictions']:
+                rows.append({'stage': 'calibration:'+prediction['trial_id'], 'comparison': comparison, 'candidate_id': row['candidate_id'], 'family': family_of(row['candidate_id']),
+                    'synthesized': True, 'requested_f0_hz': prediction['requested_f0_hz'], 'simulated_f0_hz': prediction['simulated_f0_hz']})
     for pose, bank in banks.items():
         for row in bank['forecast']['alternatives']:
-            if row['family'] == 'joint':
-                rows.append({'stage': 'heldout:'+pose, 'candidate_id': row['candidate_id'], 'family': family_of(row['candidate_id']),
-                    'requested_f0_hz': row['requested_f0_hz'], 'simulated_f0_hz': row['simulated_f0_hz']})
+            rows.append({'stage': 'heldout:'+pose, 'comparison': row['family'], 'candidate_id': row['candidate_id'], 'family': family_of(row['candidate_id']),
+                'synthesized': row['record'] is not None, 'requested_f0_hz': row['requested_f0_hz'], 'simulated_f0_hz': row['simulated_f0_hz']})
     return rows
 
 
 def compact_fit(fit):
     return {'status': fit.get('status'), 'reason': fit.get('reason'), 'actual_synthesis_calls': fit.get('actual_synthesis_calls'),
-        'per_family_calls': {f: fit[f]['actual_synthesis_calls'] for f in ('joint', 'fixed_source', 'fixed_anatomy') if f in fit},
-        'joint': [{'candidate_id': r['candidate_id'], 'status': r['status'], 'score': r['score'], 'score_excluding_pitch': r['score_excluding_pitch'],
-                   'failures': r['failures'], 'f0': [{'trial_id': x['trial_id'], 'requested_f0_hz': x['requested_f0_hz'], 'simulated_f0_hz': x['simulated_f0_hz']} for x in r['predictions']]}
-                  for r in fit.get('joint', {}).get('candidates', [])],
-        'best': {f: (fit[f].get('best') or {}).get('candidate_id') for f in ('joint', 'fixed_source', 'fixed_anatomy') if f in fit}}
+        'per_family_calls': {f: fit[f]['actual_synthesis_calls'] for f in COMPARISONS if f in fit},
+        'observation_descriptor_reasons': {o['observationId']: reasons(o) for o in fit.get('observations', [])},
+        **{f: [{'candidate_id': r['candidate_id'], 'status': r['status'], 'score': r['score'], 'score_excluding_pitch': r['score_excluding_pitch'], 'failures': r['failures'],
+                'predictions': [{'trial_id': x['trial_id'], 'requested_f0_hz': x['requested_f0_hz'], 'simulated_f0_hz': x['simulated_f0_hz'], 'descriptor_reasons': reasons(x['record'])} for x in r['predictions']]}
+               for r in fit[f]['candidates']] for f in COMPARISONS if f in fit},
+        'best': {f: (fit[f].get('best') or {}).get('candidate_id') for f in COMPARISONS if f in fit}}
 
 
-def compact_score(score):
+def compact_score(score, bank):
+    records = {r['alternative_id']: r['record'] for r in bank['forecast']['alternatives']}
     return {'status': score['status'], 'reason': score['reason'], 'canonical_extractions': score['canonical_extractions'], 'actual_synthesis_calls': score['actual_synthesis_calls'],
-        'alternatives': [{k: r[k] for k in ('alternative_id', 'status', 'reason', 'score', 'score_excluding_pitch', 'heldout_rank', 'heldout_rank_excluding_pitch', 'requested_f0_hz', 'simulated_f0_hz')} for r in score['alternatives']]}
+        'observation_descriptor_reasons': reasons(score['observation']),
+        'alternatives': [{k: r[k] for k in ('alternative_id', 'status', 'reason', 'score', 'score_excluding_pitch', 'heldout_rank', 'heldout_rank_excluding_pitch', 'requested_f0_hz', 'simulated_f0_hz')}
+                         | {'prediction_descriptor_reasons': reasons(records[r['alternative_id']])} for r in score['alternatives']]}
 
 
 def run(output):
@@ -208,26 +220,29 @@ def run(output):
                     write(output/f"{generator['id']}-bank-{h['pose']}.json", banks[h['pose']])
             record['heldout'] = {}
             for h in p['heldout_trials']:
-                # Held-out generator frames exist only after both banks are frozen.
-                pcm, metadata, _ = observe(engine, generator['anatomy'], generator['shape'], h['pose'], h, generator['id']+'-heldout-'+h['pose'])
-                calls += 1
-                engine.set_anatomy({})
-                score = score_phonation_bank(banks[h['pose']], pcm, metadata) if h['pose'] in banks else None
-                if score:write(output/f"{generator['id']}-score-{h['pose']}.json", score)
+                score = None
+                if h['pose'] in banks:
+                    # Held-out generator frames exist only after both banks are frozen; none is made without a bank.
+                    pcm, metadata, _ = observe(engine, generator['anatomy'], generator['shape'], h['pose'], h, generator['id']+'-heldout-'+h['pose'])
+                    calls += 1
+                    engine.set_anatomy({})
+                    score = score_phonation_bank(banks[h['pose']], pcm, metadata)
+                    write(output/f"{generator['id']}-score-{h['pose']}.json", score)
                 metrics = case_metrics(p, generator, fit if fit.get('status') == 'available' else None, score)
                 cases.append({'generator': generator['id'], 'pose': h['pose'], **metrics})
                 record['heldout'][h['pose']] = {'bank_coverage': banks[h['pose']]['forecast']['coverage'] if h['pose'] in banks else None,
                     'bank_sha256': banks[h['pose']]['sha256'] if h['pose'] in banks else None,
-                    'score': compact_score(score) if score else None, 'metrics': metrics}
+                    'score': compact_score(score, banks[h['pose']]) if score else None, 'metrics': metrics}
             record['f0'] = f0_rows(fit, banks)
             record['wall_s'] = round(time.perf_counter()-clock, 2)
-            record['status'] = 'evaluated'
+            record['status'] = 'evaluated' if fit.get('status') == 'available' else 'fit-'+str(fit.get('status'))
             per_generator.append(record)
             write(results/f"{generator['id']}.json", record)
             print(generator['id'], record['native_calls'], record['wall_s'], 's', flush=True)
     f0 = [row for g in per_generator for row in g.get('f0', [])]
     mismatch = {f: summary([r['simulated_f0_hz']-r['requested_f0_hz'] for r in f0 if r['family'] == f and r['simulated_f0_hz'] is not None],
-                           sum(1 for r in f0 if r['family'] == f and r['simulated_f0_hz'] is None)) for f in FAMILIES}
+                           sum(1 for r in f0 if r['family'] == f and r['synthesized'] and r['simulated_f0_hz'] is None),
+                           sum(1 for r in f0 if r['family'] == f and not r['synthesized'])) for f in FAMILIES}
     report = {'protocol_version': p['version'], 'provenance': provenance, 'finished_at': datetime.now(timezone.utc).isoformat(),
         'native_calls': calls, 'hard_total_native_calls': p['budgets']['hard_total_native_calls'], 'evidence_source': 'synthetic',
         'decision': decide(cases), 'cases': cases, 'f0_mismatch_hz': mismatch,
@@ -237,10 +252,10 @@ def run(output):
     return report
 
 
-def summary(values, missing):
-    if not values:return {'count': 0, 'missing_pitch': missing}
+def summary(values, missing, unsynthesized):
+    if not values:return {'count': 0, 'synthesized_without_pitch': missing, 'not_synthesized': unsynthesized}
     ordered = sorted(values)
-    return {'count': len(values), 'missing_pitch': missing, 'mean': math.fsum(values)/len(values), 'median': ordered[len(ordered)//2],
+    return {'count': len(values), 'synthesized_without_pitch': missing, 'not_synthesized': unsynthesized, 'mean': math.fsum(values)/len(values), 'median': ordered[len(ordered)//2],
             'min': ordered[0], 'max': ordered[-1], 'mean_absolute': math.fsum(abs(v) for v in values)/len(values)}
 
 
