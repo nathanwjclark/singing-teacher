@@ -1,4 +1,5 @@
 """Protocol-integrity checks; the native comparison runs once through run.py, not per test."""
+import hashlib
 import importlib.util
 import json
 from pathlib import Path
@@ -72,12 +73,17 @@ def test_selection_ranks_and_failures_follow_the_frozen_rules():
     assert missing['primary']['winner'] == 'none' and missing['unscorable_alternatives'] == {'geometric': 6, 'two_mass': 6}
 
 
-def test_decision_needs_six_wins_under_both_scores_and_counts_failures():
+def test_decision_needs_six_wins_under_both_scores_and_counts_failures_under_both():
     assert m.winner({'geometric': 1., 'two_mass': .96}, P['tie_margin']) == 'tie'
     assert m.winner({'geometric': 1., 'two_mass': .9}, P['tie_margin']) == 'two_mass'
-    case = lambda primary, pitchless, failed=(): {'primary': {'winner': primary, 'failures': {f: f in failed for f in m.FAMILIES}}, 'pitch_excluded': {'winner': pitchless}}
+    def case(primary, pitchless, failed=(), failed_pitchless=None):
+        flags = lambda names: {f: f in names for f in m.FAMILIES}
+        return {'primary': {'winner': primary, 'failures': flags(failed)}, 'pitch_excluded': {'winner': pitchless, 'failures': flags(failed if failed_pitchless is None else failed_pitchless)}}
     assert m.decide([case('two_mass', 'two_mass')]*6+[case('tie', 'tie')]*2)['outcome'] == 'positive'
     assert m.decide([case('two_mass', 'two_mass')]*6+[case('geometric', 'geometric', ('two_mass',))]*2)['outcome'] == 'inconclusive'
+    # A pitch-excluded selection that cannot be scored is a failure even when the primary one scored.
+    blocked = m.decide([case('two_mass', 'two_mass')]*6+[case('tie', 'geometric', (), ('two_mass',))]*2)
+    assert blocked['outcome'] == 'inconclusive' and blocked['failures'] == {'primary': {'geometric': 0, 'two_mass': 0}, 'pitch_excluded': {'geometric': 0, 'two_mass': 2}}
     assert m.decide([case('two_mass', 'geometric')]*8)['outcome'] == 'inconclusive'
     assert m.decide([case('geometric', 'geometric')]*6+[case('two_mass', 'two_mass')]*2)['outcome'] == 'negative'
 
@@ -86,8 +92,26 @@ def test_committed_results_match_this_protocol_and_the_frozen_decision_rule():
     report = json.loads((Path(__file__).parent/'results/report.json').read_text())
     assert report['provenance']['protocol_sha256'] == m.digest(P) and report['protocol_version'] == P['version']
     assert report['provenance']['worktree']['dirty'] is False
-    assert m.decide(report['cases']) == report['decision'] and report['decision']['cases'] == 2*len(P['generators'])
+    recomputed, stored = m.decide(report['cases']), report['decision']
+    assert {k: recomputed[k] for k in ('outcome', 'wins', 'cases')} == {k: stored[k] for k in ('outcome', 'wins', 'cases')} and stored['cases'] == 2*len(P['generators'])
+    # The committed report counted primary-score failures only (README "Failure counting").
+    assert stored['failures'] == recomputed['failures']['primary'] == {'geometric': 2, 'two_mass': 2}
+    assert recomputed['failures']['pitch_excluded'] == {'geometric': 2, 'two_mass': 4}
     assert report['native_calls'] <= P['budgets']['hard_total_native_calls']
     for generator in P['generators']:
         record = json.loads((Path(__file__).parent/'results'/f"{generator['id']}.json").read_text())
         assert record['generator'] == generator['id'] and set(record['heldout']) == {h['pose'] for h in P['heldout_trials']}
+
+
+def test_code_changed_since_the_run_is_listed_in_the_readme():
+    """Results stay pinned to the hashes recorded with the run; any later drift must be disclosed."""
+    recorded = json.loads((Path(__file__).parent/'results/report.json').read_text())['provenance']
+    source = m.ROOT/'science/src/singing_physics'
+    current = {'science/src/singing_physics/phonation.py': hashlib.sha256((source/'phonation.py').read_bytes()).hexdigest(),
+               **{f'science/src/singing_physics/{name}': value for name, value in m.adapter_dependencies().items()}, **m.extractor_signature()}
+    pinned = {'science/src/singing_physics/phonation.py': recorded['source_adapter_sha256'],
+              **{f'science/src/singing_physics/{name}': value for name, value in recorded['source_adapter_dependencies'].items()}, **recorded['extractor_signature']}
+    drifted = sorted(path for path in set(current) | set(pinned) if current.get(path) != pinned.get(path))
+    readme = (Path(__file__).parent/'README.md').read_text()
+    disclosed = readme[readme.index('## Code changes since the run'):]
+    assert all(f'`{path}`' in disclosed for path in drifted), drifted
