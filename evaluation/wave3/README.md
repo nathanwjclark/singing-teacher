@@ -4,7 +4,7 @@ This directory compares the production coarse objective (`canonical-coarse-v1`) 
 
 ## Revisions
 
-- **Revision 1** (`protocol.json`, frozen before the spectral code was reviewed): four anatomy/source candidates, calibration vowels a and i, held-out vowel e, eight stress cases, 21 native calls. It was executed once by `run.py` as of commit `dafdd08` (`git show dafdd08:evaluation/wave3/run.py`). Its results are in `results/first-*.json` and stay unchanged.
+- **Revision 1** (`protocol.json`, frozen before the spectral code was reviewed): four anatomy/source candidates, calibration vowels a and i, held-out vowel e, eight stress cases, 21 native calls. It was executed once by `run.py` from harness commit `b442c1e`; the identical file is `git show ba38700:evaluation/wave3/run.py` on this branch. Its results are in `results/first-*.json` and stay unchanged.
 - **Revision 2** (`protocol-2.json`, committed before it was run): responds to review of revision 1's method. Per-vowel gains come from a declared rule over the frozen prediction bank, so no candidate prediction clips by construction; candidates within a declared margin of 0.1 standardized RMS count as tied; the prediction bank is checked for level jumps between neighbouring anatomies before any target exists; both objectives are scored by the production `fit_pcm` per-trial scorer (`score_prediction`, `candidate_discrepancy`); a near-duplicate case tests ambiguity; there are three held-out vowels (e, o, u). Targets are new, so no revision-1 observation is reused, and nothing was tuned on revision-1 held-out scores. Its decision rule is fixed in the protocol.
 
 ## Running revision 2
