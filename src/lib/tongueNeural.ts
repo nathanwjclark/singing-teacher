@@ -11,7 +11,8 @@ export type NeuralTip={x:number;y:number;depth:number;visibility:number;peak:num
  * nearest-template lookup, optical flow, or conversion of vertical motion to depth. */
 export async function loadTongueNetwork(signal?:AbortSignal){
  const [meta,weights]=await Promise.all([fetch('/api/tongue-neural/manifest',{cache:'no-store',signal}),fetch('/api/tongue-neural/model',{cache:'no-store',signal})]);
- if(meta.status===404||weights.status===404||(meta.ok&&meta.headers.get('content-type')?.includes('text/html')))return (await import('./tongueBaseline')).loadTongueBaseline(signal);
+ // 404: no personal model here. 403: the server keeps personal models on its own machine, so another device (a phone) uses the public baseline.
+ if([meta,weights].some(r=>r.status===403||r.status===404)||(meta.ok&&meta.headers.get('content-type')?.includes('text/html')))return (await import('./tongueBaseline')).loadTongueBaseline(signal);
  if(!meta.ok||!weights.ok)throw Error('Personal tongue network is not installed on this Mac');
  const manifest=await meta.json();if(manifest.schema!=='personal-tongue-neural/v1')throw Error('Unknown tongue network format');
  const buffer=await weights.arrayBuffer();const digest=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',buffer))).map(v=>v.toString(16).padStart(2,'0')).join('');
