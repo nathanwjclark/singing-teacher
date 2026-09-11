@@ -77,12 +77,12 @@ await route({method:'GET',socket:{remoteAddress:'127.0.0.1'},headers:{host:'127.
     return root/'export.json', job_id, frame
 
 
-def test_actual_export_recomputes_original_received_frame_without_policy_claim(exported):
+def test_actual_export_recomputes_original_received_frame_under_its_scorer_pin(exported):
     path, job, frame = exported
     report, fresh = recompute(path, job, frame)
     original_design = json.loads(json.loads((path.parent/'replay.json').read_text())['state']['jobs'][-1]['request']['parameters']['design_json'])
-    assert report['status'] == ('verified' if original_design.get('scoring_policy') else 'version_unverified'), report
-    assert report['numerical_agreement'] is True
+    assert (report['status'], report['policy_verification'], report['numerical_agreement']) == ('verified', 'verified', True), report
+    assert report['current_scorer_implementation_pin'] == original_design['scorer_implementation_pin']
     assert report['budget']['actual_synthesis_calls'] == 0
     assert report['budget']['actual_canonical_extractions'] == 1
     assert fresh['observation_receipt']['received_at'] != json.loads(path.read_text())['replay']['state']['jobs'][-1]['result']['observation_receipt']['received_at']
@@ -154,5 +154,5 @@ def test_cli_writes_fresh_immutable_report(exported, tmp_path):
                '--job-id',job,'--original-replay',str(path.parent/'replay.json'),'--frame',str(frame),'--output',str(tmp_path/'report')]
     result = subprocess.run(command, capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
-    assert json.loads((tmp_path/'report/report.json').read_text())['status'] in ('verified', 'version_unverified')
+    assert json.loads((tmp_path/'report/report.json').read_text())['status'] == 'verified'
     assert subprocess.run(command, capture_output=True).returncode != 0

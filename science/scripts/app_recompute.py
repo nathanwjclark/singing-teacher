@@ -21,6 +21,13 @@ from singing_physics.prediction import Artifact, _encode
 ROOT = Path(__file__).resolve().parents[2]
 SCORING = {'update_pcm', 'score_visual_forecast', 'score_phonation', 'score_phonation_bank'}
 MAX_OPERATIONS = 16
+# Each retained job lands in exactly one outcome: matched (recomputed score agrees),
+# failed (score differs or retained evidence is internally inconsistent), unavailable
+# (original score, media or receipt absent), unsupported (not a score, or a policy or
+# runtime this process cannot reproduce) or skipped (operation or time budget only).
+OUTCOMES = {'verified': 'matched', 'legacy_version_unverified': 'matched', 'numerical_disagreement': 'failed',
+            'invalid_evidence': 'failed', 'missing_media': 'unavailable', 'missing_artifacts': 'unavailable',
+            'version_mismatch': 'unsupported'}
 MAX_SECONDS = 240
 
 
@@ -30,6 +37,12 @@ def now():
 
 def without_clock(value):
     return {key: item for key, item in value.items() if key not in ('received_at', 'evidence_at')}
+
+
+def compared(agrees):
+    if agrees:
+        return {'status': 'verified', 'numerical_agreement': True}
+    return {'status': 'numerical_disagreement', 'numerical_agreement': False, 'reason': 'Recomputed score differs from the recorded result.'}
 
 
 def visual_score(job):
@@ -46,8 +59,8 @@ def visual_score(job):
         raise ValueError('Visual annotation digest mismatch')
     fresh = score_visual_forecast(forecast, expected_digest=params['expected_digest'], annotations=params['annotations']).data
     left, right = without_clock(original['artifact']), without_clock(fresh)
-    return {'status': 'verified', 'policy_verification': 'verified', 'scoring_policy': params['forecast']['policy'],
-            'numerical_agreement': left == right, 'forecast_sha256': forecast.sha256,
+    return {**compared(left == right), 'policy_verification': 'verified', 'scoring_policy': params['forecast']['policy'],
+            'forecast_sha256': forecast.sha256,
             'annotation_sha256': digest(params['annotations']), 'original_scientific_result': left,
             'recomputed_scientific_result': right, 'canonical_extractions': 0,
             'evidence_scope': 'Retained annotation numbers and frozen projections; original video is not redecoded or correspondence revalidated.'}
@@ -58,11 +71,6 @@ def source_score(job):
     params = job['request']['parameters']; original = job['result']; frozen = params['frozen']
     if digest(frozen['forecast']) != frozen['sha256'] or original.get('forecast_sha256') != frozen['sha256']:
         raise ValueError('Source result does not bind the retained forecast')
-    bank = job['request']['operation'] == 'score_phonation_bank'
-    policy = phonation._bank_policy() if bank else {'version': 'phonation-score-1', 'features': phonation.FEATURES,
-        'source_model_version': phonation.SOURCE_VERSION, 'source_adapter_sha256': phonation.digest(Path(phonation.__file__))}
-    if digest(frozen['forecast'].get('scoring_policy')) != digest(policy) or frozen['forecast']['extractor_signature'] != phonation.extractor_signature():
-        return {'status': 'version_mismatch', 'reason': 'Frozen source scorer or extractor differs from the available implementation.'}
     if not original.get('observation'):
         return {'status': 'missing_artifacts', 'reason': 'Original source score has no received observation receipt.'}
     pcm = np.asarray(params['pcm'], dtype='<f4')
@@ -71,10 +79,15 @@ def source_score(job):
     frame_hash = hashlib.sha256(pcm.tobytes()).hexdigest()
     if frame_hash != original['observation']['frameSha256']:
         raise ValueError('Retained source PCM differs from original frame receipt')
+    bank = job['request']['operation'] == 'score_phonation_bank'
     fresh = (phonation.score_phonation_bank if bank else phonation.score_phonation_forecast)(frozen, pcm, params['metadata'])
+    # The scorer checks its own frozen policy and extractor signature and reports
+    # 'unsupported' without measuring when either differs from this runtime.
+    if fresh['status'] == 'unsupported':
+        return {'status': 'version_mismatch', 'reason': fresh['reason']}
     left, right = without_clock(original), without_clock(fresh)
-    return {'status': 'verified', 'policy_verification': 'verified', 'scoring_policy': policy,
-            'numerical_agreement': left == right, 'frame_sha256': frame_hash, 'forecast_sha256': frozen['sha256'],
+    return {**compared(left == right), 'policy_verification': 'verified', 'scoring_policy': frozen['forecast']['scoring_policy'],
+            'frame_sha256': frame_hash, 'forecast_sha256': frozen['sha256'],
             'original_scientific_result': left, 'recomputed_scientific_result': right, 'canonical_extractions': 1,
             'evidence_scope': 'Exact received float32 frame retained in the controller request; no full-recording or capture-clock verification.'}
 
@@ -114,15 +127,15 @@ def recompute_session(replay, *, session_id, max_operations=MAX_OPERATIONS):
         operation = job['request']['operation']
         row = {'jobId': job['job_id'], 'operation': operation, 'originalStatus': job['status'],
                'requestSha256': digest(job['request']), 'originalResultSha256': digest(job.get('result')),
-               'status': 'skipped', 'numericalAgreement': None, 'policyVerification': 'unverified'}
+               'numericalAgreement': None, 'policyVerification': 'unverified'}
         if operation not in SCORING:
-            row['reason'] = 'This operation fits or freezes a model; it is outside this read-only score verifier.'
+            row.update(outcome='unsupported', status='unsupported_operation', reason='This operation fits, freezes or synthesizes; this read-only verifier recomputes scores only.')
         elif job['status'] != 'succeeded':
-            row['reason'] = 'No successful original score is available.'
+            row.update(outcome='unavailable', status='missing_artifacts', reason='No successful original score is available.')
         elif job['job_id'] not in selected:
-            row['reason'] = 'Operation limit: this run verifies the most recent selected scoring operations.'
+            row.update(outcome='skipped', status='operation_limit', reason='Operation limit: this run verifies the most recent selected scoring operations.')
         elif time.monotonic() - started > MAX_SECONDS - 35:
-            row['reason'] = 'Wall-time budget reached before this scoring operation.'
+            row.update(outcome='skipped', status='time_limit', reason='Wall-time budget reached before this scoring operation.')
         else:
             try:
                 if operation == 'update_pcm':
@@ -141,21 +154,19 @@ def recompute_session(replay, *, session_id, max_operations=MAX_OPERATIONS):
                     result = visual_score(job)
                 else:
                     result = source_score(job)
-                row.update(status=result['status'], numericalAgreement=result.get('numerical_agreement'),
-                    policyVerification=result.get('policy_verification', 'unverified'), details=result)
-                if result.get('reason'):
-                    row['reason'] = result['reason']
-                report['budget']['canonicalExtractions'] += result.get('canonical_extractions', 0)
             except (KeyError, TypeError, ValueError, OSError, RuntimeError, subprocess.TimeoutExpired) as exc:
-                row.update(status='invalid_evidence', reason=str(exc))
+                result = {'status': 'invalid_evidence', 'reason': str(exc)}
+            row.update(outcome=OUTCOMES[result['status']], status=result['status'], numericalAgreement=result.get('numerical_agreement'),
+                policyVerification=result.get('policy_verification', 'unverified'), details=result)
+            if result.get('reason'):
+                row['reason'] = result['reason']
+            report['budget']['canonicalExtractions'] += result.get('canonical_extractions', 0)
         report['operations'].append(row)
+    rows = report['operations']
     report['counts'] = {'total': len(jobs), 'scoring': sum(j['request']['operation'] in SCORING for j in jobs),
-        'compared': sum(r['numericalAgreement'] is not None for r in report['operations']),
-        'agreed': sum(r['numericalAgreement'] is True for r in report['operations']),
-        'disagreed': sum(r['numericalAgreement'] is False for r in report['operations']),
-        'skipped': sum(r['status'] == 'skipped' for r in report['operations']),
-        'unavailable': sum(r['status'] not in ('verified', 'version_unverified', 'skipped') for r in report['operations']),
-        'policyVerified': sum(r['policyVerification'] == 'verified' for r in report['operations'])}
+        **{outcome: sum(r['outcome'] == outcome for r in rows) for outcome in ('matched', 'failed', 'unavailable', 'unsupported', 'skipped')},
+        'policyVerified': sum(r['outcome'] == 'matched' and r['policyVerification'] == 'verified' for r in rows),
+        'legacyVersionUnverified': sum(r['outcome'] == 'matched' and r['policyVerification'] == 'legacy_version_unverified' for r in rows)}
     report['budget']['elapsedSeconds'] = round(time.monotonic() - started, 3)
     if digest(replay) != original_digest:
         raise ValueError('Read-only verifier changed the captured state')
