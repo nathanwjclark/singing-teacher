@@ -75,6 +75,12 @@ test('generated microphone → MediaRecorder → decoded pitch → frozen melody
     await panel.getByRole('button', { name: 'Save attempt & sensation', exact: true }).click()
     await expect(panel).toContainText('Attempt retained')
   }
+  // The reference must never be recorded: Start is disabled while it plays.
+  await panel.getByRole('checkbox', { name: /I will use the frozen context/ }).check()
+  const start = panel.getByRole('button', { name: 'Start attempt recording', exact: true }), practiceReference = practise.getByRole('button', { name: /^(Play reference|Playing…)$/ })
+  await expect(start).toBeEnabled(); await practiceReference.click()
+  await expect(practiceReference).toHaveText('Playing…'); await expect(start).toBeDisabled()
+  await expect(practiceReference).toHaveText('Play reference', { timeout: 10_000 }); await expect(start).toBeEnabled()
   await capture(melody, async () => { await expect(practise.getByRole('button', { name: 'Play reference' })).toBeDisabled() })
   await page.screenshot({ path: testInfo.outputPath('02-prompted-melody.png'), fullPage: false })
   await panel.getByRole('combobox', { name: 'Stage', exact: true }).selectOption('recall')
