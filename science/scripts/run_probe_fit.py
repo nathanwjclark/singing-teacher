@@ -7,6 +7,7 @@ import fcntl
 from pathlib import Path
 from science.scripts.live_capture_jobs import backend_for, wait
 from singing_physics.service import canonical
+from science.scripts.probe_setup import resolve_setup
 
 
 def seal(path, value):
@@ -105,8 +106,10 @@ def _run(root, import_id, expected_model_id, output):
     if current.get('status') != 'succeeded': raise ValueError('Complete a voice model fit first')
     run_dir = root/'science-runs'/current['runId']
     voice = json.loads((run_dir/'summary.json').read_text())
-    profile_path = root/'probe-fit-profile.json'
-    if not profile_path.exists(): raise ValueError('Declare the measured probe placement nuisance controls in the private probe-fit-profile.json first')
+    configuration, profile_path, setup = resolve_setup(root, summary.get('setupId'), legacy=not summary.get('setupId'))
+    if setup and (summary.get('setupConfigurationSha256') != setup['configurationSha256'] or summary.get('setupProfileSha256') != setup['profileSha256']):
+        raise ValueError('Probe setup differs from the configuration retained by this import')
+    if not profile_path.exists(): raise ValueError('Declare probe placement and controls in Calibration setup first')
     profile = json.loads(profile_path.read_text())
     if set(profile) != {'JA','gain','direct_gain','coupling_gain','delay_s'}:
         raise ValueError('Probe profile requires JA, gain, direct_gain, coupling_gain and delay_s')
@@ -117,7 +120,7 @@ def _run(root, import_id, expected_model_id, output):
     verified=Path(tempfile.mkdtemp(prefix='verification-',dir=output))/'import'
     subprocess.run(['node','--experimental-strip-types',str(ROOT/'science/scripts/import_probe_science.ts'),
                     str(imported/summary['captureDirectory']),str(verified),
-                    str(root/'probe-science-config.json')], check=True, stdout=subprocess.DEVNULL)
+                    str(configuration)], check=True, stdout=subprocess.DEVNULL)
     document = json.loads((verified/'probe-science-document.json').read_text())
     if document is None: raise ValueError('Probe evidence is no longer eligible')
     fit = json.loads((run_dir/'fit.json').read_text())
@@ -136,6 +139,9 @@ def _run(root, import_id, expected_model_id, output):
         parameters={'probe_observations':document,'candidates':candidates,'max_native_calls':count,'pcm_weight':1.,'probe_weight':1.}
         seal(output/'request.json',parameters)
         intent={'importId':import_id,'parentModelId':expected_model_id,'sessionId':voice['sessionId'],
+            'setupId':setup['setupId'] if setup else None,
+            'configurationSha256':hashlib.sha256(configuration.read_bytes()).hexdigest(),
+            'profileSha256':hashlib.sha256(profile_path.read_bytes()).hexdigest(),
             'verifiedImport':str(verified.relative_to(output)),
             'command':{'action':'fit_probe','command_id':output.name+'-fit',
                 'expected_version':state['version'],'parameters':parameters}}

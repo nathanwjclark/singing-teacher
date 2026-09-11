@@ -1,0 +1,11 @@
+import {mkdir,mkdtemp,writeFile} from 'node:fs/promises';
+import {resolve} from 'node:path';
+import {createProbeSetupFixture} from './probe-setup-fixture.mjs';
+await mkdir(resolve('.local-data'),{recursive:true});
+const root=await mkdtemp(resolve('.local-data/probe-setup-qa-'));
+const fixture=await createProbeSetupFixture(root);
+await writeFile(resolve('.local-data/probe-setup-qa.json'),JSON.stringify({root,dataRoot:fixture.dataRoot,placement:fixture.placement,profile:fixture.profile}));
+process.env.LOCAL_DATA_DIR=fixture.dataRoot;
+process.env.PORT='5492';process.env.HOST='127.0.0.1';
+process.env.SCIENCE_URL='';process.env.SCIENCE_TOKEN='';process.env.OPENAI_API_KEY='';process.env.OPENAI_ENV_FILE='';
+await import('../../server/local.mjs');

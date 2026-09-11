@@ -3,6 +3,7 @@ import {promisify} from 'node:util';
 import {readFile,writeFile,mkdir,rename,access} from 'node:fs/promises';
 import {join} from 'node:path';
 import {randomUUID} from 'node:crypto';
+import {probeSetupStatus,saveProbeSetup} from './probeSetup.mjs';
 const execute=promisify(execFile);
 const id=/^[A-Za-z0-9_-]{1,100}$/;
 async function read(path){try{return JSON.parse(await readFile(path,'utf8'));}catch(error){if(error.code==='ENOENT')return null;throw error;}}
@@ -30,7 +31,7 @@ export function createProbeRoutes({repo,dataRoot,json,runProcess=execute}) {
   if(!response.ok)return null;return (await response.json()).state?.snapshot?.model_id??null;
  }
  return async(req,res,url)=>{
-  if(!['/api/probe/status','/api/probe/import','/api/probe/fit'].includes(url.pathname))return false;
+  if(!['/api/probe/status','/api/probe/import','/api/probe/fit','/api/probe/setup'].includes(url.pathname))return false;
   const remote=req.socket.remoteAddress?.replace(/^::ffff:/,'');
   let local=false;
   try{local=['127.0.0.1','::1'].includes(remote)&&['localhost','127.0.0.1','[::1]'].includes(new URL(`http://${req.headers.host}`).hostname)&&(!req.headers.origin||new URL(req.headers.origin).host===req.headers.host);}catch{}
@@ -49,13 +50,24 @@ export function createProbeRoutes({repo,dataRoot,json,runProcess=execute}) {
     const fit=state.fitId?await read(join(dataRoot,'probe-fits',state.fitId,'summary.json')):null;
     const measurement=imported?await read(join(dataRoot,'probe-imports',state.importId,imported.measurementPath)):null;
     const currentModelId=await model().catch(()=>null);
-    const profile=await access(join(dataRoot,'probe-fit-profile.json')).then(()=>true).catch(()=>false);
+    const setup=await probeSetupStatus(dataRoot,state.importId).catch(()=>({setup:null,capture:null,legacyConfiguration:false,error:'Saved probe setup could not be verified. Reopen setup and verify the original evidence again.'}));
+    const profile=imported?.setupId?true:await access(join(dataRoot,'probe-fit-profile.json')).then(()=>true).catch(()=>false);
     const resumable=state.fitId&&!fit&&await read(join(dataRoot,'probe-fits',state.fitId,'intent.json'));
-    const fitBlockedReason=!imported?.eligible?'Import a probe with verified calibration first.':!currentModelId?'A current scientific model and worker are required.':!profile&&!resumable?'A declared private probe-fit-profile.json is required.':null;
-    json(res,200,{busy:running||busy,import:imported,fit,measurement,currentModelId,canFit:!running&&!busy&&!fitBlockedReason,fitBlockedReason,error:state.error??null});return true;
+    const fitBlockedReason=!imported?.eligible?'Complete calibration setup and analyze the probe with verified calibration first.':!currentModelId?'A current scientific model and worker are required.':!profile&&!resumable?'Declare the probe placement and controls in Calibration setup.':null;
+    json(res,200,{busy:running||busy,import:imported,fit,measurement,currentModelId,canFit:!running&&!busy&&!fitBlockedReason,fitBlockedReason,setup,error:state.error??null});return true;
    }
    if(req.method!=='POST'||url.pathname.endsWith('/status')){json(res,405,{error:'Method not allowed'});return true;}
-   let raw='';for await(const chunk of req){raw+=chunk;if(raw.length>4096)throw Error('Request too large');}
+   const configuring=url.pathname.endsWith('/setup');
+   let raw='';for await(const chunk of req){raw+=chunk;if(Buffer.byteLength(raw)>(configuring?26*1024*1024:4096))throw Error('Request too large');}
+   if(configuring){
+    if(busy){json(res,409,{error:'A probe operation is already running'});return true;}
+    let body;try{body=JSON.parse(raw);}catch{throw Error('Invalid JSON request');}
+    if(body.importId!==state.importId)throw Error('Probe import changed; refresh calibration setup');
+    busy=true;
+    try{const setup=await saveProbeSetup({repo,dataRoot,body,runProcess});json(res,200,{saved:true,setup});}
+    finally{busy=false;}
+    return true;
+   }
    let body;try{body=JSON.parse(raw);}catch{throw Error('Invalid JSON request');}const fitting=url.pathname.endsWith('/fit');
    if(!id.test(body.requestId??'')||Object.keys(body).some(k=>!(fitting?['requestId','importId','expectedModelId']:['requestId']).includes(k)))throw Error('Invalid probe request');
    if(fitting&&(!id.test(body.importId??'')||typeof body.expectedModelId!=='string'||body.expectedModelId.length>256))throw Error('Invalid probe fit identity');
