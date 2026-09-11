@@ -2,7 +2,7 @@
 
 PYTHONPATH=science/src science/.venv/bin/python evaluation/wave3/run.py --output /tmp/wave3-run-2
 
-Revision 1 (protocol.json) ran with the harness from b442c1e (identical at ba38700); its
+Revision 1 (protocol.json) ran with the harness from b442c1e on codex/wave3-eval; its
 results in results/first-*.json are kept unchanged and are not re-scored here.
 """
 from __future__ import annotations
@@ -12,11 +12,13 @@ from datetime import datetime, timezone
 import hashlib
 import json
 from pathlib import Path
+import subprocess
 
 import numpy as np
 from scipy.signal import lfilter
 
 from singing_physics.engine import Engine
+from singing_physics.pcm_design import SCORER_PIN
 from singing_physics.pcm_inverse import candidate_discrepancy, extract_pcm, observation_target, score_prediction
 from singing_physics.pcm_spectral import COARSE_OBJECTIVE, SPECTRAL_OBJECTIVE, extract_spectral, policy
 from singing_physics.phonation import synthesize_phonation
@@ -24,6 +26,7 @@ from singing_physics.phonation import synthesize_phonation
 PROTOCOL_PATH = Path(__file__).with_name('protocol-2.json')
 OBJECTIVES = (COARSE_OBJECTIVE, SPECTRAL_OBJECTIVE)
 GROUPS = ('nominal', 'wrong-fixed-control', 'outside-support')
+ROOT = Path(__file__).resolve().parents[2]
 
 
 def digest(value):
@@ -32,6 +35,16 @@ def digest(value):
 
 def write(path, value):
     path.write_text(json.dumps(value, sort_keys=True, indent=2, allow_nan=False)+'\n')
+
+
+def worktree():
+    """The commit this run executes and whether the checkout differs from it."""
+    try:
+        run = lambda *args: subprocess.run(['git', '-C', str(ROOT), *args], capture_output=True, text=True, check=True, timeout=30).stdout
+        changed = [line[3:] for line in run('status', '--porcelain', '--untracked-files=all').splitlines()]
+        return {'commit': run('rev-parse', 'HEAD').strip(), 'dirty': bool(changed), 'changed_paths': changed}
+    except (OSError, subprocess.SubprocessError) as exc:
+        return {'commit': None, 'dirty': None, 'reason': 'git state unavailable: '+str(exc)}
 
 
 def candidates(p):
@@ -106,6 +119,8 @@ def run(output):
     output.mkdir(parents=True, exist_ok=False)
     write(output/'protocol.json', p)
     write(output/'objective-policy.json', policy())
+    source_state = {'worktree': worktree(), 'scorer_implementation_pin': SCORER_PIN}
+    write(output/'source-state.json', source_state)
     poses = [*p['calibration_poses'], *p['heldout_poses']]
     members = candidates(p)
     write(output/'candidate-grid.json', members)
@@ -285,7 +300,7 @@ def run(output):
                'negative' if coarse['hits']-spectral['hits'] >= 3 else 'inconclusive')
     report = {'protocol_sha256': digest(p), 'frozen_prediction_bank_sha256': digest(bank),
         'frozen_calibration_rankings_sha256': digest(rankings_receipt), 'native_provenance': native,
-        'actual_synthesis_calls': calls, 'extraction_counts': counts, 'objective_policy': policy(),
+        'actual_synthesis_calls': calls, 'extraction_counts': counts, 'objective_policy': policy(), **source_state,
         'pose_gains': gains, 'level_jumps': levels, 'evidence_source': 'synthetic', 'failures': failures,
         'cases': cases, 'summary': summary, 'scientific_outcome': outcome,
         'anatomical_identifiability': 'not_established', 'uncertainty_calibration': 'not_measured',

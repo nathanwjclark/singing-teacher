@@ -4,8 +4,17 @@ This directory compares the production coarse objective (`canonical-coarse-v1`) 
 
 ## Revisions
 
-- **Revision 1** (`protocol.json`, frozen before the spectral code was reviewed): four anatomy/source candidates, calibration vowels a and i, held-out vowel e, eight stress cases, 21 native calls. It was executed once by `run.py` from harness commit `b442c1e`; the identical file is `git show ba38700:evaluation/wave3/run.py` on this branch. Its results are in `results/first-*.json` and stay unchanged.
+- **Revision 1** (`protocol.json`, frozen before the spectral code was reviewed): four anatomy/source candidates, calibration vowels a and i, held-out vowel e, eight stress cases, 21 native calls. It was executed once by `run.py` from harness commit `b442c1e` on `codex/wave3-eval`; this branch carries the identical file in the commit "Add bounded prospective native corpus comparison harness". Its results are in `results/first-*.json` and stay unchanged.
 - **Revision 2** (`protocol-2.json`, committed before it was run): responds to review of revision 1's method. Per-vowel gains come from a declared rule over the frozen prediction bank, so no candidate prediction clips by construction; candidates within a declared margin of 0.1 standardized RMS count as tied; the prediction bank is checked for level jumps between neighbouring anatomies before any target exists; both objectives are scored by the production `fit_pcm` per-trial scorer (`score_prediction`, `candidate_discrepancy`); a near-duplicate case tests ambiguity; there are three held-out vowels (e, o, u). Targets are new, so no revision-1 observation is reused, and nothing was tuned on revision-1 held-out scores. Its decision rule is fixed in the protocol.
+
+  Revision 2 was committed as `9c951b0` and run once from that commit; `results/second-run-provenance.json` names it. Rebasing this branch onto a newer base re-created that commit (subject "Freeze independent evaluation revision 2 before running it") with identical `evaluation/` and `science/src/` trees but a later commit date, so the ordering evidence is the original commit, kept reachable by the local tag `wave3-spectral-before-rebase-cb0e6e7`. The revision-2 report predates two later harness additions and does not have them: a hash of every scoring module (`scorer_implementation_pin`, which covers `pcm_inverse.py`) and the commit plus dirty-worktree flag of the executing checkout. Runs from this harness now write both to `source-state.json` and the report.
+
+## Design inputs for a future revision 3
+
+Revision 2's result has little power, for two reasons that a third revision should address before it is frozen and run:
+
+- All five misses per objective are vowel-e pairs where calibration kept anatomy 0, whose e prediction is below the −60 dBFS canonical gate. Those pairs count as evaluable misses, so the comparison reduces to a choice between two anatomies. Revision 3 should count a pair as unscorable when any calibration-retained candidate's held-out prediction is unscorable, and report it with the unscorable pairs.
+- One absolute tie margin (0.1 standardized RMS) is applied to both objectives, whose numerical scales are not comparable. Revision 3 should declare a margin per objective, derived before the run (for example from repeated-noise calibration frames), not from held-out scores.
 
 ## Running revision 2
 

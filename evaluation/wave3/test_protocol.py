@@ -81,3 +81,10 @@ def test_harness_scores_with_the_production_fit_scorer():
     for objective in (COARSE_OBJECTIVE, SPECTRAL_OBJECTIVE):
         item = m.score_prediction(frame, trial, observation_target(canonical['measurement']), objective=objective, measurement_id='p')
         assert m.candidate_discrepancy([item], objective) == (0., [])
+
+
+def test_future_runs_record_commit_dirty_state_and_scorer_pin():
+    state = m.worktree()
+    assert len(state['commit']) == 40 and isinstance(state['dirty'], bool)
+    assert state['dirty'] == bool(state['changed_paths'])
+    assert 'science/src/singing_physics/pcm_inverse.py' in m.SCORER_PIN['implementation_sha256']

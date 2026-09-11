@@ -161,6 +161,11 @@ held-out evaluation.
 The spectral objective is selectable in the app's scientific model panel (the coarse objective stays the default) and runs through
 search, sealed forecast and update with pinned scoring code. A second frozen
 evaluation (three held-out vowels, equal native budgets, production scorer) is
-inconclusive: both objectives hit 13 of 18 held-out comparisons. Details are in
+inconclusive: both objectives hit 13 of 18 held-out comparisons. All five misses
+per objective are vowel-e pairs where calibration kept anatomy 0, whose e
+prediction falls below the −60 dBFS canonical gate and cannot be scored, so the
+comparison reduces to a choice between two anatomies and has little power. Its
+single absolute tie margin (0.1) is applied to two objectives whose numerical
+scales are not comparable. Details are in
 [the spectral objective note](../physiology/WAVE3_SPECTRAL_OBJECTIVE.md) and
 [the wave-three review](../physiology/wave3-review.md).
