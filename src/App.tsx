@@ -11,7 +11,6 @@ import type { VoiceActivity } from './lib/voiceActivity'
 import { useRecentTips } from './hooks/useRecentTips'
 import type { Metrics, TrackingFrame, TrackingStatus } from './types'
 import PhonePairing from './components/phone/PhonePairing'
-import PhoneCapturePage from './components/phone/PhoneCapturePage'
 import { RecordingControls } from './components/recording/RecordingControls'
 import type { RecordingController } from './components/recording/RecordingControls'
 import type { FinishedRecording } from './lib/recording'
@@ -59,7 +58,7 @@ const demoScenarios: { name: string; title: string; detail: string; metrics: Par
   { name: 'Lip shape', title: 'Let the vowel take shape.', detail: 'Explore visible lip shape without forcing a smile or a pucker.', metrics: { mouthOpen: .25, headTilt: 2, shoulderTilt: 2, lipWidth: 1.02, jawAsymmetry: .2 } },
 ]
 
-function StudioApp() {
+export default function StudioApp() {
   const [pairOpen,setPairOpen]=useState(false)
   const [tab,setTab]=useState<'studio'|'experiments'>('studio')
   const [learningRecall,setLearningRecall]=useState(false)
@@ -235,4 +234,3 @@ function StudioApp() {
     </div>
   )
 }
-export default function App(){return window.location.pathname==='/phone'?<PhoneCapturePage/>:<StudioApp/>}
