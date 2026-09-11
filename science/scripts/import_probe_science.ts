@@ -23,6 +23,9 @@ async function read(root: string, name: string, limit = 128 * 1024 * 1024) {
   } finally { await file.close() }
 }
 function requireValue(ok: unknown, message: string): asserts ok { if (!ok) throw Error(message) }
+/** No step yet derives calibration arrays from measurement recordings (e.g. a reference-microphone sweep), so a
+ * package's calibration, processing and placement are declarations. Hashing its evidence files is not measurement. */
+export const DECLARED_CALIBRATION_REASON = 'Calibration is declared, not measured; no measured-calibration evidence was derived. Human recordings stay ineligible for scientific fitting until calibration is derived from measurement recordings.'
 
 export async function importProbeScience(captureDirectory: string, outputDirectory: string, configPath: string) {
   const root = await realpath(captureDirectory), configRoot = await realpath(dirname(resolve(configPath)))
@@ -65,7 +68,8 @@ export async function importProbeScience(captureDirectory: string, outputDirecto
     }
   }
   await verifyOriginals()
-  requireValue(native.provenance === 'software-fixture' || cal.kind === 'measured', 'Physical/human capture requires measured instrument calibration evidence')
+  const human = native.provenance === 'human-recording'
+  requireValue(human || native.provenance === 'software-fixture' || cal.kind === 'measured', 'Physical reference capture requires measured instrument calibration evidence')
   requireValue(!cal.source_hashes.includes(native.received.sha256) && !config.nuisance_prior.source_hashes.includes(native.received.sha256), 'Target response cannot calibrate itself')
   const out = resolve(outputDirectory)
   await mkdir(dirname(out), { recursive: true }); await mkdir(out, { mode: 0o700 }) // Fresh output required; never overwrite private artifacts.
@@ -80,7 +84,7 @@ export async function importProbeScience(captureDirectory: string, outputDirecto
   requireValue(responseBytes.length === artifact.byteCount && hash(responseBytes) === artifact.sha256, 'Derived response hash/byte mismatch')
   const full = JSON.parse(responseBytes.toString())
   requireValue(full.units === 'recorded-PCM-per-digital-drive' && full.sourceHashes.drive === native.drive.sha256 && full.sourceHashes.received === native.received.sha256, 'Full response source/units mismatch')
-  const reasons: string[] = []
+  const reasons: string[] = human ? [DECLARED_CALIBRATION_REASON] : []
   const binding = config.capture_binding
   const bound = binding && binding.manifest_sha256 === hash(originalManifest) && binding.pose === config.pose && binding.placement_id === p.placement_id && binding.route_id === cal.route_id
   if (!bound) reasons.push('Capture manifest/pose/route/placement binding missing or mismatched')
