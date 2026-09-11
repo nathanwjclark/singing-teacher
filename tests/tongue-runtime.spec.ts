@@ -133,9 +133,10 @@ test('phone snapshots keep a region box out of tongue landmarks on the real serv
  const pair=await request.post('/api/pair',{data:{}});expect(pair.status()).toBe(201);
  const {sessionId,token}=await pair.json();
  const post=(extra:Record<string,unknown>)=>request.post(`/api/pair/${sessionId}/snapshots?token=${token}`,{data:{stepId:'tongue',capturedAt:new Date().toISOString(),width:2,height:2,imageDataUrl:'data:image/png;base64,iVBORw0KGgo=',evidence:{kind:'browser-rgb-bootstrap'},...extra}});
- const region={trackingMode:'region',box:[.3,.4,.7,.8],observedAt:1200,confidence:.96};
+ const region={trackingMode:'region',box:[.3,.4,.7,1],observedAt:1200,confidence:.96};
  const refused=await post({landmarks:{face:[],pose:[],tongue:{...region,x:.5,y:.6,lateral:0,lift:0,visibleFraction:0},timestamp:1}});
- expect(refused.status()).toBe(400);expect((await refused.json()).error).toBe('A tongue region box is not a tongue landmark');
+ expect(refused.status()).toBe(400);expect((await refused.json()).error).toBe('A tongue landmark must be a tip observation; send a region box as visibleTongueRegion');
+ expect((await post({landmarks:{face:[],pose:[],tongue:{box:[.3,.4,.7,.8]},timestamp:1}})).status()).toBe(400);
  for(const invalid of [{...region,box:[.7,.4,.3,.8]},{...region,lateral:0},{...region,trackingMode:'tip'},{...region,confidence:null}])expect((await post({landmarks:{face:[],pose:[],tongue:null,timestamp:1},visibleTongueRegion:invalid})).status()).toBe(400);
  const saved=await post({landmarks:{face:[],pose:[],tongue:null,timestamp:1},visibleTongueRegion:region});
  expect(saved.status()).toBe(201);const {snapshot}=await saved.json();
