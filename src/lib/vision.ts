@@ -85,12 +85,12 @@ export async function createVisionEngine(): Promise<VisionEngine> {
           const local=trackTongue(tongueContext.getImageData(0,0,256,256).data,256,256,localFace,timestamp);
           if(local) {
             tongue={...local,x:x+local.x*width,y:y+local.y*height,tip:local.tip ? {x:x+local.tip.x*width,y:y+local.tip.y*height} : undefined,outline:local.outline?.map(p=>({x:x+p.x*width,y:y+p.y*height}))};
-            tongueStatus='Neural tongue tip · estimated 3D';
+            tongueStatus=local.trackingMode==='region'?'TongueSAM visible-region box · no tip or depth':'Neural tongue tip · estimated 3D';
           }
         } else trackTongue(new Uint8ClampedArray(0),0,0,[],timestamp);
       } else trackTongue(new Uint8ClampedArray(0),0,0,[],timestamp);
       const tongueDiagnostic=trackTongue.diagnostics();
-      if(tongueDiagnostic.state==='lost'&&tongueStatus==='Searching for visible tongue')tongueStatus='Tip lost · open Tongue lab for details';
+      if(tongueDiagnostic.state==='lost'&&tongueStatus==='Searching for visible tongue')tongueStatus=tongueDiagnostic.reason;
       return { tongue, tongueStatus, tongueSearch, tongueDiagnostic, face: landmarks, pose: cachedPose, worldPose: cachedWorldPose, faceTransform, blendshapes, timestamp, metrics: stabilizer.metrics({ mouthOpen, headTilt: tilt(landmarks[33], landmarks[263]), shoulderTilt: tilt(cachedPose[11], cachedPose[12]), brightness, motion, ...depth }, timestamp, landmarks.length > 0) };
     },
     calibrateTongue() { trackTongue.resetMotionReference(); },
@@ -137,6 +137,7 @@ export function drawTracking(context: CanvasRenderingContext2D, frame: TrackingF
   }
   if(frame.tongue) {
     context.fillStyle='#ff71aa';context.strokeStyle='#ffb3d0';context.lineWidth=2;
+    if(frame.tongue.trackingMode==='region'&&frame.tongue.outline?.length){context.beginPath();frame.tongue.outline.forEach((p,i)=>i?context.lineTo(p.x*width,p.y*height):context.moveTo(p.x*width,p.y*height));context.closePath();context.stroke();}
     for(const p of frame.tongue.outline??[]){context.beginPath();context.arc(p.x*width,p.y*height,1.6,0,Math.PI*2);context.fill();}
     if(frame.tongue.trackingMode!=='region'){
     const x=frame.tongue.x*width,y=frame.tongue.y*height;
