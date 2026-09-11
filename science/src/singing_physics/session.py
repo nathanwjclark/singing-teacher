@@ -32,70 +32,139 @@ def _id(value):
 
 
 INLINE_BYTES = 1024
+# No verifier accepts a replay above 64 MiB (app_recompute.py, recompute_session_score.evidence), so a
+# state whose canonical JSON exceeds it can be neither exported nor verified. The same bound on writes and
+# reads keeps a small crafted node set (shared references) from expanding into an unbounded state.
+MAX_STATE_BYTES = 64 * 1024 * 1024
 EVENT_KEYS = {'format','session_id','version','previous_sha256','action','received_at','details','state_root'}
+INTEGRITY_ERRORS = (KeyError, IndexError, TypeError, ValueError, AttributeError, RecursionError)
+
+
+def _put(nodes, body):
+    digest = hashlib.sha256(body.encode()).hexdigest(); nodes[digest] = body
+    return digest
 
 
 def _split(value, nodes):
-    """Canonical text of value and its child entry: None (inline ["v",value]) or a ["h",digest] reference.
+    """Child entry of value: (canonical text if inline else None, stored node digest or None, canonical length).
 
-    Builds the canonical text bottom-up in one pass; every value whose text reaches
-    INLINE_BYTES is stored once in nodes as ["v",value], ["d",{key:child}] or ["l",[child]]."""
-    if isinstance(value, dict) and any(type(key) is not str for key in value):
-        value = json.loads(canonical(value))  # The key normalization v1 storage and reload applied.
-    items = value.values() if isinstance(value, dict) else value if isinstance(value, list) else ()
-    if not any(isinstance(item, (dict, list)) for item in items):
-        text, parts = canonical(value), None
-    elif isinstance(value, dict):
-        keys = sorted(value); parts = [_split(value[key], nodes) for key in keys]
-        text = '{'+','.join(json.dumps(key)+':'+part for key, (part, _) in zip(keys, parts))+'}'
-    else:
-        parts = [_split(item, nodes) for item in value]; text = '['+','.join(part for part, _ in parts)+']'
-    if len(text) < INLINE_BYTES: return text, None
-    if parts is None or all(ref is None for _, ref in parts): body = '["v",'+text+']'
-    elif isinstance(value, dict):
-        body = '["d",{'+','.join(json.dumps(key)+':'+(ref or '["v",'+part+']') for key, (part, ref) in zip(keys, parts))+'}]'
-    else: body = '["l",['+','.join(ref or '["v",'+part+']' for part, ref in parts)+']]'
-    digest = hashlib.sha256(body.encode()).hexdigest(); nodes[digest] = body
-    return text, '["h","'+digest+'"]'
+    Iterative and bottom-up, so any depth canonical() can serialize can be stored. A value whose
+    canonical JSON reaches INLINE_BYTES is stored once in nodes as ["v",value], ["d",{key:child}] or
+    ["l",[child]]; smaller values stay inline in their parent, so no text is copied more than once per node."""
+    def leaf(text):
+        return (text, None, len(text)) if len(text) < INLINE_BYTES else (None, _put(nodes, '["v",'+text+']'), len(text))
+    def opened(value, out):
+        """A frame [keys, items, next index, parts, out] for a container holding containers; any other value is finished into out."""
+        if isinstance(value, dict) and any(type(key) is not str for key in value):
+            value = json.loads(canonical(value))  # The key normalization v1 storage and reload applied.
+        keys = sorted(value) if isinstance(value, dict) else None
+        items = [value[key] for key in keys] if keys is not None else value if isinstance(value, list) else ()
+        if any(isinstance(item, (dict, list)) for item in items): return [keys, items, 0, [], out]
+        out.append(leaf(canonical(value)))
+    top = []; frames = [frame for frame in (opened(value, top),) if frame]
+    while frames:
+        frame = frames[-1]; keys, items, index, parts, out = frame
+        while index < len(items) and not isinstance(items[index], (dict, list)):
+            parts.append(leaf(canonical(items[index]))); index += 1
+        if index < len(items):
+            frame[2] = index+1; child = opened(items[index], parts)
+            if child: frames.append(child)
+            continue
+        frames.pop()
+        labels = [json.dumps(key)+':' for key in keys] if keys is not None else ['']*len(parts)
+        opening, closing = '{}' if keys is not None else '[]'
+        length = 1+len(parts)+sum(len(label)+size for label, (_, _, size) in zip(labels, parts))
+        if length < INLINE_BYTES or all(digest is None for _, digest, _ in parts):
+            text = opening+','.join(label+part for label, (part, _, _) in zip(labels, parts))+closing
+            out.append((text, None, length) if length < INLINE_BYTES else (None, _put(nodes, '["v",'+text+']'), length))
+        else:
+            entries = ','.join(label+('["h","'+digest+'"]' if digest else '["v",'+part+']') for label, (part, digest, _) in zip(labels, parts))
+            out.append((None, _put(nodes, '["'+('d' if keys is not None else 'l')+'",'+opening+entries+closing+']'), length))
+    return top[0]
 
 
 def _root(state, nodes):
     """Digest of the state's root node, which is stored however small the state is."""
-    text, ref = _split(state, nodes)
-    if ref is not None: return json.loads(ref)[1]
-    body = '["v",'+text+']'; digest = hashlib.sha256(body.encode()).hexdigest(); nodes[digest] = body
-    return digest
+    text, digest, _ = _split(state, nodes)
+    return digest or _put(nodes, '["v",'+text+']')
+
+
+def _entries(node):
+    tag, value = node
+    return value.values() if tag == 'd' else value if tag == 'l' else ()
+
+
+def _node(body):
+    """Parsed node after checking its shape: ["v",value], ["d",{key:child}] or ["l",[child]], every child tagged."""
+    node = json.loads(body)
+    if type(node) is not list or len(node) != 2 or not (node[0] == 'v' or node[0] == 'd' and type(node[1]) is dict or node[0] == 'l' and type(node[1]) is list):
+        raise ValueError('Invalid ledger node')
+    if not all(type(c) is list and len(c) == 2 and (c[0] == 'v' or c[0] == 'h' and type(c[1]) is str) for c in _entries(node)):
+        raise ValueError('Invalid ledger node')
+    return node
+
+
+def _sizes(nodes):
+    """Canonical length of every verified node's value, each computed once, so shared references cost nothing extra."""
+    sizes = {}
+    for start in nodes:
+        work = [start]
+        while work:
+            digest = work[-1]
+            if digest in sizes: work.pop(); continue
+            node = nodes[digest]; entries = list(_entries(node))
+            waiting = [c[1] for c in entries if c[0] == 'h' and c[1] not in sizes]
+            if waiting: work.extend(waiting); continue
+            inner = sum(len(canonical(c[1])) if c[0] == 'v' else sizes[c[1]] for c in entries)
+            sizes[digest] = (len(canonical(node[1])) if node[0] == 'v' else 1+max(len(entries), 1)+inner
+                             +(sum(len(json.dumps(key))+1 for key in node[1]) if node[0] == 'd' else 0))
+            work.pop()
+    return sizes
+
+
+def _text(entry, nodes):
+    """Canonical JSON text of a child entry over verified parsed nodes, built in one pass without recursion.
+
+    A node referenced more than once below the entry is expanded once and its text reused, so the
+    work is proportional to the distinct nodes plus the output (bounded by MAX_STATE_BYTES)."""
+    references, queue = {}, [entry]
+    while queue:
+        tag, value = queue.pop()
+        if tag == 'h':
+            references[value] = references.get(value, 0)+1
+            if references[value] == 1: queue.extend(_entries(nodes[value]))
+    out, texts, work = [], {}, [entry]
+    while work:
+        item = work.pop()
+        if type(item) is str: out.append(item); continue
+        if type(item) is tuple:  # A shared node's text is complete: keep it for its other references.
+            digest, start = item; texts[digest] = ''.join(out[start:]); del out[start:]; out.append(texts[digest]); continue
+        if item[0] == 'h' and item[1] in texts: out.append(texts[item[1]]); continue
+        if item[0] == 'h' and references[item[1]] > 1: work.append((item[1], len(out)))
+        tag, value = item if item[0] == 'v' else nodes[item[1]]
+        if tag == 'v': out.append(canonical(value)); continue
+        keys = sorted(value) if tag == 'd' else range(len(value))
+        sequence = ['{' if tag == 'd' else '[']
+        for index, key in enumerate(keys): sequence += [(',' if index else '')+(json.dumps(key)+':' if tag == 'd' else ''), value[key]]
+        sequence.append('}' if tag == 'd' else ']')
+        work.extend(reversed(sequence))
+    return ''.join(out)
 
 
 def join(digest, nodes):
-    """Value of a verified stored node; parses on every visit, so shared nodes never alias."""
-    tag, value = json.loads(nodes[digest])
-    if tag == 'v': return value
-    child = lambda c: c[1] if c[0] == 'v' else join(c[1], nodes)
-    return {key: child(c) for key, c in value.items()} if tag == 'd' else [child(c) for c in value]
+    """Value of a verified stored node: its canonical text parsed once, so shared nodes never alias."""
+    return json.loads(_text(['h', digest], nodes))
 
 
 def state_field(event, nodes, key):
     """One top-level field of a verified event's state without joining the whole state."""
     if 'state' in event: return event['state'].get(key)
-    tag, value = json.loads(nodes[event['state_root']])
-    if tag == 'v': return value.get(key)
-    child = value.get(key)
-    return None if child is None else child[1] if child[0] == 'v' else join(child[1], nodes)
-
-
-def _children(body):
-    node = json.loads(body)
-    if type(node) is not list or len(node) != 2: raise ValueError('Invalid ledger node')
-    tag, value = node
-    children = value.values() if tag == 'd' and type(value) is dict else value if tag == 'l' and type(value) is list else () if tag == 'v' else None
-    if children is None or not all(type(c) is list and len(c) == 2 and (c[0] == 'v' or c[0] == 'h' and type(c[1]) is str) for c in children):
-        raise ValueError('Invalid ledger node')
-    return [c[1] for c in children if c[0] == 'h']
+    tag, value = nodes[event['state_root']]
+    return json.loads(_text(['v', value.get(key)] if tag == 'v' else value.get(key, ['v', None]), nodes))
 
 
 def _verify(session_id, rows, load_nodes):
-    """The one integrity check for stored rows and supplied replays: (state, ledger digest, events, nodes).
+    """The one integrity check for stored rows and supplied replays: (state, ledger digest, events, parsed nodes).
 
     rows are (version, canonical event body, digest). Full-state (v1) events carry their
     state; format 2 events carry the digest of their state's root node. load_nodes() yields
@@ -116,20 +185,21 @@ def _verify(session_id, rows, load_nodes):
             previous = digest; events.append({**event,'sha256':digest})
         upgraded = [event for event in events if 'format' in event]
         if upgraded:
-            references = {}
             for digest, body in load_nodes():
                 if hashlib.sha256(body.encode()).hexdigest() != digest: raise ValueError('node digest')
-                references[digest] = _children(body); nodes[digest] = body
-            reachable = set(); pending = [event['state_root'] for event in upgraded]
-            while pending:
-                digest = pending.pop()
-                if digest not in reachable: reachable.add(digest); pending.extend(references[digest])
-            if reachable != set(references): raise ValueError('unreachable node')
+                nodes[digest] = _node(body)
+            reachable = set(); queue = [event['state_root'] for event in upgraded]
+            while queue:
+                digest = queue.pop()
+                if digest not in reachable: reachable.add(digest); queue.extend(c[1] for c in _entries(nodes[digest]) if c[0] == 'h')
+            if reachable != set(nodes): raise ValueError('unreachable node')
+            # Sizes before any expansion: a root may not expand past what the writer could have stored.
+            if max(_sizes(nodes).values()) > MAX_STATE_BYTES: raise ValueError('state size')
             for event in upgraded:
                 if state_field(event, nodes, 'version') != event['version'] or state_field(event, nodes, 'session_id') != session_id: raise ValueError('root')
             state = join(upgraded[-1]['state_root'], nodes)
         elif events: state = events[-1]['state']
-    except (KeyError, IndexError, TypeError, ValueError, AttributeError, RecursionError) as exc:
+    except INTEGRITY_ERRORS as exc:
         raise RuntimeError('Session ledger integrity failure') from exc
     return state, previous, events, nodes
 
@@ -165,7 +235,7 @@ def read_ledger(root, session_id):
 
 def _response(state, digest, events, nodes):
     # Nodes appear only once a format 2 event exists, so full-state ledgers read back unchanged.
-    return {'state':state,'ledger_sha256':digest,'events':events,**({'nodes':{key:json.loads(body) for key,body in nodes.items()}} if nodes else {})}
+    return {'state':state,'ledger_sha256':digest,'events':events,**({'nodes':nodes} if nodes else {})}
 
 
 class SessionController:
@@ -209,7 +279,13 @@ class SessionController:
         # A format 2 event binds the state by its root node digest; nodes are stored once per session.
         _,previous,_,stored=self._read(db)
         state['version']+=1
-        nodes={}; root=_root(state,nodes)
+        nodes={}; root=_root(state,nodes); text=canonical(state)
+        # Prove, before anything is written, that readers rebuild exactly this state from the stored tree:
+        # a state they could not read back rolls the whole command back instead of bricking the session.
+        tree=_text(['h',root],{**stored,**{key:_node(body) for key,body in nodes.items()}})
+        if tree!=text: text=canonical(json.loads(text))  # Non-string keys sort as strings once stored, as v1 reads did.
+        if len(text)>MAX_STATE_BYTES or tree!=text: raise ValueError('Session state cannot be stored readably')
+        json.loads(text)
         db.executemany('INSERT OR IGNORE INTO nodes VALUES(?,?,?)',[(self.session_id,key,body) for key,body in nodes.items() if key not in stored])
         event={'format':2,'session_id':self.session_id,'version':state['version'],'previous_sha256':previous,'action':action,
                'received_at':_now(),'details':details,'state_root':root}

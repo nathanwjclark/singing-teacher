@@ -13,12 +13,14 @@ from pathlib import Path
 import sqlite3
 import sys
 import threading
+import time
 
 import pytest
 
 from singing_physics.http_service import ScientificHTTPServer
 from singing_physics.service import JobService, canonical
-from singing_physics.session import SessionController, _root, _split, join, read_ledger
+from singing_physics.session import MAX_STATE_BYTES, SessionController, _node, _put, _root, _sizes, _split, _verify, join, read_ledger
+from test_session import calibration, send
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]/'scripts'))
 from recompute_session_score import verify_replay
@@ -116,27 +118,33 @@ VALUES = {
     'floats': {'pcm': [1e-05, -0.0, 0.1, 1e300, -2.5e-310, 3, -7] * 200, 'scalars': [1e-05, -0.0]},
     'text': {'reports': ['Kehlkopf \u00e9 \u4e2d \U0001d11e \u2028 "quoted" \\ ' * 60, 'ascii'], 'short': '\U0001d11e'},
     'empty': {'dict': {}, 'list': [], 'rows': [{}, [], '', {'nested': []}] * 300, 'large': [[] for _ in range(600)]},
-    'keys': {'outer': {1: 'x' * 1500, 2: {3: [0.5] * 300, 4: None}}, 'flat': {7: True, 8: False}},
+    'keys': {'outer': {1: 'x' * 1500, 10: {3: [0.5] * 300, 4: None}, 2: 'y'}, 'flat': {7: True, 10: False}},
     'list_root': [{'value': 'y' * 1100}, {'value': 'y' * 1100}, 1, None],
+    'flat_root': {'only': 'z' * 2000, 'n': 1}, 'scalar_root': 'z' * 3000,
     # State content shaped like node entries stays content: every child the writer emits is tagged.
     'lookalike': {'reference': ['h', '0' * 64], 'rows': [['h', 'x' * 64], ['v', 1], ['d', {}]] * 40, 'leaf': ['l', ['h' * 1100]]},
 }
 
 
+def stored(value):
+    """Root digest and the parsed node set the writer produces for value."""
+    bodies = {}; root = _root(value, bodies)
+    assert all(sha(body.encode()) == digest for digest, body in bodies.items())
+    return root, {digest: _node(body) for digest, body in bodies.items()}
+
+
 @pytest.mark.parametrize('name', sorted(VALUES))
 def test_split_and_join_round_trip_canonical_json(name):
-    value, nodes = VALUES[name], {}
-    root = _root(value, nodes)
-    assert _split(value, {})[0] == canonical(value)
-    assert all(sha(body.encode()) == digest for digest, body in nodes.items())
-    assert canonical(join(root, nodes)) == canonical(value)
-    assert name in ('tiny', 'text') or len(nodes) > 1  # Large values really are split into several nodes.
+    value = VALUES[name]; root, nodes = stored(value)
+    # Non-string keys are stored as the strings v1 storage and reload produced (sorted as strings).
+    expected = canonical(json.loads(canonical(value)))
+    assert _split(value, {})[2] == len(expected) and canonical(join(root, nodes)) == expected
+    assert name in ('tiny', 'text', 'flat_root', 'scalar_root') or len(nodes) > 1  # Large values really are split into several nodes.
 
 
 def test_every_recorded_version_round_trips():
     for (version, body, _), expected in zip(GOLDEN['events'], GOLDEN['expected']['version_state_sha256']):
-        state, nodes = json.loads(body)['state'], {}
-        assert sha(canonical(join(_root(state, nodes), nodes)).encode()) == expected, version
+        assert sha(canonical(join(*stored(json.loads(body)['state']))).encode()) == expected, version
 
 
 def test_identical_large_values_share_one_node_and_read_back_detached(tmp_path):
@@ -163,3 +171,83 @@ def test_database_written_before_nodes_table_reads_without_changes(tmp_path):
     stored = (path/'sessions.sqlite3').read_bytes()
     assert sha(compact(read_ledger(path, GOLDEN['session_id']))) == GOLDEN['expected']['ledger_sha256_route']
     assert (path/'sessions.sqlite3').read_bytes() == stored and [p.name for p in path.iterdir()] == ['sessions.sqlite3']
+
+
+def nested(depth, leaf):
+    value = leaf
+    for _ in range(depth): value = {'k': value}
+    return value
+
+
+def events(root):
+    with sqlite3.connect(root/'sessions/sessions.sqlite3') as db: return db.execute('SELECT COUNT(*) FROM events').fetchone()[0]
+
+
+@pytest.mark.parametrize('depth', [300, 495, 500])
+def test_a_deep_command_is_stored_readably_or_rejected_with_nothing_committed(tmp_path, depth):
+    # Each level's canonical JSON exceeds the inline limit, so every level is its own stored node.
+    # 495 levels committed an event no reader could open before the tree was read without recursion.
+    objective = nested(depth, 'x'*1100)
+    with JobService(tmp_path/'jobs') as service:
+        controller = SessionController(tmp_path/'sessions', service, 'deep')
+        send(controller, 'ingest_calibration', document=calibration())
+        try:
+            controller.execute({'action': 'search', 'command_id': 'deep', 'expected_version': 1, 'parameters': {'objective': objective}})
+        except RecursionError:
+            # Command validation copies parameters recursively, as it did before format 2; nothing is written.
+            assert depth > 300 and events(tmp_path) == 1
+        else:
+            assert events(tmp_path) == 3  # The command and its dispatch.
+            state = read_ledger(tmp_path/'sessions', 'deep')['state']
+            assert (state['pending'] or state['jobs'][-1])['request']['parameters']['objective'] == objective
+            assert controller.execute({'action': 'state'})['state']['version'] == 3
+
+
+def test_writer_and_reader_agree_at_any_depth_json_can_serialize(tmp_path):
+    with JobService(tmp_path/'jobs') as service:
+        controller = SessionController(tmp_path/'sessions', service, 'deeper')
+        state = controller.execute({'action': 'state'})['state']
+        state['sensations'] = [nested(3000, 'x'*1100)]
+        with controller._db() as db: controller._append(db, state, 'deep-fixture', {})
+        assert read_ledger(tmp_path/'sessions', 'deeper')['state']['sensations'] == state['sensations']
+        # Deeper than canonical JSON can serialize: rejected before any row is written.
+        state['sensations'] = [nested(20000, 'x')]
+        with pytest.raises(RecursionError), controller._db() as db: controller._append(db, state, 'too-deep', {})
+    assert events(tmp_path) == 1
+
+
+def test_shared_references_cannot_expand_past_the_state_bound():
+    # A few kilobytes of self-consistent nodes, each listing the previous one twice.
+    bodies = {}; digest = _put(bodies, '["v",1]')
+    for _ in range(40): digest = _put(bodies, '["l",[["h","%s"],["h","%s"]]]' % (digest, digest))
+    root = _put(bodies, canonical(['d', {'session_id': ['v', 's'], 'version': ['v', 1], 'fanout': ['h', digest]}]))
+    body = canonical({'format': 2, 'session_id': 's', 'version': 1, 'previous_sha256': '0'*64, 'action': 'fanout',
+                      'received_at': '2026-01-01T00:00:00+00:00', 'details': {}, 'state_root': root})
+    started = time.perf_counter()
+    with pytest.raises(RuntimeError, match='Session ledger integrity failure') as failure:
+        _verify('s', [(1, body, sha(body.encode()))], bodies.items)
+    assert str(failure.value.__cause__) == 'state size' and time.perf_counter()-started < 1
+    # Below the bound the same shape expands once per distinct node, not once per path.
+    assert _sizes({key: _node(value) for key, value in bodies.items()})[root] > MAX_STATE_BYTES
+
+
+def test_a_state_readers_would_refuse_is_never_committed(tmp_path, monkeypatch):
+    import singing_physics.session as session
+    monkeypatch.setattr(session, 'MAX_STATE_BYTES', 20_000)  # The 64 MiB bound, scaled down to keep the test small.
+    with JobService(tmp_path/'jobs') as service:
+        controller = SessionController(tmp_path/'sessions', service, 'bounded')
+        state = controller.execute({'action': 'state'})['state']
+        state['sensations'] = ['x'*5000]
+        with controller._db() as db: controller._append(db, state, 'fits', {})
+        state['sensations'] = ['x'*5000]*5
+        with pytest.raises(ValueError, match='cannot be stored readably'), controller._db() as db: controller._append(db, state, 'too-large', {})
+        assert events(tmp_path) == 1 and read_ledger(tmp_path/'sessions', 'bounded')['state']['version'] == 1
+
+
+def test_non_string_keys_are_stored_as_v1_read_them_back(tmp_path):
+    with JobService(tmp_path/'jobs') as service:
+        controller = SessionController(tmp_path/'sessions', service, 'keys')
+        state = controller.execute({'action': 'state'})['state']
+        state['sensations'] = [{2: 'a', 10: 'b' * 1100}]
+        with controller._db() as db: controller._append(db, state, 'integer-keys', {})
+        assert read_ledger(tmp_path/'sessions', 'keys')['state']['sensations'] == [{'2': 'a', '10': 'b' * 1100}]

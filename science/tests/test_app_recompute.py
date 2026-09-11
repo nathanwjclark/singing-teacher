@@ -12,7 +12,7 @@ from singing_physics.pcm_design import freeze_pcm_hypotheses
 from singing_physics.pcm_inverse import FEATURES
 from singing_physics.pcm_spectral import SPECTRAL_OBJECTIVE
 from singing_physics.prediction import Artifact, _encode
-from singing_physics.service import JobService, canonical
+from singing_physics.service import JobService
 from singing_physics.session import SessionController, _root, join
 from test_session import send, collect
 from science.scripts.app_recompute import recompute_session, source_score, visual_score
@@ -84,8 +84,7 @@ def updates(replay):
 
 def reroot(replay):
     """Store the edited final state as the last event's state, rebuilding the node set from every version."""
-    stored = {key: canonical(node) for key, node in replay['nodes'].items()}
-    states = [join(event['state_root'], stored) for event in replay['events']]
+    states = [join(event['state_root'], replay['nodes']) for event in replay['events']]
     states[-1] = replay['state']; nodes = {}
     for event, state in zip(replay['events'], states): event['state_root'] = _root(state, nodes)
     replay['nodes'] = {key: json.loads(body) for key, body in nodes.items()}
