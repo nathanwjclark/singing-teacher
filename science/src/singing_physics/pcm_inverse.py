@@ -17,7 +17,7 @@ import scipy
 from scipy.signal import resample_poly
 
 from .engine import Engine, finite
-from .pcm_spectral import COARSE_OBJECTIVE, SPECTRAL_OBJECTIVE, objective_policy, extract_spectral, validate_observation, discrepancy
+from .pcm_spectral import COARSE_OBJECTIVE, OPTIONAL_TRIAL_FIELDS, SPECTRAL_OBJECTIVE, objective_policy, extract_spectral, validate_observation, discrepancy
 
 ROOT = Path(__file__).resolve().parents[3]
 BRIDGE = ROOT/'science/scripts/extract_pcm.ts'
@@ -111,7 +111,7 @@ def fit_pcm(engine: Engine, document, *, candidates, max_synthesis_calls=128, no
     before independently extracting/scoring held-out evidence.
     """
     document, candidates = deepcopy(document), deepcopy(candidates)
-    scoring_policy = objective_policy(objective)
+    policy = objective_policy(objective)
     if not isinstance(document, dict) or set(document) != {'schema_version', 'kind', 'trials'} or document.get('schema_version') != '0.1.0' or document.get('kind') != 'canonical_pcm_observations':
         raise ValueError('Unsupported PCM observation document')
     trials = document['trials']
@@ -126,7 +126,7 @@ def fit_pcm(engine: Engine, document, *, candidates, max_synthesis_calls=128, no
         raise ValueError('Predeclared candidates exceed equal-model synthesis budget')
     ids, evidence_ids, targets = [], [], {}
     for trial in trials:
-        if not isinstance(trial, dict) or set(trial)-{'spectral_observation'} != {'id', 'pose', 'measurement', 'sample_rate_hz', 'frame_start_sample', 'frame_size', 'duration_s'}:
+        if not isinstance(trial, dict) or set(trial)-OPTIONAL_TRIAL_FIELDS != {'id', 'pose', 'measurement', 'sample_rate_hz', 'frame_start_sample', 'frame_size', 'duration_s'}:
             raise ValueError('Invalid PCM trial fields')
         if not isinstance(trial['id'], str) or not trial['id'].strip() or trial['pose'] not in engine.poses:
             raise ValueError('Invalid trial ID or pose')
@@ -159,6 +159,8 @@ def fit_pcm(engine: Engine, document, *, candidates, max_synthesis_calls=128, no
         interval_keys = {('hash', digest, window['startMs'], window['endMs'])
                          for digest in record['provenance']['sourceHashes']}
         interval_keys.add(('artifact', record['artifactId'], window['startMs'], window['endMs']))
+        if 'frame_sha256' in trial:
+            interval_keys.add(('frame', trial['frame_sha256']))
         if intervals.intersection(interval_keys):
             raise ValueError('Duplicate source audio interval')
         intervals.update(interval_keys)
@@ -256,7 +258,7 @@ def fit_pcm(engine: Engine, document, *, candidates, max_synthesis_calls=128, no
         'evidence_ids': evidence_ids, 'actual_synthesis_calls': calls, 'max_synthesis_calls': max_synthesis_calls,
         'canonical_extractor': extractor, 'native_provenance': dict(engine.provenance),
         'feature_scales': {k: {'unit': unit, 'scale': scale} for k, (unit, scale) in FEATURES.items()},
-        'objective':objective, 'scoring_policy':scoring_policy,
+        'objective':objective, 'objective_policy':policy,
         'objective_interpretation': 'bounded spectral shape/level/pitch/periodicity discrepancy, not calibrated likelihood' if objective == SPECTRAL_OBJECTIVE else 'weighted coarse-descriptor discrepancy, not calibrated likelihood',
         'identifiability': 'not_established', 'human_interpretation': 'conditional_physiological_hypotheses_only',
         'unsupported': ['unknown_room_filter', 'unknown_microphone_response', 'physiology_identification', 'calibrated_posterior'],

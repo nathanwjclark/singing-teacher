@@ -1,7 +1,6 @@
 """Versioned finite-frame spectral discrepancy; not an anatomical likelihood."""
 from copy import deepcopy
 import hashlib
-import json
 from pathlib import Path
 import re
 
@@ -27,9 +26,17 @@ CONFIG = {
 }
 
 
+# Pinned once, when the process imports this module, so the pin names the code the
+# process executes. Editing this file on disk does not change a running process;
+# restart the worker to upgrade. The restarted process then produces a different pin,
+# and spectral observations or forecasts frozen by the older code are rejected.
+_POLICY = {'config': deepcopy(CONFIG), 'implementation_sha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+           'numpy_version': np.__version__}
+OPTIONAL_TRIAL_FIELDS = frozenset({'spectral_observation', 'frame_sha256'})
+
+
 def policy():
-    return {'config': deepcopy(CONFIG), 'implementation_sha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
-            'numpy_version': np.__version__}
+    return deepcopy(_POLICY)
 
 
 def objective_policy(objective):
@@ -112,12 +119,24 @@ def validate_spectral(value, *, sample_rate_hz=None, frame_size=None):
 
 
 def validate_observation(trial):
-    """Bind derived spectral fields to the canonical trial and original artifact."""
-    if 'spectral_observation' not in trial:
+    """Bind an optional spectral observation to its canonical trial by exact frame hash.
+
+    `frame_sha256` is the SHA-256 of the exact little-endian float32 frame. It is a
+    dedicated field: the measurement's `sourceHashes` name whole source artifacts and
+    never stand in for it. Without the original bytes this checks consistency only;
+    fitters keep reporting `source_artifact_bytes_verified: false`.
+    """
+    present = OPTIONAL_TRIAL_FIELDS & set(trial)
+    if not present:
         return
+    if present != OPTIONAL_TRIAL_FIELDS:
+        raise ValueError('Spectral observations and frame_sha256 must be supplied together')
     value = validate_spectral(trial['spectral_observation'], sample_rate_hz=trial['sample_rate_hz'], frame_size=trial['frame_size'])
+    frame = trial['frame_sha256']
+    if not isinstance(frame, str) or re.fullmatch('[a-f0-9]{64}', frame) is None:
+        raise ValueError('Invalid exact frame SHA-256')
     measurement = trial['measurement']
-    if value['frame_start_sample'] != trial['frame_start_sample'] or value['frame_sha256'] not in measurement['provenance']['sourceHashes']:
+    if value['frame_start_sample'] != trial['frame_start_sample'] or value['frame_sha256'] != frame:
         raise ValueError('Spectral frame hash/offset is not bound to the canonical observation')
     if value['source_artifact_id'] != measurement['artifactId'] or value['source_artifact_hashes'] != measurement['provenance']['sourceHashes']:
         raise ValueError('Spectral source differs from canonical observation source')

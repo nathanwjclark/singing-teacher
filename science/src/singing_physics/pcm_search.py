@@ -40,7 +40,7 @@ def search_pcm(engine: Engine, document, *, anatomy_bounds, nuisance_profiles,
         raise ValueError("max_synthesis_calls must be an integer in 1-4096")
     if type(rounds) is not int or not 1 <= rounds <= 8 or type(seed) is not int or not 0 <= seed < 2**32:
         raise ValueError("rounds must be 1-8 and seed an unsigned 32-bit integer")
-    scoring_policy = objective_policy(objective)
+    policy = objective_policy(objective)
     doc, profiles = deepcopy(document), deepcopy(nuisance_profiles)
     if not isinstance(doc, dict) or set(doc) != {"schema_version", "kind", "trials"} or doc.get("schema_version") != "0.1.0" or doc.get("kind") != "canonical_pcm_observations":
         raise ValueError("Only canonical PCM calibration observations are accepted; held-out records must stay separate")
@@ -150,7 +150,7 @@ def search_pcm(engine: Engine, document, *, anatomy_bounds, nuisance_profiles,
                         raise RuntimeError("Native call accounting mismatch")
                     if result["native_provenance"] != native_provenance:
                         raise RuntimeError("Native provenance changed during search")
-                    signature = _hash({"canonical": result["canonical_extractor"], "native": result["native_provenance"], "objective":result["scoring_policy"]})
+                    signature = _hash({"canonical": result["canonical_extractor"], "native": result["native_provenance"], "objective": result["objective_policy"]})
                     if operator_signature is not None and signature != operator_signature:
                         raise RuntimeError("Scientific operator changed between search batches")
                     operator_signature, canonical = signature, result["canonical_extractor"]
@@ -210,7 +210,7 @@ def search_pcm(engine: Engine, document, *, anatomy_bounds, nuisance_profiles,
         "evidence_ids": [trial["measurement"]["id"] for trial in trials],
         "identifiability": "not_established", "evaluated_ranges_are_posterior": False,
         "finite_search_support_only": True,
-        "objective":objective, "scoring_policy":scoring_policy,
+        "objective": objective, "objective_policy": policy,
         "objective_interpretation": "Versioned finite-candidate discrepancy; not calibrated likelihood",
         "baseline_interpretation": "same finite nuisance support; repeated baseline calls add no unique exploration",
         "unsupported": ["physiology_identification", "calibrated_posterior", "unknown_room_filter", "unknown_microphone_response"],

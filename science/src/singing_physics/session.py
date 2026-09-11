@@ -13,6 +13,7 @@ from .service import canonical
 from .prediction import Artifact, _encode, _timestamp
 from .pcm_design import _snapshot, SCHEMA, select_pcm_experiment
 from .pcm_inverse import _bridge, _features
+from .pcm_spectral import OPTIONAL_TRIAL_FIELDS, validate_observation
 from .engine import ANATOMY, finite
 
 
@@ -180,7 +181,7 @@ class SessionController:
                 raise ValueError('Unsupported calibration document')
             ids=set()
             for trial in doc['trials']:
-                if not isinstance(trial,dict) or set(trial)-{'spectral_observation'}!={'id','pose','measurement','sample_rate_hz','frame_start_sample','frame_size','duration_s'}:
+                if not isinstance(trial,dict) or set(trial)-OPTIONAL_TRIAL_FIELDS!={'id','pose','measurement','sample_rate_hz','frame_start_sample','frame_size','duration_s'}:
                     raise ValueError('Invalid calibration trial')
                 _id(trial['id']); _id(trial['pose'])
                 if trial['id'] in ids: raise ValueError('Duplicate calibration trial')
@@ -190,9 +191,9 @@ class SessionController:
                 if type(rate) is not int or rate not in (44100,48000,96000) or type(start) is not int or start<0 or type(size) is not int or not 256<=size<=32768 or not .1<=duration<=5 or start+size>round(duration*rate):
                     raise ValueError('Unsupported canonical rate, duration or frame bounds')
                 _features(trial['measurement'])
-                if 'spectral_observation' in trial:
-                    from .pcm_spectral import validate_observation
-                    validate_observation(trial)
+                # Consistency only: the session holds no original bytes, so fits keep
+                # reporting source_artifact_bytes_verified: false.
+                validate_observation(trial)
             profiles=_bridge({'operation':'validate','records':[t['measurement'] for t in doc['trials']],
                 'sampleRates':sorted({t['sample_rate_hz'] for t in doc['trials']})},None)
             sizes={p['sampleRate']:p['frameSize'] for p in profiles['audioProfiles']}
