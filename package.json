@@ -8,7 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "test": "node --experimental-strip-types --test --test-timeout=120000 \"src/**/*.test.ts\" \"src/**/*.test.mjs\" \"server/**/*.test.mjs\" \"scripts/**/*.test.ts\" \"science/scripts/**/*.test.ts\"",
+    "test": "node --experimental-strip-types --test --test-timeout=120000 \"src/**/*.test.ts\" \"src/**/*.test.mjs\" \"server/**/*.test.mjs\" \"scripts/**/*.test.ts\" \"scripts/**/*.test.mjs\" \"science/scripts/**/*.test.ts\"",
     "test:e2e": "playwright test",
     "local": "node server/local.mjs",
     "science:local": "node scripts/start-science-local.mjs",
