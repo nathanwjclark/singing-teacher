@@ -6,7 +6,7 @@ import subprocess
 import zipfile
 from pathlib import Path
 import pytest
-from science.scripts.prepare_probe_capture import prepare
+from science.scripts.prepare_probe_capture import FILES_MESSAGE, prepare, run_importer
 
 ROOT=Path(__file__).resolve().parents[2]
 # Generated archives say so in their pull receipt; the app's own pulls record devicectl instead.
@@ -215,3 +215,14 @@ def test_fit_refuses_a_pulled_import_whose_receipt_was_lost_or_edited(tmp_path,c
             run_probe_fit.run(root,'imported','any-model',root/'probe-fits'/'fit')
     finally:
         shutil.rmtree(fixture['root'])
+
+
+def test_importer_file_errors_carry_no_private_path(tmp_path):
+    # A missing capture folder: Node's ENOENT message names the absolute path, so the app gets the generic reason.
+    with pytest.raises(ValueError) as refused:
+        run_importer('scripts/import-acoustic-probe.ts',tmp_path/'missing-capture',tmp_path/'review')
+    assert str(refused.value)==FILES_MESSAGE and '/' not in str(refused.value) and str(tmp_path) not in str(refused.value)
+    # An importer refusal without a path keeps its own reason.
+    archive_fixture(tmp_path)
+    with pytest.raises(ValueError,match='^Unsafe artifact path$'):
+        run_importer('scripts/import-acoustic-probe.ts',tmp_path/'capture',tmp_path/'review','..')

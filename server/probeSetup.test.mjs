@@ -8,6 +8,7 @@ import {tmpdir} from 'node:os';
 import {createProbeRoutes} from './probe.mjs';
 import {createProbeSetupFixture,devicectlAcquisition} from '../tests/helpers/probe-setup-fixture.mjs';
 import {DECLARED_CALIBRATION_REASON} from '../science/scripts/import_probe_science.ts';
+import {FILES_MESSAGE,pageSafe} from './probeSetup.mjs';
 
 async function poll(call){
  for(let i=0;i<200;i++){
@@ -137,4 +138,28 @@ test('a repository-fixture receipt on a human-labelled capture refuses the impor
  assert.equal(status.import,null);assert.equal(status.setup.capture,null);
  assert.equal(status.error,'ValueError: Repository-fixture pull receipt contradicts the capture manifest: only a marked software fixture without iPhone recorder fields may carry one');
  assert.deepEqual(await setups(),[]);
+});
+
+test('importer file errors reach the page without a private path',async t=>{
+ const {fixture,call}=await serve(t);
+ assert.equal((await call('import',{requestId:'import-first'})).status,202);
+ let status=await poll(call);const review=join(fixture.dataRoot,'probe-imports',status.import.importId);
+ // Setup verification with its pull receipt gone: the importer's ENOENT names the data folder.
+ const receipt=await readFile(join(review,'usb-receipt.json'));await rm(join(review,'usb-receipt.json'));
+ const refused=await call('setup',{...fixture.request,importId:status.import.importId});
+ assert.equal(refused.status,400);assert.equal(refused.body.error,`Canonical probe verification failed: ${FILES_MESSAGE}`);
+ await writeFile(join(review,'usb-receipt.json'),receipt);
+ assert.equal((await call('setup',{...fixture.request,importId:status.import.importId})).status,200);
+ assert.equal((await call('import',{requestId:'import-calibrated'})).status,202);
+ status=await poll(call);assert.equal(status.import.eligible,true);
+ // The reviewer's path: a fit whose re-import finds original.zip deleted, read back through /api/probe/status.
+ await writeFile(join(fixture.dataRoot,'science-current.json'),JSON.stringify({status:'succeeded',runId:'voice'}));
+ await mkdir(join(fixture.dataRoot,'science-runs','voice'),{recursive:true});await writeFile(join(fixture.dataRoot,'science-runs','voice','summary.json'),JSON.stringify({sessionId:'probe-runner'}));
+ await rm(join(fixture.dataRoot,'probe-imports',status.import.importId,'original.zip'));
+ assert.equal((await call('fit',{requestId:'fit-one',importId:status.import.importId,expectedModelId:'any-model'})).status,202);
+ status=await poll(call);
+ assert.equal(status.error,`ValueError: ${FILES_MESSAGE}`);
+ // Python's own file errors and path-free Node system errors are replaced too; ordinary reasons pass through.
+ for(const line of ["FileNotFoundError: [Errno 2] No such file or directory: '/x/science-current.json'",'ValueError: EISDIR: illegal operation on a directory, read','ValueError: see file:///x/y.ts'])assert.equal(pageSafe(line),FILES_MESSAGE,line);
+ assert.equal(pageSafe('ValueError: Original capture changed or hash/byte mismatch'),'ValueError: Original capture changed or hash/byte mismatch');assert.equal(status.error.includes('/'),false);assert.equal(status.error.includes(fixture.dataRoot),false);
 });

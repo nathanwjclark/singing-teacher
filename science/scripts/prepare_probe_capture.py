@@ -24,13 +24,20 @@ def write(path, value):
         os.unlink(pending)
 
 
+FILES_MESSAGE = 'The probe importer could not read or write its files; original artifacts were retained.'
+
+
 def run_importer(script, *args):
-    """Run a Node importer. Its refusal reaches the app as a ValueError carrying the importer's own message."""
+    """Run a Node importer. Its refusal reaches the app as a ValueError carrying the importer's own message, unless that
+    message is a Node system error or names an absolute path: those would show a private path (and the macOS user name)
+    on the page, so they are replaced whole. server/probeSetup.mjs pageSafe applies the same rule."""
     done = subprocess.run(['node', '--experimental-strip-types', str(ROOT/script), *map(str, args)],
                           stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
     if done.returncode:
-        raise ValueError(next((line[len('Error: '):] for line in reversed(done.stderr.splitlines()) if line.startswith('Error: ')),
-                              'The probe importer stopped without a reason; original artifacts were retained.'))
+        message = next((line[len('Error: '):] for line in reversed(done.stderr.splitlines()) if line.startswith('Error: ')),
+                       'The probe importer stopped without a reason; original artifacts were retained.')
+        private = re.match(r'E[A-Z0-9]+: ', message) or re.search(r'''(?:^|[\s'"(\[=:])/''', message)
+        raise ValueError(FILES_MESSAGE if private else message)
 
 
 def prepare(data_root, output):

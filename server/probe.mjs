@@ -3,7 +3,7 @@ import {promisify} from 'node:util';
 import {readFile,writeFile,mkdir,rename,access} from 'node:fs/promises';
 import {join} from 'node:path';
 import {randomUUID} from 'node:crypto';
-import {probeSetupStatus,saveProbeSetup} from './probeSetup.mjs';
+import {probeSetupStatus,saveProbeSetup,pageSafe} from './probeSetup.mjs';
 const execute=promisify(execFile);
 const id=/^[A-Za-z0-9_-]{1,100}$/;
 async function read(path){try{return JSON.parse(await readFile(path,'utf8'));}catch(error){if(error.code==='ENOENT')return null;throw error;}}
@@ -19,7 +19,7 @@ export function createProbeRoutes({repo,dataRoot,json,runProcess=execute}) {
   const args=[join(repo,'science/scripts',fitting?'run_probe_fit.py':'prepare_probe_capture.py'),'--data-root',dataRoot,'--output',folder];
   if(fitting)args.push('--import-id',next.importId,'--expected-model-id',next.expectedModelId);
   void runProcess(python,args,{cwd:repo,env:{...process.env,PYTHONPATH:[repo,join(repo,'science/src')].join(':')},timeout:240000,maxBuffer:65536})
-   .catch(async error=>{const safe=(error.stderr??'').split('\n').filter(x=>/^(ValueError|FileNotFoundError):/.test(x)).at(-1);next.error=safe??'Probe processing paused. Retry in the app to recover the recorded job; original artifacts were retained.';await save(next);})
+   .catch(async error=>{const line=(error.stderr??'').split('\n').filter(x=>/^(ValueError|FileNotFoundError):/.test(x)).at(-1);next.error=line?pageSafe(line):'Probe processing paused. Retry in the app to recover the recorded job; original artifacts were retained.';await save(next);})
    .finally(async()=>{next.running=false;await save(next);busy=false;}).catch(()=>{busy=false;});
  }
  async function model(){

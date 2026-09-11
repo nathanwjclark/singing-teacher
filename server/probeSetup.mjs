@@ -8,6 +8,10 @@ const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
 const safeId=value=>typeof value==='string'&&/^[A-Za-z0-9_-]{1,100}$/.test(value);
 const finite=value=>typeof value==='number'&&Number.isFinite(value);
 const requireValue=(value,message)=>{if(!value)throw Error(message);};
+// A Node system error (ENOENT, EACCES, ...) or any message naming an absolute path would put a private path, and with
+// it the macOS user name, on the page; such a message is replaced whole. The same rule is in prepare_probe_capture.py.
+export const FILES_MESSAGE='The probe importer could not read or write its files; original artifacts were retained.';
+export const pageSafe=message=>/^(?:\w*Error: )?E[A-Z0-9]+: /.test(message)||/(?:^|[\s'"([=:])\//.test(message)?FILES_MESSAGE:message;
 const limits={JA:[-5,-1],gain:[.01,100],direct_gain:[0,2],coupling_gain:[0,2],delay_s:[-.01,.01]};
 async function bytes(path,limit=2*1024*1024){
  const file=await open(path,constants.O_RDONLY|constants.O_NOFOLLOW);
@@ -115,7 +119,7 @@ export async function saveProbeSetup({repo,dataRoot,body,runProcess}){
   return receipt;
  }catch(error){
   await rm(staging,{recursive:true,force:true});
-  if(!error.stderr)throw error;
-  throw Error(`Canonical probe verification failed: ${/^Error: (.+)$/m.exec(error.stderr)?.[1]??'check calibration arrays, route, source evidence and native capture bindings.'}`);
+  if(!error.stderr)throw error.syscall?Error(FILES_MESSAGE):error;
+  throw Error(`Canonical probe verification failed: ${pageSafe(/^Error: (.+)$/m.exec(error.stderr)?.[1]??'check calibration arrays, route, source evidence and native capture bindings.')}`);
  }
 }
