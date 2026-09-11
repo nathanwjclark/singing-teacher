@@ -245,24 +245,35 @@ export function createSessionExportRoutes({dataRoot, json, fetchImpl = fetch, en
       }
       const boundControl = new Set();
       for (const attemptId of await folders(prefix + '/control-attempts')) {
-        const source = `${prefix}/control-attempts/${attemptId}/result.json`;
+        const folder = `${prefix}/control-attempts/${attemptId}`, source = folder + '/result.json';
         if (artifacts.length >= MAX_FILES) { missing.push({source, reason: 'Artifact count limit reached'}); break; }
+        let artifact;
+        try { artifact = await read(source); }
+        catch (error) {
+          if (error.code !== 'ENOENT') { missing.push({source, reason: 'Cue-execution receipt is unreadable or exceeds the export size; excluded'}); continue; }
+          // A refusal before any session command (no intent) changed nothing; an attempt that
+          // reached the session but saved no receipt is recorded as missing.
+          try { await read(folder + '/intent.json'); missing.push({source, reason: 'Not recorded'}); }
+          catch (intent) { if (intent.code !== 'ENOENT') missing.push({source, reason: 'Not recorded'}); }
+          continue;
+        }
         try {
-          const artifact = await read(source), result = artifact.data;
+          const result = artifact.data;
           if (result.sessionId !== sessionId) continue;
-          const forecast = state?.control_forecasts?.[result.forecastId];
-          const receipt = result.phase === 'score' ? state?.control_receipts?.find(row => row.operation === 'score_control_pcm' && row.job_id === result.jobId)
-            : result.phase === 'stop' ? state?.control_receipts?.find(row => row.operation === 'record_control_attempt' && row.forecast_id === result.forecastId) : null;
-          const bound = result.phase === 'forecast' ? isDeepStrictEqual(forecast?.artifact, result.result)
-            : result.phase === 'score' ? Boolean(receipt) && isDeepStrictEqual(receipt.result, result.result) && receipt.forecast_id === result.forecastId && receipt.status === result.status
-            : result.phase === 'stop' && Boolean(receipt) && receipt.status === result.status && receipt.reason === result.reason;
+          const forecast = state?.control_forecasts?.[result.forecastId], binding = state?.control_bindings?.[result.bindingId];
+          const operation = {forecast: 'forecast_control_pcm', score: 'score_control_pcm', stop: 'record_control_attempt'}[result.phase];
+          const receipt = state?.control_receipts?.find(row => row.operation === operation && row.forecast_id === result.forecastId && (result.phase === 'stop' || row.job_id === result.jobId));
+          // A committed forecast binds to its sealed artifact; a rejected or failed one binds to its ledger receipt by job.
+          const bound = Boolean(receipt) && receipt.status === result.status && receipt.binding_id === result.bindingId
+            && (result.phase === 'forecast' ? (result.result ? isDeepStrictEqual(forecast?.artifact, result.result) : !receipt.forecast_sha256)
+              : result.phase === 'score' ? isDeepStrictEqual(receipt.result, result.result ?? null) : receipt.reason === result.reason);
           const identity = result.phase + ':' + (result.jobId || result.forecastId);
-          if (!bound || !forecast || boundControl.has(identity) || forecast.binding_id !== result.bindingId || result.deliveredCue !== forecast.artifact.artifact.cue.wording
+          if (!bound || !binding || boundControl.has(identity) || result.deliveredCue !== binding.cue.wording
             || result.modelUpdated !== false || !knownModels.has(result.baselineModelId)) throw Error('Unbound or duplicate cue-execution receipt');
           let originalBytesVerified = false;
           if (result.phase === 'score' && result.result) {
             // The retained original manifest and every audio file it lists must hash to values the scored receipt carries.
-            const directory = `${prefix}/control-attempts/${attemptId}/original`, hashes = result.result.artifact.observation_hashes;
+            const directory = folder + '/original', hashes = result.result.artifact.observation_hashes;
             const manifest = await read(`${directory}/manifest.json`), samples = manifest.data.audio?.samples || [];
             if (manifest.sha256 !== result.source_manifest_sha256 || !hashes.includes(manifest.sha256) || !samples.length) throw Error('Changed original control capture');
             for (const sample of samples) {
