@@ -1,0 +1,48 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {benchmark,overlap} from './tongue-benchmark.mjs';
+import {selectTongueRegion} from '../src/lib/tongueRegion.ts';
+import {observationInFrame} from '../src/lib/tongueTracking.ts';
+import {reviewPrediction} from '../src/lib/tongueReview.ts';
+const square=[{x:.1,y:.1},{x:.9,y:.1},{x:.9,y:.9},{x:.1,y:.9}];
+const review={schema:'tongue-tip-review/v1',cropPixels:{width:480,height:384},samples:[
+ {image:'data:image/png;base64,YQ==',label:{x:.5,y:.5},surface:square},
+ {image:'data:image/png;base64,Yg==',label:null,surface:square},
+ {image:'data:image/png;base64,Yw==',label:null,surface:null}]};
+test('tip occlusion does not erase visible surface; misses remain in coverage and IoU',()=>{
+ const p={schema:'tongue-predictions/v1',reviewSha256:'abc',modelId:'test',samples:[{index:1,tip:{x:.5,y:.5},surface:square}]};
+ const r=benchmark(review,p,'abc');assert.equal(r.tip.coverage,0);assert.equal(r.tip.falseDetectionsOnHidden,1);assert.equal(r.tip.meanErrorOnDetectionsPixels,null);assert.equal(r.surface.meanIoUIncludingMisses,.5);assert.equal(r.surface.detected,1);
+});
+test('absent segmentation stays unavailable, never a successful zero or perfect overlap',()=>{
+ const r=benchmark(review,undefined,'abc');assert.equal(r.surface.available,false);assert.equal(r.surface.meanIoUIncludingMisses,null);assert.equal(overlap(square,square),1);assert.equal(overlap(square,null),0);
+});
+test('rejects cross-recording, duplicate, out-of-range and wrong-image predictions',()=>{
+ const p={schema:'tongue-predictions/v1',reviewSha256:'abc',modelId:'test',samples:[]};
+ assert.throws(()=>benchmark(review,p,'wrong'));
+ for(const samples of [[{index:0},{index:0}],[{index:5}],[{index:0,tip:{x:2,y:0}}],[{index:0,imageSha256:'wrong'}]])assert.throws(()=>benchmark(review,{...p,samples},'abc'));
+});
+
+test('recorded boxes can be evaluated independently without becoming tips or surface masks',()=>{
+ const r=benchmark({...review,samples:review.samples.map((s,i)=>({...s,regionPrediction:i===1?[.1,.1,.9,.9]:null}))},undefined,'abc');
+ assert.equal(r.region.available,true);assert.equal(r.region.meanBoxIoUIncludingMisses,.5);assert.equal(r.region.detected,1);assert.equal(r.surface.available,false);assert.equal(r.tip.detected,0);
+});
+test('invalid region boxes are rejected and missing box capability is unavailable',()=>{
+ assert.equal(benchmark(review,undefined,'abc').region.meanBoxIoUIncludingMisses,null);
+ assert.throws(()=>benchmark({...review,samples:[{...review.samples[0],regionPrediction:[.9,.1,.2,.8]}]},undefined,'abc'));
+});
+test('recorded frames without a current region result are unobserved, not misses; prediction files keep omitted rows as misses',()=>{
+ const recorded=benchmark({...review,samples:review.samples.map((s,i)=>i===0?s:{...s,regionPrediction:i===1?[.1,.1,.9,.9]:null})},undefined,'abc');
+ assert.equal(recorded.region.meanBoxIoUIncludingMisses,1);assert.equal(recorded.region.detected,1);assert.equal(recorded.region.reviewedFramesWithoutObservation,1);assert.equal(recorded.region.visibleSurfaceReferences,1);assert.equal(recorded.region.absentSurfaceReferences,1);assert.equal(recorded.rows[0].regionBoxIoU,undefined);
+ const predicted=benchmark(review,{schema:'tongue-predictions/v1',reviewSha256:'abc',modelId:'test',samples:[{index:1,region:[.1,.1,.9,.9]}]},'abc');
+ assert.equal(predicted.region.meanBoxIoUIncludingMisses,.5);assert.equal(predicted.region.reviewedFramesWithoutObservation,0);assert.equal(predicted.region.visibleSurfaceReferences,2);
+ assert.equal(benchmark(review,undefined,'abc').region.reviewedFramesWithoutObservation,null);
+});
+test('an edge box survives detector → frame → review → benchmark without leaving [0,1]',()=>{
+ // Reported repro: a box past the crop bottom made benchmark() throw "Invalid recorded region at 0".
+ const local=selectTongueRegion([.3,.4,.8,1.07,.95],.7).box,crop={x:.31,y:.47,width:.37,height:.3};
+ const tongue=observationInFrame({trackingMode:'region',box:local,observedAt:1,confidence:.95},crop);
+ const r=reviewPrediction({tongue},crop);
+ assert.ok(r.regionPrediction.every(v=>v>=0&&v<=1));
+ const report=benchmark({schema:'tongue-tip-review/v1',cropPixels:{width:480,height:384},samples:[{image:'data:image/png;base64,YQ==',label:null,surface:[{x:.3,y:.4},{x:.8,y:.4},{x:.8,y:1},{x:.3,y:1}],...r}]},undefined,'x');
+ assert.ok(Math.abs(report.region.meanBoxIoUIncludingMisses-1)<1e-9);
+});

@@ -13,7 +13,7 @@ export function SideAnatomyPanel({ motion }: Props) {
     let request = 0;
     const draw = () => {
       const state = motion.current;
-      if (status.current) status.current.textContent = state.demo ? 'DEMO MOTION' : state.tongue.visible ? 'NEURAL TIP · DEPTH ESTIMATED' : state.frame ? 'SHARED CAMERA MOTION' : 'REFERENCE · WAITING FOR CAMERA';
+      if (status.current) status.current.textContent = state.demo ? 'DEMO MOTION' : state.tongue.visible ? 'NEURAL TIP · DEPTH ESTIMATED' : state.frame?.tongue?.trackingMode === 'region' ? 'TONGUE REGION ONLY · SHAPE NOT DRIVEN' : state.frame ? 'SHARED CAMERA MOTION' : 'REFERENCE · WAITING FOR CAMERA';
       request = requestAnimationFrame(draw);
     };
     draw();

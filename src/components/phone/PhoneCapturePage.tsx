@@ -10,7 +10,7 @@ const steps = [
   { id: 'profile-left', title: 'Turn gently to one side', instruction: 'Slowly turn your head about 45 degrees. Keep your face in the frame so your cheek and jawline stay visible.' },
   { id: 'profile-right', title: 'Turn to the other side', instruction: 'Turn about 45 degrees the other way. Keep the phone still and let the tracking overlay settle.' },
   { id: 'mouth', title: 'Show the inside of your mouth', instruction: 'Face forward, move a little closer and comfortably open your mouth. Use bright light from in front of you. Do not strain.' },
-  { id: 'tongue', title: 'Show your tongue', instruction: 'With your mouth open, gently extend your tongue. Keep the tip visible. The pink outline shows the visible tongue estimate.' },
+  { id: 'tongue', title: 'Show your tongue', instruction: 'With your mouth open, gently extend your tongue. Keep the tip visible. A pink box marks the visible tongue region when one is found.' },
 ];
 
 export default function PhoneCapturePage() {
@@ -70,10 +70,13 @@ export default function PhoneCapturePage() {
   const save = async () => {
     if (!preview || !step) return;
     setSaving(true);
+    const tongue = preview.frame?.tongue;
     try {
       await phoneRequest(session, '/snapshots', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
         stepId: step.id, capturedAt: preview.capturedAt, imageDataUrl: preview.imageDataUrl, width: preview.width, height: preview.height,
-        landmarks: { face: preview.frame?.face ?? [], pose: preview.frame?.pose ?? [], tongue: preview.frame?.tongue ?? null, timestamp: preview.frame?.timestamp ?? null },
+        // A visible-region box is separate evidence, never a tongue landmark with pose fields.
+        landmarks: { face: preview.frame?.face ?? [], pose: preview.frame?.pose ?? [], tongue: tongue?.trackingMode === 'region' ? null : tongue ?? null, timestamp: preview.frame?.timestamp ?? null },
+        visibleTongueRegion: tongue?.trackingMode === 'region' ? tongue : null,
         evidence: { kind: 'browser-rgb-bootstrap', depth: 'not-captured', internalMusculature: 'not-measured', mirrored: false },
       }) });
       setPreview(null); setIndex(index + 1); setStatus('Snapshot sent to your desktop.');

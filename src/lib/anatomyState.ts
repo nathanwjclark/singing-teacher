@@ -1,11 +1,11 @@
-import type { TrackingFrame, TongueObservation } from '../types';
+import type { TrackingFrame, TongueTipObservation } from '../types';
 export type TonguePose={lateral:number;lift:number;extension:number;curl:number;visible:boolean};
 export type AnatomyMotionState={torso:{x:number;y:number;z:number};head:{x:number;y:number;z:number};jawOpen:number;tongue:TonguePose;frame:TrackingFrame|null;demo:boolean};
 export const emptyAnatomyState=():AnatomyMotionState=>({torso:{x:0,y:0,z:0},head:{x:0,y:0,z:0},jawOpen:0,tongue:{lateral:0,lift:0,extension:0,curl:0,visible:false},frame:null,demo:false});
 const bound=(n:number|undefined,lo:number,hi:number)=>Number.isFinite(n)?Math.max(lo,Math.min(hi,n!)):0;
 /** One smoothed pose feeds every anatomical view; renderers only project it. */
 export function createAnatomyMotion(){
- const state=emptyAnatomyState();let lastTime:number|undefined,lastSeen=-Infinity,lastTongue:TongueObservation|undefined,lastFrameTimestamp:number|undefined,lastDemo:boolean|undefined;
+ const state=emptyAnatomyState();let lastTime:number|undefined,lastSeen=-Infinity,lastTongue:TongueTipObservation|undefined,lastFrameTimestamp:number|undefined,lastDemo:boolean|undefined;
  return {state,update(frame:TrackingFrame|null,demo:boolean,time:number){
   const dt=lastTime===undefined?1/60:bound((time-lastTime)/1000,0,.1);lastTime=time;
   const ease=(from:number,to:number,alpha:number)=>from+(to-from)*(1-Math.pow(1-alpha,dt*60));
@@ -24,7 +24,7 @@ export function createAnatomyMotion(){
   state.jawOpen=ease(state.jawOpen,bound(m?.mouthOpen,0,1)*.5,.18);
   if(lastDemo!==undefined && demo!==lastDemo){lastTongue=undefined;lastSeen=-Infinity;lastFrameTimestamp=undefined;}
   lastDemo=demo;
-  const observed=frame?.tongue?.trackingMode==='region'?undefined:frame?.tongue;
+  const observed=frame?.tongue?.trackingMode==='tip'?frame.tongue:undefined;
   // A cached frame must not refresh an old tip forever when the camera stalls.
   if(observed && (demo || (observed.observedAt??frame?.timestamp)!==lastFrameTimestamp)){lastTongue=observed;lastSeen=time;}
   lastFrameTimestamp=observed?.observedAt??frame?.timestamp;

@@ -82,15 +82,12 @@ export async function createVisionEngine(): Promise<VisionEngine> {
           // video until the tongue is only a handful of pixels high.
           tongueContext.drawImage(video,x*video.videoWidth,y*video.videoHeight,width*video.videoWidth,height*video.videoHeight,0,0,256,256);
           const localFace=landmarks.map(p=>({...p,x:(p.x-x)/width,y:(p.y-y)/height}));
-          const local=trackTongue(tongueContext.getImageData(0,0,256,256).data,256,256,localFace,timestamp);
-          if(local) {
-            tongue={...local,x:x+local.x*width,y:y+local.y*height,tip:local.tip ? {x:x+local.tip.x*width,y:y+local.tip.y*height} : undefined,outline:local.outline?.map(p=>({x:x+p.x*width,y:y+p.y*height}))};
-            tongueStatus='Neural tongue tip · estimated 3D';
-          }
+          tongue=trackTongue(tongueContext.getImageData(0,0,256,256).data,256,256,localFace,timestamp,tongueSearch);
+          if(tongue)tongueStatus=tongue.trackingMode==='region'?'Visible tongue region · no tip or depth':'Neural tongue tip · estimated 3D';
         } else trackTongue(new Uint8ClampedArray(0),0,0,[],timestamp);
       } else trackTongue(new Uint8ClampedArray(0),0,0,[],timestamp);
       const tongueDiagnostic=trackTongue.diagnostics();
-      if(tongueDiagnostic.state==='lost'&&tongueStatus==='Searching for visible tongue')tongueStatus='Tip lost · open Tongue lab for details';
+      if(tongueDiagnostic.state==='lost'&&tongueStatus==='Searching for visible tongue')tongueStatus=tongueDiagnostic.reason;
       return { tongue, tongueStatus, tongueSearch, tongueDiagnostic, face: landmarks, pose: cachedPose, worldPose: cachedWorldPose, faceTransform, blendshapes, timestamp, metrics: stabilizer.metrics({ mouthOpen, headTilt: tilt(landmarks[33], landmarks[263]), shoulderTilt: tilt(cachedPose[11], cachedPose[12]), brightness, motion, ...depth }, timestamp, landmarks.length > 0) };
     },
     calibrateTongue() { trackTongue.resetMotionReference(); },
@@ -136,9 +133,9 @@ export function drawTracking(context: CanvasRenderingContext2D, frame: TrackingF
     context.strokeRect(box.x*width,box.y*height,box.width*width,box.height*height);context.setLineDash([]);
   }
   if(frame.tongue) {
-    context.fillStyle='#ff71aa';context.strokeStyle='#ffb3d0';context.lineWidth=2;
-    for(const p of frame.tongue.outline??[]){context.beginPath();context.arc(p.x*width,p.y*height,1.6,0,Math.PI*2);context.fill();}
-    if(frame.tongue.trackingMode!=='region'){
+    context.strokeStyle='#ffb3d0';context.lineWidth=2;
+    if(frame.tongue.trackingMode==='region'){const [x1,y1,x2,y2]=frame.tongue.box;context.strokeRect(x1*width,y1*height,(x2-x1)*width,(y2-y1)*height);}
+    else {
     const x=frame.tongue.x*width,y=frame.tongue.y*height;
     context.beginPath();context.arc(x,y,6,0,Math.PI*2);context.moveTo(x-10,y);context.lineTo(x+10,y);context.moveTo(x,y-10);context.lineTo(x,y+10);context.stroke();
     }

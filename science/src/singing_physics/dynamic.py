@@ -6,7 +6,7 @@ import hashlib
 import json
 
 from .engine import Engine, finite
-from .joint import KIND as JOINT_KIND, fit_joint
+from .joint import KIND as JOINT_KIND, fit_joint, observed_landmarks
 
 KIND = "dynamic_synthetic_transfer_unknown_articulation"
 
@@ -146,7 +146,7 @@ def fit_dynamic(engine: Engine, document, *, budget_per_model=120, starts=3, see
             metadata.append({**state, "audio_evidence_id": audio_id, "pose": frame.get("pose"),
                              "visibility": visibility, "geometry_status": status, "geometry_reason": reason,
                              "measurement": measurement if status == "visible" else None,
-                             "observed_landmarks": deepcopy(frame.get("landmarks", {})),
+                             "observed_landmarks": observed_landmarks(frame),
                              "head_pose_evidence_id": frame.get("head_pose_evidence_id"),
                              "head_pose_uncertainty": frame.get("head_pose_uncertainty")})
         if cue_time > metadata[-1]["timestamp_seconds"]:

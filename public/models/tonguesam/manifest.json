@@ -1,0 +1,37 @@
+{
+  "schema": "tonguesam-detector/v1",
+  "upstreamRevision": "3f6e8c620e4d89e669a92a22f3be3d007932ce45",
+  "modelSha256": "128e78130f5b168ca4cb7580f1a3528d0625717f0294648020f0f5c5791da4c8",
+  "sourceWeightsSha256": "a4f83fa8aeb47074ceb31d2b4c9823d4a8d574b5cdc6f7c6db68d16398fa3d3b",
+  "input": [
+    1,
+    3,
+    448,
+    448
+  ],
+  "output": "normalized xyxy and objectness-times-class score",
+  "threshold": 0.7,
+  "capability": "visible-tongue-bounding-box",
+  "notSupported": [
+    "surface segmentation",
+    "tip position",
+    "depth",
+    "hidden anatomy"
+  ],
+  "normalization": {
+    "mean": [
+      0.485,
+      0.456,
+      0.406
+    ],
+    "std": [
+      0.229,
+      0.224,
+      0.225
+    ]
+  },
+  "verification": {
+    "examples": 12,
+    "kind": "public upstream execution and PyTorch/ONNX agreement; not held-out accuracy"
+  }
+}

@@ -32,6 +32,55 @@ def _bounds(values, allowed, label):
     return result
 
 
+def _finite_number(value):
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+
+
+def _browser_tongue_tip(value):
+    """The browser's tongue landmark: a tip observation with a normalized position and finite pose values.
+    Captures stored before tip observations carried trackingMode omit it and may carry the earlier
+    tracker's detection outline; they remain valid tips."""
+    fields = {"trackingMode", "x", "y", "lateral", "lift", "visibleFraction", "observedAt", "confidence",
+              "extension", "elevation", "curl", "tip", "tip3D"}
+    unit = lambda v: _finite_number(v) and 0 <= v <= 1
+    point = lambda p: (isinstance(p, dict) and set(p) <= {"x", "y", "z", "visibility"} and unit(p.get("x"))
+                       and unit(p.get("y")) and all(k not in p or _finite_number(p[k]) for k in ("z", "visibility")))
+    if not isinstance(value, dict):
+        return False
+    if "trackingMode" not in value:
+        fields = fields | {"outline"}
+    if not (value.get("trackingMode", "tip") == "tip" and set(value) <= fields
+            and unit(value.get("x")) and unit(value.get("y"))
+            and all(_finite_number(value.get(k)) for k in ("lateral", "lift", "visibleFraction"))
+            and all(k not in value or _finite_number(value[k])
+                    for k in ("observedAt", "confidence", "extension", "elevation", "curl"))):
+        return False
+    tip, tip3d, outline = value.get("tip"), value.get("tip3D"), value.get("outline")
+    if tip is not None and not point(tip):
+        return False
+    if outline is not None and not (isinstance(outline, list) and all(point(p) for p in outline)):
+        return False
+    return tip3d is None or (isinstance(tip3d, dict) and set(tip3d) == {"x", "y", "z", "depthSource"}
+                             and all(_finite_number(tip3d[k]) for k in ("x", "y", "z"))
+                             and tip3d["depthSource"] in ("learned", "sensor"))
+
+
+def observed_landmarks(frame):
+    """Copy a frame's landmarks for the record. A visible-tongue region box has no landmark position, pose
+    or depth: any entry carrying a box or a non-tip tracking mode is rejected, and the browser's "tongue"
+    entry must be a well-formed tip observation."""
+    landmarks = frame.get("landmarks", {})
+    if not isinstance(landmarks, dict):
+        raise ValueError("Frame landmarks must be a dictionary")
+    for name, value in landmarks.items():
+        if isinstance(value, dict) and ("box" in value or any(
+                key in value and value[key] != "tip" for key in ("trackingMode", "tracking_mode"))):
+            raise ValueError("A tongue region box is not a landmark")
+        if name == "tongue" and value is not None and not _browser_tongue_tip(value):
+            raise ValueError("The tongue landmark must be a tip observation")
+    return deepcopy(landmarks)
+
+
 def fit_joint(engine: Engine, document, *, anatomy_bounds=None, articulation_bounds=None,
               budget_per_model=120, starts=3, seed=1):
     """Fit shared anatomy and independent trial controls; compare a fair baseline.

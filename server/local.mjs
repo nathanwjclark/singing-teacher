@@ -15,6 +15,7 @@ import {randomBytes,randomUUID,timingSafeEqual} from 'node:crypto';
 import {resolve,extname} from 'node:path';
 import {networkInterfaces,hostname} from 'node:os';
 import {createScienceProxy} from './science-proxy.mjs';
+import {tongueSnapshotError} from './tongueSnapshot.mjs';
 
 const port=Number(process.env.PORT||5173),host=process.env.HOST||'127.0.0.1';
 const root=resolve(import.meta.dirname,'../dist'),dataRoot=resolve(process.env.LOCAL_DATA_DIR||'.local-data');
@@ -95,8 +96,9 @@ const serverHandler=async(req,res)=>{try{
     }
     if(route[2]==='snapshots'&&req.method==='POST'){
       const input=await body(req);const match=/^data:image\/(jpeg|png);base64,([A-Za-z0-9+/=]+)$/.exec(input.imageDataUrl||'');if(!match||typeof input.stepId!=='string')return json(res,400,{error:'Expected a captured JPEG/PNG image and step ID'});
+      const region=input.visibleTongueRegion,tongueError=tongueSnapshotError(input.landmarks?.tongue,region);if(tongueError)return json(res,400,{error:tongueError});
       const id=randomUUID(),dir=resolve(dataRoot,'captures',session.sessionId);await mkdir(dir,{recursive:true});const file=`${id}.${match[1]==='jpeg'?'jpg':'png'}`;await writeFile(resolve(dir,file),Buffer.from(match[2],'base64'));
-      const snapshot={id,stepId:input.stepId,capturedAt:input.capturedAt,width:input.width,height:input.height,landmarks:input.landmarks,source:'phone-rgb',evidence:input.evidence,depth:{available:false,reason:'Browser capture does not expose measured hardware depth'},file};
+      const snapshot={id,stepId:input.stepId,capturedAt:input.capturedAt,width:input.width,height:input.height,landmarks:input.landmarks,visibleTongueRegion:region??null,source:'phone-rgb',evidence:input.evidence,depth:{available:false,reason:'Browser capture does not expose measured hardware depth'},file};
       await writeFile(resolve(dir,`${id}.json`),JSON.stringify(snapshot,null,2));session.snapshots.push(snapshot);return json(res,201,{snapshot,...summary()});
     }
     return json(res,405,{error:'Method not allowed'});

@@ -1,0 +1,28 @@
+TongueSAM prompt-detector baseline for Tract Star
+
+Source: https://github.com/cshan-github/TongueSAM
+Revision: 3f6e8c620e4d89e669a92a22f3be3d007932ce45
+TongueSAM: Copyright (c) 2023 Shan Cao, MIT License.
+YOLOX architecture: Copyright (c) Megvii, Inc. and its affiliates,
+Apache License 2.0. Both license texts accompany this model.
+
+Modified artifact: segment/yolox.pth was converted to ONNX with decoded
+normalized boxes and confidence, using scripts/export-tonguesam-detector.py.
+No training or modification of the learned detector weights was performed.
+This is the tongue bounding-box prompt generator, not the full TongueSAM
+segmentation checkpoint, a tongue-tip estimator or a depth model.
+Public upstream example images are not redistributed with this model.
+
+Training data of segment/yolox.pth: not documented upstream. The upstream
+README says TongueSet1 (private), TongueSet2 (BioHit,
+https://github.com/BioHit/TongeImageDataset) and TongueSet3 (1000 images
+selected from a Baidu AI Studio dataset) were used to fine-tune the released
+TongueSAM segmentation model; it does not say which data trained this prompt
+detector. The TongueSAM repository states no licence for those datasets.
+Whether any dataset terms apply to use of these weights is unknown.
+
+smoke-results.json lists the exported ONNX model's output on the twelve
+upstream example images (image SHA-256, best box and score). The export
+script also compared every output with PyTorch and stops on disagreement,
+but these rows record only the ONNX output. They are not an accuracy
+measurement.

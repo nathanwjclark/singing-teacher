@@ -189,3 +189,12 @@ def test_duplicate_depth_timing_and_control_model_binding():
         assert profile["anatomy_model_id"] == snapshot.data["model_id"]
         with pytest.raises(ValueError):
             fit_control_profile([control], anatomy_model_id="different-model", fitted_at="2026-01-03T00:00:00Z")
+
+
+def test_tongue_region_box_cannot_enter_observed_landmarks():
+    region = {"trackingMode": "region", "box": [.3, .4, .7, .8], "confidence": .96, "observedAt": 1000.}
+    with Engine() as engine:
+        snapshot, doc, _ = frozen_fixture(engine)
+        doc["attempts"][0]["frames"][0]["landmarks"] = {"tongue": region}
+        with pytest.raises(ValueError, match="region box is not a landmark"):
+            run_fit(engine, snapshot, doc, budget=30)
