@@ -1,0 +1,1577 @@
+{
+  "f0": [
+    {
+      "candidate_id": "t0-geometric-0",
+      "family": "geometric",
+      "requested_f0_hz": 150.0109716831251,
+      "simulated_f0_hz": 150.0220859087799,
+      "stage": "calibration:cal-a"
+    },
+    {
+      "candidate_id": "t0-geometric-0",
+      "family": "geometric",
+      "requested_f0_hz": 219.91675859288193,
+      "simulated_f0_hz": 219.92243459791368,
+      "stage": "calibration:cal-u"
+    },
+    {
+      "candidate_id": "t0-geometric-1",
+      "family": "geometric",
+      "requested_f0_hz": 150.0109716831251,
+      "simulated_f0_hz": 150.0218729712825,
+      "stage": "calibration:cal-a"
+    },
+    {
+      "candidate_id": "t0-geometric-1",
+      "family": "geometric",
+      "requested_f0_hz": 219.91675859288193,
+      "simulated_f0_hz": 219.91704751938704,
+      "stage": "calibration:cal-u"
+    },
+    {
+      "candidate_id": "t0-geometric-2",
+      "family": "geometric",
+      "requested_f0_hz": 150.0109716831251,
+      "simulated_f0_hz": 150.02174369409522,
+      "stage": "calibration:cal-a"
+    },
+    {
+      "candidate_id": "t0-geometric-2",
+      "family": "geometric",
+      "requested_f0_hz": 219.91675859288193,
+      "simulated_f0_hz": 219.9044310276773,
+      "stage": "calibration:cal-u"
+    },
+    {
+      "candidate_id": "t1-geometric-0",
+      "family": "geometric",
+      "requested_f0_hz": 150.0109716831251,
+      "simulated_f0_hz": 150.02498148684924,
+      "stage": "calibration:cal-a"
+    },
+    {
+      "candidate_id": "t1-geometric-0",
+      "family": "geometric",
+      "requested_f0_hz": 219.91675859288193,
+      "simulated_f0_hz": null,
+      "stage": "calibration:cal-u"
+    },
+    {
+      "candidate_id": "t1-geometric-1",
+      "family": "geometric",
+      "requested_f0_hz": 150.0109716831251,
+      "simulated_f0_hz": 150.02412954896522,
+      "stage": "calibration:cal-a"
+    },
+    {
+      "candidate_id": "t1-geometric-1",
+      "family": "geometric",
+      "requested_f0_hz": 219.91675859288193,
+      "simulated_f0_hz": null,
+      "stage": "calibration:cal-u"
+    },
+    {
+      "candidate_id": "t1-geometric-2",
+      "family": "geometric",
+      "requested_f0_hz": 150.0109716831251,
+      "simulated_f0_hz": 150.01448158774983,
+      "stage": "calibration:cal-a"
+    },
+    {
+      "candidate_id": "t1-geometric-2",
+      "family": "geometric",
+      "requested_f0_hz": 219.91675859288193,
+      "simulated_f0_hz": null,
+      "stage": "calibration:cal-u"
+    },
+    {
+      "candidate_id": "t0-two_mass-0",
+      "family": "two_mass",
+      "requested_f0_hz": 150.0109716831251,
+      "simulated_f0_hz": 150.42778333928612,
+      "stage": "calibration:cal-a"
+    },
+    {
+      "candidate_id": "t0-two_mass-0",
+      "family": "two_mass",
+      "requested_f0_hz": 219.91675859288193,
+      "simulated_f0_hz": 226.03486123886228,
+      "stage": "calibration:cal-u"
+    },
+    {
+      "candidate_id": "t0-two_mass-1",
+      "family": "two_mass",
+      "requested_f0_hz": 150.0109716831251,
+      "simulated_f0_hz": 139.38068690671972,
+      "stage": "calibration:cal-a"
+    },
+    {
+      "candidate_id": "t0-two_mass-1",
+      "family": "two_mass",
+      "requested_f0_hz": 219.91675859288193,
+      "simulated_f0_hz": 201.4844222120014,
+      "stage": "calibration:cal-u"
+    },
+    {
+      "candidate_id": "t0-two_mass-2",
+      "family": "two_mass",
+      "requested_f0_hz": 150.0109716831251,
+      "simulated_f0_hz": 139.93347597659422,
+      "stage": "calibration:cal-a"
+    },
+    {
+      "candidate_id": "t0-two_mass-2",
+      "family": "two_mass",
+      "requested_f0_hz": 219.91675859288193,
+      "simulated_f0_hz": 206.8439938842122,
+      "stage": "calibration:cal-u"
+    },
+    {
+      "candidate_id": "t1-two_mass-0",
+      "family": "two_mass",
+      "requested_f0_hz": 150.0109716831251,
+      "simulated_f0_hz": 140.65278719987964,
+      "stage": "calibration:cal-a"
+    },
+    {
+      "candidate_id": "t1-two_mass-0",
+      "family": "two_mass",
+      "requested_f0_hz": 219.91675859288193,
+      "simulated_f0_hz": null,
+      "stage": "calibration:cal-u"
+    },
+    {
+      "candidate_id": "t1-two_mass-1",
+      "family": "two_mass",
+      "requested_f0_hz": 150.0109716831251,
+      "simulated_f0_hz": 93.48711324147403,
+      "stage": "calibration:cal-a"
+    },
+    {
+      "candidate_id": "t1-two_mass-1",
+      "family": "two_mass",
+      "requested_f0_hz": 219.91675859288193,
+      "simulated_f0_hz": null,
+      "stage": "calibration:cal-u"
+    },
+    {
+      "candidate_id": "t1-two_mass-2",
+      "family": "two_mass",
+      "requested_f0_hz": 150.0109716831251,
+      "simulated_f0_hz": 129.42142736992528,
+      "stage": "calibration:cal-a"
+    },
+    {
+      "candidate_id": "t1-two_mass-2",
+      "family": "two_mass",
+      "requested_f0_hz": 219.91675859288193,
+      "simulated_f0_hz": null,
+      "stage": "calibration:cal-u"
+    },
+    {
+      "candidate_id": "t0-geometric-0",
+      "family": "geometric",
+      "requested_f0_hz": 190.0,
+      "simulated_f0_hz": 190.07036350058632,
+      "stage": "heldout:e"
+    },
+    {
+      "candidate_id": "t0-geometric-1",
+      "family": "geometric",
+      "requested_f0_hz": 190.0,
+      "simulated_f0_hz": 190.07507683522755,
+      "stage": "heldout:e"
+    },
+    {
+      "candidate_id": "t0-geometric-2",
+      "family": "geometric",
+      "requested_f0_hz": 190.0,
+      "simulated_f0_hz": 190.0807064827409,
+      "stage": "heldout:e"
+    },
+    {
+      "candidate_id": "t1-geometric-0",
+      "family": "geometric",
+      "requested_f0_hz": null,
+      "simulated_f0_hz": null,
+      "stage": "heldout:e"
+    },
+    {
+      "candidate_id": "t1-geometric-1",
+      "family": "geometric",
+      "requested_f0_hz": null,
+      "simulated_f0_hz": null,
+      "stage": "heldout:e"
+    },
+    {
+      "candidate_id": "t1-geometric-2",
+      "family": "geometric",
+      "requested_f0_hz": null,
+      "simulated_f0_hz": null,
+      "stage": "heldout:e"
+    },
+    {
+      "candidate_id": "t0-two_mass-0",
+      "family": "two_mass",
+      "requested_f0_hz": 190.0,
+      "simulated_f0_hz": 204.54612651989237,
+      "stage": "heldout:e"
+    },
+    {
+      "candidate_id": "t0-two_mass-1",
+      "family": "two_mass",
+      "requested_f0_hz": 190.0,
+      "simulated_f0_hz": 192.04963135403057,
+      "stage": "heldout:e"
+    },
+    {
+      "candidate_id": "t0-two_mass-2",
+      "family": "two_mass",
+      "requested_f0_hz": 190.0,
+      "simulated_f0_hz": 189.97019318023604,
+      "stage": "heldout:e"
+    },
+    {
+      "candidate_id": "t1-two_mass-0",
+      "family": "two_mass",
+      "requested_f0_hz": null,
+      "simulated_f0_hz": null,
+      "stage": "heldout:e"
+    },
+    {
+      "candidate_id": "t1-two_mass-1",
+      "family": "two_mass",
+      "requested_f0_hz": null,
+      "simulated_f0_hz": null,
+      "stage": "heldout:e"
+    },
+    {
+      "candidate_id": "t1-two_mass-2",
+      "family": "two_mass",
+      "requested_f0_hz": null,
+      "simulated_f0_hz": null,
+      "stage": "heldout:e"
+    },
+    {
+      "candidate_id": "t0-geometric-0",
+      "family": "geometric",
+      "requested_f0_hz": 190.0,
+      "simulated_f0_hz": 190.0351575129945,
+      "stage": "heldout:o"
+    },
+    {
+      "candidate_id": "t0-geometric-1",
+      "family": "geometric",
+      "requested_f0_hz": 190.0,
+      "simulated_f0_hz": 190.03565084976356,
+      "stage": "heldout:o"
+    },
+    {
+      "candidate_id": "t0-geometric-2",
+      "family": "geometric",
+      "requested_f0_hz": 190.0,
+      "simulated_f0_hz": 190.03512975321675,
+      "stage": "heldout:o"
+    },
+    {
+      "candidate_id": "t1-geometric-0",
+      "family": "geometric",
+      "requested_f0_hz": null,
+      "simulated_f0_hz": null,
+      "stage": "heldout:o"
+    },
+    {
+      "candidate_id": "t1-geometric-1",
+      "family": "geometric",
+      "requested_f0_hz": null,
+      "simulated_f0_hz": null,
+      "stage": "heldout:o"
+    },
+    {
+      "candidate_id": "t1-geometric-2",
+      "family": "geometric",
+      "requested_f0_hz": null,
+      "simulated_f0_hz": null,
+      "stage": "heldout:o"
+    },
+    {
+      "candidate_id": "t0-two_mass-0",
+      "family": "two_mass",
+      "requested_f0_hz": 190.0,
+      "simulated_f0_hz": 199.89272874148722,
+      "stage": "heldout:o"
+    },
+    {
+      "candidate_id": "t0-two_mass-1",
+      "family": "two_mass",
+      "requested_f0_hz": 190.0,
+      "simulated_f0_hz": 178.84339052716908,
+      "stage": "heldout:o"
+    },
+    {
+      "candidate_id": "t0-two_mass-2",
+      "family": "two_mass",
+      "requested_f0_hz": 190.0,
+      "simulated_f0_hz": 185.3931206333918,
+      "stage": "heldout:o"
+    },
+    {
+      "candidate_id": "t1-two_mass-0",
+      "family": "two_mass",
+      "requested_f0_hz": null,
+      "simulated_f0_hz": null,
+      "stage": "heldout:o"
+    },
+    {
+      "candidate_id": "t1-two_mass-1",
+      "family": "two_mass",
+      "requested_f0_hz": null,
+      "simulated_f0_hz": null,
+      "stage": "heldout:o"
+    },
+    {
+      "candidate_id": "t1-two_mass-2",
+      "family": "two_mass",
+      "requested_f0_hz": null,
+      "simulated_f0_hz": null,
+      "stage": "heldout:o"
+    }
+  ],
+  "family": "geometric",
+  "fit": {
+    "actual_synthesis_calls": 72,
+    "best": {
+      "fixed_anatomy": "t0-geometric-0",
+      "fixed_source": "t0-geometric-0",
+      "joint": "t0-geometric-0"
+    },
+    "joint": [
+      {
+        "candidate_id": "t0-geometric-0",
+        "f0": [
+          {
+            "requested_f0_hz": 150.0109716831251,
+            "simulated_f0_hz": 150.0220859087799,
+            "trial_id": "cal-a"
+          },
+          {
+            "requested_f0_hz": 219.91675859288193,
+            "simulated_f0_hz": 219.92243459791368,
+            "trial_id": "cal-u"
+          }
+        ],
+        "failures": [],
+        "score": 0.017508222877275877,
+        "score_excluding_pitch": 0.023344232276765742,
+        "status": "scored"
+      },
+      {
+        "candidate_id": "t0-geometric-1",
+        "f0": [
+          {
+            "requested_f0_hz": 150.0109716831251,
+            "simulated_f0_hz": 150.0218729712825,
+            "trial_id": "cal-a"
+          },
+          {
+            "requested_f0_hz": 219.91675859288193,
+            "simulated_f0_hz": 219.91704751938704,
+            "trial_id": "cal-u"
+          }
+        ],
+        "failures": [],
+        "score": 0.020274919928352883,
+        "score_excluding_pitch": 0.027033177020486333,
+        "status": "scored"
+      },
+      {
+        "candidate_id": "t0-geometric-2",
+        "f0": [
+          {
+            "requested_f0_hz": 150.0109716831251,
+            "simulated_f0_hz": 150.02174369409522,
+            "trial_id": "cal-a"
+          },
+          {
+            "requested_f0_hz": 219.91675859288193,
+            "simulated_f0_hz": 219.9044310276773,
+            "trial_id": "cal-u"
+          }
+        ],
+        "failures": [],
+        "score": 0.03731122752217365,
+        "score_excluding_pitch": 0.049748191694113104,
+        "status": "scored"
+      },
+      {
+        "candidate_id": "t1-geometric-0",
+        "f0": [
+          {
+            "requested_f0_hz": 150.0109716831251,
+            "simulated_f0_hz": 150.02498148684924,
+            "trial_id": "cal-a"
+          },
+          {
+            "requested_f0_hz": 219.91675859288193,
+            "simulated_f0_hz": null,
+            "trial_id": "cal-u"
+          }
+        ],
+        "failures": [
+          {
+            "reason": "required_predicted_descriptor_missing",
+            "trial_id": "cal-u"
+          }
+        ],
+        "score": null,
+        "score_excluding_pitch": null,
+        "status": "unscorable"
+      },
+      {
+        "candidate_id": "t1-geometric-1",
+        "f0": [
+          {
+            "requested_f0_hz": 150.0109716831251,
+            "simulated_f0_hz": 150.02412954896522,
+            "trial_id": "cal-a"
+          },
+          {
+            "requested_f0_hz": 219.91675859288193,
+            "simulated_f0_hz": null,
+            "trial_id": "cal-u"
+          }
+        ],
+        "failures": [
+          {
+            "reason": "required_predicted_descriptor_missing",
+            "trial_id": "cal-u"
+          }
+        ],
+        "score": null,
+        "score_excluding_pitch": null,
+        "status": "unscorable"
+      },
+      {
+        "candidate_id": "t1-geometric-2",
+        "f0": [
+          {
+            "requested_f0_hz": 150.0109716831251,
+            "simulated_f0_hz": 150.01448158774983,
+            "trial_id": "cal-a"
+          },
+          {
+            "requested_f0_hz": 219.91675859288193,
+            "simulated_f0_hz": null,
+            "trial_id": "cal-u"
+          }
+        ],
+        "failures": [
+          {
+            "reason": "required_predicted_descriptor_missing",
+            "trial_id": "cal-u"
+          }
+        ],
+        "score": null,
+        "score_excluding_pitch": null,
+        "status": "unscorable"
+      },
+      {
+        "candidate_id": "t0-two_mass-0",
+        "f0": [
+          {
+            "requested_f0_hz": 150.0109716831251,
+            "simulated_f0_hz": 150.42778333928612,
+            "trial_id": "cal-a"
+          },
+          {
+            "requested_f0_hz": 219.91675859288193,
+            "simulated_f0_hz": 226.03486123886228,
+            "trial_id": "cal-u"
+          }
+        ],
+        "failures": [],
+        "score": 0.060178258749377524,
+        "score_excluding_pitch": 0.06456896502272695,
+        "status": "scored"
+      },
+      {
+        "candidate_id": "t0-two_mass-1",
+        "f0": [
+          {
+            "requested_f0_hz": 150.0109716831251,
+            "simulated_f0_hz": 139.38068690671972,
+            "trial_id": "cal-a"
+          },
+          {
+            "requested_f0_hz": 219.91675859288193,
+            "simulated_f0_hz": 201.4844222120014,
+            "trial_id": "cal-u"
+          }
+        ],
+        "failures": [],
+        "score": 0.18008249856190525,
+        "score_excluding_pitch": 0.05146250688028686,
+        "status": "scored"
+      },
+      {
+        "candidate_id": "t0-two_mass-2",
+        "f0": [
+          {
+            "requested_f0_hz": 150.0109716831251,
+            "simulated_f0_hz": 139.93347597659422,
+            "trial_id": "cal-a"
+          },
+          {
+            "requested_f0_hz": 219.91675859288193,
+            "simulated_f0_hz": 206.8439938842122,
+            "trial_id": "cal-u"
+          }
+        ],
+        "failures": [],
+        "score": 0.09412921530832682,
+        "score_excluding_pitch": 0.011983496726357143,
+        "status": "scored"
+      },
+      {
+        "candidate_id": "t1-two_mass-0",
+        "f0": [
+          {
+            "requested_f0_hz": 150.0109716831251,
+            "simulated_f0_hz": 140.65278719987964,
+            "trial_id": "cal-a"
+          },
+          {
+            "requested_f0_hz": 219.91675859288193,
+            "simulated_f0_hz": null,
+            "trial_id": "cal-u"
+          }
+        ],
+        "failures": [
+          {
+            "reason": "required_predicted_descriptor_missing",
+            "trial_id": "cal-u"
+          }
+        ],
+        "score": null,
+        "score_excluding_pitch": null,
+        "status": "unscorable"
+      },
+      {
+        "candidate_id": "t1-two_mass-1",
+        "f0": [
+          {
+            "requested_f0_hz": 150.0109716831251,
+            "simulated_f0_hz": 93.48711324147403,
+            "trial_id": "cal-a"
+          },
+          {
+            "requested_f0_hz": 219.91675859288193,
+            "simulated_f0_hz": null,
+            "trial_id": "cal-u"
+          }
+        ],
+        "failures": [
+          {
+            "reason": "required_predicted_descriptor_missing",
+            "trial_id": "cal-u"
+          }
+        ],
+        "score": null,
+        "score_excluding_pitch": null,
+        "status": "unscorable"
+      },
+      {
+        "candidate_id": "t1-two_mass-2",
+        "f0": [
+          {
+            "requested_f0_hz": 150.0109716831251,
+            "simulated_f0_hz": 129.42142736992528,
+            "trial_id": "cal-a"
+          },
+          {
+            "requested_f0_hz": 219.91675859288193,
+            "simulated_f0_hz": null,
+            "trial_id": "cal-u"
+          }
+        ],
+        "failures": [
+          {
+            "reason": "required_predicted_descriptor_missing",
+            "trial_id": "cal-u"
+          }
+        ],
+        "score": null,
+        "score_excluding_pitch": null,
+        "status": "unscorable"
+      }
+    ],
+    "per_family_calls": {
+      "fixed_anatomy": 24,
+      "fixed_source": 24,
+      "joint": 24
+    },
+    "reason": "Conditional source/tract candidate comparison",
+    "status": "available"
+  },
+  "generator": "geometric-2",
+  "generator_calibration_f0": {
+    "cal-a": {
+      "requested_f0_hz": 150.0,
+      "simulated_f0_hz": 150.0109716831251
+    },
+    "cal-u": {
+      "requested_f0_hz": 220.0,
+      "simulated_f0_hz": 219.91675859288193
+    }
+  },
+  "heldout": {
+    "e": {
+      "bank_coverage": {
+        "available": 21,
+        "complete": false,
+        "total": 36,
+        "unavailable": 15
+      },
+      "bank_sha256": "40167d1aae9499bb636b9d12943785b98cb6e3f43aa077ea9e3523561e120734",
+      "metrics": {
+        "pitch_excluded": {
+          "difference_two_mass_minus_geometric": 0.051363483717419736,
+          "failures": {
+            "geometric": false,
+            "two_mass": false
+          },
+          "heldout_discrepancy": {
+            "geometric": 0.0027295054431125533,
+            "two_mass": 0.05409298916053229
+          },
+          "joint_ranking": [
+            "t0-geometric-0",
+            "t0-geometric-1",
+            "t0-two_mass-2",
+            "t0-geometric-2",
+            "t0-two_mass-0"
+          ],
+          "nearest_grid_rank": null,
+          "selected": {
+            "geometric": "t0-geometric-0",
+            "two_mass": "t0-two_mass-2"
+          },
+          "true_family_rank": 1,
+          "winner": "geometric"
+        },
+        "primary": {
+          "difference_two_mass_minus_geometric": 0.20994606508920324,
+          "failures": {
+            "geometric": false,
+            "two_mass": false
+          },
+          "heldout_discrepancy": {
+            "geometric": 0.0020477637096264992,
+            "two_mass": 0.21199382879882975
+          },
+          "joint_ranking": [
+            "t0-geometric-0",
+            "t0-geometric-1",
+            "t0-two_mass-2",
+            "t0-geometric-2",
+            "t0-two_mass-0"
+          ],
+          "nearest_grid_rank": null,
+          "selected": {
+            "geometric": "t0-geometric-0",
+            "two_mass": "t0-two_mass-0"
+          },
+          "true_family_rank": 1,
+          "winner": "geometric"
+        },
+        "unscorable_alternatives": {
+          "geometric": 3,
+          "two_mass": 4
+        }
+      },
+      "score": {
+        "actual_synthesis_calls": 0,
+        "alternatives": [
+          {
+            "alternative_id": "joint:t0-geometric-0",
+            "heldout_rank": 2,
+            "heldout_rank_excluding_pitch": 2,
+            "reason": null,
+            "requested_f0_hz": 190.0,
+            "score": 0.0020477637096264992,
+            "score_excluding_pitch": 0.0027295054431125533,
+            "simulated_f0_hz": 190.07036350058632,
+            "status": "scored"
+          },
+          {
+            "alternative_id": "joint:t0-geometric-1",
+            "heldout_rank": 6,
+            "heldout_rank_excluding_pitch": 6,
+            "reason": null,
+            "requested_f0_hz": 190.0,
+            "score": 0.022445365794962403,
+            "score_excluding_pitch": 0.02992654003110755,
+            "simulated_f0_hz": 190.07507683522755,
+            "status": "scored"
+          },
+          {
+            "alternative_id": "joint:t0-geometric-2",
+            "heldout_rank": 9,
+            "heldout_rank_excluding_pitch": 9,
+            "reason": null,
+            "requested_f0_hz": 190.0,
+            "score": 0.06535160350665316,
+            "score_excluding_pitch": 0.087135085330174,
+            "simulated_f0_hz": 190.0807064827409,
+            "status": "scored"
+          },
+          {
+            "alternative_id": "joint:t1-geometric-0",
+            "heldout_rank": null,
+            "heldout_rank_excluding_pitch": null,
+            "reason": "Calibration alternative was unscorable",
+            "requested_f0_hz": null,
+            "score": null,
+            "score_excluding_pitch": null,
+            "simulated_f0_hz": null,
+            "status": "unavailable"
+          },
+          {
+            "alternative_id": "joint:t1-geometric-1",
+            "heldout_rank": null,
+            "heldout_rank_excluding_pitch": null,
+            "reason": "Calibration alternative was unscorable",
+            "requested_f0_hz": null,
+            "score": null,
+            "score_excluding_pitch": null,
+            "simulated_f0_hz": null,
+            "status": "unavailable"
+          },
+          {
+            "alternative_id": "joint:t1-geometric-2",
+            "heldout_rank": null,
+            "heldout_rank_excluding_pitch": null,
+            "reason": "Calibration alternative was unscorable",
+            "requested_f0_hz": null,
+            "score": null,
+            "score_excluding_pitch": null,
+            "simulated_f0_hz": null,
+            "status": "unavailable"
+          },
+          {
+            "alternative_id": "joint:t0-two_mass-0",
+            "heldout_rank": 11,
+            "heldout_rank_excluding_pitch": 11,
+            "reason": null,
+            "requested_f0_hz": 190.0,
+            "score": 0.21199382879882975,
+            "score_excluding_pitch": 0.10880328968212338,
+            "simulated_f0_hz": 204.54612651989237,
+            "status": "scored"
+          },
+          {
+            "alternative_id": "joint:t0-two_mass-1",
+            "heldout_rank": null,
+            "heldout_rank_excluding_pitch": null,
+            "reason": "Required predicted descriptor unavailable",
+            "requested_f0_hz": 190.0,
+            "score": null,
+            "score_excluding_pitch": null,
+            "simulated_f0_hz": 192.04963135403057,
+            "status": "unavailable"
+          },
+          {
+            "alternative_id": "joint:t0-two_mass-2",
+            "heldout_rank": 7,
+            "heldout_rank_excluding_pitch": 8,
+            "reason": null,
+            "requested_f0_hz": 190.0,
+            "score": 0.040580637764925445,
+            "score_excluding_pitch": 0.05409298916053229,
+            "simulated_f0_hz": 189.97019318023604,
+            "status": "scored"
+          },
+          {
+            "alternative_id": "joint:t1-two_mass-0",
+            "heldout_rank": null,
+            "heldout_rank_excluding_pitch": null,
+            "reason": "Calibration alternative was unscorable",
+            "requested_f0_hz": null,
+            "score": null,
+            "score_excluding_pitch": null,
+            "simulated_f0_hz": null,
+            "status": "unavailable"
+          },
+          {
+            "alternative_id": "joint:t1-two_mass-1",
+            "heldout_rank": null,
+            "heldout_rank_excluding_pitch": null,
+            "reason": "Calibration alternative was unscorable",
+            "requested_f0_hz": null,
+            "score": null,
+            "score_excluding_pitch": null,
+            "simulated_f0_hz": null,
+            "status": "unavailable"
+          },
+          {
+            "alternative_id": "joint:t1-two_mass-2",
+            "heldout_rank": null,
+            "heldout_rank_excluding_pitch": null,
+            "reason": "Calibration alternative was unscorable",
+            "requested_f0_hz": null,
+            "score": null,
+            "score_excluding_pitch": null,
+            "simulated_f0_hz": null,
+            "status": "unavailable"
+          },
+          {
+            "alternative_id": "fixed_source:t0-geometric-0",
+            "heldout_rank": 6,
+            "heldout_rank_excluding_pitch": 6,
+            "reason": null,
+            "requested_f0_hz": 190.0,
+            "score": 0.022445365794962403,
+            "score_excluding_pitch": 0.02992654003110755,
+            "simulated_f0_hz": 190.07507683522755,
+            "status": "scored"
+          },
+          {
+            "alternative_id": "fixed_source:t0-geometric-1",
+            "heldout_rank": 6,
+            "heldout_rank_excluding_pitch": 6,
+            "reason": null,
+            "requested_f0_hz": 190.0,
+            "score": 0.022445365794962403,
+            "score_excluding_pitch": 0.02992654003110755,
+            "simulated_f0_hz": 190.07507683522755,
+            "status": "scored"
+          },
+          {
+            "alternative_id": "fixed_source:t0-geometric-2",
+            "heldout_rank": 6,
+            "heldout_rank_excluding_pitch": 6,
+            "reason": null,
+            "requested_f0_hz": 190.0,
+            "score": 0.022445365794962403,
+            "score_excluding_pitch": 0.02992654003110755,
+            "simulated_f0_hz": 190.07507683522755,
+            "status": "scored"
+          },
+          {
+            "alternative_id": "fixed_source:t1-geometric-0",
+            "heldout_rank": null,
+            "heldout_rank_excluding_pitch": null,
+            "reason": "Calibration alternative was unscorable",
+            "requested_f0_hz": null,
+            "score": null,
+            "score_excluding_pitch": null,
+            "simulated_f0_hz": null,
+            "status": "unavailable"
+          },
+          {
+            "alternative_id": "fixed_source:t1-geometric-1",
+            "heldout_rank": null,
+            "heldout_rank_excluding_pitch": null,
+            "reason": "Calibration alternative was unscorable",
+            "requested_f0_hz": null,
+            "score": null,
+            "score_excluding_pitch": null,
+            "simulated_f0_hz": null,
+            "status": "unavailable"
+          },
+          {
+            "alternative_id": "fixed_source:t1-geometric-2",
+            "heldout_rank": null,
+            "heldout_rank_excluding_pitch": null,
+            "reason": "Calibration alternative was unscorable",
+            "requested_f0_hz": null,
+            "score": null,
+            "score_excluding_pitch": null,
+            "simulated_f0_hz": null,
+            "status": "unavailable"
+          },
+          {
+            "alternative_id": "fixed_source:t0-two_mass-0",
+            "heldout_rank": 5,
+            "heldout_rank_excluding_pitch": 3,
+            "reason": null,
+            "requested_f0_hz": 190.0,
+            "score": 0.013520981329917024,
+            "score_excluding_pitch": 0.004521517178097269,
+            "simulated_f0_hz": 194.1281138353374,
+            "status": "scored"
+          },
+          {
+            "alternative_id": "fixed_source:t0-two_mass-1",
+            "heldout_rank": 5,
+            "heldout_rank_excluding_pitch": 3,
+            "reason": null,
+            "requested_f0_hz": 190.0,
+            "score": 0.013520981329917024,
+            "score_excluding_pitch": 0.004521517178097269,
+            "simulated_f0_hz": 194.1281138353374,
+            "status": "scored"
+          },
+          {
+            "alternative_id": "fixed_source:t0-two_mass-2",
+            "heldout_rank": 5,
+            "heldout_rank_excluding_pitch": 3,
+            "reason": null,
+            "requested_f0_hz": 190.0,
+            "score": 0.013520981329917024,
+            "score_excluding_pitch": 0.004521517178097269,
+            "simulated_f0_hz": 194.1281138353374,
+            "status": "scored"
+          },
+          {
+            "alternative_id": "fixed_source:t1-two_mass-0",
+            "heldout_rank": null,
+            "heldout_rank_excluding_pitch": null,
+            "reason": "Calibration alternative was unscorable",
+            "requested_f0_hz": null,
+            "score": null,
+            "score_excluding_pitch": null,
+            "simulated_f0_hz": null,
+            "status": "unavailable"
+          },
+          {
+            "alternative_id": "fixed_source:t1-two_mass-1",
+            "heldout_rank": null,
+            "heldout_rank_excluding_pitch": null,
+            "reason": "Calibration alternative was unscorable",
+            "requested_f0_hz": null,
+            "score": null,
+            "score_excluding_pitch": null,
+            "simulated_f0_hz": null,
+            "status": "unavailable"
+          },
+          {
+            "alternative_id": "fixed_source:t1-two_mass-2",
+            "heldout_rank": null,
+            "heldout_rank_excluding_pitch": null,
+            "reason": "Calibration alternative was unscorable",
+            "requested_f0_hz": null,
+            "score": null,
+            "score_excluding_pitch": null,
+            "simulated_f0_hz": null,
+            "status": "unavailable"
+          },
+          {
+            "alternative_id": "fixed_anatomy:t0-geometric-0",
+            "heldout_rank": 4,
+            "heldout_rank_excluding_pitch": 5,
+            "reason": null,
+            "requested_f0_hz": 190.0,
+            "score": 0.013244966970554795,
+            "score_excluding_pitch": 0.017659827917742437,
+            "simulated_f0_hz": 190.0898332716741,
+            "status": "scored"
+          },
+          {
+            "alternative_id": "fixed_anatomy:t0-geometric-1",
+            "heldout_rank": 1,
+            "heldout_rank_excluding_pitch": 1,
+            "reason": null,
+            "requested_f0_hz": 190.0,
+            "score": 2.340964776938259e-05,
+            "score_excluding_pitch": 3.1153674637960146e-05,
+            "simulated_f0_hz": 190.09380115601036,
+            "status": "scored"
+          },
+          {
+            "alternative_id": "fixed_anatomy:t0-geometric-2",
+            "heldout_rank": 3,
+            "heldout_rank_excluding_pitch": 4,
+            "reason": null,
+            "requested_f0_hz": 190.0,
+            "score": 0.005814154983398336,
+            "score_excluding_pitch": 0.007752202394212741,
+            "simulated_f0_hz": 190.0999704972611,
+            "status": "scored"
+          },
+          {
+            "alternative_id": "fixed_anatomy:t1-geometric-0",
+            "heldout_rank": 4,
+            "heldout_rank_excluding_pitch": 5,
+            "reason": null,
+            "requested_f0_hz": 190.0,
+            "score": 0.013244966970554795,
+            "score_excluding_pitch": 0.017659827917742437,
+            "simulated_f0_hz": 190.0898332716741,
+            "status": "scored"
+          },
+          {
+            "alternative_id": "fixed_anatomy:t1-geometric-1",
+            "heldout_rank": 1,
+            "heldout_rank_excluding_pitch": 1,
+            "reason": null,
+            "requested_f0_hz": 190.0,
+            "score": 2.340964776938259e-05,
+            "score_excluding_pitch": 3.1153674637960146e-05,
+            "simulated_f0_hz": 190.09380115601036,
+            "status": "scored"
+          },
+          {
+            "alternative_id": "fixed_anatomy:t1-geometric-2",
+            "heldout_rank": 3,
+            "heldout_rank_excluding_pitch": 4,
+            "reason": null,
+            "requested_f0_hz": 190.0,
+            "score": 0.005814154983398336,
+            "score_excluding_pitch": 0.007752202394212741,
+            "simulated_f0_hz": 190.0999704972611,
+            "status": "scored"
+          },
+          {
+            "alternative_id": "fixed_anatomy:t0-two_mass-0",
+            "heldout_rank": 8,
+            "heldout_rank_excluding_pitch": 7,
+            "reason": null,
+            "requested_f0_hz": 190.0,
+            "score": 0.054294408604714225,
+            "score_excluding_pitch": 0.0305718674687952,
+            "simulated_f0_hz": 197.1863528968128,
+            "status": "scored"
+          },
+          {
+            "alternative_id": "fixed_anatomy:t0-two_mass-1",
+            "heldout_rank": null,
+            "heldout_rank_excluding_pitch": null,
+            "reason": "Required predicted descriptor unavailable",
+            "requested_f0_hz": 190.0,
+            "score": null,
+            "score_excluding_pitch": null,
+            "simulated_f0_hz": 187.25880387947387,
+            "status": "unavailable"
+          },
+          {
+            "alternative_id": "fixed_anatomy:t0-two_mass-2",
+            "heldout_rank": 10,
+            "heldout_rank_excluding_pitch": 10,
+            "reason": null,
+            "requested_f0_hz": 190.0,
+            "score": 0.0958962265329634,
+            "score_excluding_pitch": 0.10117330232523301,
+            "simulated_f0_hz": 184.44307704970703,
+            "status": "scored"
+          },
+          {
+            "alternative_id": "fixed_anatomy:t1-two_mass-0",
+            "heldout_rank": 8,
+            "heldout_rank_excluding_pitch": 7,
+            "reason": null,
+            "requested_f0_hz": 190.0,
+            "score": 0.054294408604714225,
+            "score_excluding_pitch": 0.0305718674687952,
+            "simulated_f0_hz": 197.1863528968128,
+            "status": "scored"
+          },
+          {
+            "alternative_id": "fixed_anatomy:t1-two_mass-1",
+            "heldout_rank": null,
+            "heldout_rank_excluding_pitch": null,
+            "reason": "Required predicted descriptor unavailable",
+            "requested_f0_hz": 190.0,
+            "score": null,
+            "score_excluding_pitch": null,
+            "simulated_f0_hz": 187.25880387947387,
+            "status": "unavailable"
+          },
+          {
+            "alternative_id": "fixed_anatomy:t1-two_mass-2",
+            "heldout_rank": 10,
+            "heldout_rank_excluding_pitch": 10,
+            "reason": null,
+            "requested_f0_hz": 190.0,
+            "score": 0.0958962265329634,
+            "score_excluding_pitch": 0.10117330232523301,
+            "simulated_f0_hz": 184.44307704970703,
+            "status": "scored"
+          }
+        ],
+        "canonical_extractions": 1,
+        "reason": "Conditional heldout bank discrepancies",
+        "status": "available"
+      }
+    },
+    "o": {
+      "bank_coverage": {
+        "available": 24,
+        "complete": false,
+        "total": 36,
+        "unavailable": 12
+      },
+      "bank_sha256": "e06a68ed4de067700c88cf7a4cc10a11faa0ee04143d63c2b2d9cef3fa027dad",
+      "metrics": {
+        "pitch_excluded": {
+          "difference_two_mass_minus_geometric": 0.4073138453042459,
+          "failures": {
+            "geometric": false,
+            "two_mass": false
+          },
+          "heldout_discrepancy": {
+            "geometric": 0.44249984193896913,
+            "two_mass": 0.849813687243215
+          },
+          "joint_ranking": [
+            "t0-two_mass-0",
+            "t0-geometric-1",
+            "t0-geometric-0",
+            "t0-two_mass-2",
+            "t0-two_mass-1",
+            "t0-geometric-2"
+          ],
+          "nearest_grid_rank": null,
+          "selected": {
+            "geometric": "t0-geometric-0",
+            "two_mass": "t0-two_mass-2"
+          },
+          "true_family_rank": 2,
+          "winner": "geometric"
+        },
+        "primary": {
+          "difference_two_mass_minus_geometric": -0.24594815705261097,
+          "failures": {
+            "geometric": false,
+            "two_mass": false
+          },
+          "heldout_discrepancy": {
+            "geometric": 0.3318749126622999,
+            "two_mass": 0.08592675560968895
+          },
+          "joint_ranking": [
+            "t0-two_mass-0",
+            "t0-geometric-1",
+            "t0-geometric-0",
+            "t0-two_mass-2",
+            "t0-two_mass-1",
+            "t0-geometric-2"
+          ],
+          "nearest_grid_rank": null,
+          "selected": {
+            "geometric": "t0-geometric-0",
+            "two_mass": "t0-two_mass-0"
+          },
+          "true_family_rank": 2,
+          "winner": "two_mass"
+        },
+        "unscorable_alternatives": {
+          "geometric": 3,
+          "two_mass": 3
+        }
+      },
+      "score": {
+        "actual_synthesis_calls": 0,
+        "alternatives": [
+          {
+            "alternative_id": "joint:t0-geometric-0",
+            "heldout_rank": 8,
+            "heldout_rank_excluding_pitch": 8,
+            "reason": null,
+            "requested_f0_hz": 190.0,
+            "score": 0.3318749126622999,
+            "score_excluding_pitch": 0.44249984193896913,
+            "simulated_f0_hz": 190.0351575129945,
+            "status": "scored"
+          },
+          {
+            "alternative_id": "joint:t0-geometric-1",
+            "heldout_rank": 7,
+            "heldout_rank_excluding_pitch": 7,
+            "reason": null,
+            "requested_f0_hz": 190.0,
+            "score": 0.23161538426754472,
+            "score_excluding_pitch": 0.30882046473301655,
+            "simulated_f0_hz": 190.03565084976356,
+            "status": "scored"
+          },
+          {
+            "alternative_id": "joint:t0-geometric-2",
+            "heldout_rank": 13,
+            "heldout_rank_excluding_pitch": 13,
+            "reason": null,
+            "requested_f0_hz": 190.0,
+            "score": 1.7848126678400813,
+            "score_excluding_pitch": 2.3797501825023013,
+            "simulated_f0_hz": 190.03512975321675,
+            "status": "scored"
+          },
+          {
+            "alternative_id": "joint:t1-geometric-0",
+            "heldout_rank": null,
+            "heldout_rank_excluding_pitch": null,
+            "reason": "Calibration alternative was unscorable",
+            "requested_f0_hz": null,
+            "score": null,
+            "score_excluding_pitch": null,
+            "simulated_f0_hz": null,
+            "status": "unavailable"
+          },
+          {
+            "alternative_id": "joint:t1-geometric-1",
+            "heldout_rank": null,
+            "heldout_rank_excluding_pitch": null,
+            "reason": "Calibration alternative was unscorable",
+            "requested_f0_hz": null,
+            "score": null,
+            "score_excluding_pitch": null,
+            "simulated_f0_hz": null,
+            "status": "unavailable"
+          },
+          {
+            "alternative_id": "joint:t1-geometric-2",
+            "heldout_rank": null,
+            "heldout_rank_excluding_pitch": null,
+            "reason": "Calibration alternative was unscorable",
+            "requested_f0_hz": null,
+            "score": null,
+            "score_excluding_pitch": null,
+            "simulated_f0_hz": null,
+            "status": "unavailable"
+          },
+          {
+            "alternative_id": "joint:t0-two_mass-0",
+            "heldout_rank": 5,
+            "heldout_rank_excluding_pitch": 4,
+            "reason": null,
+            "requested_f0_hz": 190.0,
+            "score": 0.08592675560968895,
+            "score_excluding_pitch": 0.033476445798777406,
+            "simulated_f0_hz": 199.89272874148722,
+            "status": "scored"
+          },
+          {
+            "alternative_id": "joint:t0-two_mass-1",
+            "heldout_rank": 11,
+            "heldout_rank_excluding_pitch": 11,
+            "reason": null,
+            "requested_f0_hz": 190.0,
+            "score": 0.8737499127199383,
+            "score_excluding_pitch": 1.0607519428573557,
+            "simulated_f0_hz": 178.84339052716908,
+            "status": "scored"
+          },
+          {
+            "alternative_id": "joint:t0-two_mass-2",
+            "heldout_rank": 10,
+            "heldout_rank_excluding_pitch": 10,
+            "reason": null,
+            "requested_f0_hz": 190.0,
+            "score": 0.6507871104718415,
+            "score_excluding_pitch": 0.849813687243215,
+            "simulated_f0_hz": 185.3931206333918,
+            "status": "scored"
+          },
+          {
+            "alternative_id": "joint:t1-two_mass-0",
+            "heldout_rank": null,
+            "heldout_rank_excluding_pitch": null,
+            "reason": "Calibration alternative was unscorable",
+            "requested_f0_hz": null,
+            "score": null,
+            "score_excluding_pitch": null,
+            "simulated_f0_hz": null,
+            "status": "unavailable"
+          },
+          {
+            "alternative_id": "joint:t1-two_mass-1",
+            "heldout_rank": null,
+            "heldout_rank_excluding_pitch": null,
+            "reason": "Calibration alternative was unscorable",
+            "requested_f0_hz": null,
+            "score": null,
+            "score_excluding_pitch": null,
+            "simulated_f0_hz": null,
+            "status": "unavailable"
+          },
+          {
+            "alternative_id": "joint:t1-two_mass-2",
+            "heldout_rank": null,
+            "heldout_rank_excluding_pitch": null,
+            "reason": "Calibration alternative was unscorable",
+            "requested_f0_hz": null,
+            "score": null,
+            "score_excluding_pitch": null,
+            "simulated_f0_hz": null,
+            "status": "unavailable"
+          },
+          {
+            "alternative_id": "fixed_source:t0-geometric-0",
+            "heldout_rank": 7,
+            "heldout_rank_excluding_pitch": 7,
+            "reason": null,
+            "requested_f0_hz": 190.0,
+            "score": 0.23161538426754472,
+            "score_excluding_pitch": 0.30882046473301655,
+            "simulated_f0_hz": 190.03565084976356,
+            "status": "scored"
+          },
+          {
+            "alternative_id": "fixed_source:t0-geometric-1",
+            "heldout_rank": 7,
+            "heldout_rank_excluding_pitch": 7,
+            "reason": null,
+            "requested_f0_hz": 190.0,
+            "score": 0.23161538426754472,
+            "score_excluding_pitch": 0.30882046473301655,
+            "simulated_f0_hz": 190.03565084976356,
+            "status": "scored"
+          },
+          {
+            "alternative_id": "fixed_source:t0-geometric-2",
+            "heldout_rank": 7,
+            "heldout_rank_excluding_pitch": 7,
+            "reason": null,
+            "requested_f0_hz": 190.0,
+            "score": 0.23161538426754472,
+            "score_excluding_pitch": 0.30882046473301655,
+            "simulated_f0_hz": 190.03565084976356,
+            "status": "scored"
+          },
+          {
+            "alternative_id": "fixed_source:t1-geometric-0",
+            "heldout_rank": null,
+            "heldout_rank_excluding_pitch": null,
+            "reason": "Calibration alternative was unscorable",
+            "requested_f0_hz": null,
+            "score": null,
+            "score_excluding_pitch": null,
+            "simulated_f0_hz": null,
+            "status": "unavailable"
+          },
+          {
+            "alternative_id": "fixed_source:t1-geometric-1",
+            "heldout_rank": null,
+            "heldout_rank_excluding_pitch": null,
+            "reason": "Calibration alternative was unscorable",
+            "requested_f0_hz": null,
+            "score": null,
+            "score_excluding_pitch": null,
+            "simulated_f0_hz": null,
+            "status": "unavailable"
+          },
+          {
+            "alternative_id": "fixed_source:t1-geometric-2",
+            "heldout_rank": null,
+            "heldout_rank_excluding_pitch": null,
+            "reason": "Calibration alternative was unscorable",
+            "requested_f0_hz": null,
+            "score": null,
+            "score_excluding_pitch": null,
+            "simulated_f0_hz": null,
+            "status": "unavailable"
+          },
+          {
+            "alternative_id": "fixed_source:t0-two_mass-0",
+            "heldout_rank": 1,
+            "heldout_rank_excluding_pitch": 1,
+            "reason": null,
+            "requested_f0_hz": 190.0,
+            "score": 0.010423607067397669,
+            "score_excluding_pitch": 0.013807815348244013,
+            "simulated_f0_hz": 189.6988604354091,
+            "status": "scored"
+          },
+          {
+            "alternative_id": "fixed_source:t0-two_mass-1",
+            "heldout_rank": 1,
+            "heldout_rank_excluding_pitch": 1,
+            "reason": null,
+            "requested_f0_hz": 190.0,
+            "score": 0.010423607067397669,
+            "score_excluding_pitch": 0.013807815348244013,
+            "simulated_f0_hz": 189.6988604354091,
+            "status": "scored"
+          },
+          {
+            "alternative_id": "fixed_source:t0-two_mass-2",
+            "heldout_rank": 1,
+            "heldout_rank_excluding_pitch": 1,
+            "reason": null,
+            "requested_f0_hz": 190.0,
+            "score": 0.010423607067397669,
+            "score_excluding_pitch": 0.013807815348244013,
+            "simulated_f0_hz": 189.6988604354091,
+            "status": "scored"
+          },
+          {
+            "alternative_id": "fixed_source:t1-two_mass-0",
+            "heldout_rank": null,
+            "heldout_rank_excluding_pitch": null,
+            "reason": "Calibration alternative was unscorable",
+            "requested_f0_hz": null,
+            "score": null,
+            "score_excluding_pitch": null,
+            "simulated_f0_hz": null,
+            "status": "unavailable"
+          },
+          {
+            "alternative_id": "fixed_source:t1-two_mass-1",
+            "heldout_rank": null,
+            "heldout_rank_excluding_pitch": null,
+            "reason": "Calibration alternative was unscorable",
+            "requested_f0_hz": null,
+            "score": null,
+            "score_excluding_pitch": null,
+            "simulated_f0_hz": null,
+            "status": "unavailable"
+          },
+          {
+            "alternative_id": "fixed_source:t1-two_mass-2",
+            "heldout_rank": null,
+            "heldout_rank_excluding_pitch": null,
+            "reason": "Calibration alternative was unscorable",
+            "requested_f0_hz": null,
+            "score": null,
+            "score_excluding_pitch": null,
+            "simulated_f0_hz": null,
+            "status": "unavailable"
+          },
+          {
+            "alternative_id": "fixed_anatomy:t0-geometric-0",
+            "heldout_rank": 4,
+            "heldout_rank_excluding_pitch": 5,
+            "reason": null,
+            "requested_f0_hz": 190.0,
+            "score": 0.03307678094432968,
+            "score_excluding_pitch": 0.04410237414504353,
+            "simulated_f0_hz": 190.02735847255246,
+            "status": "scored"
+          },
+          {
+            "alternative_id": "fixed_anatomy:t0-geometric-1",
+            "heldout_rank": 2,
+            "heldout_rank_excluding_pitch": 2,
+            "reason": null,
+            "requested_f0_hz": 190.0,
+            "score": 0.017299482437456718,
+            "score_excluding_pitch": 0.02306597649190233,
+            "simulated_f0_hz": 190.0277600589469,
+            "status": "scored"
+          },
+          {
+            "alternative_id": "fixed_anatomy:t0-geometric-2",
+            "heldout_rank": 3,
+            "heldout_rank_excluding_pitch": 3,
+            "reason": null,
+            "requested_f0_hz": 190.0,
+            "score": 0.02441699919452916,
+            "score_excluding_pitch": 0.032555974876876566,
+            "simulated_f0_hz": 190.03346324711268,
+            "status": "scored"
+          },
+          {
+            "alternative_id": "fixed_anatomy:t1-geometric-0",
+            "heldout_rank": 4,
+            "heldout_rank_excluding_pitch": 5,
+            "reason": null,
+            "requested_f0_hz": 190.0,
+            "score": 0.03307678094432968,
+            "score_excluding_pitch": 0.04410237414504353,
+            "simulated_f0_hz": 190.02735847255246,
+            "status": "scored"
+          },
+          {
+            "alternative_id": "fixed_anatomy:t1-geometric-1",
+            "heldout_rank": 2,
+            "heldout_rank_excluding_pitch": 2,
+            "reason": null,
+            "requested_f0_hz": 190.0,
+            "score": 0.017299482437456718,
+            "score_excluding_pitch": 0.02306597649190233,
+            "simulated_f0_hz": 190.0277600589469,
+            "status": "scored"
+          },
+          {
+            "alternative_id": "fixed_anatomy:t1-geometric-2",
+            "heldout_rank": 3,
+            "heldout_rank_excluding_pitch": 3,
+            "reason": null,
+            "requested_f0_hz": 190.0,
+            "score": 0.02441699919452916,
+            "score_excluding_pitch": 0.032555974876876566,
+            "simulated_f0_hz": 190.03346324711268,
+            "status": "scored"
+          },
+          {
+            "alternative_id": "fixed_anatomy:t0-two_mass-0",
+            "heldout_rank": 12,
+            "heldout_rank_excluding_pitch": 12,
+            "reason": null,
+            "requested_f0_hz": 190.0,
+            "score": 1.0448668539860948,
+            "score_excluding_pitch": 1.391666015503522,
+            "simulated_f0_hz": 191.3651580448116,
+            "status": "scored"
+          },
+          {
+            "alternative_id": "fixed_anatomy:t0-two_mass-1",
+            "heldout_rank": 9,
+            "heldout_rank_excluding_pitch": 9,
+            "reason": null,
+            "requested_f0_hz": 190.0,
+            "score": 0.568518784897715,
+            "score_excluding_pitch": 0.5076593814766864,
+            "simulated_f0_hz": 172.69492073404737,
+            "status": "scored"
+          },
+          {
+            "alternative_id": "fixed_anatomy:t0-two_mass-2",
+            "heldout_rank": 6,
+            "heldout_rank_excluding_pitch": 6,
+            "reason": null,
+            "requested_f0_hz": 190.0,
+            "score": 0.16565528825738585,
+            "score_excluding_pitch": 0.10015461504691824,
+            "simulated_f0_hz": 177.99218976347115,
+            "status": "scored"
+          },
+          {
+            "alternative_id": "fixed_anatomy:t1-two_mass-0",
+            "heldout_rank": 12,
+            "heldout_rank_excluding_pitch": 12,
+            "reason": null,
+            "requested_f0_hz": 190.0,
+            "score": 1.0448668539860948,
+            "score_excluding_pitch": 1.391666015503522,
+            "simulated_f0_hz": 191.3651580448116,
+            "status": "scored"
+          },
+          {
+            "alternative_id": "fixed_anatomy:t1-two_mass-1",
+            "heldout_rank": 9,
+            "heldout_rank_excluding_pitch": 9,
+            "reason": null,
+            "requested_f0_hz": 190.0,
+            "score": 0.568518784897715,
+            "score_excluding_pitch": 0.5076593814766864,
+            "simulated_f0_hz": 172.69492073404737,
+            "status": "scored"
+          },
+          {
+            "alternative_id": "fixed_anatomy:t1-two_mass-2",
+            "heldout_rank": 6,
+            "heldout_rank_excluding_pitch": 6,
+            "reason": null,
+            "requested_f0_hz": 190.0,
+            "score": 0.16565528825738585,
+            "score_excluding_pitch": 0.10015461504691824,
+            "simulated_f0_hz": 177.99218976347115,
+            "status": "scored"
+          }
+        ],
+        "canonical_extractions": 1,
+        "reason": "Conditional heldout bank discrepancies",
+        "status": "available"
+      }
+    }
+  },
+  "native_calls": {
+    "bank-e": 24,
+    "bank-o": 24,
+    "fit": 72
+  },
+  "nearest_grid": "t1-geometric-2",
+  "status": "evaluated",
+  "wall_s": 37.32
+}
