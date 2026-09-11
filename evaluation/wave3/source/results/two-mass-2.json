@@ -4,7 +4,12 @@
   "fit": {
     "actual_synthesis_calls": 0,
     "best": {},
-    "joint": [],
+    "observation_descriptor_reasons": {
+      "cal-a": {},
+      "cal-u": {
+        "harmonicSpectralSlopeDbOctave": "Fewer than four harmonic amplitudes within40dB of strongest harmonic"
+      }
+    },
     "per_family_calls": {},
     "reason": "Required observed phonation descriptors unavailable",
     "status": "insufficient-quality"
@@ -124,6 +129,6 @@
     "fit": 0
   },
   "nearest_grid": "t1-two_mass-1",
-  "status": "evaluated",
-  "wall_s": 1.62
+  "status": "fit-insufficient-quality",
+  "wall_s": 1.27
 }

@@ -469,25 +469,27 @@
   "evidence_source": "synthetic",
   "f0_mismatch_hz": {
     "geometric": {
-      "count": 45,
-      "max": 0.08070648274090786,
-      "mean": 0.026875783006927476,
-      "mean_absolute": 0.029336739069646633,
-      "median": 0.014005583228851037,
-      "min": -0.012327565204628854,
-      "missing_pitch": 27
+      "count": 162,
+      "max": 0.09997049726109708,
+      "mean": 0.026475626207450535,
+      "mean_absolute": 0.03601512359976485,
+      "median": 0.025777465388756582,
+      "min": -0.08824081957359908,
+      "not_synthesized": 36,
+      "synthesized_without_pitch": 18
     },
     "two_mass": {
-      "count": 45,
+      "count": 162,
       "max": 14.546126519892368,
-      "mean": -8.23661835122294,
-      "mean_absolute": 12.618039167479342,
-      "median": -9.35856662700715,
+      "mean": -8.704313877044696,
+      "mean_absolute": 11.013499784866324,
+      "median": -5.556922950292972,
       "min": -60.28133094675495,
-      "missing_pitch": 27
+      "not_synthesized": 36,
+      "synthesized_without_pitch": 18
     }
   },
-  "finished_at": "2026-09-11T04:44:55.707584+00:00",
+  "finished_at": "2026-09-11T05:07:35.658782+00:00",
   "generators": [
     {
       "family": "geometric",
@@ -508,7 +510,7 @@
         "fit": 72
       },
       "status": "evaluated",
-      "wall_s": 34.66
+      "wall_s": 35.8
     },
     {
       "family": "geometric",
@@ -529,7 +531,7 @@
         "fit": 72
       },
       "status": "evaluated",
-      "wall_s": 37.32
+      "wall_s": 41.38
     },
     {
       "family": "two_mass",
@@ -550,7 +552,7 @@
         "fit": 72
       },
       "status": "evaluated",
-      "wall_s": 35.78
+      "wall_s": 42.16
     },
     {
       "family": "two_mass",
@@ -568,15 +570,15 @@
       "native_calls": {
         "fit": 0
       },
-      "status": "evaluated",
-      "wall_s": 1.62
+      "status": "fit-insufficient-quality",
+      "wall_s": 1.27
     }
   ],
   "hard_total_native_calls": 592,
-  "native_calls": 376,
+  "native_calls": 374,
   "protocol_version": "wave3-source-family-1",
   "provenance": {
-    "capability_sha256": "73d0a9beb421bb8412974701109cc3fceabaa0c847f35fdf447b027d343e4323",
+    "capability_sha256": "8d356aef50473b4effa67528ad575ff0666e2e5b3b5ace8ffe0d37e92d2aa474",
     "extractor_signature": {
       "science/scripts/phonation_bridge.ts": "3e0643156a7122c77f2ac3f2599d423e273e04c062e527c33e296a1642e4f7a8",
       "src/contracts/contracts.test.ts": "7ff8e1cd57f40c00f39250ca04412e212ec5d220d9da9103cfc81f23c1704b66",
@@ -601,12 +603,12 @@
       "engine.py": "180e1d6c177900d64252e899aeff79b724022df7bc6c1ce997896f6fa73a1d2a",
       "pcm_inverse.py": "2e0a3fb5a1ed8efba7c2955c8af3e8e48939ed28131e3c0df24c34a3cb476235"
     },
-    "source_adapter_sha256": "d9707d31d66e5e01629fcbdf3a1cb821dc1b6f02f1aaef7fc10ac455f0bbc791",
+    "source_adapter_sha256": "58ed517ccc6322ac6c1426d2bd4e08e156e0ef0b2c9bf2bf8b8dbd9d2218cc81",
     "source_model_version": "vtl-finite-geometric-two-mass-v2",
-    "started_at": "2026-09-11T04:43:06.164662+00:00",
+    "started_at": "2026-09-11T05:05:34.845166+00:00",
     "worktree": {
       "changed_paths": [],
-      "commit": "a622381f5004a4fed32c3917df21d3b36d4cfa8f",
+      "commit": "d3a1d280b6010115582769d4692843410cb19606",
       "dirty": false
     }
   }
