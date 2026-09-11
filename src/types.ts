@@ -6,7 +6,11 @@ export type Metrics = {
   lipWidth?: number; jawAsymmetry?: number; shoulderElevation?: number;
   distanceCm?: number; relativeDepth?: number; faceDepthSpan?: number;
 };
-export type TongueObservation = { observedAt?: number; confidence?: number; tip3D?: {x:number;y:number;z:number;depthSource:'learned'|'sensor'}; trackingMode?: 'region' | 'tip'; x: number; y: number; lateral: number; lift: number; visibleFraction: number; extension?: number; elevation?: number; curl?: number; tip?: Landmark; outline?: Landmark[] };
+/** A tip-driven tongue pose (personal tip model or the declared demo). */
+export type TongueTipObservation = { trackingMode?: 'tip'; observedAt?: number; confidence?: number; tip3D?: {x:number;y:number;z:number;depthSource:'learned'|'sensor'}; x: number; y: number; lateral: number; lift: number; visibleFraction: number; extension?: number; elevation?: number; curl?: number; tip?: Landmark };
+/** A detected visible-tongue box in normalized image coordinates [xMin,yMin,xMax,yMax]. It has no tip, pose or depth fields, so no consumer can read it as one. */
+export type TongueRegionObservation = { trackingMode: 'region'; observedAt: number; confidence: number; box: [number, number, number, number] };
+export type TongueObservation = TongueTipObservation | TongueRegionObservation;
 export type TongueDiagnostic = {state:'unselected'|'selected'|'tracking'|'lost';reason:string;score?:number;margin?:number};
 export type TrackingFrame = {
   tongueDiagnostic?: TongueDiagnostic;

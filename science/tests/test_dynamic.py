@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 
 from singing_physics.dynamic import KIND, fit_dynamic
+from singing_physics.joint import observed_landmarks
 from singing_physics.engine import Engine
 
 
@@ -154,3 +155,22 @@ def test_held_out_nested_depth_alias_and_conflicting_identity_are_rejected():
         frame["geometry_observation"].update(value_m=float("nan"), sigma_m=-1)
         repeat = fit_dynamic(engine, doc, budget_per_model=10, starts=1)
         assert first["joint_fit"] == repeat["joint_fit"]
+
+
+def test_tongue_region_box_is_rejected_as_a_landmark_and_tip_landmarks_are_copied():
+    tip = {"trackingMode": "tip", "x": .5, "y": .6, "lateral": .1, "lift": 0, "visibleFraction": 0}
+    frame = {"landmarks": {"tongue": tip}}
+    copied = observed_landmarks(frame)
+    assert copied == {"tongue": tip} and copied["tongue"] is not tip
+    assert observed_landmarks({}) == {}
+    for region in ({"trackingMode": "region", "box": [.3, .4, .7, .8], "confidence": .9, "observedAt": 1.},
+                   {"tracking_mode": "region", "box": [.3, .4, .7, .8]}):
+        with pytest.raises(ValueError, match="region box is not a landmark"):
+            observed_landmarks({"landmarks": {"tongue": region}})
+    with pytest.raises(ValueError, match="must be a dictionary"):
+        observed_landmarks({"landmarks": [tip]})
+    with Engine() as engine:
+        doc = dynamic_document(engine)
+        doc["attempts"][0]["frames"][0]["landmarks"]["tongue"] = {"trackingMode": "region", "box": [.3, .4, .7, .8]}
+        with pytest.raises(ValueError, match="region box is not a landmark"):
+            fit_dynamic(engine, doc, budget_per_model=10, starts=1)

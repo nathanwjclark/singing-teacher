@@ -1,6 +1,6 @@
 import * as ort from 'onnxruntime-web/wasm';
 import wasmUrl from 'onnxruntime-web/ort-wasm-simd-threaded.wasm?url';
-import type {Landmark, TongueDiagnostic, TongueObservation} from '../types';
+import type {Landmark, TongueDiagnostic, TongueObservation, TongueTipObservation} from '../types';
 
 ort.env.wasm.numThreads=1;
 ort.env.wasm.wasmPaths={wasm:wasmUrl};
@@ -31,7 +31,7 @@ export async function loadTongueNetwork(signal?:AbortSignal){
  },close:()=>session.release(),manifest};
 }
 
-export function neuralTipObservation(tip:NeuralTip,face:Landmark[],width:number,height:number,timestamp:number):TongueObservation|undefined{
+export function neuralTipObservation(tip:NeuralTip,face:Landmark[],width:number,height:number,timestamp:number):TongueTipObservation|undefined{
  if(!face[78]||!face[308]||!face[14]||tip.visibility<.55||tip.peak<.2||![tip.x,tip.y,tip.depth,tip.visibility,tip.peak].every(Number.isFinite))return;
  const [left,right]=[face[78],face[308]].sort((a,b)=>a.x-b.x);const dx=(right.x-left.x)*width,dy=(right.y-left.y)*height,span=Math.max(1,Math.hypot(dx,dy)),ux=dx/span,uy=dy/span;
  const tx=(tip.x-(left.x+right.x)/2)*width,ty=(tip.y-(left.y+right.y)/2)*height;
@@ -53,8 +53,7 @@ export function createNeuralTongueTracker(){
     failures=0;
     let observation:TongueObservation|undefined;
     if('box' in prediction){
-     const b=prediction.box;
-     if(b)observation={trackingMode:'region',x:(b[0]+b[2])/2,y:(b[1]+b[3])/2,lateral:0,lift:0,visibleFraction:0,observedAt:timestamp,confidence:prediction.score,outline:[{x:b[0],y:b[1]},{x:b[2],y:b[1]},{x:b[2],y:b[3]},{x:b[0],y:b[3]}]};
+     if(prediction.box)observation={trackingMode:'region',box:prediction.box,observedAt:timestamp,confidence:prediction.score};
      diagnostic={state:observation?'tracking':'lost',reason:observation?'TongueSAM visible-region box · tip and depth unavailable':'TongueSAM cannot identify a visible tongue region',score:prediction.score};
     }else{
      observation=neuralTipObservation(prediction,face,width,height,timestamp);

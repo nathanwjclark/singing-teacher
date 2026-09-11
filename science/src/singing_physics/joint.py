@@ -32,6 +32,18 @@ def _bounds(values, allowed, label):
     return result
 
 
+def observed_landmarks(frame):
+    """Copy a frame's landmarks for the record. A visible-tongue region box has no landmark
+    position, pose or depth; it is rejected rather than stored as a tongue landmark."""
+    landmarks = frame.get("landmarks", {})
+    if not isinstance(landmarks, dict):
+        raise ValueError("Frame landmarks must be a dictionary")
+    if any(isinstance(value, dict) and "region" in (value.get("trackingMode"), value.get("tracking_mode"))
+           for value in landmarks.values()):
+        raise ValueError("A tongue region box is not a landmark")
+    return deepcopy(landmarks)
+
+
 def fit_joint(engine: Engine, document, *, anatomy_bounds=None, articulation_bounds=None,
               budget_per_model=120, starts=3, seed=1):
     """Fit shared anatomy and independent trial controls; compare a fair baseline.

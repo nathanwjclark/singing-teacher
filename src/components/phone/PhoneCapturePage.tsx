@@ -70,10 +70,13 @@ export default function PhoneCapturePage() {
   const save = async () => {
     if (!preview || !step) return;
     setSaving(true);
+    const tongue = preview.frame?.tongue;
     try {
       await phoneRequest(session, '/snapshots', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
         stepId: step.id, capturedAt: preview.capturedAt, imageDataUrl: preview.imageDataUrl, width: preview.width, height: preview.height,
-        landmarks: { face: preview.frame?.face ?? [], pose: preview.frame?.pose ?? [], tongue: preview.frame?.tongue ?? null, timestamp: preview.frame?.timestamp ?? null },
+        // A visible-region box is separate evidence, never a tongue landmark with pose fields.
+        landmarks: { face: preview.frame?.face ?? [], pose: preview.frame?.pose ?? [], tongue: tongue?.trackingMode === 'region' ? null : tongue ?? null, timestamp: preview.frame?.timestamp ?? null },
+        visibleTongueRegion: tongue?.trackingMode === 'region' ? tongue : null,
         evidence: { kind: 'browser-rgb-bootstrap', depth: 'not-captured', internalMusculature: 'not-measured', mirrored: false },
       }) });
       setPreview(null); setIndex(index + 1); setStatus('Snapshot sent to your desktop.');

@@ -95,8 +95,11 @@ const serverHandler=async(req,res)=>{try{
     }
     if(route[2]==='snapshots'&&req.method==='POST'){
       const input=await body(req);const match=/^data:image\/(jpeg|png);base64,([A-Za-z0-9+/=]+)$/.exec(input.imageDataUrl||'');if(!match||typeof input.stepId!=='string')return json(res,400,{error:'Expected a captured JPEG/PNG image and step ID'});
+      const region=input.visibleTongueRegion,box=region?.box;
+      if(input.landmarks?.tongue?.trackingMode==='region')return json(res,400,{error:'A tongue region box is not a tongue landmark'});
+      if(region!=null&&(region.trackingMode!=='region'||!Array.isArray(box)||box.length!==4||!box.every(v=>Number.isFinite(v)&&v>=0&&v<=1)||box[2]<=box[0]||box[3]<=box[1]||!Number.isFinite(region.confidence)||!Number.isFinite(region.observedAt)||Object.keys(region).length!==4))return json(res,400,{error:'Invalid visible tongue region'});
       const id=randomUUID(),dir=resolve(dataRoot,'captures',session.sessionId);await mkdir(dir,{recursive:true});const file=`${id}.${match[1]==='jpeg'?'jpg':'png'}`;await writeFile(resolve(dir,file),Buffer.from(match[2],'base64'));
-      const snapshot={id,stepId:input.stepId,capturedAt:input.capturedAt,width:input.width,height:input.height,landmarks:input.landmarks,source:'phone-rgb',evidence:input.evidence,depth:{available:false,reason:'Browser capture does not expose measured hardware depth'},file};
+      const snapshot={id,stepId:input.stepId,capturedAt:input.capturedAt,width:input.width,height:input.height,landmarks:input.landmarks,visibleTongueRegion:region??null,source:'phone-rgb',evidence:input.evidence,depth:{available:false,reason:'Browser capture does not expose measured hardware depth'},file};
       await writeFile(resolve(dir,`${id}.json`),JSON.stringify(snapshot,null,2));session.snapshots.push(snapshot);return json(res,201,{snapshot,...summary()});
     }
     return json(res,405,{error:'Method not allowed'});
