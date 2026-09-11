@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
 import {mkdtemp,mkdir,writeFile,readFile,rm} from 'node:fs/promises';
+import {spawn} from 'node:child_process';
+import {createServer} from 'node:net';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {createSessionRecomputeRoutes} from './sessionRecompute.mjs';
@@ -58,4 +60,24 @@ test('invalid limits and nonlocal requests never launch a numerical worker',asyn
  for(const maxOperations of [0,17,1.5]){await route(request({requestId:first,maxOperations}),'invalid',run);assert.equal(replies.get('invalid').code,409);}
  await route({...request({requestId:first,maxOperations:1}),socket:{remoteAddress:'192.0.2.1'}},'remote',run);
  assert.equal(replies.get('remote').code,403);assert.equal(children.length,0);
+});
+
+test('status without a baseline model is unavailable with a plain reason, not a path',async t=>{
+ const {root,replies,route}=await fixture(t);
+ await rm(join(root,'science-current.json'));
+ await route(request(null,'GET'),'none',status);
+ assert.deepEqual(replies.get('none'),{code:200,body:{status:'unavailable',reason:'Complete a baseline voice model first'}});
+});
+
+test('the local app server mounts the recompute routes',{timeout:30_000},async t=>{
+ const {root}=await fixture(t);
+ const server=createServer();await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));const port=server.address().port;await new Promise(resolve=>server.close(resolve));
+ const app=spawn(process.execPath,['server/local.mjs'],{cwd:process.cwd(),env:{...process.env,PORT:String(port),HOST:'127.0.0.1',LOCAL_DATA_DIR:root,SCIENCE_URL:'',SCIENCE_TOKEN:'',OPENAI_API_KEY:'',OPENAI_ENV_FILE:'/dev/null'},stdio:'ignore'});
+ t.after(()=>app.kill('SIGTERM'));
+ const base=`http://127.0.0.1:${port}/api/session-recompute`;
+ let reply;for(let i=0;i<100&&!reply;i++){try{reply=await fetch(base+'/status');}catch{await new Promise(resolve=>setTimeout(resolve,100));}}
+ assert.equal(reply.status,200);assert.deepEqual(await reply.json(),{status:'not-run',runId:'run-synthetic',sessionId:'synthetic-session'});
+ const invalid=await fetch(base+'/run',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({requestId:'bad',maxOperations:1})});
+ assert.equal(invalid.status,409);assert.match((await invalid.json()).error,/one to sixteen/);
+ assert.equal((await fetch(base+'/unknown')).status,405);
 });

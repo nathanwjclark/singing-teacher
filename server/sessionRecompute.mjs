@@ -13,7 +13,7 @@ export function createSessionRecomputeRoutes({repo,dataRoot,json,env=process.env
  let running=null;
  const index=resolve(dataRoot,'session-recompute-current.json');
  async function context(){
-  const current=await read(resolve(dataRoot,'science-current.json'));
+  let current;try{current=await read(resolve(dataRoot,'science-current.json'));}catch(error){if(error.code==='ENOENT')throw Error('Complete a baseline voice model first');throw error;}
   if(current.status!=='succeeded'||!safeId(current.runId))throw Error('Complete a baseline voice model first');
   const summary=await read(resolve(dataRoot,'science-runs',current.runId,'summary.json'));
   if(!safeId(summary.sessionId))throw Error('Current run has no valid scientific session');
