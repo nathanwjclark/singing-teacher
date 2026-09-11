@@ -58,14 +58,14 @@ http.createServer(async(req,res)=>{try{const url=new URL(req.url,'http://localho
 
 
 def generated_capture(parent, identity, *, anatomy=None, pose='a', f0=180., ps=.2,
-                      ja=-3., pressure=8000., gain=1.):
+                      ja=-3., pressure=8000., gain=1., source_shape=None):
     """Original artifact bytes and manifests, not fabricated acoustic descriptors."""
     directory = capture(parent)
     with Engine() as engine:
         if anatomy is not None:
             engine.set_anatomy(anatomy)
         audio, _ = synthesize_phonation(engine, pose=pose, JA=ja, F0=f0,
-            PR=pressure, PS=ps, duration_s=.6)
+            PR=pressure, duration_s=.6, **(source_shape or {'PS':ps}))
         samples, _ = resample_native_pcm(audio, 44100, 48000)
     raw = (samples * gain).astype('<f4').tobytes()
     (directory / 'audio.pcm.raw').write_bytes(raw)
@@ -266,7 +266,7 @@ def test_optional_source_fit_forecast_later_capture_score_and_restart(tmp_path):
         alternative = next(row for row in frozen['alternatives'] if row['family'] == 'joint' and row['status'] == 'available')
         controls = alternative['controls']
         later = generated_capture(later_root, '00000000-0000-4000-8000-000000000011',
-            anatomy=alternative['anatomy'], f0=controls['F0'], ps=controls['PS'],
+            anatomy=alternative['anatomy'], f0=controls['F0'], source_shape={k:v for k,v in controls.items() if k not in ('JA','F0','PR','gain')},
             ja=controls['JA'], pressure=controls['PR'], gain=controls['gain'])
         publish_capture(data, later)
         call('/api/source/score', False, expected=202)
@@ -297,7 +297,7 @@ def test_optional_source_fit_forecast_later_capture_score_and_restart(tmp_path):
         second_root = data / 'second-later'
         second_root.mkdir()
         later2 = generated_capture(second_root, '00000000-0000-4000-8000-000000000012',
-            anatomy=alternative['anatomy'], f0=controls['F0']+7, ps=controls['PS'],
+            anatomy=alternative['anatomy'], f0=controls['F0']+7, source_shape={k:v for k,v in controls.items() if k not in ('JA','F0','PR','gain')},
             ja=controls['JA'], pressure=controls['PR'], gain=controls['gain'])
         publish_capture(data, later2)
         restart()

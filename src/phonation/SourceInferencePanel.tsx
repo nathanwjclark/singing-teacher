@@ -11,7 +11,7 @@ function text(value: unknown, fallback = 'Unavailable'): string {
 }
 function number(value: unknown): string { return typeof value === 'number' && Number.isFinite(value) ? value.toFixed(3) : 'Unavailable'; }
 function parameters(value: unknown): string {
-  return Object.entries(object(value)).filter(([, entry]) => typeof entry === 'number' && Number.isFinite(entry)).map(([key, entry]) => `${key}: ${number(entry)}`).join(' · ') || 'Unavailable';
+  return Object.entries(object(value)).filter(([key, entry]) => typeof entry === 'number' && Number.isFinite(entry) || key === 'source_model' && typeof entry === 'string').map(([key, entry]) => `${key}: ${typeof entry === 'string' ? entry : number(entry)}`).join(' · ') || 'Unavailable';
 }
 
 export function SourceInferencePanel() {
@@ -73,7 +73,7 @@ export function SourceInferencePanel() {
         <div className="source-inference-table"><table><thead><tr><th>Hypothesis</th><th>Status / discrepancy</th><th>Source and articulation controls</th><th>Tract parameters</th></tr></thead>
           <tbody>{alternatives.map((candidate, index) => <tr key={text(candidate.candidate_id, String(index))}><td>{text(candidate.candidate_id)}</td><td>{text(candidate.status)} · {number(candidate.score)}</td>
             <td>{(Array.isArray(candidate.predictions) ? candidate.predictions : []).map((prediction, i) => <p key={i}>{parameters(object(prediction).controls)}</p>)}</td><td>{parameters(candidate.anatomy)}</td></tr>)}</tbody></table></div>
-        <p>PS, F0, PR, JA and gain are simulator controls, not measurements of vocal-fold contact or instructions to reproduce internal pressures.</p></details>}
+        <p>PS (geometric pulse skew), XB/XT (mechanical rest displacement in cm), EAA (gap area in cm²), DF (damping factor), F0 (native frequency control), PR, JA and gain are simulator controls, not measurements of vocal-fold contact or instructions to reproduce internal pressures.</p></details>}
       {typeof fit.identifiability === 'string' && <p>{fit.identifiability}</p>}
     </>}
     <div className="source-inference-actions"><button disabled={!ready || alternatives.length === 0} onClick={() => void run('forecast')}>Freeze optional prediction</button></div>
