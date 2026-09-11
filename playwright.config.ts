@@ -12,7 +12,9 @@ export default defineConfig({
   // A CI retry is reported as flaky rather than hidden; local runs never retry.
   retries: process.env.CI ? 1 : 0,
   // Need the scientific worker as well; each has its own config (tests/<name>.config.ts).
-  testIgnore: ['spectral-objective.spec.ts', 'session-recompute.spec.ts', 'motion-timeline.spec.ts'],
+  // motion-audio.spec.ts runs in both: its empty-data case here, its native case in
+  // tests/motion-audio.config.ts.
+  testIgnore: ['spectral-objective.spec.ts', 'session-recompute.spec.ts', 'motion-timeline.spec.ts', 'visual-likelihood.spec.ts', 'lidar-runtime.spec.ts', 'source-bank-runtime.spec.ts'],
   use: { baseURL: `http://127.0.0.1:${port}`, browserName: 'chromium', channel: 'chrome' },
   webServer: {
     command: `rm -rf ${dataDir} && npm run build && node server/local.mjs`,
