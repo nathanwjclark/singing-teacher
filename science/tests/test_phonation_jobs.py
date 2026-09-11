@@ -65,12 +65,14 @@ def test_hung_extractor_descendant_terminated_with_job(tmp_path,monkeypatch):
     code='import os,time;from pathlib import Path;Path('+repr(str(pidfile))+').write_text(str(os.getpid()));time.sleep(120)'
     node.write_text('#!/bin/sh\nexec '+shlex.quote(sys.executable)+' -c '+shlex.quote(code)+'\n')
     node.chmod(0o700);monkeypatch.setenv('PATH',str(shim)+os.pathsep+os.environ['PATH'])
-    with JobService(tmp_path/'jobs',timeout_s=2) as service:
+    # The aggregate job timeout must outlast the worker's cold start (native load and synthesis)
+    # so the job reaches the hung extractor; with 2 s a loaded CI runner timed out before it.
+    with JobService(tmp_path/'jobs',timeout_s=8) as service:
         job=service.submit(dict(operation='fit_phonation',parameters=params),idempotency_key='hung-node')
-        deadline=time.monotonic()+5
+        deadline=time.monotonic()+8
         while not pidfile.exists() and time.monotonic()<deadline:time.sleep(.01)
         assert pidfile.exists()
-        status=service.wait(job,timeout_s=10);assert status['status']=='failed' and status['error']=='timeout'
+        status=service.wait(job,timeout_s=20);assert status['status']=='failed' and status['error']=='timeout'
         pid=int(pidfile.read_text());deadline=time.monotonic()+3
         while time.monotonic()<deadline:
             try:os.kill(pid,0)
