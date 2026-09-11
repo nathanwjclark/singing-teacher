@@ -119,7 +119,7 @@ def test_ledger_corruption_fails_closed_on_every_read_path(tmp_path,kind):
     finally:service.close()
 
 
-def test_control_pending_check_fails_closed_and_expands_each_stored_value_once(tmp_path,monkeypatch):
+def test_control_pending_check_fails_closed_and_expands_each_stored_value_once(tmp_path):
     """verify_ledger reads every event's pending job; a pending value no reader can parse is a 409, never a 500."""
     import singing_physics.session as session
     service=JobService(tmp_path/'jobs');controller=SessionController(tmp_path/'sessions',service,'pending-test')
@@ -148,8 +148,7 @@ def test_control_pending_check_fails_closed_and_expands_each_stored_value_once(t
         with controller._db() as db:
             db.execute('DELETE FROM events WHERE version>=5')
             db.execute('DELETE FROM nodes WHERE digest NOT IN (?,?,?,?,?)',(shared,*roots[:4]))
-        calls=[];real=session._text
-        monkeypatch.setattr(session,'_text',lambda entry,nodes:calls.append(entry) or real(entry,nodes))
-        assert len(controller.execute({'action':'replay'})['events'])==4
-        assert [entry for entry in calls if entry==['h',shared]]==[['h',shared]]
+        replay=controller.execute({'action':'replay'})
+        pending=list(session.state_fields(replay['events'],replay['nodes'],'pending'))
+        assert pending[0] is pending[1] is pending[2] and pending[0]['key']=='k' and pending[3] is None
     finally:service.close()

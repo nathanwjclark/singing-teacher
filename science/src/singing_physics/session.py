@@ -146,20 +146,21 @@ def join(digest, nodes):
 
 
 def state_fields(events, nodes, key):
-    """One top-level field of each verified event's state (None when absent), without joining whole states.
+    """Yield one top-level field of each verified event's state (None when absent), without joining whole states.
 
-    A stored value shared by several versions is expanded once; every failure is a ledger integrity failure."""
-    texts, values = {}, []
+    Consecutive events that name the same stored value share one parsed, read-only object, so a value
+    is expanded once per run and only one is held at a time; every failure is a ledger integrity failure."""
+    shared = value = None
     try:
         for event in events:
-            if 'state' in event: values.append(event['state'].get(key)); continue
-            tag, value = nodes[event['state_root']]
-            entry = ['v', value.get(key)] if tag == 'v' else value.get(key, ['v', None])
-            if entry[0] == 'h' and entry[1] not in texts: texts[entry[1]] = _text(entry, nodes)
-            values.append(json.loads(texts[entry[1]] if entry[0] == 'h' else _text(entry, nodes)))
+            if 'state' in event: yield event['state'].get(key); continue
+            tag, root = nodes[event['state_root']]
+            entry = ['v', root.get(key)] if tag == 'v' else root.get(key, ['v', None])
+            if entry[0] != 'h' or entry[1] != shared:
+                value, shared = json.loads(_text(entry, nodes)), entry[1] if entry[0] == 'h' else None
+            yield value
     except INTEGRITY_ERRORS as exc:
         raise RuntimeError('Session ledger integrity failure') from exc
-    return values
 
 
 def _verify(session_id, rows, load_nodes):
