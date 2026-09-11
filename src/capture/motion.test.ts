@@ -35,3 +35,10 @@ test('companion media requires exact bytes; missing legacy binding is not verifi
  await assert.rejects(()=>verifyMotionMedia({...media,sha256:undefined,byteLength:undefined},blob),/no media integrity/)
  await assert.rejects(()=>motionMediaBinding(new Blob([])),/empty/)
 })
+
+test('a tongue region box is never a tongue_tip landmark; only a tip observation is',()=>{
+ const region=motionSample({...frame(100),tongue:{trackingMode:'region',box:[.4,.4,.6,.6],observedAt:90,confidence:.99}},0,1,'gesture')
+ assert.deepEqual(region.points.at(-1),{name:'tongue_tip',image:null,headRelative:null,visibility:'missing',reason:'tip-not-tracked',confidence:null})
+ const tip=motionSample({...frame(100),tongue:{trackingMode:'tip',x:.5,y:.6,lateral:0,lift:0,visibleFraction:0,tip:{x:.5,y:.6}}},0,1,'gesture')
+ assert.deepEqual(tip.points.at(-1)?.image,[.5,.6])
+})

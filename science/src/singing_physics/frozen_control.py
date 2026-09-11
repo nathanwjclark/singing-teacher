@@ -6,7 +6,7 @@ import numpy as np
 from scipy.optimize import minimize_scalar
 
 from .engine import ANATOMY, Engine, finite
-from .joint import ALIGNMENT_TOLERANCE_SECONDS, LIP_OPERATOR
+from .joint import ALIGNMENT_TOLERANCE_SECONDS, LIP_OPERATOR, observed_landmarks
 from .prediction import Artifact, _encode, _identity, _timestamp, freeze_candidates
 
 KIND = "frozen_anatomy_dynamic_transfer"
@@ -205,7 +205,7 @@ def fit_frozen_control(engine: Engine, snapshot: Artifact, document, *, expected
                 raise ValueError("Invalid spectral observation")
             row.update(pose=pose, visibility=visibility, geometry_status=status,
                        geometry_reason=reason, measured_visible_geometry=measurement,
-                       observed_landmarks=deepcopy(frame.get("landmarks", {})))
+                       observed_landmarks=observed_landmarks(frame))
             fitted_frames.append((row, target))
         if cue_time > output["frames"][-1]["timestamp_seconds"]:
             raise ValueError("Cue delivery follows captured attempt")

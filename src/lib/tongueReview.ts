@@ -11,10 +11,10 @@ export function reviewPrediction(frame:TrackingFrame,crop:NonNullable<TrackingFr
  const tongue=frame.tongue;
  const result:ReviewPrediction={};
  if(tongue?.observedAt!==undefined)result.predictionObservedAt=tongue.observedAt;
- if(tongue?.trackingMode==='tip')result.prediction={x:(tongue.x-crop.x)/crop.width,y:(tongue.y-crop.y)/crop.height};
- if(tongue?.trackingMode==='region'&&tongue.outline?.length){
-  const xs=tongue.outline.map(p=>(p.x-crop.x)/crop.width),ys=tongue.outline.map(p=>(p.y-crop.y)/crop.height);
-  result.regionPrediction=[Math.min(...xs),Math.min(...ys),Math.max(...xs),Math.max(...ys)];
- }else if(frame.tongueDiagnostic?.reason.startsWith('TongueSAM'))result.regionPrediction=null;
+ if(tongue?.trackingMode==='region'){
+  const [x1,y1,x2,y2]=tongue.box,x=(v:number)=>(v-crop.x)/crop.width,y=(v:number)=>(v-crop.y)/crop.height;
+  result.regionPrediction=[x(x1),y(y1),x(x2),y(y2)];
+ }else if(tongue?.trackingMode==='tip')result.prediction={x:(tongue.x-crop.x)/crop.width,y:(tongue.y-crop.y)/crop.height};
+ else if(frame.tongueDiagnostic?.reason.startsWith('TongueSAM'))result.regionPrediction=null;
  return result;
 }

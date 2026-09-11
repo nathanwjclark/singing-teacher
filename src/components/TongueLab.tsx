@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { RefObject } from 'react';
-import type { TrackingFrame } from '../types';
+import type { TongueTipObservation, TrackingFrame } from '../types';
 import {reviewPrediction} from '../lib/tongueReview';
 import type {ReviewPrediction} from '../lib/tongueReview';
 import './TongueLab.css';
@@ -21,7 +21,7 @@ export default function TongueLab({video,frame,close}:Props){
   const setIndex=(value:number|null)=>{setIndexState(value);setVertices([])};
   const [motion,setMotion]=useState('up');
   const [status,setStatus]=useState('Waiting for a mouth crop');
-  const [tip3D,setTip3D]=useState<TrackingFrame['tongue']>();
+  const [tip3D,setTip3D]=useState<TongueTipObservation>();
   const [diagnostic,setDiagnostic]=useState<TrackingFrame['tongueDiagnostic']>();
   const currentCrop=useRef<TrackingFrame['tongueSearch']>(undefined);
   const chosen=index===null?undefined:samples[index];
@@ -38,7 +38,7 @@ export default function TongueLab({video,frame,close}:Props){
         ctx.drawImage(v,crop.x*v.videoWidth,crop.y*v.videoHeight,crop.width*v.videoWidth,crop.height*v.videoHeight,0,0,W,H);
         const prediction=reviewPrediction(f,crop);
         const p=prediction.prediction;
-        setStatus(f.tongueStatus??'No tip observation');setDiagnostic(f.tongueDiagnostic);setTip3D(f.tongue);
+        setStatus(f.tongueStatus??'No tip observation');setDiagnostic(f.tongueDiagnostic);setTip3D(f.tongue?.trackingMode==='region'?undefined:f.tongue);
         // Save the raw crop before drawing predictions: labels must see original pixels.
         if(capture.current.recording&&now-last>=250&&f.timestamp!==lastFrame){last=now;lastFrame=f.timestamp;
           if(capture.current.count>=80){setRecording(false);}else{
@@ -47,7 +47,6 @@ export default function TongueLab({video,frame,close}:Props){
           }
         }
         if(prediction.regionPrediction)regionBox(ctx,prediction.regionPrediction);
-        ctx.fillStyle='#ff71aa';for(const o of f.tongue?.outline??[]){ctx.beginPath();ctx.arc((o.x-crop.x)/crop.width*W,(o.y-crop.y)/crop.height*H,2,0,Math.PI*2);ctx.fill();}
         if(p)cross(ctx,p,'#ff71aa');
       }else{setCanFreeze(false);currentCrop.current=undefined;setStatus('Waiting for a live mouth crop');setDiagnostic(undefined);setTip3D(undefined);ctx?.clearRect(0,0,W,H);}
       raf=requestAnimationFrame(tick);
