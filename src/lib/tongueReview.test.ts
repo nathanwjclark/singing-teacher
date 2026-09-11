@@ -3,13 +3,23 @@ import assert from 'node:assert/strict';
 import {reviewPrediction} from './tongueReview.ts';
 import type {TrackingFrame} from '../types';
 
+const crop={x:0,y:0,width:1,height:1};
 test('review retains a region box and acquisition time without inventing a tip or surface mask',()=>{
  const frame={tongue:{trackingMode:'region',box:[.3,.3,.7,.7],observedAt:100,confidence:.9}} as TrackingFrame;
- const result=reviewPrediction(frame,{x:0,y:0,width:1,height:1});
- assert.deepEqual(result,{regionPrediction:[.3,.3,.7,.7],predictionObservedAt:100});
+ assert.deepEqual(reviewPrediction(frame,crop),{regionPrediction:[.3,.3,.7,.7],predictionObservedAt:100});
+ assert.deepEqual(reviewPrediction(frame,{x:.2,y:.2,width:.5,height:.5}).regionPrediction?.map(v=>+v.toFixed(6)),[.2,.2,1,1]);
 });
-test('region abstention and unavailable capability remain different',()=>{
- const crop={x:0,y:0,width:1,height:1};
- assert.deepEqual(reviewPrediction({tongueDiagnostic:{reason:'TongueSAM cannot identify a visible tongue region'}} as TrackingFrame,crop),{regionPrediction:null});
+test('only a current region abstention is a miss; stale, pending, loading and unavailable results record nothing',()=>{
+ const region={state:'lost',capability:'region'} as const;
+ assert.deepEqual(reviewPrediction({tongueDiagnostic:{...region,reason:'TongueSAM cannot identify a visible tongue region',abstained:true}} as TrackingFrame,crop),{regionPrediction:null});
+ // An expired or not-yet-arrived result keeps the last display text but is not an abstention.
+ assert.deepEqual(reviewPrediction({tongueDiagnostic:{...region,state:'tracking',reason:'TongueSAM visible-region box · tip and depth unavailable',abstained:false}} as TrackingFrame,crop),{});
+ assert.deepEqual(reviewPrediction({tongueDiagnostic:{state:'selected',capability:'region',reason:'TongueSAM baseline ready · visible region only',abstained:false}} as TrackingFrame,crop),{});
+ assert.deepEqual(reviewPrediction({tongueDiagnostic:{state:'lost',reason:'Tongue baseline is unavailable',abstained:false}} as TrackingFrame,crop),{});
  assert.deepEqual(reviewPrediction({} as TrackingFrame,crop),{});
+});
+test('a tip abstention never becomes a region miss, and a tip never becomes a region',()=>{
+ assert.deepEqual(reviewPrediction({tongueDiagnostic:{state:'lost',capability:'tip',reason:'Neural model cannot identify a visible tip',abstained:true}} as TrackingFrame,crop),{});
+ const tip=reviewPrediction({tongue:{trackingMode:'tip',x:.4,y:.6,lateral:0,lift:0,visibleFraction:0,observedAt:5}} as TrackingFrame,crop);
+ assert.deepEqual(tip,{prediction:{x:.4,y:.6},predictionObservedAt:5});
 });

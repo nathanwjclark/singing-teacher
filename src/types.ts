@@ -11,7 +11,8 @@ export type TongueTipObservation = { trackingMode?: 'tip'; observedAt?: number; 
 /** A detected visible-tongue box in normalized image coordinates [xMin,yMin,xMax,yMax]. It has no tip, pose or depth fields, so no consumer can read it as one. */
 export type TongueRegionObservation = { trackingMode: 'region'; observedAt: number; confidence: number; box: [number, number, number, number] };
 export type TongueObservation = TongueTipObservation | TongueRegionObservation;
-export type TongueDiagnostic = {state:'unselected'|'selected'|'tracking'|'lost';reason:string;score?:number;margin?:number};
+/** capability names the loaded model; abstained is true only while the model's current result found nothing. */
+export type TongueDiagnostic = {state:'unselected'|'selected'|'tracking'|'lost';reason:string;score?:number;margin?:number;capability?:'region'|'tip';abstained?:boolean};
 export type TrackingFrame = {
   tongueDiagnostic?: TongueDiagnostic;
   tongue?: TongueObservation;

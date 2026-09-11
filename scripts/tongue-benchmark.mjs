@@ -34,7 +34,7 @@ export function benchmark(review,predictions,reviewSha256){
   if(row.surface!=null&&!polygon(row.surface))throw Error('Invalid predicted outline');
   byIndex.set(row.index,row);
  }
- const errors=[],ious=[],regionIous=[],rows=[];let regionFound=0,falseRegion=0,visible=0,tipFound=0,hidden=0,falseTip=0,surfaces=0,surfaceFound=0,absent=0,falseSurface=0;
+ const errors=[],ious=[],regionIous=[],rows=[];let regionFound=0,falseRegion=0,regionVisible=0,regionAbsent=0,regionUnobserved=0,visible=0,tipFound=0,hidden=0,falseTip=0,surfaces=0,surfaceFound=0,absent=0,falseSurface=0;
  for(const [index,s] of review.samples.entries()){
   if(s.label!==undefined&&s.label!==null&&!point(s.label))throw Error(`Invalid tip label at ${index}`);
   if(s.surface!==undefined&&s.surface!==null&&!polygon(s.surface))throw Error(`Invalid surface label at ${index}`);
@@ -48,16 +48,20 @@ export function benchmark(review,predictions,reviewSha256){
   const row={index,imageSha256,tipReviewed:s.label!==undefined,surfaceReviewed:s.surface!==undefined,tipDetected:!!predicted?.tip,surfaceDetected:!!predicted?.surface,regionDetected:!!predicted?.region,predictionObservedAt:s.predictionObservedAt??null};
   if(s.label){visible++;if(predicted?.tip){tipFound++;const e=Math.hypot((s.label.x-predicted.tip.x)*width,(s.label.y-predicted.tip.y)*height);errors.push(e);row.tipErrorPixels=e;}}
   else if(s.label===null){hidden++;falseTip+=Number(!!predicted?.tip);}
-  if(s.surface){regionFound+=Number(!!predicted?.region);const regionIoU=boxOverlap(bounds(s.surface),predicted?.region);row.regionBoxIoU=regionIoU;regionIous.push(regionIoU);surfaces++;surfaceFound+=Number(!!predicted?.surface);const iou=overlap(s.surface,predicted?.surface);row.surfaceIoU=iou;if(iou!==null)ious.push(iou);}
-  else if(s.surface===null){falseRegion+=Number(!!predicted?.region);absent++;falseSurface+=Number(!!predicted?.surface);}
+  // A recorded frame without regionPrediction had no current detector result (loading, pending or expired): unobserved, not a miss.
+  const regionObserved=!!predictions||Object.hasOwn(s,'regionPrediction');
+  if(s.surface!==undefined&&!regionObserved)regionUnobserved++;
+  if(s.surface){if(regionObserved){regionVisible++;regionFound+=Number(!!predicted?.region);const regionIoU=boxOverlap(bounds(s.surface),predicted?.region);row.regionBoxIoU=regionIoU;regionIous.push(regionIoU);}surfaces++;surfaceFound+=Number(!!predicted?.surface);const iou=overlap(s.surface,predicted?.surface);row.surfaceIoU=iou;if(iou!==null)ious.push(iou);}
+  else if(s.surface===null){if(regionObserved){regionAbsent++;falseRegion+=Number(!!predicted?.region);}absent++;falseSurface+=Number(!!predicted?.surface);}
   rows.push(row);
  }
+ const regionAvailable=predictions?predictions.samples.some(s=>Object.hasOwn(s,'region')):review.samples.some(s=>Object.hasOwn(s,'regionPrediction'));
  return {schema:'tongue-benchmark/v1',reviewSha256,sessionId:review.sessionId??null,modelId:predictions?.modelId??'recorded-live-observations',
   modelSha256:predictions?.modelSha256??null,sampleCount:rows.length,
   tip:{visibleLabeled:visible,detected:tipFound,coverage:visible?tipFound/visible:null,meanErrorOnDetectionsPixels:mean(errors),hiddenLabeled:hidden,falseDetectionsOnHidden:falseTip},
-  region:{available:predictions?predictions.samples.some(s=>Object.hasOwn(s,'region')):review.samples.some(s=>Object.hasOwn(s,'regionPrediction')),visibleSurfaceReferences:surfaces,detected:regionFound,meanBoxIoUIncludingMisses:(predictions?predictions.samples.some(s=>Object.hasOwn(s,'region')):review.samples.some(s=>Object.hasOwn(s,'regionPrediction')))?mean(regionIous):null,absentSurfaceReferences:absent,falseDetectionsOnAbsent:falseRegion},
+  region:{available:regionAvailable,visibleSurfaceReferences:regionVisible,detected:regionFound,meanBoxIoUIncludingMisses:regionAvailable?mean(regionIous):null,absentSurfaceReferences:regionAbsent,falseDetectionsOnAbsent:falseRegion,reviewedFramesWithoutObservation:regionAvailable?regionUnobserved:null},
   surface:{available:!!predictions?.samples.some(s=>Object.hasOwn(s,'surface')),visibleLabeled:surfaces,detected:surfaceFound,meanIoUIncludingMisses:predictions?.samples.some(s=>Object.hasOwn(s,'surface'))?mean(ious):null,absentLabeled:absent,falseDetectionsOnAbsent:falseSurface,rasterResolution:128},
-  limitations:['Region IoU compares bounding boxes of manual visible-surface labels, not segmentation masks.','Recorded observations may lag the image; predictionObservedAt preserves acquisition time when available.','Manual labels require review.','Frames from one clip are correlated; split by recording session before training.','Tip error excludes misses; always read coverage alongside error.','Surface IoU uses a 128-square raster and includes abstentions as zero overlap.','Neither visible outlines nor tip detection establish hidden anatomy or depth.'],rows};
+  limitations:['Region IoU compares bounding boxes of manual visible-surface labels, not segmentation masks.','Recorded observations may lag the image; predictionObservedAt preserves acquisition time when available.','Recorded frames without a current region result are excluded from region IoU and counted separately; they are neither detections nor misses.','Manual labels require review.','Frames from one clip are correlated; split by recording session before training.','Tip error excludes misses; always read coverage alongside error.','Surface IoU uses a 128-square raster and includes abstentions as zero overlap.','Neither visible outlines nor tip detection establish hidden anatomy or depth.'],rows};
 }
 async function main(){
  const [reviewPath,predictionPath,outputPath]=process.argv.slice(2);
