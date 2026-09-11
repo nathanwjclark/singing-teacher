@@ -6,7 +6,7 @@ import re
 import numpy as np
 
 from .engine import Engine, finite
-from .pcm_inverse import _hash, fit_pcm
+from .pcm_inverse import _hash, fit_pcm, planned_synthesis_calls
 from .acoustic_probe import OPERATOR_VERSION, predict_external_probe
 
 QUANTITY = 'recorded_pcm_per_digital_drive'
@@ -271,7 +271,12 @@ def fit_probe_pcm(engine: Engine, pcm_document, probe_document, *, candidates,
                 raise ValueError('Shared calibration requires shared scalar nuisance parameters')
             shared[calibration_id] = nuisance
         pcm_candidates.append({key: candidate[key] for key in ('candidate_id', 'anatomy', 'trials')})
-    required = 2*len(candidates)*(len(pcm['trials'])+2*len(usable))
+    try:
+        # Exact PCM calls per model: gain-only candidate variants share one waveform in fit_pcm.
+        pcm_calls = planned_synthesis_calls(pcm, pcm_candidates)
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError('Candidate must declare anatomy and PCM controls for each calibration trial') from exc
+    required = 2*(pcm_calls+2*len(candidates)*len(usable))
     if required > max_native_calls:
         raise ValueError('Declared joint and baseline operators exceed total budget')
     operators = _Operators(engine, max_native_calls)
@@ -279,7 +284,7 @@ def fit_probe_pcm(engine: Engine, pcm_document, probe_document, *, candidates,
     models = {'joint': [], 'fixed_anatomy_baseline': []}
     try:
         pcm_result = fit_pcm(operators, pcm, candidates=pcm_candidates,
-            max_synthesis_calls=2*len(candidates)*len(pcm['trials']), node_binary=node_binary)
+            max_synthesis_calls=2*pcm_calls, node_binary=node_binary)
         if operators.counts['joint']['pcm_synthesis_calls'] != sum(pcm_result[model]['actual_synthesis_calls'] for model in models):
             raise RuntimeError('Native PCM call accounting mismatch')
         for model in models:
