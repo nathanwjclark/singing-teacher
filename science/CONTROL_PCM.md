@@ -12,8 +12,10 @@ Wave 3 acceptance: bind exact delivered cues and context to original outcomes; f
 
 - **Control weights** are standardized-descriptor affinities under engineering scales. For one attempt and one anatomy, each alternative gets `exp(-0.5 * sum((observed - predicted) / scale)^2)`, normalized over the bank. The scales (pitch 20 Hz, spectral centroid 250 Hz, flatness 0.1) are engineering choices, not measured noise. The weights are not execution probabilities, measured movement or anatomy evidence.
 - **Execution support** (`execution_support`) is the only frequency model: per anatomy, `weight = (1/C + sum of attempt affinities) / (1 + n)` with every matched attempt weighted equally. Below three matched attempts the weights stay uniform.
-- **Residual calibration** (`empirical_residual_calibration`) reports count, mean and sample SD of observed minus the earlier frozen weighted prediction, per anatomy and descriptor. It is `empirical` at three or more matched attempts, otherwise `insufficient`. It never enters weights or `conditional_predictions`. Those earlier predictions used different weights, so the residuals are not stationary measurement noise and they do not describe physical execution.
+- **Residual calibration** (`empirical_residual_calibration`) reports count, mean and sample SD of observed minus the earlier frozen weighted prediction, per anatomy and descriptor. It covers every compatible attempt with a residual, including attempts where no alternative fits, and is `empirical` at three or more such attempts, otherwise `insufficient`. It never enters weights or `conditional_predictions`. Those earlier predictions used different weights, so the residuals are not stationary measurement noise and they do not describe physical execution.
 - **Gain** is an acquisition response. It is one declared nuisance for the whole bank and never an alternative. dBFS is therefore not scored; a level mismatch would otherwise be credited to `JA` or `F0`.
+- **Absolute fit.** Affinities are relative, so a constant offset (for example a centroid shift from the microphone and room, or a wrong anatomy hypothesis) would move mass to whichever alternative happens to sit on that side. Each score therefore records, per anatomy, the smallest standardized square sum over the bank. The frozen forecast declares a bound: the chi-square 0.99 quantile for the number of declared descriptors (11.34 for three). The scales are engineering choices, so this is an engineering bound, not a calibrated test. When the best alternative exceeds it, that anatomy is `no-alternative-fits` for the attempt and gets no support; an attempt where no anatomy fits has status `no-alternative-fits`, stays in the ledger and does not count. Its residuals still enter residual calibration, which is where such offsets belong.
+- **Indistinguishable alternatives.** Alternatives within an anatomy that the simulator applies identically (same applied native controls, recorded as `applied_controls_sha256`, and the same F0) are listed in `indistinguishable_control_ids`; no recording can separate them. Near-identical predictions that are not bit-identical are not flagged; exact weight ties appear in `leading_control_ids`.
 - `JA`/`F0` alternatives can trade off against anatomy. When anatomies lead with different alternatives the support reports `anatomy_control_tradeoff: true`; exact ties are listed in `leading_control_ids`.
 
 ## Matching rules
@@ -22,7 +24,7 @@ History matches by one compatibility key: native provenance, extractor hashes, f
 
 The policy pins `control_pcm.py` and the PCM scorer modules by their SHA-256 at import (`pcm_design.SCORER_PIN`). Any edit to these files starts a new key, so earlier attempts no longer count. This is deliberate: an edited scorer may score differently. Restart the worker after an upgrade.
 
-Repeated physical evidence (a reused attempt ID or any overlapping original hash) is an error. Stopped, failed and unscorable attempts stay in the ledger and never count. A score whose observed descriptors are missing is `unscorable`; a score where some anatomy rows were stopped or failed is `partial` and counts only for the complete anatomies.
+Repeated physical evidence (a reused attempt ID or any overlapping original hash) is an error. Stopped, failed, unscorable and no-alternative-fits attempts stay in the ledger and never count toward the weights. A score whose observed descriptors are missing is `unscorable`; a score where some anatomy rows were stopped or failed is `partial` and counts only for the complete anatomies.
 
 ## Design
 
@@ -34,17 +36,27 @@ Repeated physical evidence (a reused attempt ID or any overlapping original hash
 | App job | `science/scripts/app_control.py` | `forecast`, `score` and `stop` phases for the current Astra decision and the latest USB pull |
 | Server | `server/controlLearning.mjs` | `GET /api/control/status`; `POST /api/control/forecast`, `/score`, `/stop` (localhost, no body) |
 | Astra | `server/astra.mjs` | `prompt.controlLearning`; optional `cueBindingId` decision field |
-| Export | `server/sessionExport.mjs` | Binds `control-attempts/*/result.json` to the ledger and the retained original manifest |
+| Export | `server/sessionExport.mjs` | Binds `control-attempts/*/result.json` to the ledger (committed forecasts by artifact, rejected or failed forecasts and scores by job) and the retained original capture; an attempt that reached the session without saving a receipt is `Not recorded`, a refusal before any session command is omitted |
 | UI | `src/experiment/control/ControlLearningPanel.tsx` | Delivered wording, matched attempts, weights and a separate residual block |
 
 ### Session commands
 
 - `declare_control_binding {binding_id, binding: {cue, context, controls, gain}}`. Redeclaring the same content is a no-op; the same ID with different content is rejected.
 - `forecast_control {binding_id, target_id, parameters}`. `parameters` accepts only `profile`, `feature_scales`, `max_synthesis_calls` and `timeout_s`. The session injects its snapshot (with expected digest) and history from its own collected score receipts. Callers cannot supply either.
-- `score_control {forecast_id, pcm, metadata}` requires a committed forecast for the current baseline, capture after the commitment and unused original hashes.
+- `score_control {forecast_id, pcm, metadata}` requires a committed forecast for the current baseline, capture after the commitment and unused original hashes. The capture's hashes are consumed as soon as the score is submitted, so a failed or rejected score cannot be retried with the same recording; record a new attempt.
 - `record_control_attempt {forecast_id, status: stopped|failed, reason}` preserves an attempt that was not scored.
 
 Collected forecasts must retain every anatomy x control alternative of the declared binding. Collected scores must retain every committed alternative and bind to the forecast hash. A worker reply that fails these checks is kept as a `rejected` receipt instead of blocking the session. At most one control forecast is committed at a time: committing a new one marks the previous one `superseded` with a receipt, so the cue shown to the learner is the one the next recording is scored against. A baseline change marks committed forecasts `stale`. None of these operations changes the baseline model.
+
+Control job entries in the ledger keep only SHA-256 digests of their parameters and result (`request.parameters = {sha256}`, `result_sha256`); the sealed forecast and score artifacts live once in `control_forecasts` and `control_receipts`. Every ledger event stores the whole session state, so copies of the PCM frame, frozen bank and history in each job made the replay grow quadratically. Measured with four anatomies and the five-alternative bank (`ledger_size.py`, session commands only):
+
+| Rounds | Replay before | Replay after | State before | State after |
+|---|---|---|---|---|
+| 1 | 0.83 MB | 0.44 MB | 199 KB | 45 KB |
+| 3 | 6.35 MB | 2.13 MB | 632 KB | 130 KB |
+| 6 | 25.65 MB | 6.84 MB | 1391 KB | 262 KB |
+
+State growth per round fell from about 238 KB to 43 KB (82%). A repeated binding is not declared again, which saves one full-state event per round. In the full app loop (baseline search, Astra decisions, four control forecasts and three scores) the event bodies total 23.9 MB, just under the exporter's 24 MiB replay bound; about three quarters of that state is the baseline search result and the Astra designs, which other lanes store. A ledger that stores changes instead of full states per event is a roadmap item for the session layer, not part of this lane.
 
 A forecast request carries only score receipts of bindings with the same content, because other bindings can never match its key. This keeps the request under the worker's 2 MB input bound; each receipt is a few kilobytes plus about 0.2 KB per bank row. The ledger still rejects reused evidence across all bindings.
 
@@ -54,11 +66,11 @@ A forecast request carries only score receipts of bindings with the same content
 
 ### App bank
 
-`app_control.py` uses five alternatives around the selected experiment: the selected `JA` at the reference pitch, `JA ± 1`, and `F0` one semitone lower and higher. Gain is the experiment gain. With `n` retained anatomies a forecast needs `5n` native synthesis calls; the bank is refused when `5n > 96`, so at most 19 anatomies are supported. A forecast that times out keeps the remaining rows as `stopped`.
+`app_control.py` uses five alternatives around the selected experiment: `reference` is the selected experiment's `JA` at the calibration-measured pitch (not the experiment's simulator F0), `JA ± 1`, and `F0` one semitone lower and higher. Gain is the experiment gain. With `n` retained anatomies a forecast needs `5n` native synthesis calls; the bank is refused when `5n > 96`, so at most 19 anatomies are supported. A forecast that times out keeps the remaining rows as `stopped`. The worker gives the forecast 15 s less than its own hard deadline, so a slow bank ends `incomplete` rather than being killed as a failed job.
 
 ### Astra
 
-When the session has bindings, the decision schema requires `cueBindingId` with enum `[null, ...binding ids]`. Choosing a binding delivers that wording verbatim; the provider's own text is kept as `providerCue`. `app_control.py` then reuses that binding exactly (wording, context, bank and gain), so its history matches even if the selected experiment would produce a different bank. Rest decisions, unknown IDs and bindings whose vowel differs from the selected experiment are rejected. `null` means a new free-text cue, which starts a new binding with no history. Without bindings the schema is unchanged.
+When the session has bindings, the decision schema requires `cueBindingId` with enum `[null, ...binding ids]`, built from the bindings in Astra's bounded context; bindings dropped from that 24 KB context cannot be chosen. Choosing a binding delivers that wording verbatim; the provider's own text is kept as `providerCue`. `app_control.py` then reuses that binding exactly (wording, context, bank and gain), so its history matches even if the selected experiment would produce a different bank. Rest decisions, unknown IDs and bindings whose vowel differs from the selected experiment are rejected. `null` means a new free-text cue, which starts a new binding with no history. Without bindings the schema is unchanged.
 
 ## Usage
 
@@ -91,6 +103,7 @@ Measured on generated frames from the first anatomy at the `open` alternative (`
 
 - Generated fixtures prove plumbing only. Human cue execution, and whether a cue changes execution at all, is untested.
 - The five-alternative bank is a coarse finite support; the true execution can lie outside it. Weights near uniform mean the bank does not discriminate, not that execution is ambiguous in the body.
+- Systematic acquisition or anatomy bias can still shift weights when it is smaller than the absolute-fit bound: a small constant centroid offset moves mass toward the alternative on that side. The bound only removes attempts that no alternative explains.
 - A learner could pull several takes and score only the best one. Unscored takes leave no trace, so repeated attempts can be selected. Record every take, or record it as stopped.
 - The same original capture may also be submitted as the baseline outcome. Control support is conditional per anatomy and never changes anatomy support.
-- The session ledger stores the full state in every event. In the four-round app test the replay reached about 37 MB, above the exporter's 24 MiB bound, so long sessions export as `partial` without the replay. The first scored round exports completely. This ledger design predates this feature; each control round adds roughly 250 KB of state (mostly the scored PCM frame and the frozen bank in the score job request).
+- The session ledger stores the full state in every event. With the digest-only control jobs the four-round app loop exports with its replay at 23.9 MB of 24 MiB; a fifth Astra round, or more anatomies, would exceed it and the export would come back `partial` without the replay. Most of that state belongs to other lanes (see above).
