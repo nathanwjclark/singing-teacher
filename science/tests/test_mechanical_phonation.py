@@ -190,7 +190,20 @@ def test_rows_record_requested_and_simulated_f0_and_a_pitch_excluded_score(monke
         cancelled=source.forecast_phonation_bank(engine,fitted,reference_trial_id='cal',pose='o',
             controls={'JA':-3.,'F0':190.,'PR':8000.,'gain':2.},target_id='cancelled',cancelled=stop)['forecast']
         assert cancelled['actual_synthesis_calls']==0 and [row['status'] for row in cancelled['alternatives']]==['timed-out']*6
-        assert len(loads)==2  # only the bank's capability audit reloads; no family group is entered after cancellation
+        assert cancelled['status']=='timed-out' and len(loads)==2  # only the capability audit reloads; no family group is entered
+        # A deadline inside the first family group would leave the second family uncovered: such a bank is not committed.
+        partway=threading.Event();measure=source.measure_phonation
+        def measure_then_stop(*args):partway.set();return measure(*args)
+        monkeypatch.setattr(source,'measure_phonation',measure_then_stop)
+        cut=source.forecast_phonation_bank(engine,fitted,reference_trial_id='cal',pose='o',
+            controls={'JA':-3.,'F0':190.,'PR':8000.,'gain':2.},target_id='cut',cancelled=partway)['forecast']
+        monkeypatch.setattr(source,'measure_phonation',measure)
+        assert cut['actual_synthesis_calls']==1 and cut['status']=='timed-out' and 'unequally covered' in cut['reason']
+        assert [(row['source_model'],row['status']) for row in cut['alternatives']][:2]==[('geometric','available'),('two_mass','timed-out')]
+        mixed=[{**c,'trials':{'cal':{**c['trials']['cal'],'gain':4. if c['candidate_id']=='geometric' else 2.}}} for c in candidates]
+        refit=source.fit_phonation(engine,document,candidates=mixed,max_synthesis_calls=6,enabled=True)
+        with pytest.raises(ValueError,match='mixed-gain'):
+            source.forecast_phonation_bank(engine,refit,reference_trial_id='cal',pose='o',controls={'JA':-3.,'F0':190.,'PR':8000.,'gain':2.},target_id='mixed-gain')
 
 
 def test_app_grids_vary_one_declared_axis_and_family_gains_do_not_clip():

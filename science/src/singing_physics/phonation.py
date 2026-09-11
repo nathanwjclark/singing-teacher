@@ -431,15 +431,17 @@ def forecast_phonation_bank(engine,fit_result,*,reference_trial_id,pose,controls
         refs=[r for r in row.get('predictions',[]) if r['trial_id']==reference_trial_id]
         if len(refs)!=1:entry['reason']='Fitted source reference unavailable';continue
         control=_controls({**controls,**_source_shape(refs[0]['controls'])})
-        entry.update(controls=control,source_model=_family(control),requested_f0_hz=control['F0']);pending.append((entry,row))
+        entry.update(controls=control,source_model=_family(control),requested_f0_hz=control['F0']);pending.append((entry,row,refs[0]['controls']['gain']))
+    if len({gain for *_,gain in pending})>1:
+        raise ValueError('A frozen bank applies one declared gain; fitted alternatives use different reference gains, so this mixed-gain bank is rejected')
     def expired():return time.monotonic()>=deadline or cancelled is not None and cancelled.is_set()
     try:
         for source_family,group in _by_family(pending,lambda item:item[0]['source_model']):
             if expired():  # skip the native family reload once the deadline has passed
-                for entry,_ in group:entry.update(status='timed-out',reason='Bank deadline or cancellation reached')
+                for entry,*_ in group:entry.update(status='timed-out',reason='Bank deadline or cancellation reached')
                 continue
             with engine.source_model(SOURCE_FAMILIES[source_family]):
-                for entry,row in group:
+                for entry,row,_ in group:
                     if expired():
                         entry.update(status='timed-out',reason='Bank deadline or cancellation reached');continue
                     engine.set_anatomy(row['anatomy'])
@@ -457,6 +459,10 @@ def forecast_phonation_bank(engine,fit_result,*,reference_trial_id,pose,controls
     finally:engine.set_anatomy(saved)
     if signature!=extractor_signature():raise RuntimeError('Extractor changed during source bank generation')
     available=sum(row['status']=='available' for row in alternatives)
+    # Families are synthesized one group at a time, so a deadline always cuts the later
+    # family; a mixed-family bank that lost rows to the deadline is not a fair comparison.
+    families={row['source_model'] for row,*_ in pending}
+    partial=len(families)>1 and any(row['status']=='timed-out' for row in alternatives)
     excluded=sorted({h for row in fitted['observations'] for h in row['sourceHashes']})
     result={'kind':'frozen-phonation-bank-1','fit_sha256':_hash(fitted),'target_id':target_id,
         'reference_trial_id':reference_trial_id,'pose':pose,'profile':profile,'shared_controls':deepcopy(controls),
@@ -465,7 +471,8 @@ def forecast_phonation_bank(engine,fit_result,*,reference_trial_id,pose,controls
         'excluded_frame_hashes':list(fitted['evidence_frame_hashes']),'excluded_artifact_hashes':excluded,
         'sealed_at':datetime.now(timezone.utc).isoformat(),'actual_synthesis_calls':calls,'max_synthesis_calls':max_synthesis_calls,
         'coverage':{'total':len(alternatives),'available':available,'unavailable':len(alternatives)-available,'complete':available==len(alternatives)},
-        'status':'available' if available else 'insufficient-quality',
+        'status':'timed-out' if partial else 'available' if available else 'insufficient-quality',
+        'reason':'Deadline or cancellation left source families unequally covered; a partially covered mixed-family bank is not committed' if partial else None,
         'scope':'Competing conditional source/tract predictions; shared control assumptions are not verified human execution, anatomical identification or vocal-fold contact'}
     return {'forecast':result,'sha256':_hash(result)}
 
