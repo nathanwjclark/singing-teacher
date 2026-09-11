@@ -35,7 +35,7 @@ Revision 2's result has little power, for two reasons that a third revision shou
 From the repository root:
 
 ```sh
-PYTHONPATH=science/src science/.venv/bin/python -m pytest evaluation/wave3/test_protocol.py -q
+PYTHONPATH=science/src science/.venv/bin/python -m pytest evaluation/wave3/test_spectral_protocol.py -q
 PYTHONPATH=science/src science/.venv/bin/python evaluation/wave3/run.py --output /tmp/singing-wave3-independent-2
 ```
 
