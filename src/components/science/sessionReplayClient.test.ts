@@ -30,10 +30,14 @@ test('verification client keeps legacy and skipped outcomes and sends only bound
   assert.deepEqual((await readSessionRecomputation()).report,report);
   globalThis.fetch=async()=>Response.json({status:'completed',attemptId:'different',sessionId:'s',report});
   await assert.rejects(readSessionRecomputation(),/Invalid numerical verification report/);
-  // Counts that do not account for every operation, or lack an outcome, are rejected.
-  for(const counts of [{...report.counts,skipped:0},{...report.counts,failed:undefined}]){
-   globalThis.fetch=async()=>Response.json({status:'completed',attemptId:'a',sessionId:'s',report:{...report,counts}});
-   await assert.rejects(readSessionRecomputation(),/Invalid numerical verification report/);
+  // Counts must equal a recount of the rows, and every row must be a known, coherent outcome.
+  const [match,skip]=report.operations;
+  for(const bad of [{counts:{...report.counts,skipped:0}},{counts:{...report.counts,failed:undefined}},
+   {counts:{...report.counts,matched:0,failed:1}},{counts:{...report.counts,policyVerified:1,legacyVersionUnverified:0}},
+   {operations:[{...match,outcome:'agreed'},skip]},{operations:[match,{...skip,policyVerification:'pinned'}]},
+   {operations:[{...match,numericalAgreement:false},skip]},{operations:[{...match,policyVerification:'unverified'},skip]}]){
+   globalThis.fetch=async()=>Response.json({status:'completed',attemptId:'a',sessionId:'s',report:{...report,...bad}});
+   await assert.rejects(readSessionRecomputation(),/Invalid numerical verification report/,JSON.stringify(bad).slice(0,120));
   }
  }finally{globalThis.fetch=original}
 });

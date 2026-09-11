@@ -36,13 +36,22 @@ export interface SessionRecomputationStatus {
  status:'not-run'|'running'|'completed'|'failed'|'unavailable';reason?:string;attemptId?:string;
  sessionId?:string;runId?:string;reportSha256?:string;report?:SessionRecomputationReport;
 }
+const policyVerifications=['verified','legacy_version_unverified','unverified'];
+// Recount the outcomes from the rows: every retained operation falls in exactly one
+// outcome, a match always agrees numerically, and matches split into pinned and legacy.
+function validReport(value:SessionRecomputationStatus){
+ const report=value.report;
+ if(!report||report.schemaVersion!=='session-recomputation/1'||!Array.isArray(report.operations)||!report.counts||report.modelUpdated!==false||report.rawMediaIncluded!==false||report.attemptId!==value.attemptId||report.sessionId!==value.sessionId)return false;
+ const rows=report.operations,counts=report.counts;
+ if(rows.some(row=>!recomputationOutcomes.includes(row.outcome)||!policyVerifications.includes(row.policyVerification)||(row.outcome==='matched')!==(row.numericalAgreement===true&&row.policyVerification!=='unverified')))return false;
+ const matched=rows.filter(row=>row.outcome==='matched');
+ return counts.total===rows.length&&recomputationOutcomes.every(name=>counts[name]===rows.filter(row=>row.outcome===name).length)
+  &&counts.policyVerified===matched.filter(row=>row.policyVerification==='verified').length&&counts.legacyVersionUnverified===matched.filter(row=>row.policyVerification==='legacy_version_unverified').length;
+}
 async function recomputationResponse(response:Response):Promise<SessionRecomputationStatus>{
  const value=await response.json();if(!response.ok)throw Error(value.error||'Numerical verification unavailable');
  if(!['not-run','running','completed','failed','unavailable'].includes(value.status))throw Error('Invalid numerical verification status');
- const report=value.report;
- // Every retained operation falls in exactly one outcome, so the counts must add up.
- if(value.status==='completed'&&(!report||report.schemaVersion!=='session-recomputation/1'||!Array.isArray(report.operations)||!report.counts||report.modelUpdated!==false||report.rawMediaIncluded!==false||report.attemptId!==value.attemptId||report.sessionId!==value.sessionId
-  ||recomputationOutcomes.some(name=>!Number.isInteger(report.counts[name]))||recomputationOutcomes.reduce((sum,name)=>sum+report.counts[name],0)!==report.counts.total||report.operations.length!==report.counts.total))throw Error('Invalid numerical verification report');
+ if(value.status==='completed'&&!validReport(value))throw Error('Invalid numerical verification report');
  return value;
 }
 export async function readSessionRecomputation(signal?:AbortSignal):Promise<SessionRecomputationStatus>{
