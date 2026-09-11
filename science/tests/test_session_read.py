@@ -52,7 +52,7 @@ CAUSES={'body':'digest','chain':'chain','version':'format','format':'format','no
 
 
 def tamper(db,session,kind):
-    """Change stored rows the way a corrupted disk or a hand edit would; digests are recomputed where noted."""
+    """Change stored rows as a corrupted disk or a hand edit would; put() rehashes the edited event, so only the targeted check can fail."""
     event=lambda version:json.loads(db.execute('SELECT body FROM events WHERE session=? AND version=?',(session,version)).fetchone()[0])
     def put(version,value):
         body=canonical(value)

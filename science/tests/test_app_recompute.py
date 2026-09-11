@@ -328,7 +328,7 @@ def test_recompute_never_dispatches_a_pending_intent(batch_evidence, tmp_path, m
     from science.scripts.live_capture_jobs import HTTPBackend
     root, original = batch_evidence
     shutil.copytree(root/'worker', tmp_path/'worker')
-    sessions, jobs = tmp_path/'worker/sessions/sessions.sqlite3', tmp_path/'worker/jobs.sqlite3'
+    jobs = tmp_path/'worker/jobs.sqlite3'
     # Input data: the ledger as left by a crash after an intent was persisted and
     # before JobService returned its job id (written by the controller's own _append).
     controller = SessionController(tmp_path/'worker/sessions', None, 'synthetic-replay-session')
