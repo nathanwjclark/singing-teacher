@@ -21,7 +21,8 @@ export function validateMelody(melody: LearningMelody, toleranceCents: number): 
   const smallest = Math.min(...melody.notes.slice(1).map((n,i) => Math.abs(cents(n.hz,melody.notes[i].hz))))
   // 0.5 cent slack: frequencies entered to 0.01 Hz put exact semitones a few hundredths of a cent short.
   if (smallest < 100-.5) throw Error('Adjacent notes must differ by at least 100 cents so recorded pitch can locate note changes. Repeated notes and articulation are not measured.')
-  if (2*toleranceCents > smallest+.5) throw Error(`Pitch tolerance must be at most half the smallest adjacent interval (${Math.round(smallest)} cents) so a neighbouring note cannot pass.`)
+  // Strict and on the actual interval: at exactly half, a pitch between two notes would be within tolerance of both.
+  if (!(2*toleranceCents < smallest)) throw Error(`Pitch tolerance must be less than half the smallest adjacent interval (${smallest.toFixed(2)} cents) so a neighbouring note cannot pass.`)
   if (!Number.isFinite(melody.rhythmToleranceMs) || melody.rhythmToleranceMs < 100 || melody.rhythmToleranceMs > 500 || !Number.isFinite(melody.minimumNoteVoicedFraction) || melody.minimumNoteVoicedFraction < .5 || melody.minimumNoteVoicedFraction > 1) throw Error('Use 100–500 ms rhythm tolerance and per-note voicing of 0.5–1.')
   if (!Number.isFinite(melody.maximumBreathMs) || melody.maximumBreathMs < 0 || melody.maximumBreathMs > 250 || !Number.isFinite(melody.maximumLeadInVoicedMs) || melody.maximumLeadInVoicedMs < 0 || melody.maximumLeadInVoicedMs > 5000) throw Error('Allow breaths of 0–250 ms and 0–5000 ms of voicing before note 1.')
 }
