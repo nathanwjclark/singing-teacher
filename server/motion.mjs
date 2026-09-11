@@ -48,7 +48,10 @@ export function createMotionRoutes({dataRoot,json,repo=join(import.meta.dirname,
   if(!state)return {status:'not-run',analysisId:null,error:null,result:null,resultCurrent:false,currentModelId,availability:await decoderAvailability()};
   const result=await optional(join(analysisRoot,captureId,state.analysisId,'summary.json'));
   if(result)await verifyAnalysis(result,state);
-  if(result&&state.status!=='succeeded'){
+  // While this server's own worker is still running, complete() publishes the result
+  // after the worker exits; flipping here would report success while a new analysis
+  // is still refused. A summary left by an earlier server process is recovered.
+  if(result&&state.status!=='succeeded'&&!analysisBusy){
    state={...state,status:'succeeded',error:null};await saveAnalysis(path,state);
   }else if(state.status==='running'&&!analysisBusy){
    let alive=false;try{if(Number.isSafeInteger(state.pid)&&state.pid>0){process.kill(state.pid,0);alive=true;}}catch{}
