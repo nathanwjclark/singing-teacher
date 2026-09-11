@@ -56,8 +56,9 @@ export async function saveProbeSetup({repo,dataRoot,body,runProcess}){
   requireValue(typeof value==='string'&&value.length<=Math.ceil(limit/3)*4&&/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(value),'Invalid or oversized evidence encoding');
   const data=Buffer.from(value,'base64');requireValue(data.length>0&&data.length<=limit,'Empty or oversized calibration evidence');return data;
  };
- const packageBytes=decode(body.packageBase64,2*1024*1024),packageValue=JSON.parse(packageBytes);
- requireValue(packageValue.schema_version==='0.1.0'&&['probe_calibration_package','probe_science_import_configuration'].includes(packageValue.kind),'Upload a supported calibration package or existing probe configuration');
+ const packageBytes=decode(body.packageBase64,2*1024*1024);
+ let packageValue=null;try{packageValue=JSON.parse(packageBytes);}catch{/* Refused below as an unsupported package. */}
+ requireValue(packageValue?.schema_version==='0.1.0'&&['probe_calibration_package','probe_science_import_configuration'].includes(packageValue.kind),'Upload a supported calibration package or existing probe configuration');
  const p=body.placement;
  requireValue(p&&Object.keys(p).length===5&&['placement_id','coordinate_frame'].every(k=>typeof p[k]==='string'&&p[k].trim().length>0&&p[k].length<=120)&&['source_m','microphone_m','mouth_m'].every(k=>Array.isArray(p[k])&&p[k].length===3&&p[k].every(v=>finite(v)&&Math.abs(v)<=10)),'Declare placement identity, coordinate frame and three metric positions (within 10 m)');
  for(const [a,b] of [['source_m','mouth_m'],['microphone_m','mouth_m'],['source_m','microphone_m']]){

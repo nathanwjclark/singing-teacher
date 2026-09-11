@@ -12,6 +12,8 @@ import {DECLARED_CALIBRATION_REASON} from '../science/scripts/import_probe_scien
 async function poll(call){
  for(let i=0;i<200;i++){
   const result=await call('status');
+  // An error response has no busy field; it must fail here, not read as finished.
+  assert.equal(result.status,200,JSON.stringify(result.body));
   if(!result.body.busy)return result.body;
   await new Promise(resolve=>setTimeout(resolve,30));
  }
@@ -44,6 +46,8 @@ test('actual route verifies original calibration, atomically saves setup and rei
  const missing=await call('setup',{...request,evidence:[]});assert.equal(missing.status,400);assert.match(missing.body.error,/every original/);
  const changed=await call('setup',{...request,evidence:[{name:fixture.descriptor.path,base64:Buffer.from('incorrect').toString('base64')}]});assert.equal(changed.status,400);assert.match(changed.body.error,/SHA-256/);
  assert.equal((await call('setup',{...request,profile:{...request.profile,gain:2}})).status,400);
+ const notJson=await call('setup',{...request,packageBase64:Buffer.from('not json').toString('base64')});
+ assert.equal(notJson.status,400);assert.match(notJson.body.error,/supported calibration package/);
  assert.equal((await call('setup',{...request,evidence:[{name:'../evidence',base64:fixture.evidence.toString('base64')}]})).status,400);
  const wrong=structuredClone(fixture.calibration);wrong.calibration.frequency_hz[0]+=1;
  const grid=await call('setup',{...request,requestId:'wrong-grid',packageBase64:Buffer.from(JSON.stringify(wrong)).toString('base64')});
