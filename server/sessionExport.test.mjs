@@ -247,3 +247,32 @@ test('exports the latest score recomputation only while its report matches the r
   assert.ok(!data.artifacts.some(a=>a.source.startsWith('replay-verifications/')));
   assert.ok(!data.missing.some(row=>row.source.startsWith('replay-verifications')));
 });
+
+test('binds cue-execution forecast, score and stop receipts to the ledger and the retained original manifest',async t=>{
+ const {root,put}=await fixture(t),scientific=replay(),hash=x=>createHash('sha256').update(x).digest('hex');
+ const manifest=Buffer.from('{"capture_id":"fictional-control-capture"}'),manifestSha=hash(manifest);
+ const forecast={sha256:'c'.repeat(64),artifact:{kind:'frozen-control-pcm',target_id:'target'}};
+ const score={sha256:'d'.repeat(64),artifact:{kind:'scored-control-pcm',observation_hashes:[manifestSha],control_support:{}}};
+ scientific.state.control_forecasts={target:{artifact:forecast,status:'scored',binding_id:'cue-one',baseline_model_id:'updated-model'},stopped:{artifact:forecast,status:'stopped',binding_id:'cue-one',baseline_model_id:'updated-model'}};
+ scientific.state.control_receipts=[{operation:'forecast_control_pcm',job_id:'forecast-job',forecast_id:'target',binding_id:'cue-one',status:'available',result:null},
+  {operation:'score_control_pcm',job_id:'score-job',forecast_id:'target',binding_id:'cue-one',status:'scored',result:score},
+  {operation:'record_control_attempt',forecast_id:'stopped',binding_id:'cue-one',status:'stopped',result:null}];
+ const base={sessionId:'session-one',bindingId:'cue-one',baselineModelId:'updated-model',modelUpdated:false};
+ await put('science-runs/run-one/control-attempts/forecast-one/result.json',{...base,phase:'forecast',forecastId:'target',result:forecast});
+ await put('science-runs/run-one/control-attempts/score-one/result.json',{...base,phase:'score',forecastId:'target',jobId:'score-job',result:score,source_manifest_sha256:manifestSha});
+ await mkdir(join(root,'science-runs/run-one/control-attempts/score-one/original'),{recursive:true});
+ await writeFile(join(root,'science-runs/run-one/control-attempts/score-one/original/manifest.json'),manifest);
+ await put('science-runs/run-one/control-attempts/stop-one/result.json',{...base,phase:'stop',forecastId:'stopped'});
+ await put('science-runs/run-one/control-attempts/forged-one/result.json',{...base,phase:'score',forecastId:'target',jobId:'score-job',result:{...score,sha256:'e'.repeat(64)},source_manifest_sha256:manifestSha});
+ await put('science-runs/run-one/control-attempts/foreign-one/result.json',{...base,sessionId:'other-session',phase:'forecast',forecastId:'target',result:forecast});
+ let output;const route=createSessionExportRoutes({dataRoot:root,env,json:(_r,status,data)=>{output={status,data};},fetchImpl:async()=>Response.json(scientific)});
+ await request(route);assert.equal(output.status,200);assert.equal(output.data.summary.controlScoreCount,1);
+ const roles=output.data.artifacts.filter(a=>a.binding?.role?.startsWith('cue-execution-')).map(a=>[a.binding.role,a.binding.originalBytesVerified,a.binding.modelUpdated]);
+ assert.deepEqual(roles.sort(),[['cue-execution-forecast',false,false],['cue-execution-score',true,false],['cue-execution-stop',false,false]]);
+ assert.ok(output.data.missing.some(r=>r.source.endsWith('forged-one/result.json')));
+ assert.ok(!output.data.artifacts.some(a=>a.source.includes('foreign-one')));
+ await writeFile(join(root,'science-runs/run-one/control-attempts/score-one/original/manifest.json'),'changed');
+ await request(route);
+ assert.ok(output.data.missing.some(r=>r.source.endsWith('score-one/result.json')));
+ assert.ok(!output.data.artifacts.some(a=>a.binding?.role==='cue-execution-score'));
+});

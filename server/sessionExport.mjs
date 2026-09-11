@@ -243,6 +243,30 @@ export function createSessionExportRoutes({dataRoot, json, fetchImpl = fetch, en
           missing.push({source, reason: error.code === 'ENOENT' ? 'Completed score recomputation receipt or report is missing' : 'Latest score recomputation report is invalid, unbound to its receipt or exceeds the export size; excluded'});
         }
       }
+      for (const attemptId of await folders(prefix + '/control-attempts')) {
+        const source = `${prefix}/control-attempts/${attemptId}/result.json`;
+        if (artifacts.length >= MAX_FILES) { missing.push({source, reason: 'Artifact count limit reached'}); break; }
+        try {
+          const artifact = await read(source), result = artifact.data;
+          if (result.sessionId !== sessionId) continue;
+          const forecast = state?.control_forecasts?.[result.forecastId];
+          const receipt = result.phase === 'score' ? state?.control_receipts?.find(row => row.operation === 'score_control_pcm' && row.job_id === result.jobId)
+            : result.phase === 'stop' ? state?.control_receipts?.find(row => row.operation === 'record_control_attempt' && row.forecast_id === result.forecastId) : null;
+          const bound = result.phase === 'forecast' ? isDeepStrictEqual(forecast?.artifact, result.result)
+            : result.phase === 'score' ? Boolean(receipt) && isDeepStrictEqual(receipt.result, result.result) && receipt.forecast_id === result.forecastId
+            : result.phase === 'stop' && Boolean(receipt);
+          if (!bound || !forecast || forecast.binding_id !== result.bindingId || result.modelUpdated !== false || !knownModels.has(result.baselineModelId)) throw Error('Unbound cue-execution receipt');
+          let originalBytesVerified = false;
+          if (result.phase === 'score' && result.result) {
+            // The retained original manifest must be the one whose hash the scored receipt carries.
+            const manifest = await digestOriginal(`${prefix}/control-attempts/${attemptId}/original/manifest.json`, 1024 * 1024);
+            if (manifest.sha256 !== result.source_manifest_sha256 || !result.result.artifact.observation_hashes.includes(manifest.sha256)) throw Error('Changed original control capture');
+            originalBytesVerified = true;
+          }
+          artifacts.push({...artifact, binding: {sessionId, modelId: result.baselineModelId, current: result.baselineModelId === state.snapshot?.model_id,
+            role: 'cue-execution-' + result.phase, bindingId: result.bindingId, originalBytesVerified, modelUpdated: false}});
+        } catch { missing.push({source, reason: 'Cue-execution receipt or original capture does not match the authoritative session; excluded'}); }
+      }
       const summary = {
         modelId: state?.snapshot?.model_id || null,
         sessionVersion: state?.version ?? null,
@@ -255,6 +279,7 @@ export function createSessionExportRoutes({dataRoot, json, fetchImpl = fetch, en
         sourceBankScoreCount: (state?.source_receipts || []).filter(row => row.operation === 'score_phonation_bank').length,
         visualResultCount: artifacts.filter(a => a.binding?.role === 'conditional-visual-annotation-holdout').length,
         motionAnalysisCount: artifacts.filter(a => a.binding?.role === 'conditional-motion-audio-analysis').length,
+        controlScoreCount: (state?.control_receipts || []).filter(row => row.operation === 'score_control_pcm' && row.result).length,
       };
       // Recheck the app pointer after asynchronous collection; never mix two active runs.
       const finalIndex = await read('science-current.json');
