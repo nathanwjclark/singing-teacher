@@ -20,3 +20,18 @@ export async function extractLearningPitch(blob:Blob, melodic=false):Promise<Lea
   return frames
  }finally{await context.close()}
 }
+/** Reference playback for declared notes: one Web Audio triangle oscillator per note with short ramps to mark note changes. */
+export async function playLearningMelody(notes:{hz:number;durationMs:number}[]){
+ const context=new AudioContext()
+ try{
+  await context.resume()
+  let time=context.currentTime+.05, last:OscillatorNode|null=null
+  for(const note of notes){
+   const oscillator=context.createOscillator(),gain=context.createGain(),end=time+note.durationMs/1000
+   oscillator.type='triangle';oscillator.frequency.value=note.hz
+   gain.gain.setValueAtTime(0,time);gain.gain.linearRampToValueAtTime(.2,time+.02);gain.gain.setValueAtTime(.2,end-.03);gain.gain.linearRampToValueAtTime(0,end)
+   oscillator.connect(gain).connect(context.destination);oscillator.start(time);oscillator.stop(end);time=end;last=oscillator
+  }
+  if(last)await new Promise(resolve=>{last.onended=resolve})
+ }finally{await context.close()}
+}
