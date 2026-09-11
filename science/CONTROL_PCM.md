@@ -44,7 +44,9 @@ Repeated physical evidence (a reused attempt ID or any overlapping original hash
 - `score_control {forecast_id, pcm, metadata}` requires a committed forecast for the current baseline, capture after the commitment and unused original hashes.
 - `record_control_attempt {forecast_id, status: stopped|failed, reason}` preserves an attempt that was not scored.
 
-Collected forecasts must retain every anatomy x control alternative of the declared binding. Collected scores must retain every committed alternative and bind to the forecast hash. A baseline change marks committed forecasts `stale`. None of these operations changes the baseline model.
+Collected forecasts must retain every anatomy x control alternative of the declared binding. Collected scores must retain every committed alternative and bind to the forecast hash. A worker reply that fails these checks is kept as a `rejected` receipt instead of blocking the session. At most one control forecast is committed at a time: committing a new one marks the previous one `superseded` with a receipt, so the cue shown to the learner is the one the next recording is scored against. A baseline change marks committed forecasts `stale`. None of these operations changes the baseline model.
+
+A forecast request carries only score receipts of bindings with the same content, because other bindings can never match its key. This keeps the request under the worker's 2 MB input bound; each receipt is a few kilobytes plus about 0.2 KB per bank row. The ledger still rejects reused evidence across all bindings.
 
 ### Context contract
 
@@ -56,11 +58,11 @@ Collected forecasts must retain every anatomy x control alternative of the decla
 
 ### Astra
 
-When the session has bindings, the decision schema requires `cueBindingId` with enum `[null, ...binding ids]`. Choosing a binding delivers that wording verbatim; the provider's own text is kept as `providerCue`. Rest decisions, unknown IDs and bindings whose vowel differs from the selected experiment are rejected. `null` means a new free-text cue, which starts a new binding with no history. Without bindings the schema is unchanged.
+When the session has bindings, the decision schema requires `cueBindingId` with enum `[null, ...binding ids]`. Choosing a binding delivers that wording verbatim; the provider's own text is kept as `providerCue`. `app_control.py` then reuses that binding exactly (wording, context, bank and gain), so its history matches even if the selected experiment would produce a different bank. Rest decisions, unknown IDs and bindings whose vowel differs from the selected experiment are rejected. `null` means a new free-text cue, which starts a new binding with no history. Without bindings the schema is unchanged.
 
 ## Usage
 
-Local app: `npm run build`, then `npm run science:local`. Fit a voice capture, ask Astra for a recording decision, open Experiments → Cue-execution learning, press **Freeze prediction for this cue**, record one attempt with that exact wording, use **Pull iPhone**, confirm and press **Score latest capture**. Repeat with the same cue (Astra can choose `cueBindingId`). The fourth prediction is the first that can leave uniform.
+Local app: `npm run build`, then `npm run science:local`. Fit a voice capture, ask Astra for a recording decision, open Experiments → Cue-execution learning, press **Freeze prediction for this cue**, record one attempt with that exact wording, use **Pull iPhone**, confirm and press **Score latest capture** (or **Record attempt as stopped**). Each Astra decision gets one prediction; after it is scored, stopped or replaced, ask Astra again. Repeat with the same cue (Astra can choose `cueBindingId`). The fourth prediction is the first that can leave uniform.
 
 Direct use:
 
@@ -77,7 +79,8 @@ receipt = score_control_pcm(frozen=frozen, pcm=frame, metadata=metadata)
 ## Verification
 
 - `science/tests/test_control_pcm.py`: uniform below three matches and changed predictions at three; pruned support keeps per-anatomy history; changed wording, level, capture context, bank, gain, scales and profile exclude history; repeated evidence and tampered receipts rejected; outcome before the seal rejected; gain absent from support; residual calibration never applied; silent frames unscorable and uncounted; budget and timeout rules; the isolated worker path.
-- `science/tests/test_session_control.py`: ledger-owned history, caller history rejected, binding immutability, stale-on-baseline, pruned successor, stopped/failed/unscorable attempts preserved and uncounted.
+- `science/tests/test_session_control.py`: ledger-owned history, caller history rejected, history limited to same-content bindings, one committed forecast at a time, binding immutability, stale-on-baseline, pruned successor, stopped/failed/unscorable attempts preserved and uncounted.
+- `science/tests/test_app_control.py`: the app's binding derivation, verbatim reuse of a repeated binding, and refusals for pitch range, budget, rest and non-recording decisions.
 - `science/tests/test_app_control_loop.py`: real app routes, Astra route with a test-only provider and the HTTP worker through four delivered-cue rounds, plus a bound export.
 - `server/controlLearning.test.mjs`, `server/astra.test.mjs`, `server/sessionExport.test.mjs`, `src/experiment/control/controlClient.test.ts`.
 - `npx playwright test -c tests/control-learning.config.ts` runs the built app over a seeded session and saves screenshots under `test-results/`.
@@ -88,5 +91,6 @@ Measured on generated frames from the first anatomy at the `open` alternative (`
 
 - Generated fixtures prove plumbing only. Human cue execution, and whether a cue changes execution at all, is untested.
 - The five-alternative bank is a coarse finite support; the true execution can lie outside it. Weights near uniform mean the bank does not discriminate, not that execution is ambiguous in the body.
+- A learner could pull several takes and score only the best one. Unscored takes leave no trace, so repeated attempts can be selected. Record every take, or record it as stopped.
 - The same original capture may also be submitted as the baseline outcome. Control support is conditional per anatomy and never changes anatomy support.
 - The session ledger stores the full state in every event. In the four-round app test the replay reached about 37 MB, above the exporter's 24 MiB bound, so long sessions export as `partial` without the replay. The first scored round exports completely. This ledger design predates this feature; each control round adds roughly 250 KB of state (mostly the scored PCM frame and the frozen bank in the score job request).

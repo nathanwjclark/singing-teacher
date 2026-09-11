@@ -14,7 +14,7 @@ function Binding({ binding, minimum }: { binding: ControlBinding; minimum: numbe
     <p className="control-cue">“{binding.deliveredCue}”</p>
     <p>Context: vowel {context.vowel}, {fixed(context.pitch_hz, 1)} Hz reference pitch, {context.level} level, posture {context.posture.replaceAll('-', ' ')}, {context.capture_context_id} ({context.source_kind}).
       Alternatives: {binding.controls.map(c => `${c.controlId} (JA ${fixed(c.JA, 1)}, ${fixed(c.f0Hz, 1)} Hz)`).join(', ')}. Declared gain {fixed(binding.gain, 2)} is a recording nuisance, not an alternative.</p>
-    <p>Attempts: {binding.attempts.scored} scored, {binding.attempts.unscorable} unscorable, {binding.attempts.stopped} stopped, {binding.attempts.failed} failed. Only scored attempts count.</p>
+    <p>Attempts: {binding.attempts.scored} scored, {binding.attempts.unscorable} unscorable, {binding.attempts.stopped} stopped, {binding.attempts.failed} failed. Scored attempts count toward the weights only while the wording, context, alternatives and scoring code stay the same.</p>
     {forecast ? <>
       <p>Latest prediction {forecast.forecastId}: {forecast.status}{forecast.current ? ', ready for a recording' : ''}. Prediction status: {forecast.predictionStatus}.</p>
       <div className="control-table"><table><thead><tr><th>Anatomy hypothesis</th><th>Matched attempts</th><th>Weights in latest prediction</th></tr></thead>
