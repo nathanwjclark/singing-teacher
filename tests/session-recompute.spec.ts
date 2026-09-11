@@ -12,12 +12,19 @@ const data=()=>process.env.RECOMPUTE_E2E_DATA!;
 // Everything the app and worker retain, except the recompute attempt's own outputs.
 // A SQLite reader may create a -shm index and an empty -wal beside a database; those
 // hold no data. A -wal with content would be a write and is compared like any file.
+// SQLite also deletes the -wal (and a -journal) when the last connection closes, and the
+// worker's job scheduler opens and closes jobs.sqlite3 every 30 ms, so a sidecar listed by
+// readdir can be gone before it is read. Its frames were checkpointed into the database, which is
+// compared, unless the walk read the database before that checkpoint; in that narrow case a write
+// in the vanished sidecar would go unseen, so this check bounds read-only behaviour, it does not prove it.
 async function retained(){
  const files:Record<string,string>={};
  async function walk(dir:string){for(const entry of await readdir(dir,{withFileTypes:true})){const path=join(dir,entry.name),name=relative(data(),path);
   if(name==='replay-verifications'||name==='session-recompute-current.json'||name.endsWith('.sqlite3-shm'))continue;
   if(entry.isDirectory())await walk(path);
-  else if(entry.isFile()){const bytes=await readFile(path);if(!(name.endsWith('.sqlite3-wal')&&bytes.length===0))files[name]=createHash('sha256').update(bytes).digest('hex');}}}
+  else if(entry.isFile()){
+   const bytes=await readFile(path).catch((error:NodeJS.ErrnoException)=>{if(error.code==='ENOENT'&&/\.sqlite3-(wal|journal)$/.test(name))return null;throw error;});
+   if(bytes&&!(name.endsWith('.sqlite3-wal')&&bytes.length===0))files[name]=createHash('sha256').update(bytes).digest('hex');}}}
  await walk(data());return files;
 }
 async function worker(request:APIRequestContext,sessionId:string){return (await request.get(`/api/science/sessions/${sessionId}/replay`)).json()}
