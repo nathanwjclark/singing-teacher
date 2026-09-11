@@ -1,5 +1,5 @@
 import {constants} from 'node:fs';
-import {open,writeFile,mkdir,rename} from 'node:fs/promises';
+import {open,writeFile,mkdir,rename,readdir,rm} from 'node:fs/promises';
 import {join} from 'node:path';
 import {createHash,randomUUID} from 'node:crypto';
 
@@ -67,7 +67,7 @@ export async function saveProbeSetup({repo,dataRoot,body,runProcess}){
  requireValue(Array.isArray(packageValue.evidence)&&packageValue.evidence.length>0&&packageValue.evidence.length<=32&&Array.isArray(body.evidence)&&body.evidence.length===packageValue.evidence.length,'Upload every original calibration evidence file');
  const supplied=new Map();let total=0;
  for(const item of body.evidence){
-  requireValue(item&&Object.keys(item).length===2&&typeof item.name==='string'&&/^[\w][\w.-]{0,119}$/.test(item.name)&&!['configuration.json','profile.json','summary.json','package.json','failure.json','request.json'].includes(item.name)&&!supplied.has(item.name),'Evidence filenames must be unique safe basenames');
+  requireValue(item&&Object.keys(item).length===2&&typeof item.name==='string'&&/^[\w][\w.-]{0,119}$/.test(item.name)&&!['configuration.json','profile.json','summary.json','package.json','verification'].includes(item.name)&&!supplied.has(item.name),'Evidence filenames must be unique safe basenames');
   const data=decode(item.base64,16*1024*1024);total+=data.length;requireValue(total<=16*1024*1024,'Calibration evidence exceeds 16 MB total');supplied.set(item.name,data);
  }
  const expectedNames=new Set();
@@ -82,28 +82,32 @@ export async function saveProbeSetup({repo,dataRoot,body,runProcess}){
  const root=join(dataRoot,'probe-setups'),folder=join(root,body.requestId);
  const requestSha256=hash(Buffer.from(JSON.stringify(body)));
  await mkdir(root,{recursive:true,mode:0o700});
- try{await mkdir(folder,{mode:0o700});}catch(error){
-  if(error.code!=='EEXIST')throw error;
-  const previous=await read(join(folder,'summary.json'));
-  requireValue(previous?.requestSha256===requestSha256&&status.setup?.setupId===body.requestId,'Setup attempt already exists; refresh and submit a new attempt');return previous;
- }
+ // Saves run one at a time (the route holds its busy flag), so any staging folder left here is from a crash.
+ for(const name of await readdir(root))if(name.startsWith('.staging-'))await rm(join(root,name),{recursive:true,force:true});
+ const previous=await read(join(folder,'summary.json'));
+ if(previous){requireValue(previous.requestSha256===requestSha256&&status.setup?.setupId===body.requestId,'Setup attempt already exists; refresh and submit a new attempt');return previous;}
+ // Build and verify in a staging folder; only a verified setup is renamed into place, so a
+ // failed attempt leaves none of its (up to 16 MB) evidence behind.
+ const staging=join(root,`.staging-${randomUUID()}`);await mkdir(staging,{mode:0o700});
  try{
-  await write(join(folder,'package.json'),packageBytes);
-  await write(join(folder,'configuration.json'),configuration);await write(join(folder,'profile.json'),body.profile);
-  for(const [name,data] of supplied)await write(join(folder,name),data);
+  await write(join(staging,'package.json'),packageBytes);
+  await write(join(staging,'configuration.json'),configuration);await write(join(staging,'profile.json'),body.profile);
+  for(const [name,data] of supplied)await write(join(staging,name),data);
   const imported=await read(join(dataRoot,'probe-imports',body.importId,'summary.json'));
-  await runProcess(process.execPath,['--experimental-strip-types',join(repo,'science/scripts/import_probe_science.ts'),join(dataRoot,'probe-imports',body.importId,imported.captureDirectory),join(folder,'verification'),join(folder,'configuration.json')],{cwd:repo,timeout:60000,maxBuffer:65536});
-  const verified=await read(join(folder,'verification/probe-science-receipt.json'));
+  await runProcess(process.execPath,['--experimental-strip-types',join(repo,'science/scripts/import_probe_science.ts'),join(dataRoot,'probe-imports',body.importId,imported.captureDirectory),join(staging,'verification'),join(staging,'configuration.json')],{cwd:repo,timeout:60000,maxBuffer:65536});
+  const verified=await read(join(staging,'verification/probe-science-receipt.json'));
   requireValue(verified?.eligible_for_fit,`Calibration is not eligible: ${(verified?.reasons??['verification unavailable']).join('; ')}`);
-  const receipt={setupId:body.requestId,importId:body.importId,createdAt:new Date().toISOString(),requestSha256,configurationSha256:hash(await bytes(join(folder,'configuration.json'))),profileSha256:hash(await bytes(join(folder,'profile.json'))),packageSha256:hash(packageBytes),manifestSha256:capture.manifestSha256,
+  const receipt={setupId:body.requestId,importId:body.importId,createdAt:new Date().toISOString(),requestSha256,configurationSha256:hash(await bytes(join(staging,'configuration.json'))),profileSha256:hash(await bytes(join(staging,'profile.json'))),packageSha256:hash(packageBytes),manifestSha256:capture.manifestSha256,
    provenance:capture.provenance,calibrationKind:configuration.calibration.kind,calibrationId:configuration.calibration.calibration_id,routeId:configuration.calibration.route_id,placement:p,profile:body.profile,pose:body.pose,trialId:body.trialId,
    frequencyHz:configuration.calibration.frequency_hz,comparison:configuration.comparison,evidence:configuration.evidence,eligible:true,includedInFit:false,calibrationAuthenticityVerified:false};
-  await write(join(folder,'summary.json'),receipt);
+  await write(join(staging,'summary.json'),receipt);
+  await rename(staging,folder);
   const pointer={setupId:body.requestId,receiptSha256:hash(await bytes(join(folder,'summary.json')))},temporary=join(dataRoot,`probe-setup-${randomUUID()}.pending`);
   await write(temporary,pointer);await rename(temporary,join(dataRoot,'probe-setup-current.json'));
   return receipt;
  }catch(error){
-  const message=error.stderr?'Canonical probe verification failed; check calibration arrays, route, source evidence and native capture bindings.':error.message;
-  await write(join(folder,'failure.json'),{error:message}).catch(()=>{});throw Error(message);
+  await rm(staging,{recursive:true,force:true});
+  if(!error.stderr)throw error;
+  throw Error(`Canonical probe verification failed: ${/^Error: (.+)$/m.exec(error.stderr)?.[1]??'check calibration arrays, route, source evidence and native capture bindings.'}`);
  }
 }
