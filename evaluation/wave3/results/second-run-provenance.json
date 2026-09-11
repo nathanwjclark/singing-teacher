@@ -1,0 +1,24 @@
+{
+  "command": "PYTHONPATH=science/src science/.venv/bin/python evaluation/wave3/run.py --output <new scratch directory>",
+  "evidence_source": "synthetic",
+  "executed_worktree_commit": "9c951b0",
+  "files": {
+    "second-calibration-rankings.json": "d2c3a1b9ca6d0f0c571fbcf96c3709acca38db9eed23cd6e486447fb330876af",
+    "second-prediction-bank.json": "c86448fd4d7d2ea04e75b2884000ef6cc2ee3c32c71087155943ee8b8c9ad9e3",
+    "second-report.json": "3e5d60d1e2e93e0ffad1891a9aaa949586fd9f4c541beb219f08cef005de46ac"
+  },
+  "harness_commit": "9c951b0",
+  "harness_sha256": "fc47bf368b8b1295ea108b78a606a6f64b89b4e07f7664f41e07711a45f14090",
+  "protocol_commit": "9c951b0",
+  "protocol_committed_at": "2026-09-10T23:59:34-04:00",
+  "protocol_file": "evaluation/wave3/protocol-2.json",
+  "protocol_sha256": "b61b8a9b470570ab8ebf5ff447459f8f3862e968fe9ac1128950b76f6f3e7528",
+  "raw_pcm_frames": "Written next to the JSON receipts in the run directory with SHA-256 hashes in the bank/report; not committed, as for revision 1",
+  "reruns": 0,
+  "scientific_outcome": "inconclusive",
+  "write_order": {
+    "calibration_rankings_committed_at": "2026-09-11T04:00:01.558656+00:00",
+    "prediction_bank_committed_at": "2026-09-11T03:59:43.414334+00:00",
+    "report_completed_at": "2026-09-11T04:00:26.886051+00:00"
+  }
+}
