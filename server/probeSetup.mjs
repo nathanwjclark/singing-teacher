@@ -1,7 +1,8 @@
 import {constants} from 'node:fs';
-import {open,writeFile,mkdir,rename,readdir,rm} from 'node:fs/promises';
+import {open,writeFile,mkdir,rename,readdir,rm,lstat} from 'node:fs/promises';
 import {join} from 'node:path';
 import {createHash,randomUUID} from 'node:crypto';
+import {probeSource} from '../src/contracts/probes.ts';
 
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
 const safeId=value=>typeof value==='string'&&/^[A-Za-z0-9_-]{1,100}$/.test(value);
@@ -13,6 +14,9 @@ async function bytes(path,limit=2*1024*1024){
  try{const stat=await file.stat();requireValue(stat.isFile()&&stat.size>0&&stat.size<=limit,'Invalid probe setup file size or type');const data=await file.readFile();requireValue(data.length===stat.size,'Probe setup file changed during read');return data;}finally{await file.close();}
 }
 async function read(path){try{return JSON.parse(await bytes(path));}catch(error){if(error.code==='ENOENT')return null;throw error;}}
+// Verification is capped at 60 s, so a staging or pending file this old is a crash leftover, not another process's save.
+const STALE_MS=10*60*1000;
+async function sweep(folder,matches){for(const name of await readdir(folder))if(matches(name)){const path=join(folder,name),info=await lstat(path).catch(()=>null);if(info&&Date.now()-info.mtimeMs>STALE_MS)await rm(path,{recursive:true,force:true});}}
 async function write(path,value){await writeFile(path,Buffer.isBuffer(value)?value:JSON.stringify(value),{mode:0o600,flag:'wx'});}
 
 export async function probeSetupStatus(dataRoot,importId){
@@ -26,7 +30,7 @@ export async function probeSetupStatus(dataRoot,importId){
   setup=JSON.parse(receiptBytes);
   for(const [name,key] of [['configuration.json','configurationSha256'],['profile.json','profileSha256']])requireValue(hash(await bytes(join(folder,name)))===setup[key],'Saved probe setup configuration hash mismatch');
   }
- }catch{setup=null;error='Saved probe setup could not be verified. Import its original calibration evidence again to replace it.';}
+ }catch{setup=null;error='Saved calibration setup could not be verified. Save the setup again with its original evidence.';}
  let capture=null;
  if(importId){
   requireValue(safeId(importId),'Invalid imported probe identity');
@@ -35,7 +39,8 @@ export async function probeSetupStatus(dataRoot,importId){
    requireValue(['capture','unpacked/sound'].includes(summary.captureDirectory),'Invalid original probe capture path');
    const manifestBytes=await bytes(join(folder,summary.captureDirectory,'manifest.json'));
    const manifest=JSON.parse(manifestBytes);
-   capture={importId,captureId:manifest.captureId,manifestSha256:hash(manifestBytes),provenance:manifest.provenance,
+   const source=probeSource(manifest);
+   capture={importId,captureId:manifest.captureId,manifestSha256:hash(manifestBytes),provenance:source.kind,declaredProvenance:source.declared,
     pose:manifest.pose??null,placementId:manifest.calibration?.placementId??null,routeSignature:manifest.calibration?.levelCheck?.routeSignature??null};
   }
  }
@@ -82,10 +87,10 @@ export async function saveProbeSetup({repo,dataRoot,body,runProcess}){
  const root=join(dataRoot,'probe-setups'),folder=join(root,body.requestId);
  const requestSha256=hash(Buffer.from(JSON.stringify(body)));
  await mkdir(root,{recursive:true,mode:0o700});
- // Saves run one at a time (the route holds its busy flag), so any staging folder left here is from a crash.
- for(const name of await readdir(root))if(name.startsWith('.staging-'))await rm(join(root,name),{recursive:true,force:true});
+ await sweep(root,name=>name.startsWith('.staging-'));await sweep(dataRoot,name=>name.startsWith('probe-setup-')&&name.endsWith('.pending'));
  const previous=await read(join(folder,'summary.json'));
  if(previous){requireValue(previous.requestSha256===requestSha256&&status.setup?.setupId===body.requestId,'Setup attempt already exists; refresh and submit a new attempt');return previous;}
+ requireValue(!await lstat(folder).catch(()=>null),'A setup folder with this request ID exists without a saved receipt; submit a new attempt');
  // Build and verify in a staging folder; only a verified setup is renamed into place, so a
  // failed attempt leaves none of its (up to 16 MB) evidence behind.
  const staging=join(root,`.staging-${randomUUID()}`);await mkdir(staging,{mode:0o700});
