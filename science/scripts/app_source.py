@@ -31,15 +31,16 @@ def source_candidates(hypotheses,trial_id,pitch,source_model='geometric'):
 
     Geometric alternatives vary PS; two-mass alternatives vary rest displacement
     XB=XT with EAA=0 cm² and DF=1 fixed, so a preference is attributable to one
-    control. Gain 2 keeps both families below clipping across 65-600 Hz.
+    control. Geometric frames keep gain 4; two-mass frames are louder and clip
+    at gain 4 at high pitch, so they use gain 2 (both peak below 0.9 over 65-600 Hz).
     """
     if source_model not in ('geometric','two_mass'):raise ValueError('Unsupported app source model')
     if not 1<=len(hypotheses)<=8:raise ValueError('Optional source candidate budget cannot cover current anatomy support')
     three=len(hypotheses)<=2
     if source_model=='geometric':support=[{'PS':ps} for ps in ([-.2,0.,.2] if three else [-.2,.2])]
     else:support=[{'source_model':'two_mass','XB':x,'XT':x,'EAA':0.,'DF':1.} for x in ([.005,.01,.015] if three else [.005,.015])]
-    prefix='source' if source_model=='geometric' else 'mechanical'
-    return [{'candidate_id':f'{prefix}-{i}-{j}','anatomy':h['anatomy'],'trials':{trial_id:{'JA':-3.,'F0':pitch,'PR':8000.,'gain':2.,**shape}}}
+    prefix,gain=('source',4.) if source_model=='geometric' else ('mechanical',2.)
+    return [{'candidate_id':f'{prefix}-{i}-{j}','anatomy':h['anatomy'],'trials':{trial_id:{'JA':-3.,'F0':pitch,'PR':8000.,'gain':gain,**shape}}}
         for i,h in enumerate(hypotheses) for j,shape in enumerate(support)],support
 
 
@@ -112,7 +113,7 @@ def run(root,phase,output):
         source_model=os.environ.get('PHONATION_SOURCE_MODEL','geometric')
         candidates,support=source_candidates(hypotheses,trial['id'],pitch,source_model)
         command={'action':'fit_source','parameters':{'document':{'schema_version':'phonation-fit-1','trials':[trial]},'candidates':candidates,'max_synthesis_calls':3*len(candidates),'timeout_s':90.}}
-        binding={'source_import_sha256':summary['sourceImportSha256'],'source_model_selection':source_model,'source_shape_support':support,'source_assumptions':'Observed acoustic pitch sets the requested native F0 control; two-mass simulated pitch can differ, and every row records requested and simulated F0. Prescribed JA=-3, PR=8000 and gain=2. Every retained anatomy has the same finite native source alternatives along one shape axis; template tissue constants stay fixed. These are simulator hypotheses, not measured execution, tissue parameters or vocal-fold contact.'}
+        binding={'source_import_sha256':summary['sourceImportSha256'],'source_model_selection':source_model,'source_shape_support':support,'source_assumptions':'Observed acoustic pitch sets the requested native F0 control; two-mass simulated pitch can differ, and every row records requested and simulated F0. Prescribed JA=-3, PR=8000 and gain (4 geometric, 2 two-mass). Every retained anatomy has the same finite native source alternatives along one shape axis; template tissue constants stay fixed. These are simulator hypotheses, not measured execution, tissue parameters or vocal-fold contact.'}
     elif phase=='forecast':
         model=state.get('source_model')
         if not model or model['baseline_model_id']!=baseline:raise ValueError('Fit a source model for the current anatomy first')
