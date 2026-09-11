@@ -1,4 +1,5 @@
 """Cue-execution learning through the session ledger and isolated native jobs (synthetic evidence)."""
+from copy import deepcopy
 from datetime import datetime, timezone
 import hashlib
 
@@ -7,6 +8,8 @@ import pytest
 from singing_physics.pcm_design import _hash, freeze_pcm_hypotheses
 from singing_physics.service import JobService
 from singing_physics.session import SessionController
+from singing_physics.session_control import prepare, verify_ledger
+from science.scripts.app_recompute import recompute_session
 from test_control_pcm import CONTEXT, CONTROLS, FIRST, GAIN, SECOND, cue, frame
 from test_session import send
 
@@ -66,8 +69,22 @@ def test_ledger_history_changes_the_fourth_forecast_and_survives_pruning(tmp_pat
         assert by_anatomy(learned)[first]['status'] == 'empirical' and by_anatomy(learned)[first]['leading_control_ids'] == ['open']
         assert state['snapshot']['model_id'] == 'baseline'
         # Control job entries keep digests only; the sealed artifacts live in the control fields.
-        jobs = [job for job in controller.execute({'action': 'state'})['state']['jobs'] if job['request']['operation'].endswith('control_pcm')]
-        assert len(jobs) == 7 and all(set(job['request']['parameters']) == {'sha256'} and job['result'] is None and len(job['result_sha256']) == 64 for job in jobs)
+        # Every read verifies them against the full requests recorded while pending and the retained artifacts.
+        replay = controller.execute({'action': 'replay'})
+        state, jobs = replay['state'], [job for job in replay['state']['jobs'] if job.get('control_binding')]
+        assert len(jobs) == 7 and all(set(job['request']['parameters']) == {'sha256'} and job['result'] is None for job in jobs)
+        requests = {e['state']['pending']['key']: e['state']['pending']['request']['parameters'] for e in replay['events'] if (e['state'].get('pending') or {}).get('control_binding')}
+        receipts = {r['job_id']: r for r in state['control_receipts']}
+        for job in jobs:
+            assert job['request']['parameters']['sha256'] == _hash(requests[job['key']])
+            receipt = receipts[job['job_id']]
+            retained = receipt['result'] if receipt['operation'] == 'score_control_pcm' else state['control_forecasts'][receipt['forecast_id']]['artifact']
+            assert job['result_sha256'] == _hash(retained)
+            if receipt['operation'] == 'score_control_pcm': assert job['result_sha256'] == receipt['result_sha256']
+        for field, value in (('result_sha256', '0' * 64), ('request', {**jobs[0]['request'], 'parameters': {'sha256': '0' * 64}})):
+            tampered = deepcopy(state); next(job for job in tampered['jobs'] if job['key'] == jobs[0]['key'])[field] = value
+            with pytest.raises(RuntimeError, match='digest does not match'):
+                verify_ledger(tampered, replay['events'])
 
         # Callers cannot supply history, a snapshot or extra command fields.
         state = controller.execute({'action': 'state'})['state']
@@ -141,3 +158,20 @@ def test_bindings_are_immutable_and_unsuccessful_attempts_stay_uncounted(tmp_pat
         assert [row['attempt_id'] for row in later['excluded']] == ['attempt-2']
         with pytest.raises(ValueError, match='already used'):
             attempt(controller, service, 'later-target', 2)
+
+        # A forecast frozen before the absolute-fit policy is refused before its capture is consumed.
+        state = controller.execute({'action': 'state'})['state']
+        old = deepcopy(state); frozen = old['control_forecasts']['later-target']['artifact']
+        del frozen['artifact']['maximum_best_fit_square_sum']; frozen['sha256'] = _hash(frozen['artifact'])
+        with pytest.raises(ValueError, match='predates the absolute-fit policy'):
+            prepare(old, 'score_control', {'forecast_id': 'later-target', 'pcm': frame(FIRST, CONTROLS[1], 9), 'metadata': metadata('later-target', 9)})
+        assert old['control_forecasts']['later-target']['status'] == 'committed'
+        assert len(old['control_receipts']) == len(state['control_receipts'])
+
+        # The score recomputation verifier reports control jobs by their digests and does not recompute them.
+        report = recompute_session(controller.execute({'action': 'replay'}), session_id='session')
+        control = [row for row in report['operations'] if row['operation'].endswith('control_pcm')]
+        jobs = {job['job_id']: job for job in state['jobs']}
+        assert control and all(row['status'] == 'unsupported_operation' and row['requestSha256'] is None
+            and row['originalResultSha256'] == jobs[row['jobId']]['result_sha256']
+            and row['requestParametersSha256'] == jobs[row['jobId']]['request']['parameters']['sha256'] for row in control)

@@ -157,6 +157,9 @@ class SessionController:
             if set(command)!={'action'}:
                 raise ValueError('Unexpected read parameters')
             state,digest,events=self._dispatch(ledger=True)
+            if state.get('control_receipts'):
+                from .session_control import verify_ledger
+                verify_ledger(state,events)
             return {'state':state,'ledger_sha256':digest, **({'events':events} if action=='replay' else {})}
         command_id=_id(command.get('command_id'))
         fields={'forecast_visual':{'forecast_id','parameters'},'score_visual':{'forecast_id','parameters'},'register_model':{'snapshot'},'ingest_calibration':{'document'},'search':{'parameters'},'fit_probe':{'parameters'},'fit_lidar':{'parameters'},

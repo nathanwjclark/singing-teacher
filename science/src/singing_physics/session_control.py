@@ -46,6 +46,28 @@ def job_record(record):
             'result': None, 'result_sha256': None if result is None else _hash(result)}
 
 
+def verify_ledger(state, events):
+    """Fail closed when a control job digest disagrees with the ledger's own copies.
+
+    Parameters are checked against the full request the ledger recorded while the job was
+    pending; results against the sealed artifact in control_forecasts or control_receipts.
+    A reply the session rejected is kept only by the worker, so its digest is not checkable here."""
+    requests = {}
+    for event in events:
+        pending = event['state'].get('pending')
+        if pending and pending.get('control_binding'): requests.setdefault(pending['key'], pending['request']['parameters'])
+    receipts = {row['job_id']: row for row in state.get('control_receipts', []) if row.get('job_id')}
+    for job in state.get('jobs', []):
+        if not job.get('control_binding'): continue
+        if job['key'] not in requests or _hash(requests[job['key']]) != job['request']['parameters'].get('sha256'):
+            raise RuntimeError('Control job parameter digest does not match the recorded request')
+        receipt = receipts.get(job['job_id'])
+        if receipt is None or job['result_sha256'] is None: continue
+        stored = (receipt['result'] if receipt['operation'] == 'score_control_pcm' else
+                  state['control_forecasts'].get(receipt['forecast_id'], {}).get('artifact') if receipt.get('forecast_sha256') else None)
+        if stored is not None and _hash(stored) != job['result_sha256']: raise RuntimeError('Control job result digest does not match the retained artifact')
+
+
 def invalidate_stale(state):
     baseline = (state.get('snapshot') or {}).get('model_id')
     for forecast in state.get('control_forecasts', {}).values():
@@ -98,6 +120,8 @@ def prepare(state, action, command):
     if not forecast or forecast['status'] != 'committed' or forecast['baseline_model_id'] != baseline:
         raise ValueError('Control score requires a current committed forecast')
     if _hash(forecast['artifact']['artifact']) != forecast['artifact']['sha256']: raise ValueError('Control forecast integrity mismatch')
+    # Refuse before the capture's hashes are consumed; the worker could not score it.
+    if 'maximum_best_fit_square_sum' not in forecast['artifact']['artifact']: raise ValueError('Forecast predates the absolute-fit policy; freeze a new prediction')
     metadata = command['metadata']; _metadata(metadata, state['session_id'], prospective=True)
     if metadata['observationId'] != command['forecast_id'] or _time(metadata['evidenceAt']) <= _time(forecast['committed_at']):
         raise ValueError('Control capture must match its target and follow session commitment')

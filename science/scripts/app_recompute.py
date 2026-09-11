@@ -183,11 +183,18 @@ def recompute_session(replay, *, session_id, max_operations=MAX_OPERATIONS, star
                 'workerLedgerSha256': replay['ledger_sha256'], 'replay': replay}
     for job in jobs:
         operation = job['request']['operation']
+        # Cue-execution control jobs keep only digests of their parameters and result in the
+        # ledger (the sealed artifacts live in the control fields); report those digests as such.
+        digest_only = 'result_sha256' in job
         row = {'jobId': job['job_id'], 'operation': operation, 'originalStatus': job['status'],
-               'requestSha256': digest(job['request']), 'originalResultSha256': digest(job.get('result')),
+               'requestSha256': None if digest_only else digest(job['request']),
+               'originalResultSha256': job['result_sha256'] if digest_only else digest(job.get('result')),
                'numericalAgreement': None, 'policyVerification': 'unverified'}
+        if digest_only: row['requestParametersSha256'] = job['request']['parameters']['sha256']
         if operation not in SCORING:
-            row.update(outcome='unsupported', status='unsupported_operation', reason='This operation fits, freezes or synthesizes; this read-only verifier recomputes scores only.')
+            row.update(outcome='unsupported', status='unsupported_operation', reason=
+                'Cue-execution control jobs are not recomputed by this verifier; the ledger retains only their parameter and result digests.' if digest_only else
+                'This operation fits, freezes or synthesizes; this read-only verifier recomputes scores only.')
         elif job['status'] != 'succeeded':
             row.update(outcome='unavailable', status='missing_artifacts', reason='No successful original score is available.')
         elif job['job_id'] not in selected:
