@@ -33,7 +33,8 @@ def test_app_run_publishes_shared_session_and_verified_model(tmp_path):
         with zipfile.ZipFile(archive,'w') as zipped:
             for file in directory.iterdir():zipped.write(file,file.name)
         (data/'native-pull-latest.json').write_text(json.dumps({'name':archive.name,
-            'bytes':archive.stat().st_size,'sha256':hashlib.sha256(archive.read_bytes()).hexdigest()}))
+            'bytes':archive.stat().st_size,'sha256':hashlib.sha256(archive.read_bytes()).hexdigest(),
+            'acquisition':{'transport':'repository-fixture','generator':'science/tests/test_app_science_pipeline.py'}}))
     publish_capture(source)
     with ScientificHTTPServer(tmp_path/'worker','t'*48,port=0) as worker:
         thread=threading.Thread(target=worker.serve_forever,daemon=True);thread.start()
