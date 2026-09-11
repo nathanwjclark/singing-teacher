@@ -242,3 +242,57 @@ def test_app_runner_reads_real_http_worker_and_only_persists_redacted_report(bat
             assert after==original
         finally:
             server.shutdown();thread.join(timeout=5)
+
+
+def test_recompute_never_dispatches_a_pending_intent(batch_evidence, tmp_path, monkeypatch):
+    """The 'replay' session action would submit a persisted intent and append job_dispatched."""
+    import shutil, sqlite3, threading
+    from singing_physics.http_service import ScientificHTTPServer
+    from singing_physics.service import canonical
+    from singing_physics.session import _hash, _ledger
+    from science.scripts.app_recompute import run
+    from science.scripts.live_capture_jobs import HTTPBackend
+    root, original = batch_evidence
+    shutil.copytree(root/'worker', tmp_path/'worker')
+    sessions, jobs = tmp_path/'worker/sessions/sessions.sqlite3', tmp_path/'worker/jobs.sqlite3'
+    # Input data: the ledger as left by a crash after an intent was persisted and
+    # before JobService returned its job id (written exactly as _append writes).
+    with sqlite3.connect(sessions) as db:
+        state, previous, _ = _ledger(db, 'synthetic-replay-session')
+        state['version'] += 1
+        model = state['snapshot']['model_id']
+        state['pending'] = {'request': {'operation': 'forward', 'parameters': {'pose': 'a', 'duration_s': .1}, 'session_id': 'synthetic-replay-session', 'model_id': model},
+                            'key': 'session:'+'c'*64, 'job_id': None, 'base_model_id': model}
+        event = {'session_id': 'synthetic-replay-session', 'previous_sha256': previous, 'action': 'search', 'received_at': datetime.now(timezone.utc).isoformat(), 'details': {}, 'state': deepcopy(state)}
+        db.execute('INSERT INTO events VALUES(?,?,?,?)', ('synthetic-replay-session', state['version'], canonical(event), _hash(event)))
+    def models():
+        with sqlite3.connect(jobs.as_uri()+'?mode=ro', uri=True) as db:
+            return db.execute('SELECT * FROM models ORDER BY session_id').fetchall()
+    def retained():
+        return {str(p.relative_to(tmp_path)): p.read_bytes() for p in sorted((tmp_path/'worker').rglob('*')) if p.is_file() and not p.name.endswith(('-shm', '-wal'))}
+    before, before_models = retained(), models()
+    token = 'synthetic-token-' + 'b'*32
+    with ScientificHTTPServer(tmp_path/'worker', token, port=0) as server:
+        thread = threading.Thread(target=server.serve_forever, daemon=True); thread.start()
+        url = 'http://127.0.0.1:'+str(server.server_port)
+        monkeypatch.setenv('SCIENCE_URL', url); monkeypatch.setenv('SCIENCE_TOKEN', token)
+        try:
+            data = tmp_path/'app'; (data/'science-runs/run-synthetic').mkdir(parents=True)
+            (data/'science-current.json').write_text(json.dumps({'status':'succeeded','runId':'run-synthetic'}))
+            (data/'science-runs/run-synthetic/summary.json').write_text(json.dumps({'sessionId':'synthetic-replay-session'}))
+            output = data/'replay-verifications/replay-33333333-3333-4333-8333-333333333333'; output.mkdir(parents=True)
+            (output/'request.json').write_text(json.dumps({'runId':'run-synthetic','sessionId':'synthetic-replay-session','maxOperations':16}))
+            report = run(data, output)
+            assert report['sessionVersion'] == state['version'] and report['counts']['matched'] == 2, report
+            assert retained() == before and models() == before_models
+            ledger = HTTPBackend(url, token, 'synthetic-replay-session').ledger()
+            assert ledger['state']['version'] == state['version'] and ledger['state']['pending']['job_id'] is None
+            assert ledger['ledger_sha256'] == report['workerLedgerSha256'] != original['ledger_sha256']
+            from urllib.error import HTTPError
+            with pytest.raises(HTTPError, match='404'):
+                HTTPBackend(url, token, 'unknown-session').ledger()
+            # The recovery read the recompute used to call advances this same ledger.
+            dispatched = HTTPBackend(url, token, 'synthetic-replay-session').execute({'action': 'replay'})
+            assert dispatched['state']['version'] == state['version'] + 1 and dispatched['events'][-1]['action'] == 'job_dispatched'
+        finally:
+            server.shutdown(); thread.join(timeout=5)

@@ -59,6 +59,10 @@ class HTTPBackend:
     def execute(self,command):
         return self.request('/sessions/'+self.session_id+'/commands',command)
 
+    def ledger(self):
+        """Verified replay read without dispatching a pending job (never a session action)."""
+        return self.request('/sessions/'+self.session_id+'/ledger')
+
     def submit(self,request,key):
         return self.request('/jobs',{'request':request,'idempotency_key':key})['id']
 

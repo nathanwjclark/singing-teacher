@@ -188,7 +188,9 @@ def run(data_root, output, *, max_operations=MAX_OPERATIONS):
     if request != {'runId': current['runId'], 'sessionId': summary['sessionId'], 'maxOperations': max_operations}:
         raise ValueError('Current session changed before replay capture; start a new verification')
     backend = HTTPBackend(os.environ.get('SCIENCE_URL'), os.environ.get('SCIENCE_TOKEN'), summary['sessionId'])
-    replay = backend.execute({'action': 'replay'})
+    # The worker's read-only ledger path: unlike the 'replay' session action it never
+    # dispatches a pending job or registers a model.
+    replay = backend.ledger()
     # No private replay or PCM is written to the artifact directory. A private
     # scratch working directory bounds any numerical adapter temporary files.
     with tempfile.TemporaryDirectory(prefix='session-score-replay-') as scratch:
