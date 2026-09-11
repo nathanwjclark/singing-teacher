@@ -82,11 +82,8 @@ export async function createVisionEngine(): Promise<VisionEngine> {
           // video until the tongue is only a handful of pixels high.
           tongueContext.drawImage(video,x*video.videoWidth,y*video.videoHeight,width*video.videoWidth,height*video.videoHeight,0,0,256,256);
           const localFace=landmarks.map(p=>({...p,x:(p.x-x)/width,y:(p.y-y)/height}));
-          const local=trackTongue(tongueContext.getImageData(0,0,256,256).data,256,256,localFace,timestamp);
-          if(local) {
-            if(local.trackingMode==='region'){const [x1,y1,x2,y2]=local.box;tongue={...local,box:[x+x1*width,y+y1*height,x+x2*width,y+y2*height]};tongueStatus='TongueSAM visible-region box · no tip or depth';}
-            else {tongue={...local,x:x+local.x*width,y:y+local.y*height,tip:local.tip ? {x:x+local.tip.x*width,y:y+local.tip.y*height} : undefined};tongueStatus='Neural tongue tip · estimated 3D';}
-          }
+          tongue=trackTongue(tongueContext.getImageData(0,0,256,256).data,256,256,localFace,timestamp,tongueSearch);
+          if(tongue)tongueStatus=tongue.trackingMode==='region'?'TongueSAM visible-region box · no tip or depth':'Neural tongue tip · estimated 3D';
         } else trackTongue(new Uint8ClampedArray(0),0,0,[],timestamp);
       } else trackTongue(new Uint8ClampedArray(0),0,0,[],timestamp);
       const tongueDiagnostic=trackTongue.diagnostics();
