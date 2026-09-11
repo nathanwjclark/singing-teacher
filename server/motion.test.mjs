@@ -2,7 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import {createHash} from 'node:crypto';
-import {mkdtemp,rm,stat,mkdir,writeFile} from 'node:fs/promises';
+import {mkdtemp,rm,stat,mkdir,writeFile,readFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {createMotionRoutes} from './motion.mjs';
@@ -59,6 +59,9 @@ test('actual HTTP motion persistence preserves exact originals, unknown timing, 
   assert.equal((await (await fetch(base+'/api/motion/status')).json()).capture.id,saved.capture.id);
   const analysis=await (await fetch(base+`/api/motion/analysis?captureId=${saved.capture.id}`)).json();
   assert.equal(analysis.status,'not-run');assert.equal(analysis.availability.available,false);
+  // The server reports the version declared by the Python analysis, which the client binds into its request identity.
+  const source=await readFile(join(import.meta.dirname,'../science/src/singing_physics/motion_trajectory.py'),'utf8');
+  assert.match(analysis.analysisPolicy,/^motion-forward-bank-\d+$/);assert.ok(source.includes(`VERSION = '${analysis.analysisPolicy}'`));
   const declaration={requestId:'analysis',captureId:saved.capture.id,pose:'a',containsExternalExcitation:false};
   const analyze=body=>fetch(base+'/api/motion/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
   assert.equal((await analyze({...declaration,containsExternalExcitation:true})).status,400);

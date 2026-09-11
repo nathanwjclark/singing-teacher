@@ -18,8 +18,8 @@ export async function importMotionCapture(record:Blob,media:Blob,filename:string
 }
 export const motionAssetUrl=(id:string,kind:'record'|'media')=>`/api/motion/${kind}?id=${encodeURIComponent(id)}`;
 export type MotionVowel='a'|'e'|'i'|'o'|'u';
-export function motionAnalysisRequestIdentity(previous:{key:string;id:string}|null,captureId:string,pose:MotionVowel,modelId:string|null){
- const key=JSON.stringify([captureId,pose,modelId,'motion-forward-bank-3']);
+export function motionAnalysisRequestIdentity(previous:{key:string;id:string}|null,captureId:string,pose:MotionVowel,modelId:string|null,analysisPolicy:string){
+ const key=JSON.stringify([captureId,pose,modelId,analysisPolicy]);
  return previous?.key===key?previous:{key,id:crypto.randomUUID()};
 }
 export interface MotionCandidateScore {candidate_id:string;status:string;weighted_mean_square_discrepancy:number|null;missing_features?:Array<{reason:string;feature?:string}>}
@@ -36,7 +36,7 @@ export interface MotionAudioResult {
 }
 export interface MotionAnalysisStatus {
  status:'not-run'|'running'|'succeeded'|'failed'|'interrupted';analysisId?:string;error?:string;
- resultCurrent:boolean;currentModelId:string|null;
+ resultCurrent:boolean;currentModelId:string|null;analysisPolicy:string;
  result?:MotionAudioResult|null;availability:{available:boolean;reason:string|null};
 }
 export const readMotionAnalysis=(captureId:string,signal?:AbortSignal):Promise<MotionAnalysisStatus>=>request('analysis?captureId='+encodeURIComponent(captureId),{signal});

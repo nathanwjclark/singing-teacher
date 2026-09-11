@@ -15,6 +15,10 @@ export function createMotionRoutes({dataRoot,json,repo=join(import.meta.dirname,
  let analysisBusy=false,decoderCheck;
  const root=join(dataRoot,'motion-captures'),latest=join(dataRoot,'motion-latest.json');
  const analysisRoot=join(dataRoot,'motion-analyses');
+ // The Python analysis owns its version; a stored result is reused only when it was produced by that version.
+ let policy;
+ const analysisPolicy=()=>policy??=readFile(join(repo,'science/src/singing_physics/motion_trajectory.py'),'utf8').then(source=>{
+  const version=source.match(/^VERSION = '([A-Za-z0-9.-]+)'$/m)?.[1];if(!version)throw Error('Motion analysis version is unavailable.');return version;});
  async function decoderAvailability(){
   if(!decoderCheck)decoderCheck=Promise.all([process.env.SINGING_FFMPEG||'ffmpeg',process.env.SINGING_FFPROBE||'ffprobe'].map(binary=>promisify(execFile)(binary,['-version'],{timeout:5000,maxBuffer:131072})))
    .then(()=>({available:true,reason:null})).catch(()=>({available:false,reason:'Optional audio decoding is unavailable on this Mac. Your motion recording remains saved and replayable.'}));
@@ -45,7 +49,7 @@ export function createMotionRoutes({dataRoot,json,repo=join(import.meta.dirname,
   if(!identifier.test(captureId??''))throw Error('Invalid motion capture identifier');
   const path=join(analysisRoot,captureId,'current.json');let state=await optional(path);
   const currentModelId=await currentModel().catch(()=>null);
-  if(!state)return {status:'not-run',analysisId:null,error:null,result:null,resultCurrent:false,currentModelId,availability:await decoderAvailability()};
+  if(!state)return {status:'not-run',analysisId:null,error:null,result:null,resultCurrent:false,currentModelId,analysisPolicy:await analysisPolicy(),availability:await decoderAvailability()};
   const result=await optional(join(analysisRoot,captureId,state.analysisId,'summary.json'));
   if(result)await verifyAnalysis(result,state);
   // While this server's own worker is still running, complete() publishes the result
@@ -57,7 +61,7 @@ export function createMotionRoutes({dataRoot,json,repo=join(import.meta.dirname,
    let alive=false;try{if(Number.isSafeInteger(state.pid)&&state.pid>0){process.kill(state.pid,0);alive=true;}}catch{}
    if(!alive){state={...state,status:'interrupted',error:'Audio analysis was interrupted. Retry in the app; your saved evidence and model are unchanged.'};await saveAnalysis(path,state);}
   }
-  return {...state,result,resultCurrent:!!result&&result.modelId===currentModelId,currentModelId,availability:await decoderAvailability()};
+  return {...state,result,resultCurrent:!!result&&result.modelId===currentModelId,currentModelId,analysisPolicy:await analysisPolicy(),availability:await decoderAvailability()};
  }
  async function analyze(req,res,url){
   if(req.method==='GET'&&url.pathname.endsWith('/analysis')){
@@ -75,7 +79,7 @@ export function createMotionRoutes({dataRoot,json,repo=join(import.meta.dirname,
   if(previous.requestId===body.requestId&&(previous.pose!==body.pose||previous.expectedModelId!==previous.currentModelId)){
    json(res,409,{error:'This request ID belongs to a different vowel or baseline model. Start a new analysis request.'});return;
   }
-  if(previous.requestId===body.requestId&&previous.status==='succeeded'&&previous.result?.analysisPolicy==='motion-forward-bank-3'){json(res,200,{accepted:true,reused:true,analysisId:previous.analysisId});return;}
+  if(previous.requestId===body.requestId&&previous.status==='succeeded'&&previous.result?.analysisPolicy===previous.analysisPolicy){json(res,200,{accepted:true,reused:true,analysisId:previous.analysisId});return;}
   if(analysisBusy||previous.status==='running'){json(res,409,{error:'An audio analysis is already running.'});return;}
   if(!previous.availability.available){json(res,503,{error:previous.availability.reason});return;}
   if(!previous.currentModelId){json(res,503,{error:'Complete a voice model fit and connect its worker before analyzing motion audio.'});return;}

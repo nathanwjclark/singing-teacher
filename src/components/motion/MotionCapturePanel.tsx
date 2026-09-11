@@ -32,7 +32,7 @@ export function MotionCapturePanel({frame,videoStream,audioStream}:{frame:Tracki
    setAnalysisEntry({captureId,value:latest});
    if(latest.status==='running'){setAnalysisRefresh(value=>value+1);return}
    if(!latest.availability.available)throw Error(latest.availability.reason||'Audio analysis unavailable');
-   analysisRequest.current=motionAnalysisRequestIdentity(analysisRequest.current,captureId,analysisPose,latest.currentModelId);
+   analysisRequest.current=motionAnalysisRequestIdentity(analysisRequest.current,captureId,analysisPose,latest.currentModelId,latest.analysisPolicy);
    await analyzeMotionAudio(captureId,analysisPose,analysisRequest.current.id);
    if(mounted.current){setConfirmedAnalysis('');setAnalysisRefresh(value=>value+1)}
   }

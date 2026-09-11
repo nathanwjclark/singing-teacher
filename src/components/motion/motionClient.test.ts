@@ -45,10 +45,11 @@ test('candidate ranking retains unscored hypotheses without inventing zero discr
  assert.equal(rankMotionCandidates(candidates)[2].weighted_mean_square_discrepancy,null);
 });
 
-test('analysis identity keeps uncertain retries stable and renews after a baseline change',()=>{
- const first=motionAnalysisRequestIdentity(null,'capture','a','model-A');
- assert.deepEqual(motionAnalysisRequestIdentity(first,'capture','a','model-A'),first);
- const changed=motionAnalysisRequestIdentity(first,'capture','a','model-B');
+test('analysis identity keeps uncertain retries stable and renews after a baseline or analysis version change',()=>{
+ const first=motionAnalysisRequestIdentity(null,'capture','a','model-A','policy-1');
+ assert.deepEqual(motionAnalysisRequestIdentity(first,'capture','a','model-A','policy-1'),first);
+ const changed=motionAnalysisRequestIdentity(first,'capture','a','model-B','policy-1');
  assert.notEqual(changed.id,first.id);
- assert.notEqual(motionAnalysisRequestIdentity(changed,'capture','i','model-B').id,changed.id);
+ assert.notEqual(motionAnalysisRequestIdentity(changed,'capture','i','model-B','policy-1').id,changed.id);
+ assert.notEqual(motionAnalysisRequestIdentity(changed,'capture','a','model-B','policy-2').id,changed.id);
 });
