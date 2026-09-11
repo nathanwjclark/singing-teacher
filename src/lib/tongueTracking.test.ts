@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {resultCurrent} from './tongueTracking.ts';
+import {resultCurrent,tongueCapabilityLabel} from './tongueTracking.ts';
 
 test('a slow result is current when it arrives and stays current until the next result can arrive',()=>{
  // Inference started at frame 1000 and took 400 ms; the next result is due near 1800.
@@ -21,4 +21,10 @@ test('a fast tip model keeps its short expiry',()=>{
  const result={observedAt:100,arrivedAt:110};
  assert.equal(resultCurrent(result,409,300),true);
  assert.equal(resultCurrent(result,420,300),false);
+});
+test('capability labels never call a region a tip or depth',()=>{
+ assert.match(tongueCapabilityLabel('region'),/no tip or depth/);
+ assert.doesNotMatch(tongueCapabilityLabel('region'),/estimated depth|neural tip/i);
+ assert.equal(tongueCapabilityLabel('tip'),'Automatic neural tip · estimated depth');
+ assert.equal(tongueCapabilityLabel(undefined),'No tongue model loaded');
 });

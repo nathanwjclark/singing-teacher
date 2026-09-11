@@ -5,6 +5,7 @@ import type { VisionEngine } from '../lib/vision';
 import type { TrackingFrame, TrackingStatus } from '../types';
 import './CameraPanel.css';
 import TongueLab from './TongueLab';
+import { tongueCapabilityLabel } from '../lib/tongueTracking';
 
 type Props = { active: boolean; onFrame: (frame: TrackingFrame) => void; onStatus: (status: TrackingStatus, message?: string) => void; onStream?: (stream: MediaStream | null) => void };
 
@@ -20,6 +21,7 @@ export default function CameraPanel({ active, onFrame, onStatus, onStream }: Pro
   const [message, setMessage] = useState('');
   const [depth, setDepth] = useState<{ distance?: number; relative?: number; points: number }>({ points: 0 });
   const [tongueStatus, setTongueStatus] = useState('Searching for visible tongue');
+  const [tongueCapability, setTongueCapability] = useState<'region' | 'tip'>();
   const [calibration, setCalibration] = useState('');
 
   useEffect(() => {
@@ -66,7 +68,7 @@ export default function CameraPanel({ active, onFrame, onStatus, onStream }: Pro
         callbacks.current.onStream?.(stream);
         await video.play();
         if (cancelled) { release(); return; }
-        update('loading', 'Loading face and posture models. The personal tongue network loads separately.');
+        update('loading', 'Loading face and posture models. The tongue model loads separately.');
         modelTimeout = window.setTimeout(() => {
           expired = true; release();
           update('error', 'Tracking models took too long to load. Check your connection, then stop and restart the session.');
@@ -83,7 +85,7 @@ export default function CameraPanel({ active, onFrame, onStatus, onStream }: Pro
               lastTime = video.currentTime; lastTick = time;
               const frame = engine.process(video, time);
               latestFrame.current=frame;
-              setTongueStatus(frame.tongueStatus ?? 'Searching for visible tongue');
+              setTongueStatus(frame.tongueStatus ?? 'Searching for visible tongue'); setTongueCapability(frame.tongueDiagnostic?.capability);
               setDepth({ distance: frame.metrics.distanceCm, relative: frame.metrics.relativeDepth, points: frame.face.length + frame.pose.filter(point => (point.visibility ?? 0) >= .5).length });
               const canvas = canvasRef.current;
               if (canvas) {
@@ -131,7 +133,7 @@ export default function CameraPanel({ active, onFrame, onStatus, onStream }: Pro
         {status === 'idle' && <span className="camera-private"><ShieldCheck size={14} /> Video stays on your device</span>}
       </div>}
       {status === 'no-face' && <div className="camera-no-face"><ScanFace size={18} /> Bring your face into the frame</div>}
-      {status === 'tracking' && <div className="camera-tongue-status">{tongueStatus}<small>Automatic neural tip · estimated depth</small><button type="button" onClick={event=>{event.stopPropagation();engineRef.current?.calibrateTongue()}} title="Hold your tongue centered, then set this as its neutral position">Recenter tongue</button></div>}
+      {status === 'tracking' && <div className="camera-tongue-status">{tongueStatus}<small>{tongueCapabilityLabel(tongueCapability)}</small>{tongueCapability === 'tip' && <button type="button" onClick={event=>{event.stopPropagation();engineRef.current?.calibrateTongue()}} title="Hold your tongue centered, then set this as its neutral position">Recenter tongue</button>}</div>}
       <div className="camera-stage-label"><span className={status === 'tracking' ? 'camera-light live' : 'camera-light'} /> {status === 'tracking' ? 'LIVE CAMERA' : 'CAMERA VIEW'}<span>MIRRORED</span></div>
     </div>
     <div className="camera-depth">
