@@ -27,7 +27,7 @@ test('fit requests accept only an allowlisted scoring objective and record it',a
     assert.equal((await post({objective:'canonical-coarse-v1'},{length:999})).status,400);
     // A client that declares a body and never sends it gets a timeout and does not hold the start slot.
     const stalled=route({method:'POST',headers:{'content-length':'40','content-type':'application/json'},socket:{remoteAddress:'127.0.0.1'},
-      async *[Symbol.asyncIterator](){await new Promise(()=>{})}},{},new URL('http://localhost/api/science/run'));
+      [Symbol.asyncIterator]:()=>({next:()=>new Promise(()=>{})})},{},new URL('http://localhost/api/science/run'));
     const meanwhile=await post({objective:'canonical-coarse-v1'});
     assert.equal(meanwhile.status,409);assert.match(meanwhile.body.error,/No verified local voice capture/);
     await stalled;
