@@ -6,7 +6,9 @@ import {selectTongueRegion} from './tongueRegion.ts';
 const {threshold}=JSON.parse(readFileSync(new URL('../../public/models/tonguesam/manifest.json',import.meta.url),'utf8'));
 test('shipped manifest keeps the published 0.7 detector threshold',()=>assert.equal(threshold,.7));
 test('region selection abstains and never returns a tip or depth',()=>{
- assert.deepEqual(selectTongueRegion([.1,.2,.7,.8,.69],threshold),{box:null,score:0});
+ // Abstention keeps the best score below the threshold for display; it never becomes a box.
+ assert.deepEqual(selectTongueRegion([.1,.2,.7,.8,.69],threshold),{box:null,score:.69});
+ assert.deepEqual(selectTongueRegion([],threshold),{box:null,score:0});
  assert.deepEqual(selectTongueRegion([.1,.2,.7,.8,.9],threshold),{box:[.1,.2,.7,.8],score:.9});
  assert.deepEqual(selectTongueRegion([.1,.2,.7,.8,.69],.6),{box:[.1,.2,.7,.8],score:.69});
 });

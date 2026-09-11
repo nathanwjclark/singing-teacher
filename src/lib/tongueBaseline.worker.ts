@@ -11,5 +11,5 @@ self.onmessage=async(event:MessageEvent<{id:number;weights?:ArrayBuffer;threshol
   const input=new ort.Tensor('float32',data,[1,3,448,448]);let output:ort.InferenceSession.OnnxValueMapType|undefined;
   try{output=await session.run({image:input});self.postMessage({id,result:selectTongueRegion(output.boxes.data as Float32Array,threshold)});}
   finally{input.dispose();if(output)Object.values(output).forEach(t=>t.dispose());}
- }catch{self.postMessage({id,error:'Tongue baseline inference failed'});}
+ }catch(error){self.postMessage({id,error:error instanceof Error?error.message:'unknown worker error'});}
 };
