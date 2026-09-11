@@ -270,7 +270,7 @@ def test_encoded_motion_audio_ranks_native_windows_without_changing_baseline(tmp
         assert exported['summary']['motionAnalysisCount'] == 1
         assert next(a for a in exported['artifacts'] if a.get('binding', {}).get('role') == 'conditional-motion-audio-analysis')['data']['temporalAnalysis'] == temporal
         # The server reports the version the Python analysis declares; the client binds requests to it.
-        assert completed['analysisPolicy'] == result['analysisPolicy'] == 'motion-forward-bank-3'
+        assert completed['analysisPolicy'] == result['analysisPolicy'] == 'motion-forward-bank-4'
         assert result['trajectoryBank']['synthesisRequests'] <= 108
         assert call('/api/motion/status')['record']['timebase']['syncUncertaintyMs'] is None
         unchanged()

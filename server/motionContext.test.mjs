@@ -19,7 +19,7 @@ const temporal=(overrides={})=>({status:'available',informationOverConstant:'exc
   transitionUncertainty:Array.from({length:79},(_,i)=>({fromPosition:i,toPosition:i+1,JAChangeSet:i%20===0?[-1,0]:[0],gainRatioSet:[1],admissiblePairCount:1}))})),...overrides});
 
 test('long motion context retains timeline endpoints and explicitly counts omitted or missing evidence',()=>{
- const result=compactMotionEvidence({windows,modelUpdated:false,analysisPolicy:'motion-forward-bank-3'},{});
+ const result=compactMotionEvidence({windows,modelUpdated:false,analysisPolicy:'motion-forward-bank-4'},{});
  assert.equal(result.windows.length,12);assert.equal(result.windows[0].index,0);assert.equal(result.windows.at(-1).index,119);assert.equal(result.windows.at(-1).seconds,29.75);
  assert.equal(result.timeline.missingWindows,40);assert.equal(result.timeline.scoredWindows,80);assert.equal(result.windows[0].candidateCount,18);
  // The three lowest discrepancies, not the first three list entries.

@@ -1,6 +1,6 @@
 # Recorded audio trajectory comparison
 
-The app's `motion-forward-bank-3` compares a time course of audio windows from the saved, hash-verified companion recording with a bounded native prediction bank. It does not align camera landmarks to internal geometry, alter the baseline anatomy, or identify measured jaw movement. Evidence from the generated fixtures below is `synthetic`; the scientific outcome for human singing is `untested`.
+The app's `motion-forward-bank-4` compares a time course of audio windows from the saved, hash-verified companion recording with a bounded native prediction bank. It does not align camera landmarks to internal geometry, alter the baseline anatomy, or identify measured jaw movement. Evidence from the generated fixtures below is `synthetic`; the scientific outcome for human singing is `untested`.
 
 ## Measured windows
 

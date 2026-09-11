@@ -6,7 +6,7 @@ import math
 from .pcm_inverse import FEATURES, candidate_discrepancy, feature_scale, fit_pcm
 from .pcm_spectral import COARSE_OBJECTIVE
 
-VERSION = 'motion-forward-bank-3'
+VERSION = 'motion-forward-bank-4'
 MAX_RECORDING_SECONDS = 30
 MAX_WINDOWS = 120
 MAX_HYPOTHESES = 3
