@@ -122,7 +122,8 @@ validation remain open.
 The merged prototype is complete as a connected research harness, while the
 scientific moonshot remains deliberately experimental. The authoritative state,
 branch checkpoints, evidence boundaries, Wave 3 workstreams and exact continuation
-commands are in the [engineering and scientific handoff](docs/coordination/WAVE3-HANDOFF.md).
+commands are in the [editable engineering and scientific handoff](docs/coordination/WAVE3-HANDOFF.md);
+the same brief is available as a [shareable PDF](output/pdf/TractStar-Wave3-Handoff.pdf).
 Wave 3 currently includes richer spectral fitting, cue-to-execution learning,
 time-resolved audio articulation, native source mechanics, coupled oral/nasal
 probe physics, reproducible scoring, phrase transfer and controlled modality
