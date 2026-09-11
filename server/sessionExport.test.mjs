@@ -89,10 +89,12 @@ test('a model update during receipt collection returns a retryable conflict', as
 });
 
 test('real native fit/design/outcome replay reaches the read-only exporter', {timeout: 90000}, async t => {
-  const {root, put} = await fixture(t), repo = process.cwd();
-  const python = process.env.SINGING_PYTHON || resolve(repo, 'science/.venv/bin/python');
+  // node:test runs after-hooks in registration order: stop the worker before the
+  // fixture removes the directory it is still writing to.
   const children = [];
   t.after(async () => { for (const child of children) child.kill('SIGTERM'); await Promise.all(children.map(child => new Promise(resolve => {if (child.exitCode !== null) return resolve(); child.once('exit', resolve); setTimeout(() => {child.kill('SIGKILL'); resolve();}, 2000).unref();}))); });
+  const {root, put} = await fixture(t), repo = process.cwd();
+  const python = process.env.SINGING_PYTHON || resolve(repo, 'science/.venv/bin/python');
   const childEnv = {...process.env, PYTHONPATH: repo + ':' + repo + '/science/src'};
   const script = `
 import sys,json
