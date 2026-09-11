@@ -215,11 +215,11 @@ def test_app_grids_vary_one_declared_axis_and_family_gains_do_not_clip():
     candidates,support=source_candidates([{'anatomy':{}}],'t',180.,'two_mass')
     assert {c['trials']['t']['gain'] for c in prescribed}=={4.} and {c['trials']['t']['gain'] for c in candidates}=={2.}
     with Engine() as engine:
-        # Loudest points of a 65-600 Hz sweep over all five vowels at PR=8000 (science/MECHANICAL_SOURCE.md).
+        # Loudest points of a 65-600 Hz sweep over all five vowels at PR=8000 stay below the documented 0.9 (science/MECHANICAL_SOURCE.md).
         for shape,f0,gain in [(geometric[0],415.,4),(geometric[2],415.,4),(support[0],600.,2),(support[1],485.,2),(support[2],380.,2),(support[0],65.,2)]:
             audio,_=source.synthesize_phonation(engine,pose='a',JA=-3,F0=f0,PR=8000,**shape)
             peak=float(np.max(np.abs(source._frame(audio,48000)[0])))
-            assert gain*peak<.995
+            assert gain*peak<.9
         audio,_=source.synthesize_phonation(engine,pose='a',JA=-3,F0=600,PR=8000,**support[0])
         assert 4*float(np.max(np.abs(source._frame(audio,48000)[0])))>=.995  # the former gain 4 clipped here
 
