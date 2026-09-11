@@ -71,11 +71,17 @@ def test_reproducibility_and_retain_clipped_candidates():
             return value
         # Keep actual canonical creation timestamps in production evidence.
         assert without_audit_times(first) == without_audit_times(second)
-        assert first['status'] == 'budget_exhausted'
-        assert len(first['joint']['candidates']) == 6
+        # The two profiles differ only by gain, so each anatomy point costs one
+        # waveform per model. The same 12-call budget now finishes both rounds
+        # (5 anatomy points in 10 calls) instead of stopping after 3 points.
+        assert first['status'] == 'round_limit'
+        assert first['unique_evaluated_anatomy_points'] == 5
+        assert len(first['joint']['candidates']) == 10
         assert any(row['status'] == 'missing_predicted_features' for row in first['joint']['candidates'])
-        assert first['actual_synthesis_calls'] == 12
-        assert first['baseline_unique_nuisance_synthesis_calls'] == 2
+        assert first['actual_synthesis_calls'] == 10
+        assert first['joint']['actual_synthesis_calls'] == first['fixed_anatomy_baseline']['actual_synthesis_calls'] == 5
+        assert first['baseline_unique_nuisance_synthesis_calls'] == 1
+        assert first['baseline_redundant_synthesis_calls'] == 4
 
 
 def test_invalid_budget_bounds_lineage_and_partial_native_failure(monkeypatch):

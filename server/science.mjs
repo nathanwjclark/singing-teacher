@@ -5,6 +5,23 @@ import {spawn} from 'node:child_process';
 
 const files=new Set(['space-diff.json','tract0.obj','tract0.mtl','tract.svg','geometry.json','manifest.json','fit.json','forecast.json','summary.json']);
 const types={obj:'text/plain',mtl:'text/plain',svg:'image/svg+xml',json:'application/json'};
+// Scoring objectives the capture pipeline accepts (science/scripts/live_capture_jobs.py --objective).
+const OBJECTIVES=['canonical-coarse-v1','multires-log-spectrum-v1'];
+/** Read the optional {objective} body of a fit request; no body keeps the coarse default. */
+async function requestedObjective(req,timeoutMs){
+  if(req.headers['transfer-encoding'])throw new Error('Send a small JSON body with a content length');
+  const declared=req.headers['content-length'],length=Number(declared??0);
+  if(!/^\d{1,3}$/.test(declared??'0')||length>256)throw new Error('Expected a small JSON body');
+  if(!length)return OBJECTIVES[0];
+  if(!/^application\/json(?:;|$)/.test(req.headers['content-type']||''))throw new Error('Expected a small JSON body');
+  const read=async()=>{const chunks=[];let count=0;for await(const chunk of req){count+=chunk.length;if(count>256)throw new Error('Expected a small JSON body');chunks.push(chunk)}if(count!==length)throw new Error('Incomplete request body');return Buffer.concat(chunks).toString()};
+  // A client that declares a length and stalls must not hold the request open indefinitely.
+  let timer;const stalled=new Promise((_,reject)=>{timer=setTimeout(()=>{req.destroy?.();reject(new Error('Request body not received in time'))},timeoutMs)});
+  let text;try{text=await Promise.race([read(),stalled])}finally{clearTimeout(timer)}
+  let body;try{body=JSON.parse(text)}catch{throw new Error('Expected a small JSON body')}
+  if(!body||typeof body!=='object'||Array.isArray(body)||Object.keys(body).join()!=='objective'||!OBJECTIVES.includes(body.objective))throw new Error('Choose objective '+OBJECTIVES.join(' or '));
+  return body.objective;
+}
 async function restDecision(runDirectory,sessionId){
   let rest;
   try{rest=JSON.parse(await readFile(resolve(runDirectory,'astra-rest.json'),'utf8'))}catch(error){if(error.code==='ENOENT')return null;throw error}
@@ -37,7 +54,7 @@ export async function activeResult(runDirectory,fetchImpl=fetch){
   if(active.sessionId!==original.sessionId||!active.modelId||!active.designId||active.forecast?.design_id!==active.designId||!active.forecast?.target_observation_id||!active.forecast?.selected_experiment_id)throw new Error('Active experiment lineage is invalid');
   return verifyRecording({...original,geometryModelId:original.modelId,modelId:active.modelId,designId:active.designId,sessionVersion:active.sessionVersion,forecast:active.forecast,decisionId:active.decisionId,...resting},fetchImpl);
 }
-export function scienceRoutes({repo,dataRoot,json,fetchImpl=fetch}) {
+export function scienceRoutes({repo,dataRoot,json,fetchImpl=fetch,bodyTimeoutMs=5000}) {
   let running=null,starting=false;
   const index=resolve(dataRoot,'science-current.json');
   const saveAt=async(path,value)=>{const temporary=path+'.'+randomUUID()+'.tmp';await writeFile(temporary,JSON.stringify(value,null,2),{mode:0o600});await rename(temporary,path)};
@@ -132,8 +149,10 @@ export function scienceRoutes({repo,dataRoot,json,fetchImpl=fetch}) {
       }finally{starting=false}
     }
     if(url.pathname==='/api/science/run'&&req.method==='POST'){
+      if(url.search){json(res,400,{error:'This action takes no query parameters'});return true}
+      // Read the body before claiming the single start slot, so a slow client cannot block other runs.
+      let objective;try{objective=await requestedObjective(req,bodyTimeoutMs)}catch(error){json(res,400,{error:error.message});return true}
       if(running||starting){json(res,409,{error:'A scientific job is already running'});return true}
-      if(url.search||Number(req.headers['content-length']||0)>0||req.headers['transfer-encoding']){json(res,400,{error:'This action takes no parameters'});return true}
       starting=true;try{
       let config;try{config=JSON.parse(await readFile(resolve(dataRoot,'science-input.json'),'utf8'))}catch{json(res,409,{error:'No verified local voice capture configured'});return true}
       if(config.evidenceKind!==undefined&&!['human-observation','development-fixture'].includes(config.evidenceKind)){json(res,400,{error:'Unknown configured voice evidence kind'});return true}
@@ -141,8 +160,8 @@ export function scienceRoutes({repo,dataRoot,json,fetchImpl=fetch}) {
       if(!source.startsWith(dataRoot+'/')){json(res,400,{error:'Voice source must remain in the private data directory'});return true}
       const runId='run-'+Date.now()+'-'+randomUUID().slice(0,8),output=resolve(dataRoot,'science-runs',runId);
       await mkdir(resolve(dataRoot,'science-runs'),{recursive:true,mode:0o700});
-      const record={status:'running',runId,startedAt:new Date().toISOString()};await save(record);
-      const args=[resolve(repo,'science/scripts/live_capture_jobs.py'),'--source',source,'--output',output];
+      const record={status:'running',runId,objective,startedAt:new Date().toISOString()};await save(record);
+      const args=[resolve(repo,'science/scripts/live_capture_jobs.py'),'--source',source,'--output',output,'--objective',objective];
       if(config.evidenceKind==='development-fixture')args.push('--development-fixture');
       launch(args,output,record,save);
       json(res,202,record);return true;

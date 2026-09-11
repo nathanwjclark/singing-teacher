@@ -38,6 +38,7 @@ dist-ssr
 
 # Throwaway data for the browser-check server
 .local-e2e-data/
+.local-e2e-spectral/
 
 # Python bytecode from tests that import scripts/*.py
 __pycache__/

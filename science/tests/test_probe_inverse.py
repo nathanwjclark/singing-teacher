@@ -153,3 +153,17 @@ def test_excluded_source_alias_and_direct_only_confounding():
         result=fit_probe_pcm(engine,pcm,probes,candidates=candidates,max_native_calls=12,node_binary=NODE)
         assert [r['probe_discrepancy'] for r in result['joint']['candidates']]==[0.,0.]
         assert result['identifiability']=='not_established'
+
+
+def test_budget_preflight_uses_shared_pcm_synthesis_for_gain_only_candidates():
+    with Engine() as engine:
+        pcm,probes,candidates=probe_fixture(engine)
+        base=candidates[0]
+        variants=[{**deepcopy(base),'candidate_id':f'gain-{gain:g}','trials':{'sing':{**base['trials']['sing'],'gain':gain}}} for gain in (.8,1.6)]
+        # One shared PCM waveform per model (2 calls) plus geometry and external-forward calls
+        # for 2 candidates x 2 models x 1 probe (8): 10. The unshared preflight required 12.
+        result=fit_probe_pcm(engine,pcm,probes,candidates=variants,max_native_calls=10,node_binary=NODE)
+        assert result['actual_operator_calls']==10 and result['equal_actual_comparison_calls']
+        assert all(result['operator_counts'][model]['pcm_synthesis_calls']==1 for model in ('joint','fixed_anatomy_baseline'))
+        with pytest.raises(ValueError,match='exceed total budget'):
+            fit_probe_pcm(engine,pcm,probes,candidates=variants,max_native_calls=9,node_binary=NODE)

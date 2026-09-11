@@ -13,6 +13,7 @@ from .service import canonical
 from .prediction import Artifact, _encode, _timestamp
 from .pcm_design import _snapshot, SCHEMA, select_pcm_experiment
 from .pcm_inverse import _bridge, _features
+from .pcm_spectral import OPTIONAL_TRIAL_FIELDS, validate_observation
 from .engine import ANATOMY, finite
 
 
@@ -180,7 +181,7 @@ class SessionController:
                 raise ValueError('Unsupported calibration document')
             ids=set()
             for trial in doc['trials']:
-                if not isinstance(trial,dict) or set(trial)!={'id','pose','measurement','sample_rate_hz','frame_start_sample','frame_size','duration_s'}:
+                if not isinstance(trial,dict) or set(trial)-OPTIONAL_TRIAL_FIELDS!={'id','pose','measurement','sample_rate_hz','frame_start_sample','frame_size','duration_s'}:
                     raise ValueError('Invalid calibration trial')
                 _id(trial['id']); _id(trial['pose'])
                 if trial['id'] in ids: raise ValueError('Duplicate calibration trial')
@@ -190,6 +191,9 @@ class SessionController:
                 if type(rate) is not int or rate not in (44100,48000,96000) or type(start) is not int or start<0 or type(size) is not int or not 256<=size<=32768 or not .1<=duration<=5 or start+size>round(duration*rate):
                     raise ValueError('Unsupported canonical rate, duration or frame bounds')
                 _features(trial['measurement'])
+                # Consistency only: the session holds no original bytes, so fits keep
+                # reporting source_artifact_bytes_verified: false.
+                validate_observation(trial)
             profiles=_bridge({'operation':'validate','records':[t['measurement'] for t in doc['trials']],
                 'sampleRates':sorted({t['sample_rate_hz'] for t in doc['trials']})},None)
             sizes={p['sampleRate']:p['frameSize'] for p in profiles['audioProfiles']}
@@ -211,7 +215,7 @@ class SessionController:
             if state['calibration'] is None or state['snapshot']:
                 raise ValueError('Search requires initial calibration and no frozen model')
             params=deepcopy(c['parameters'])
-            if not isinstance(params,dict) or set(params)-{'anatomy_bounds','nuisance_profiles','max_synthesis_calls','rounds','seed'}:
+            if not isinstance(params,dict) or set(params)-{'anatomy_bounds','nuisance_profiles','max_synthesis_calls','rounds','seed','objective'}:
                 raise ValueError('Invalid search parameters')
             params['observations']=state['calibration']
             self._launch(state,'search_pcm',params,c['command_id'])
@@ -254,7 +258,7 @@ class SessionController:
         elif action=='propose_design':
             if not state['snapshot']: raise ValueError('A frozen model is required')
             params=deepcopy(c['parameters'])
-            if not isinstance(params,dict) or set(params)-{'design_id','target_observation_id','experiments','feature_scales','minimum_separation','max_synthesis_calls','retention_margin','maximum_discrepancy','profile'}:
+            if not isinstance(params,dict) or set(params)-{'design_id','target_observation_id','experiments','feature_scales','minimum_separation','max_synthesis_calls','retention_margin','maximum_discrepancy','profile','objective'}:
                 raise ValueError('Invalid design parameters')
             identity=_id(params.get('design_id')); target=_id(params.get('target_observation_id'))
             if identity in state['designs'] or any(d['data']['target_observation_id']==target for d in state['designs'].values()):

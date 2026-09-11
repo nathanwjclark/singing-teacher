@@ -7,7 +7,8 @@ import scipy
 from scipy.stats import qmc
 
 from .engine import Engine, finite
-from .pcm_inverse import _hash, fit_pcm
+from .pcm_inverse import _hash, fit_pcm, planned_synthesis_calls
+from .pcm_spectral import COARSE_OBJECTIVE, objective_policy
 
 SUPPORTED_BOUNDS = {"hard_palate_length": (3.8, 5.1), "pharynx_length": (5.7, 7.4), "lip_width": (.5, 1.5)}
 
@@ -28,7 +29,7 @@ class _CountedEngine:
 
 
 def search_pcm(engine: Engine, document, *, anatomy_bounds, nuisance_profiles,
-               max_synthesis_calls=128, rounds=3, seed=1, node_binary=None):
+               max_synthesis_calls=128, rounds=3, seed=1, node_binary=None, objective=COARSE_OBJECTIVE):
     """Search a declared small parameter box without reading held-out data.
 
     All nuisance profiles are evaluated at every proposed anatomy. Each finite
@@ -39,6 +40,7 @@ def search_pcm(engine: Engine, document, *, anatomy_bounds, nuisance_profiles,
         raise ValueError("max_synthesis_calls must be an integer in 1-4096")
     if type(rounds) is not int or not 1 <= rounds <= 8 or type(seed) is not int or not 0 <= seed < 2**32:
         raise ValueError("rounds must be 1-8 and seed an unsigned 32-bit integer")
+    policy = objective_policy(objective)
     doc, profiles = deepcopy(document), deepcopy(nuisance_profiles)
     if not isinstance(doc, dict) or set(doc) != {"schema_version", "kind", "trials"} or doc.get("schema_version") != "0.1.0" or doc.get("kind") != "canonical_pcm_observations":
         raise ValueError("Only canonical PCM calibration observations are accepted; held-out records must stay separate")
@@ -82,7 +84,12 @@ def search_pcm(engine: Engine, document, *, anatomy_bounds, nuisance_profiles,
         raise ValueError("Duplicate nuisance controls under different profile IDs")
     dimensions = len(bounds)
     initial_count = 2*dimensions+1
-    point_cost = 2*len(trials)*len(profiles)
+    try:
+        # Distinct waveforms for one anatomy point; gain-only profiles share one.
+        unit = planned_synthesis_calls(doc, [{"candidate_id": p["profile_id"], "anatomy": {}, "trials": p["trials"]} for p in profiles])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError("Calibration trials need a pose and duration") from exc
+    point_cost = 2*unit
     if max_synthesis_calls < initial_count*point_cost:
         raise ValueError("Budget cannot cover the complete initial anatomy design and baseline")
     initial = [np.full(dimensions, .5), *qmc.LatinHypercube(dimensions, seed=seed).random(2*dimensions)]
@@ -140,15 +147,15 @@ def search_pcm(engine: Engine, document, *, anatomy_bounds, nuisance_profiles,
             for start in range(0, len(proposals), batch_size):
                 batch = proposals[start:start+batch_size]
                 candidates = [{k: p[k] for k in ("candidate_id", "anatomy", "trials")} for p in batch]
-                expected = 2*len(batch)*len(trials)
+                expected = 2*planned_synthesis_calls(doc, candidates)
                 before = counted.calls
                 try:
-                    result = fit_pcm(counted, doc, candidates=candidates, max_synthesis_calls=expected, node_binary=node_binary)
+                    result = fit_pcm(counted, doc, candidates=candidates, max_synthesis_calls=expected, node_binary=node_binary, objective=objective)
                     if counted.calls-before != expected or result["actual_synthesis_calls"] != expected:
                         raise RuntimeError("Native call accounting mismatch")
                     if result["native_provenance"] != native_provenance:
                         raise RuntimeError("Native provenance changed during search")
-                    signature = _hash({"canonical": result["canonical_extractor"], "native": result["native_provenance"]})
+                    signature = _hash({"canonical": result["canonical_extractor"], "native": result["native_provenance"], "objective": result["objective_policy"]})
                     if operator_signature is not None and signature != operator_signature:
                         raise RuntimeError("Scientific operator changed between search batches")
                     operator_signature, canonical = signature, result["canonical_extractor"]
@@ -188,7 +195,7 @@ def search_pcm(engine: Engine, document, *, anatomy_bounds, nuisance_profiles,
             "best": min(scored, key=lambda r: (r["weighted_mean_square_discrepancy"], r["candidate_id"])) if scored else None,
             "actual_synthesis_calls": completed_calls[model]}
     unique_evaluated = {r["anatomy_point_id"] for r in retained["joint"]}
-    baseline_unique = len({r["nuisance_profile_id"] for r in retained["fixed_anatomy_baseline"]})*len(trials)
+    baseline_unique = unit if retained["fixed_anatomy_baseline"] else 0
     evaluated_ranges = {name: [min(r["proposed_anatomy"][name] for r in retained["joint"]),
                                max(r["proposed_anatomy"][name] for r in retained["joint"])]
                         for name in bounds} if retained["joint"] else {}
@@ -208,7 +215,8 @@ def search_pcm(engine: Engine, document, *, anatomy_bounds, nuisance_profiles,
         "evidence_ids": [trial["measurement"]["id"] for trial in trials],
         "identifiability": "not_established", "evaluated_ranges_are_posterior": False,
         "finite_search_support_only": True,
-        "objective_interpretation": "canonical coarse-descriptor discrepancy; not calibrated likelihood",
+        "objective": objective, "objective_policy": policy,
+        "objective_interpretation": "Versioned finite-candidate discrepancy; not calibrated likelihood",
         "baseline_interpretation": "same finite nuisance support; repeated baseline calls add no unique exploration",
         "unsupported": ["physiology_identification", "calibrated_posterior", "unknown_room_filter", "unknown_microphone_response"],
         "source_artifact_bytes_verified": False}

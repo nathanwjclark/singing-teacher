@@ -15,7 +15,7 @@
     "https:prepare": "node scripts/prepare-local-https.mjs",
     "local:private": "node scripts/start-local-https.mjs",
     "science:private": "PRIVATE_HTTPS=1 node scripts/start-science-local.mjs",
-    "test:science": "PYTHONPATH=.:science/src science/.venv/bin/python -m pytest science/tests evaluation/wave3/source -q"
+    "test:science": "PYTHONPATH=.:science/src science/.venv/bin/python -m pytest science/tests evaluation/wave3 -q"
   },
   "dependencies": {
     "@mediapipe/tasks-vision": "^1.0.1",

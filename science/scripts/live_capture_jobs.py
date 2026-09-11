@@ -2,6 +2,7 @@
 import argparse
 import base64
 from contextlib import contextmanager
+from copy import deepcopy
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -14,8 +15,11 @@ import time
 from urllib.parse import urlsplit
 from urllib.request import Request, build_opener, ProxyHandler, HTTPRedirectHandler
 
+import numpy as np
+
 from singing_physics.engine import digest, write_json
-from singing_physics.pcm_inverse import FEATURES
+from singing_physics.pcm_inverse import FEATURES, extract_pcm
+from singing_physics.pcm_spectral import COARSE_OBJECTIVE, SPECTRAL_OBJECTIVE, objective_policy, extract_spectral, validate_observation
 from singing_physics.service import JobService, canonical
 from singing_physics.session import SessionController
 from science.scripts.model_space_diff import pair
@@ -105,14 +109,56 @@ def wait(backend,job_id):
     raise TimeoutError('Scientific job did not finish within 185 seconds')
 
 
-def pipeline(data, output, backend, session_id):
+def spectral_trials(data, output, trials):
+    """Derive spectral observations from the importer's hash-verified original segment bytes.
+
+    The canonical measurement is re-extracted from the same frame and must match, so
+    the dedicated frame_sha256 binds both descriptions to the exact float32 bytes.
+    """
+    result = deepcopy(trials)
+    for trial in result:
+        measurement = trial['measurement']
+        matches = [s for s in data['segments'] if s['derived_artifact']['id'] == measurement['artifactId'] and measurement['id'] in s['measurement_ids']]
+        if len(matches) != 1:
+            raise ValueError('Canonical frame has no unique verified original PCM segment')
+        segment = matches[0]; artifact = segment['derived_artifact']; name = artifact['uri']
+        if not isinstance(name,str) or Path(name).name != name or not name.endswith('.pcm.f32'):
+            raise ValueError('Invalid original PCM segment path')
+        path = output/'import'/name
+        with os.fdopen(os.open(path,os.O_RDONLY|os.O_NOFOLLOW),'rb') as stream:
+            info = os.fstat(stream.fileno())
+            if info.st_size != artifact['byteLength'] or not 0 < info.st_size <= 64*1024*1024:
+                raise ValueError('Original PCM segment size changed')
+            raw = stream.read()
+        if hashlib.sha256(raw).hexdigest() != artifact['sha256'] or measurement['provenance']['sourceHashes'] != [artifact['sha256']]:
+            raise ValueError('Original PCM segment digest changed')
+        start,size = trial['frame_start_sample'],trial['frame_size']
+        values = np.frombuffer(raw,dtype='<f4')
+        if len(values) != segment['sample_count'] or segment['sample_rate_hz'] != trial['sample_rate_hz'] or start+size > len(values):
+            raise ValueError('Original PCM frame profile changed')
+        frame = values[start:start+size]
+        recomputed = extract_pcm(frame,trial['sample_rate_hz'],measurement_id=measurement['id'],observation_id=measurement['observationId'],
+            artifact_id=measurement['artifactId'],start_ms=start/trial['sample_rate_hz']*1000)
+        if recomputed['measurement']['measurements'] != measurement['measurements'] or recomputed['measurement']['window'] != measurement['window']:
+            raise ValueError('Canonical measurement differs from the verified original frame')
+        trial['frame_sha256'] = recomputed['pcmFloat32Sha256']
+        trial['spectral_observation'] = extract_spectral(frame,trial['sample_rate_hz'],
+            source_artifact_hashes=measurement['provenance']['sourceHashes'],source_artifact_id=measurement['artifactId'],frame_start_sample=start)
+        validate_observation(trial)
+    return result
+
+
+def pipeline(data, output, backend, session_id, *, objective=COARSE_OBJECTIVE):
     """Run already imported canonical evidence through the authoritative session."""
+    objective_policy(objective)
     protocol={'selection':'Earliest two full-descriptor voiced windows; periodicity >= .85, dbfs > -60, pitch65..1000, no clipping/invalid/low-snr',
         'pose_assumption':'Prompted comfortable ah treated as a; phonetics not independently verified',
         'anatomy_bounds':{'hard_palate_length':[3.8,5.1],'lip_width':[.5,1.5]},'gains':[1.,4.,16.],'JA':-3.,
-        'search_budget':60,'search_rounds':1,'seed':7,
+        'search_budget':60,'search_rounds':1,'seed':7,'objective':objective,
         'forecast_conditions':'Library a/e/i at JA=-3, F0=180Hz, gain=4; simulator conditions, not observed execution',
         'claim':'Conditional research hypotheses. No identified anatomy, microphone/room calibration, muscle tension or tissue mechanics.'}
+    if objective == SPECTRAL_OBJECTIVE:
+        protocol['spectral_nuisance']='Per-resolution shape normalization; separate bounded ±24 dB gain and ±6 dB/octave empirical tilt; no calibrated room response'
     write_json(output/'protocol.json',protocol)
     eligible=[]
     for trial in data['fit_trial_options']:
@@ -121,6 +167,8 @@ def pipeline(data, output, backend, session_id):
             eligible.append(trial)
     trials=eligible[:2]
     if len(trials)<2: raise ValueError('No two eligible voice windows; import retained, no fitting performed')
+    if objective == SPECTRAL_OBJECTIVE:
+        trials=spectral_trials(data,output,trials)
     document={'schema_version':'0.1.0','kind':'canonical_pcm_observations','trials':trials}
     write_json(output/'observations.json',document)
     nuisance=[{'profile_id':f'gain-{gain:g}','trials':{t['id']:{'JA':-3.,'f0_hz':next(x['value'] for x in t['measurement']['measurements'] if x['name']=='pitchHz'),'gain':gain} for t in trials}} for gain in protocol['gains']]
@@ -146,7 +194,7 @@ def pipeline(data, output, backend, session_id):
         raise ValueError('Live calibration requires a new session; existing ledger is preserved')
     command('ingest_calibration',document=document)
     state,fit=session_job('search',{'anatomy_bounds':protocol['anatomy_bounds'],'nuisance_profiles':nuisance,
-        'max_synthesis_calls':protocol['search_budget'],'rounds':protocol['search_rounds'],'seed':protocol['seed']})
+        'objective':protocol['objective'],'max_synthesis_calls':protocol['search_budget'],'rounds':protocol['search_rounds'],'seed':protocol['seed']})
     write_json(output/'fit.json',fit)
     best=fit['joint']['best']
     if best is None or state['snapshot'] is None: raise ValueError('No scorable candidate; attempted hypotheses retained')
@@ -154,7 +202,7 @@ def pipeline(data, output, backend, session_id):
     rate=trials[0]['sample_rate_hz']
     forecast_profile={'sample_rate_hz':rate,'frame_start_sample':round(rate*.1),
                       'frame_size':trials[0]['frame_size'],'duration_s':.25}
-    state,forecast=session_job('propose_design',{'profile':forecast_profile,'design_id':'prospective-'+output.name,'target_observation_id':'future-voice-'+output.name,
+    state,forecast=session_job('propose_design',{'objective':protocol['objective'],'profile':forecast_profile,'design_id':'prospective-'+output.name,'target_observation_id':'future-voice-'+output.name,
         'experiments':[{'experiment_id':p,'pose':p,'JA':-3.,'f0_hz':180.,'gain':4.} for p in ['a','e','i']],
         'feature_scales':{name:{'unit':unit,'scale':scale,'assumption':'Engineering discrepancy scale, not calibrated noise'} for name,(unit,scale) in FEATURES.items()},
         'minimum_separation':.05,'retention_margin':.05,'maximum_discrepancy':2.,'max_synthesis_calls':3*len(snapshot['hypotheses'])})
@@ -195,6 +243,7 @@ def pipeline(data, output, backend, session_id):
         'nativeCalls':fit['actual_synthesis_calls']+forecast['actual_synthesis_calls']+2,
         'nativeCallsScope':'Actual PCM synthesis calls only; export also performs spectrum, tube geometry, mesh and SVG operations',
         'candidateId':best['candidate_id'],'anatomy':best['anatomy'],'referenceAnatomy':reference,
+        'objective':protocol['objective'],'objectivePolicy':fit['objective_policy'],
         'fitDiscrepancy':best['weighted_mean_square_discrepancy'],
         'baselineDiscrepancy':baseline['weighted_mean_square_discrepancy'] if baseline else None,
         'forecast':forecast,'files':files,'anatomyValidated':False,'liveTongueSource':'camera tracking, not scientific-model inference',
@@ -248,7 +297,8 @@ def cancel_owned_jobs(backend,run_id):
     return report
 
 
-def run(source,output,*,development_fixture=False):
+def run(source,output,*,development_fixture=False,objective=COARSE_OBJECTIVE):
+    objective_policy(objective)
     output.mkdir(parents=True,exist_ok=False,mode=0o700)
     session_id='live-'+hashlib.sha256(str(output.resolve()).encode()).hexdigest()[:24]
     args=['node','--experimental-strip-types',str(ROOT/'science/scripts/import_native_pcm.ts'),str(source),str(output/'import'),'local-participant',session_id,'a']
@@ -257,7 +307,7 @@ def run(source,output,*,development_fixture=False):
     data=json.loads((output/'import/native-pcm.json').read_text())
     with backend_for(output,session_id) as backend:
         try:
-            summary=pipeline(data,output,backend,session_id)
+            summary=pipeline(data,output,backend,session_id,objective=objective)
         except BaseException as exc:
             report={'status':'interrupted','reason':str(exc),'time':now()}
             try: report['cleanup']=cancel_owned_jobs(backend,output.name)
@@ -281,10 +331,12 @@ def run(source,output,*,development_fixture=False):
 
 if __name__=='__main__':
     p=argparse.ArgumentParser(description=__doc__);p.add_argument('--source',type=Path,required=True);p.add_argument('--output',type=Path,required=True)
-    p.add_argument('--development-fixture',action='store_true');a=p.parse_args()
+    p.add_argument('--development-fixture',action='store_true')
+    p.add_argument('--objective',choices=[COARSE_OBJECTIVE,SPECTRAL_OBJECTIVE],default=COARSE_OBJECTIVE)
+    a=p.parse_args()
     try:
         with interruption_signals():
-            run(a.source.resolve(),a.output.resolve(),development_fixture=a.development_fixture)
+            run(a.source.resolve(),a.output.resolve(),development_fixture=a.development_fixture,objective=a.objective)
     except Exception as e:
         if a.output.exists():write_json(a.output/'failure.json',{'status':'failed','error':str(e),'time':now()})
         raise

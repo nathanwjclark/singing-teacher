@@ -2,16 +2,53 @@
 from datetime import datetime, timezone
 import hashlib
 from itertools import combinations
+from pathlib import Path
+import scipy
 import re
 
 import numpy as np
 
 from .engine import ANATOMY, Engine, finite
-from .pcm_inverse import FEATURES, _bridge, _features, extract_pcm, resample_native_pcm
+from .pcm_inverse import BRIDGE, BRIDGE_SHA256, FEATURES, ROOT, _bridge, _features, extract_pcm, resample_native_pcm
+from .pcm_spectral import COARSE_OBJECTIVE, SPECTRAL_OBJECTIVE, objective_policy, extract_spectral, validate_spectral, discrepancy
 from .prediction import Artifact, _encode, _identity, _timestamp
 
 PROFILE = {'sample_rate_hz': 44100, 'frame_start_sample': 4410, 'frame_size': 4096, 'duration_s': .25}
 SCHEMA = 'internal-pcm-design-0.1'
+
+
+# Every source file whose code can change a sealed prediction or its later score,
+# hashed once at import so the pin names the code this process executes. Editing
+# these files on disk does not change a running worker; restart it to upgrade. The
+# restarted worker pins different hashes and rejects designs sealed by older code.
+# The extractor bridge runs as a new Node process per extraction and reads its file
+# from disk; _bridge rejects any reply whose self-reported hash differs from
+# BRIDGE_SHA256 (the value pinned here). The TypeScript extractor and contracts are
+# hashed by that subprocess (extractorSha256/contractsSha256) and checked on update.
+_PINNED_MODULES = [Path(__file__).with_name(name) for name in ('pcm_design.py', 'pcm_inverse.py', 'pcm_spectral.py', 'prediction.py', 'engine.py')]
+SCORER_PIN = {'version': 'pcm-scorer-pin-1',
+    'implementation_sha256': {**{path.relative_to(ROOT).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest() for path in _PINNED_MODULES},
+                              BRIDGE.relative_to(ROOT).as_posix(): BRIDGE_SHA256},
+    'numpy_version': np.__version__, 'scipy_version': scipy.__version__}
+
+
+def _require_pin(frozen):
+    """Return 'verified' or 'legacy_version_unverified'; reject a changed or missing required pin."""
+    if 'scorer_implementation_pin' not in frozen:
+        if frozen.get('objective', COARSE_OBJECTIVE) != COARSE_OBJECTIVE:
+            raise ValueError('Unsupported spectral scoring policy: missing frozen scorer pin')
+        return 'legacy_version_unverified'
+    if frozen['scorer_implementation_pin'] != SCORER_PIN:
+        raise ValueError('Unsupported PCM scoring policy: freeze a new design with the current runtime')
+    return 'verified'
+
+
+def _distance(left, right, scales, objective):
+    if objective == SPECTRAL_OBJECTIVE:
+        return float(np.sqrt(discrepancy(left['spectral_observation'],right['spectral_observation'],
+            predicted_features=left['features'],observed_features=right['features'])['mean_square']))
+    return float(np.sqrt(np.mean([((left['features'][name]-right['features'][name])/scale['scale'])**2
+        for name,scale in scales.items()])))
 
 
 def _now():
@@ -144,7 +181,7 @@ def _available(canonical, scales):
         features = _features(record)
     except ValueError as exc:
         return None, str(exc)
-    missing = [name for name in scales if features[name]['value'] is None]
+    missing = sorted(name for name in scales if features[name]['value'] is None)
     if missing:
         return None, 'Required canonical features missing: '+', '.join(missing)
     return {name: features[name]['value'] for name in scales}, None
@@ -152,9 +189,10 @@ def _available(canonical, scales):
 
 def design_pcm(snapshot, *, expected_digest, design_id, target_observation_id, generated_at,
                experiments, feature_scales, minimum_separation=1., retention_margin=1.,
-               maximum_discrepancy=2., max_synthesis_calls=64, node_binary=None, profile=None):
+               maximum_discrepancy=2., max_synthesis_calls=64, node_binary=None, profile=None, objective=COARSE_OBJECTIVE):
     """Freeze conservative pair discrimination using actual synthesized PCM features."""
     data = _snapshot(snapshot, expected_digest)
+    objective_signature = objective_policy(objective)
     profile = _profile(PROFILE if profile is None else profile)
     _identity(design_id, 'design_id'); _identity(target_observation_id, 'target_observation_id')
     if target_observation_id in data['evidence_ids'] or target_observation_id+':canonical' in data['evidence_ids']:
@@ -162,6 +200,11 @@ def design_pcm(snapshot, *, expected_digest, design_id, target_observation_id, g
     if not _timestamp(data['sealed_at']) <= _timestamp(generated_at) <= _timestamp(_now()):
         raise ValueError('Design timestamp must follow hypothesis receipt and not be future')
     _scales(feature_scales)
+    # The spectral score reads pitch and periodicity from these declared features but
+    # scales them by its frozen policy, so the declaration must state those same scales.
+    if objective == SPECTRAL_OBJECTIVE and any(feature_scales.get(name, {}).get('scale') != objective_signature['config'][key]
+            for name, key in (('pitchHz', 'pitch_scale_hz'), ('periodicity', 'periodicity_scale'))):
+        raise ValueError('Spectral objective requires pitchHz and periodicity scales equal to its frozen policy (20 Hz, 0.1)')
     for name, value in [('minimum_separation', minimum_separation), ('retention_margin', retention_margin), ('maximum_discrepancy', maximum_discrepancy)]:
         if finite(value, name) <= 0:
             raise ValueError('Separation and retention thresholds must be positive')
@@ -202,14 +245,19 @@ def design_pcm(snapshot, *, expected_digest, design_id, target_observation_id, g
                 if any(canonical[k] != extractor[k] for k in extractor):
                     raise ValueError('Extractor changed during design')
                 features, reason = _available(canonical, feature_scales)
+                spectral = None
+                if objective == SPECTRAL_OBJECTIVE and features is not None:
+                    try:
+                        spectral = extract_spectral(frame, profile['sample_rate_hz'], source_artifact_hashes=canonical['measurement']['provenance']['sourceHashes'], source_artifact_id='simulated-design-frame', frame_start_sample=start)
+                    except ValueError as exc:
+                        features, reason = None, str(exc)
                 predictions.append({'hypothesis_id': hypothesis['hypothesis_id'],
                                     'native_controls': engine.pose(experiment['pose'], {'JA': experiment['JA']})[1], 'features': features,
-                                    'missing_reason': reason, 'canonical': canonical, 'resampling': resampling})
+                                    'missing_reason': reason, 'canonical': canonical, 'resampling': resampling, 'spectral_observation':spectral})
             pairs = []
             if all(p['features'] is not None for p in predictions):
                 for left, right in combinations(predictions, 2):
-                    score = float(np.sqrt(np.mean([((left['features'][name]-right['features'][name])/scale['scale'])**2
-                                                   for name, scale in feature_scales.items()])))
+                    score = _distance(left,right,feature_scales,objective)
                     pairs.append({'hypothesis_ids': [left['hypothesis_id'], right['hypothesis_id']], 'standardized_rms': score})
             score = min((p['standardized_rms'] for p in pairs), default=None)
             status = ('missing_predicted_features' if any(p['features'] is None for p in predictions) else
@@ -225,6 +273,7 @@ def design_pcm(snapshot, *, expected_digest, design_id, target_observation_id, g
         'evidence_ids': data['evidence_ids'], 'evidence_hashes': data['evidence_hashes'],
         'provenance': data['provenance'], 'extractor': extractor, 'generated_at': generated_at, 'sealed_at': _now(),
         'target_observation_id': target_observation_id, 'profile': profile, 'feature_scales': feature_scales,
+        'objective':objective, 'objective_policy':objective_signature, 'scorer_implementation_pin':SCORER_PIN,
         'minimum_separation': minimum_separation, 'retention_margin': retention_margin,
         'maximum_discrepancy': maximum_discrepancy, 'rankings': rankings,
         'selected_experiment_id': chosen, 'actual_synthesis_calls': calls,
@@ -237,6 +286,7 @@ def select_pcm_experiment(design, snapshot, *, expected_design_digest, expected_
     """Commit a declared choice among complete forecasts without changing scores."""
     frozen = _read(design, expected_design_digest, 'frozen_pcm_experiment_design')
     data = _snapshot(snapshot, expected_snapshot_digest)
+    _require_pin(frozen)
     if frozen.get('hypothesis_snapshot_sha256') != snapshot.sha256 or any(frozen.get(k) != data[k] for k in ('model_id','provenance','evidence_ids','evidence_hashes')):
         raise ValueError('Selection requires matching current forecast and snapshot')
     for value, label in ((design_id,'design_id'),(target_observation_id,'target_observation_id'),(experiment_id,'experiment_id')):
@@ -271,6 +321,7 @@ def update_pcm(design, snapshot, *, expected_design_digest, expected_snapshot_di
         if not isinstance(frozen.get('source_design_sha256'),str) or re.fullmatch('[a-f0-9]{64}',frozen['source_design_sha256']) is None or not isinstance(frozen.get('selection_reason'),str) or not frozen['selection_reason'].strip():
             raise ValueError('Invalid explicit selection lineage')
     data = _snapshot(snapshot, expected_snapshot_digest)
+    pin_status = _require_pin(frozen)
     if frozen.get('hypothesis_snapshot_sha256') != snapshot.sha256 or any(frozen.get(key) != data[key] for key in ('model_id', 'provenance', 'evidence_ids', 'evidence_hashes')):
         raise ValueError('Design/hypothesis model or evidence binding mismatch')
     if not _timestamp(frozen['sealed_at']) < _timestamp(observed_at) <= _timestamp(received_at):
@@ -278,6 +329,11 @@ def update_pcm(design, snapshot, *, expected_design_digest, expected_snapshot_di
     _identity(observation_id, 'observation_id'); _identity(artifact_id, 'artifact_id')
     if observation_id != frozen['target_observation_id'] or any(identity in data['evidence_ids'] for identity in (observation_id, artifact_id, observation_id+':canonical')):
         raise ValueError('Observation identity is not disjoint prospective target')
+    objective = frozen.get('objective', COARSE_OBJECTIVE)
+    objective_signature = objective_policy(objective)
+    # Legacy coarse designs predate objective policies; every newer design must match.
+    if frozen.get('objective_policy', objective_signature if objective == COARSE_OBJECTIVE else None) != objective_signature:
+        raise ValueError('Unsupported PCM objective policy')
     profile = _profile(frozen.get('profile'))
     if any(type(x) is not int for x in (sample_rate_hz, frame_start_sample, frame_size)) or (sample_rate_hz, frame_start_sample, frame_size) != tuple(profile[k] for k in ('sample_rate_hz', 'frame_start_sample', 'frame_size')):
         raise ValueError('Unsupported or mismatched canonical PCM frame profile')
@@ -319,10 +375,13 @@ def update_pcm(design, snapshot, *, expected_design_digest, expected_snapshot_di
         if window.get('startMs') != expected_start or not np.isclose(window.get('endMs', float('nan')), expected_end, rtol=0, atol=1e-6):
             raise ValueError('Prediction frame profile binding mismatch')
         predicted_features, predicted_reason = _available(canonical_prediction, frozen['feature_scales'])
+        if objective == SPECTRAL_OBJECTIVE and prediction.get('features') is not None:
+            validate_spectral(prediction.get('spectral_observation'),sample_rate_hz=sample_rate_hz,frame_size=frame_size)
+            if prediction['spectral_observation']['source_artifact_hashes'] != canonical_prediction['measurement']['provenance']['sourceHashes'] or prediction['spectral_observation']['frame_sha256'] != canonical_prediction['pcmFloat32Sha256'] or prediction['spectral_observation']['frame_start_sample'] != frame_start_sample:
+                raise ValueError('Frozen spectral prediction source binding mismatch')
         if prediction.get('features') != predicted_features or prediction.get('missing_reason') != predicted_reason:
             raise ValueError('Prediction feature binding mismatch')
-    pair_scores = [float(np.sqrt(np.mean([((left['features'][name]-right['features'][name])/scale['scale'])**2
-        for name, scale in frozen['feature_scales'].items()]))) for left, right in combinations(predictions, 2)] if all(p['features'] is not None for p in predictions) else []
+    pair_scores = [_distance(left,right,frozen['feature_scales'],objective) for left, right in combinations(predictions, 2)] if all(p['features'] is not None for p in predictions) else []
     worst = min(pair_scores, default=None)
     expected_status = ('missing_predicted_features' if any(p['features'] is None for p in predictions) else
         'insufficient_distinct_hypotheses' if not pair_scores else
@@ -334,17 +393,26 @@ def update_pcm(design, snapshot, *, expected_design_digest, expected_snapshot_di
     if any(canonical[k] != frozen['extractor'][k] for k in frozen['extractor']):
         raise ValueError('Extractor changed during observation receipt')
     features, reason = _available(canonical, frozen['feature_scales'])
+    spectral = None
+    if objective == SPECTRAL_OBJECTIVE and features is not None:
+        try:
+            spectral = extract_spectral(values,sample_rate_hz,source_artifact_hashes=canonical['measurement']['provenance']['sourceHashes'],source_artifact_id=artifact_id,frame_start_sample=frame_start_sample)
+        except ValueError as exc:
+            features,reason = None,str(exc)
     receipt = {'observation_id': observation_id, 'artifact_id': artifact_id, 'observed_at': observed_at,
         'received_at': received_at, 'frame_sha256': frame_hash, 'hash_scope': 'little-endian-float32-frame-bytes',
-        'design_sha256': design.sha256, 'profile': profile, 'canonical': canonical,
+        'design_sha256': design.sha256, 'profile': profile, 'canonical': canonical, 'spectral_observation':spectral,
         'capture_time_attestation': 'caller-declared capture time; server-attested local receipt only',
         'window_provenance': 'caller-supplied crop; start offset declared, not independently recovered from source recording'}
     scores = []
     if features is not None and all(p['features'] is not None for p in selected['predictions']):
         for predicted in selected['predictions']:
-            score = float(np.sqrt(np.mean([((predicted['features'][name]-features[name])/scale['scale'])**2
-                                           for name, scale in frozen['feature_scales'].items()])))
-            scores.append({'hypothesis_id': predicted['hypothesis_id'], 'standardized_rms': score})
+            target = {'features':features,'spectral_observation':spectral}
+            score = _distance(predicted,target,frozen['feature_scales'],objective)
+            row = {'hypothesis_id': predicted['hypothesis_id'], 'standardized_rms': score}
+            if objective == SPECTRAL_OBJECTIVE:
+                row['objective_components'] = discrepancy(predicted['spectral_observation'],spectral,predicted_features=predicted['features'],observed_features=features)
+            scores.append(row)
     scores.sort(key=lambda row: (row['standardized_rms'], row['hypothesis_id']))
     status = ('missing_required_features' if not scores else 'model_mismatch' if scores[0]['standardized_rms'] > frozen['maximum_discrepancy'] else
               'no_design_separation' if selected['status'] != 'separated_at_assumed_threshold' else 'conditional_support_updated')
@@ -360,6 +428,7 @@ def update_pcm(design, snapshot, *, expected_design_digest, expected_snapshot_di
     return Artifact(_encode({'schema_version': SCHEMA, 'kind': 'conditional_pcm_support_update',
         'design_sha256': design.sha256, 'parent_snapshot_sha256': snapshot.sha256,
         'status': status, 'scores': scores, 'missing_reason': reason,
+        'objective':objective,'scorer_pin_status':pin_status,
         'observation_receipt': receipt, 'observation_receipt_sha256': _hash(receipt),
         'updated_snapshot': updated, 'updated_snapshot_sha256': _hash(updated),
         'limitations': ['Conditional on declared executed JA/F0/gain and finite retained geometry space',

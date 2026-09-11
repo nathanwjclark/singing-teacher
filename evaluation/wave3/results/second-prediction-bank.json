@@ -1,0 +1,3076 @@
+{
+  "actual_synthesis_calls": 25,
+  "committed_at": "2026-09-11T03:59:43.414334+00:00",
+  "frames": {
+    "anatomy-0-source-0-a": {
+      "anatomy": {
+        "hard_palate_length": 4.2,
+        "larynx_length": 3.2,
+        "larynx_width": 3.3,
+        "lip_width": 0.8,
+        "lower_molars_height": 0.5,
+        "mandible_height": 1.5,
+        "oral_pharyngeal_angle": -98.0,
+        "palate_depth": 3.6,
+        "palate_height": 1.6,
+        "pharynx_length": 6.35,
+        "soft_palate_length": 2.372,
+        "upper_molars_height": 0.5,
+        "vocal_fold_length": 1.2000000000000002
+      },
+      "controls": {
+        "articulation": {
+          "HX": {
+            "applied": 0.1667,
+            "requested": 0.1667
+          },
+          "HY": {
+            "applied": -3.9392,
+            "requested": -3.9392
+          },
+          "JA": {
+            "applied": -3.0,
+            "requested": -3.0
+          },
+          "JX": {
+            "applied": 0.0,
+            "requested": 0.0
+          },
+          "LD": {
+            "applied": 0.9937,
+            "requested": 0.9937
+          },
+          "LP": {
+            "applied": 0.0718,
+            "requested": 0.0718
+          },
+          "TBX": {
+            "applied": 2.5488,
+            "requested": 2.5488
+          },
+          "TBY": {
+            "applied": -0.675,
+            "requested": -0.675
+          },
+          "TCX": {
+            "applied": 0.15240000000000004,
+            "requested": 0.1524
+          },
+          "TCY": {
+            "applied": -1.8333000000000084,
+            "requested": -1.8333
+          },
+          "TRX": {
+            "applied": -2.6797940308073755,
+            "requested": -2.8371
+          },
+          "TRY": {
+            "applied": -2.7954098413012023,
+            "requested": -2.9034
+          },
+          "TS1": {
+            "applied": 0.2064,
+            "requested": 0.2064
+          },
+          "TS2": {
+            "applied": 0.0384,
+            "requested": 0.0384
+          },
+          "TS3": {
+            "applied": 0.1488,
+            "requested": 0.1488
+          },
+          "TTX": {
+            "applied": 4.245887434432651,
+            "requested": 4.2474
+          },
+          "TTY": {
+            "applied": -1.3001943511411582,
+            "requested": -1.694
+          },
+          "VO": {
+            "applied": -0.1,
+            "requested": -0.1
+          },
+          "VS": {
+            "applied": 0.8,
+            "requested": 0.8
+          }
+        },
+        "source_controls": {
+          "AS": -40.0,
+          "CA": 0.05,
+          "DP": 0.0,
+          "F0": 180.0,
+          "FL": 0.0,
+          "PL": 1.22,
+          "PR": 8000.0,
+          "PS": -0.15,
+          "RA": 1.0,
+          "XB": 0.01,
+          "XT": 0.02
+        },
+        "source_model_version": "vtl-geometric-pulse-skew-v1",
+        "source_values_are": "requested prescribed simulator controls, not measured physiology"
+      },
+      "frame_sha256": "379cd660c7ee9c4e83a761343e32cbf40f02a56e15a7eb833471b0e6bfaa37d7",
+      "path": "anatomy-0-source-0-a.pcm.f32",
+      "pose": "a",
+      "pose_gain": 1.758378912350766,
+      "raw_synthesis_sha256": "c64353b591fd5a9bd91a01413a5eb6adb242a097fd892567dffb6c7aa89bded7",
+      "source_kind": "development-fixture"
+    },
+    "anatomy-0-source-0-e": {
+      "anatomy": {
+        "hard_palate_length": 4.2,
+        "larynx_length": 3.2,
+        "larynx_width": 3.3,
+        "lip_width": 0.8,
+        "lower_molars_height": 0.5,
+        "mandible_height": 1.5,
+        "oral_pharyngeal_angle": -98.0,
+        "palate_depth": 3.6,
+        "palate_height": 1.6,
+        "pharynx_length": 6.35,
+        "soft_palate_length": 2.372,
+        "upper_molars_height": 0.5,
+        "vocal_fold_length": 1.2000000000000002
+      },
+      "controls": {
+        "articulation": {
+          "HX": {
+            "applied": 0.7193,
+            "requested": 0.7193
+          },
+          "HY": {
+            "applied": -4.1402,
+            "requested": -4.1402
+          },
+          "JA": {
+            "applied": -3.0,
+            "requested": -3.0
+          },
+          "JX": {
+            "applied": -0.1,
+            "requested": -0.1
+          },
+          "LD": {
+            "applied": 0.8441,
+            "requested": 0.8441
+          },
+          "LP": {
+            "applied": -0.0949,
+            "requested": -0.0949
+          },
+          "TBX": {
+            "applied": 3.574468085106383,
+            "requested": 4.0
+          },
+          "TBY": {
+            "applied": 0.8498240112317559,
+            "requested": 0.4265
+          },
+          "TCX": {
+            "applied": 2.5667136241592634,
+            "requested": 2.5669
+          },
+          "TCY": {
+            "applied": -0.6894229428211247,
+            "requested": -0.7755
+          },
+          "TRX": {
+            "applied": -0.9752463967930481,
+            "requested": -0.9966
+          },
+          "TRY": {
+            "applied": -0.6894229428211247,
+            "requested": -0.8969
+          },
+          "TS1": {
+            "applied": 0.2736,
+            "requested": 0.2736
+          },
+          "TS2": {
+            "applied": 0.0,
+            "requested": 0.0
+          },
+          "TS3": {
+            "applied": 0.0,
+            "requested": 0.0
+          },
+          "TTX": {
+            "applied": 4.523911654695663,
+            "requested": 4.5548
+          },
+          "TTY": {
+            "applied": -1.0352469299082259,
+            "requested": -1.0706
+          },
+          "VO": {
+            "applied": -0.1,
+            "requested": -0.1
+          },
+          "VS": {
+            "applied": 0.857,
+            "requested": 0.857
+          }
+        },
+        "source_controls": {
+          "AS": -40.0,
+          "CA": 0.05,
+          "DP": 0.0,
+          "F0": 180.0,
+          "FL": 0.0,
+          "PL": 1.22,
+          "PR": 8000.0,
+          "PS": -0.15,
+          "RA": 1.0,
+          "XB": 0.01,
+          "XT": 0.02
+        },
+        "source_model_version": "vtl-geometric-pulse-skew-v1",
+        "source_values_are": "requested prescribed simulator controls, not measured physiology"
+      },
+      "frame_sha256": "6a9051ff06c16e4ddd607bdccdc62e8c8f68cda3624d6ddaec471c251ad77349",
+      "path": "anatomy-0-source-0-e.pcm.f32",
+      "pose": "e",
+      "pose_gain": 5.7442588079530434,
+      "raw_synthesis_sha256": "c8dd4b095e20164c6c8f3177f70a541ab0d55220a2a4548fbc1ac68291a99351",
+      "source_kind": "development-fixture"
+    },
+    "anatomy-0-source-0-i": {
+      "anatomy": {
+        "hard_palate_length": 4.2,
+        "larynx_length": 3.2,
+        "larynx_width": 3.3,
+        "lip_width": 0.8,
+        "lower_molars_height": 0.5,
+        "mandible_height": 1.5,
+        "oral_pharyngeal_angle": -98.0,
+        "palate_depth": 3.6,
+        "palate_height": 1.6,
+        "pharynx_length": 6.35,
+        "soft_palate_length": 2.372,
+        "upper_molars_height": 0.5,
+        "vocal_fold_length": 1.2000000000000002
+      },
+      "controls": {
+        "articulation": {
+          "HX": {
+            "applied": 1.0,
+            "requested": 1.0
+          },
+          "HY": {
+            "applied": -5.5284,
+            "requested": -5.5284
+          },
+          "JA": {
+            "applied": -3.0,
+            "requested": -3.0
+          },
+          "JX": {
+            "applied": -0.075,
+            "requested": -0.075
+          },
+          "LD": {
+            "applied": 0.9251,
+            "requested": 0.9251
+          },
+          "LP": {
+            "applied": 0.0771,
+            "requested": 0.0771
+          },
+          "TBX": {
+            "applied": 3.574468085106383,
+            "requested": 4.0
+          },
+          "TBY": {
+            "applied": 0.904911419044454,
+            "requested": 0.521
+          },
+          "TCX": {
+            "applied": 2.60448150231199,
+            "requested": 2.6045
+          },
+          "TCY": {
+            "applied": -0.6721034131611532,
+            "requested": -0.6805
+          },
+          "TRX": {
+            "applied": 0.005825124089817402,
+            "requested": 0.0607
+          },
+          "TRY": {
+            "applied": -0.6721034131611532,
+            "requested": -0.8657
+          },
+          "TS1": {
+            "applied": 0.2476,
+            "requested": 0.2476
+          },
+          "TS2": {
+            "applied": 0.0548,
+            "requested": 0.0548
+          },
+          "TS3": {
+            "applied": -0.05,
+            "requested": -0.05
+          },
+          "TTX": {
+            "applied": 4.524140271493213,
+            "requested": 4.642
+          },
+          "TTY": {
+            "applied": -0.9479071427505232,
+            "requested": -0.8664
+          },
+          "VO": {
+            "applied": -0.1,
+            "requested": -0.1
+          },
+          "VS": {
+            "applied": 0.0,
+            "requested": 0.0
+          }
+        },
+        "source_controls": {
+          "AS": -40.0,
+          "CA": 0.05,
+          "DP": 0.0,
+          "F0": 180.0,
+          "FL": 0.0,
+          "PL": 1.22,
+          "PR": 8000.0,
+          "PS": -0.15,
+          "RA": 1.0,
+          "XB": 0.01,
+          "XT": 0.02
+        },
+        "source_model_version": "vtl-geometric-pulse-skew-v1",
+        "source_values_are": "requested prescribed simulator controls, not measured physiology"
+      },
+      "frame_sha256": "bff736f759bc9928c3f2c6af67ab56b6a218e79fd3e550ba327cfb20aad74688",
+      "path": "anatomy-0-source-0-i.pcm.f32",
+      "pose": "i",
+      "pose_gain": 24.316286275454594,
+      "raw_synthesis_sha256": "abb04037812d1bcbe5d4fda3be396615ff5159267c1ff0839cd777b428ee9a07",
+      "source_kind": "development-fixture"
+    },
+    "anatomy-0-source-0-o": {
+      "anatomy": {
+        "hard_palate_length": 4.2,
+        "larynx_length": 3.2,
+        "larynx_width": 3.3,
+        "lip_width": 0.8,
+        "lower_molars_height": 0.5,
+        "mandible_height": 1.5,
+        "oral_pharyngeal_angle": -98.0,
+        "palate_depth": 3.6,
+        "palate_height": 1.6,
+        "pharynx_length": 6.35,
+        "soft_palate_length": 2.372,
+        "upper_molars_height": 0.5,
+        "vocal_fold_length": 1.2000000000000002
+      },
+      "controls": {
+        "articulation": {
+          "HX": {
+            "applied": 0.4929,
+            "requested": 0.4929
+          },
+          "HY": {
+            "applied": -5.1837,
+            "requested": -5.1837
+          },
+          "JA": {
+            "applied": -3.0,
+            "requested": -3.0
+          },
+          "JX": {
+            "applied": 0.0,
+            "requested": 0.0
+          },
+          "LD": {
+            "applied": 0.2607,
+            "requested": 0.2607
+          },
+          "LP": {
+            "applied": 0.6935,
+            "requested": 0.6935
+          },
+          "TBX": {
+            "applied": 1.7447,
+            "requested": 1.7447
+          },
+          "TBY": {
+            "applied": 0.0791,
+            "requested": 0.0791
+          },
+          "TCX": {
+            "applied": -0.19430000000000003,
+            "requested": -0.1943
+          },
+          "TCY": {
+            "applied": -1.112100000000055,
+            "requested": -1.1121
+          },
+          "TRX": {
+            "applied": -1.2133988017692556,
+            "requested": -1.2577
+          },
+          "TRY": {
+            "applied": -3.1331678744447706,
+            "requested": -3.1915
+          },
+          "TS1": {
+            "applied": 0.1056,
+            "requested": 0.1056
+          },
+          "TS2": {
+            "applied": 0.0,
+            "requested": 0.0
+          },
+          "TS3": {
+            "applied": 0.0,
+            "requested": 0.0
+          },
+          "TTX": {
+            "applied": 2.0052,
+            "requested": 2.0052
+          },
+          "TTY": {
+            "applied": -0.8047000000000253,
+            "requested": -0.8047
+          },
+          "VO": {
+            "applied": -0.1,
+            "requested": -0.1
+          },
+          "VS": {
+            "applied": 0.5422,
+            "requested": 0.5422
+          }
+        },
+        "source_controls": {
+          "AS": -40.0,
+          "CA": 0.05,
+          "DP": 0.0,
+          "F0": 180.0,
+          "FL": 0.0,
+          "PL": 1.22,
+          "PR": 8000.0,
+          "PS": -0.15,
+          "RA": 1.0,
+          "XB": 0.01,
+          "XT": 0.02
+        },
+        "source_model_version": "vtl-geometric-pulse-skew-v1",
+        "source_values_are": "requested prescribed simulator controls, not measured physiology"
+      },
+      "frame_sha256": "3a4931278a1e75d11a883ae42badfd4b896f1da2be10d3ef0e7f2479aabfc3cf",
+      "path": "anatomy-0-source-0-o.pcm.f32",
+      "pose": "o",
+      "pose_gain": 4.330456960149653,
+      "raw_synthesis_sha256": "4efd750c3143df13f11b23f68beb6ffe48466d39daacfb6943f54d55343bb5c7",
+      "source_kind": "development-fixture"
+    },
+    "anatomy-0-source-0-u": {
+      "anatomy": {
+        "hard_palate_length": 4.2,
+        "larynx_length": 3.2,
+        "larynx_width": 3.3,
+        "lip_width": 0.8,
+        "lower_molars_height": 0.5,
+        "mandible_height": 1.5,
+        "oral_pharyngeal_angle": -98.0,
+        "palate_depth": 3.6,
+        "palate_height": 1.6,
+        "pharynx_length": 6.35,
+        "soft_palate_length": 2.372,
+        "upper_molars_height": 0.5,
+        "vocal_fold_length": 1.2000000000000002
+      },
+      "controls": {
+        "articulation": {
+          "HX": {
+            "applied": 1.0,
+            "requested": 1.0
+          },
+          "HY": {
+            "applied": -6.0,
+            "requested": -6.0
+          },
+          "JA": {
+            "applied": -3.0,
+            "requested": -3.0
+          },
+          "JX": {
+            "applied": 0.0,
+            "requested": 0.0
+          },
+          "LD": {
+            "applied": 0.3446,
+            "requested": 0.3446
+          },
+          "LP": {
+            "applied": 1.0,
+            "requested": 1.0
+          },
+          "TBX": {
+            "applied": 1.8387,
+            "requested": 1.8387
+          },
+          "TBY": {
+            "applied": 0.6311,
+            "requested": 0.6311
+          },
+          "TCX": {
+            "applied": 0.5154,
+            "requested": 0.5154
+          },
+          "TCY": {
+            "applied": -0.9786000000000286,
+            "requested": -0.9786
+          },
+          "TRX": {
+            "applied": -0.47867378259075455,
+            "requested": -0.4071
+          },
+          "TRY": {
+            "applied": -2.441772212137328,
+            "requested": -2.6017
+          },
+          "TS1": {
+            "applied": 0.292,
+            "requested": 0.292
+          },
+          "TS2": {
+            "applied": 0.0,
+            "requested": 0.0
+          },
+          "TS3": {
+            "applied": 0.0,
+            "requested": 0.0
+          },
+          "TTX": {
+            "applied": 3.2438,
+            "requested": 3.2438
+          },
+          "TTY": {
+            "applied": -0.7467000000000326,
+            "requested": -0.7467
+          },
+          "VO": {
+            "applied": -0.1,
+            "requested": -0.1
+          },
+          "VS": {
+            "applied": 0.5872,
+            "requested": 0.5872
+          }
+        },
+        "source_controls": {
+          "AS": -40.0,
+          "CA": 0.05,
+          "DP": 0.0,
+          "F0": 180.0,
+          "FL": 0.0,
+          "PL": 1.22,
+          "PR": 8000.0,
+          "PS": -0.15,
+          "RA": 1.0,
+          "XB": 0.01,
+          "XT": 0.02
+        },
+        "source_model_version": "vtl-geometric-pulse-skew-v1",
+        "source_values_are": "requested prescribed simulator controls, not measured physiology"
+      },
+      "frame_sha256": "b13b304c812bc6f17de124063cfba702231d4a9acc57dd2ef78a4f69813b15b5",
+      "path": "anatomy-0-source-0-u.pcm.f32",
+      "pose": "u",
+      "pose_gain": 6.75589899021318,
+      "raw_synthesis_sha256": "64f938b3d788551892a0bdf893cbcaa3ea10fc91d1d05099e7c7a4d1d3a4b3f7",
+      "source_kind": "development-fixture"
+    },
+    "anatomy-0-source-1-a": {
+      "anatomy": {
+        "hard_palate_length": 4.2,
+        "larynx_length": 3.2,
+        "larynx_width": 3.3,
+        "lip_width": 0.8,
+        "lower_molars_height": 0.5,
+        "mandible_height": 1.5,
+        "oral_pharyngeal_angle": -98.0,
+        "palate_depth": 3.6,
+        "palate_height": 1.6,
+        "pharynx_length": 6.35,
+        "soft_palate_length": 2.372,
+        "upper_molars_height": 0.5,
+        "vocal_fold_length": 1.2000000000000002
+      },
+      "controls": {
+        "articulation": {
+          "HX": {
+            "applied": 0.1667,
+            "requested": 0.1667
+          },
+          "HY": {
+            "applied": -3.9392,
+            "requested": -3.9392
+          },
+          "JA": {
+            "applied": -3.0,
+            "requested": -3.0
+          },
+          "JX": {
+            "applied": 0.0,
+            "requested": 0.0
+          },
+          "LD": {
+            "applied": 0.9937,
+            "requested": 0.9937
+          },
+          "LP": {
+            "applied": 0.0718,
+            "requested": 0.0718
+          },
+          "TBX": {
+            "applied": 2.5488,
+            "requested": 2.5488
+          },
+          "TBY": {
+            "applied": -0.675,
+            "requested": -0.675
+          },
+          "TCX": {
+            "applied": 0.15240000000000004,
+            "requested": 0.1524
+          },
+          "TCY": {
+            "applied": -1.8333000000000084,
+            "requested": -1.8333
+          },
+          "TRX": {
+            "applied": -2.6797940308073755,
+            "requested": -2.8371
+          },
+          "TRY": {
+            "applied": -2.7954098413012023,
+            "requested": -2.9034
+          },
+          "TS1": {
+            "applied": 0.2064,
+            "requested": 0.2064
+          },
+          "TS2": {
+            "applied": 0.0384,
+            "requested": 0.0384
+          },
+          "TS3": {
+            "applied": 0.1488,
+            "requested": 0.1488
+          },
+          "TTX": {
+            "applied": 4.245887434432651,
+            "requested": 4.2474
+          },
+          "TTY": {
+            "applied": -1.3001943511411582,
+            "requested": -1.694
+          },
+          "VO": {
+            "applied": -0.1,
+            "requested": -0.1
+          },
+          "VS": {
+            "applied": 0.8,
+            "requested": 0.8
+          }
+        },
+        "source_controls": {
+          "AS": -40.0,
+          "CA": 0.05,
+          "DP": 0.0,
+          "F0": 180.0,
+          "FL": 0.0,
+          "PL": 1.22,
+          "PR": 8000.0,
+          "PS": 0.15,
+          "RA": 1.0,
+          "XB": 0.01,
+          "XT": 0.02
+        },
+        "source_model_version": "vtl-geometric-pulse-skew-v1",
+        "source_values_are": "requested prescribed simulator controls, not measured physiology"
+      },
+      "frame_sha256": "7f0a388c5850a512a09d37d53e7327890ec2d5fe29b55bd90cb013cae8759db0",
+      "path": "anatomy-0-source-1-a.pcm.f32",
+      "pose": "a",
+      "pose_gain": 1.758378912350766,
+      "raw_synthesis_sha256": "32e42aeccb053369d6d27817de97ca1fca80eccb2b1091945840c7eb60e0ac48",
+      "source_kind": "development-fixture"
+    },
+    "anatomy-0-source-1-e": {
+      "anatomy": {
+        "hard_palate_length": 4.2,
+        "larynx_length": 3.2,
+        "larynx_width": 3.3,
+        "lip_width": 0.8,
+        "lower_molars_height": 0.5,
+        "mandible_height": 1.5,
+        "oral_pharyngeal_angle": -98.0,
+        "palate_depth": 3.6,
+        "palate_height": 1.6,
+        "pharynx_length": 6.35,
+        "soft_palate_length": 2.372,
+        "upper_molars_height": 0.5,
+        "vocal_fold_length": 1.2000000000000002
+      },
+      "controls": {
+        "articulation": {
+          "HX": {
+            "applied": 0.7193,
+            "requested": 0.7193
+          },
+          "HY": {
+            "applied": -4.1402,
+            "requested": -4.1402
+          },
+          "JA": {
+            "applied": -3.0,
+            "requested": -3.0
+          },
+          "JX": {
+            "applied": -0.1,
+            "requested": -0.1
+          },
+          "LD": {
+            "applied": 0.8441,
+            "requested": 0.8441
+          },
+          "LP": {
+            "applied": -0.0949,
+            "requested": -0.0949
+          },
+          "TBX": {
+            "applied": 3.574468085106383,
+            "requested": 4.0
+          },
+          "TBY": {
+            "applied": 0.8498240112317559,
+            "requested": 0.4265
+          },
+          "TCX": {
+            "applied": 2.5667136241592634,
+            "requested": 2.5669
+          },
+          "TCY": {
+            "applied": -0.6894229428211247,
+            "requested": -0.7755
+          },
+          "TRX": {
+            "applied": -0.9752463967930481,
+            "requested": -0.9966
+          },
+          "TRY": {
+            "applied": -0.6894229428211247,
+            "requested": -0.8969
+          },
+          "TS1": {
+            "applied": 0.2736,
+            "requested": 0.2736
+          },
+          "TS2": {
+            "applied": 0.0,
+            "requested": 0.0
+          },
+          "TS3": {
+            "applied": 0.0,
+            "requested": 0.0
+          },
+          "TTX": {
+            "applied": 4.523911654695663,
+            "requested": 4.5548
+          },
+          "TTY": {
+            "applied": -1.0352469299082259,
+            "requested": -1.0706
+          },
+          "VO": {
+            "applied": -0.1,
+            "requested": -0.1
+          },
+          "VS": {
+            "applied": 0.857,
+            "requested": 0.857
+          }
+        },
+        "source_controls": {
+          "AS": -40.0,
+          "CA": 0.05,
+          "DP": 0.0,
+          "F0": 180.0,
+          "FL": 0.0,
+          "PL": 1.22,
+          "PR": 8000.0,
+          "PS": 0.15,
+          "RA": 1.0,
+          "XB": 0.01,
+          "XT": 0.02
+        },
+        "source_model_version": "vtl-geometric-pulse-skew-v1",
+        "source_values_are": "requested prescribed simulator controls, not measured physiology"
+      },
+      "frame_sha256": "84ec7d86216178377f9507328a0773634f016761a446e62dea665f52f7c3e5be",
+      "path": "anatomy-0-source-1-e.pcm.f32",
+      "pose": "e",
+      "pose_gain": 5.7442588079530434,
+      "raw_synthesis_sha256": "e154795ce370a15a3d6b2c6df5f8f5452d568a38df1e302f95fbdd88e99488f8",
+      "source_kind": "development-fixture"
+    },
+    "anatomy-0-source-1-i": {
+      "anatomy": {
+        "hard_palate_length": 4.2,
+        "larynx_length": 3.2,
+        "larynx_width": 3.3,
+        "lip_width": 0.8,
+        "lower_molars_height": 0.5,
+        "mandible_height": 1.5,
+        "oral_pharyngeal_angle": -98.0,
+        "palate_depth": 3.6,
+        "palate_height": 1.6,
+        "pharynx_length": 6.35,
+        "soft_palate_length": 2.372,
+        "upper_molars_height": 0.5,
+        "vocal_fold_length": 1.2000000000000002
+      },
+      "controls": {
+        "articulation": {
+          "HX": {
+            "applied": 1.0,
+            "requested": 1.0
+          },
+          "HY": {
+            "applied": -5.5284,
+            "requested": -5.5284
+          },
+          "JA": {
+            "applied": -3.0,
+            "requested": -3.0
+          },
+          "JX": {
+            "applied": -0.075,
+            "requested": -0.075
+          },
+          "LD": {
+            "applied": 0.9251,
+            "requested": 0.9251
+          },
+          "LP": {
+            "applied": 0.0771,
+            "requested": 0.0771
+          },
+          "TBX": {
+            "applied": 3.574468085106383,
+            "requested": 4.0
+          },
+          "TBY": {
+            "applied": 0.904911419044454,
+            "requested": 0.521
+          },
+          "TCX": {
+            "applied": 2.60448150231199,
+            "requested": 2.6045
+          },
+          "TCY": {
+            "applied": -0.6721034131611532,
+            "requested": -0.6805
+          },
+          "TRX": {
+            "applied": 0.005825124089817402,
+            "requested": 0.0607
+          },
+          "TRY": {
+            "applied": -0.6721034131611532,
+            "requested": -0.8657
+          },
+          "TS1": {
+            "applied": 0.2476,
+            "requested": 0.2476
+          },
+          "TS2": {
+            "applied": 0.0548,
+            "requested": 0.0548
+          },
+          "TS3": {
+            "applied": -0.05,
+            "requested": -0.05
+          },
+          "TTX": {
+            "applied": 4.524140271493213,
+            "requested": 4.642
+          },
+          "TTY": {
+            "applied": -0.9479071427505232,
+            "requested": -0.8664
+          },
+          "VO": {
+            "applied": -0.1,
+            "requested": -0.1
+          },
+          "VS": {
+            "applied": 0.0,
+            "requested": 0.0
+          }
+        },
+        "source_controls": {
+          "AS": -40.0,
+          "CA": 0.05,
+          "DP": 0.0,
+          "F0": 180.0,
+          "FL": 0.0,
+          "PL": 1.22,
+          "PR": 8000.0,
+          "PS": 0.15,
+          "RA": 1.0,
+          "XB": 0.01,
+          "XT": 0.02
+        },
+        "source_model_version": "vtl-geometric-pulse-skew-v1",
+        "source_values_are": "requested prescribed simulator controls, not measured physiology"
+      },
+      "frame_sha256": "e9c9f950a0b9558b28439c9132fc09e4c8bcfb4ed6df84dcc49e372bda8595c1",
+      "path": "anatomy-0-source-1-i.pcm.f32",
+      "pose": "i",
+      "pose_gain": 24.316286275454594,
+      "raw_synthesis_sha256": "577ac8c193999ccb789a6463c96d2b31f47445fd5d68cef2bb6ffee5eaac123d",
+      "source_kind": "development-fixture"
+    },
+    "anatomy-0-source-1-o": {
+      "anatomy": {
+        "hard_palate_length": 4.2,
+        "larynx_length": 3.2,
+        "larynx_width": 3.3,
+        "lip_width": 0.8,
+        "lower_molars_height": 0.5,
+        "mandible_height": 1.5,
+        "oral_pharyngeal_angle": -98.0,
+        "palate_depth": 3.6,
+        "palate_height": 1.6,
+        "pharynx_length": 6.35,
+        "soft_palate_length": 2.372,
+        "upper_molars_height": 0.5,
+        "vocal_fold_length": 1.2000000000000002
+      },
+      "controls": {
+        "articulation": {
+          "HX": {
+            "applied": 0.4929,
+            "requested": 0.4929
+          },
+          "HY": {
+            "applied": -5.1837,
+            "requested": -5.1837
+          },
+          "JA": {
+            "applied": -3.0,
+            "requested": -3.0
+          },
+          "JX": {
+            "applied": 0.0,
+            "requested": 0.0
+          },
+          "LD": {
+            "applied": 0.2607,
+            "requested": 0.2607
+          },
+          "LP": {
+            "applied": 0.6935,
+            "requested": 0.6935
+          },
+          "TBX": {
+            "applied": 1.7447,
+            "requested": 1.7447
+          },
+          "TBY": {
+            "applied": 0.0791,
+            "requested": 0.0791
+          },
+          "TCX": {
+            "applied": -0.19430000000000003,
+            "requested": -0.1943
+          },
+          "TCY": {
+            "applied": -1.112100000000055,
+            "requested": -1.1121
+          },
+          "TRX": {
+            "applied": -1.2133988017692556,
+            "requested": -1.2577
+          },
+          "TRY": {
+            "applied": -3.1331678744447706,
+            "requested": -3.1915
+          },
+          "TS1": {
+            "applied": 0.1056,
+            "requested": 0.1056
+          },
+          "TS2": {
+            "applied": 0.0,
+            "requested": 0.0
+          },
+          "TS3": {
+            "applied": 0.0,
+            "requested": 0.0
+          },
+          "TTX": {
+            "applied": 2.0052,
+            "requested": 2.0052
+          },
+          "TTY": {
+            "applied": -0.8047000000000253,
+            "requested": -0.8047
+          },
+          "VO": {
+            "applied": -0.1,
+            "requested": -0.1
+          },
+          "VS": {
+            "applied": 0.5422,
+            "requested": 0.5422
+          }
+        },
+        "source_controls": {
+          "AS": -40.0,
+          "CA": 0.05,
+          "DP": 0.0,
+          "F0": 180.0,
+          "FL": 0.0,
+          "PL": 1.22,
+          "PR": 8000.0,
+          "PS": 0.15,
+          "RA": 1.0,
+          "XB": 0.01,
+          "XT": 0.02
+        },
+        "source_model_version": "vtl-geometric-pulse-skew-v1",
+        "source_values_are": "requested prescribed simulator controls, not measured physiology"
+      },
+      "frame_sha256": "3c953aa20ec2ce90c792faa29ef88c95e0466a25d89749e60d0678aeca5a14fe",
+      "path": "anatomy-0-source-1-o.pcm.f32",
+      "pose": "o",
+      "pose_gain": 4.330456960149653,
+      "raw_synthesis_sha256": "76e22f0fbdedc9844ee6e806fe3e8d37f787652f1ca0c6855d2598566f57cd7e",
+      "source_kind": "development-fixture"
+    },
+    "anatomy-0-source-1-u": {
+      "anatomy": {
+        "hard_palate_length": 4.2,
+        "larynx_length": 3.2,
+        "larynx_width": 3.3,
+        "lip_width": 0.8,
+        "lower_molars_height": 0.5,
+        "mandible_height": 1.5,
+        "oral_pharyngeal_angle": -98.0,
+        "palate_depth": 3.6,
+        "palate_height": 1.6,
+        "pharynx_length": 6.35,
+        "soft_palate_length": 2.372,
+        "upper_molars_height": 0.5,
+        "vocal_fold_length": 1.2000000000000002
+      },
+      "controls": {
+        "articulation": {
+          "HX": {
+            "applied": 1.0,
+            "requested": 1.0
+          },
+          "HY": {
+            "applied": -6.0,
+            "requested": -6.0
+          },
+          "JA": {
+            "applied": -3.0,
+            "requested": -3.0
+          },
+          "JX": {
+            "applied": 0.0,
+            "requested": 0.0
+          },
+          "LD": {
+            "applied": 0.3446,
+            "requested": 0.3446
+          },
+          "LP": {
+            "applied": 1.0,
+            "requested": 1.0
+          },
+          "TBX": {
+            "applied": 1.8387,
+            "requested": 1.8387
+          },
+          "TBY": {
+            "applied": 0.6311,
+            "requested": 0.6311
+          },
+          "TCX": {
+            "applied": 0.5154,
+            "requested": 0.5154
+          },
+          "TCY": {
+            "applied": -0.9786000000000286,
+            "requested": -0.9786
+          },
+          "TRX": {
+            "applied": -0.47867378259075455,
+            "requested": -0.4071
+          },
+          "TRY": {
+            "applied": -2.441772212137328,
+            "requested": -2.6017
+          },
+          "TS1": {
+            "applied": 0.292,
+            "requested": 0.292
+          },
+          "TS2": {
+            "applied": 0.0,
+            "requested": 0.0
+          },
+          "TS3": {
+            "applied": 0.0,
+            "requested": 0.0
+          },
+          "TTX": {
+            "applied": 3.2438,
+            "requested": 3.2438
+          },
+          "TTY": {
+            "applied": -0.7467000000000326,
+            "requested": -0.7467
+          },
+          "VO": {
+            "applied": -0.1,
+            "requested": -0.1
+          },
+          "VS": {
+            "applied": 0.5872,
+            "requested": 0.5872
+          }
+        },
+        "source_controls": {
+          "AS": -40.0,
+          "CA": 0.05,
+          "DP": 0.0,
+          "F0": 180.0,
+          "FL": 0.0,
+          "PL": 1.22,
+          "PR": 8000.0,
+          "PS": 0.15,
+          "RA": 1.0,
+          "XB": 0.01,
+          "XT": 0.02
+        },
+        "source_model_version": "vtl-geometric-pulse-skew-v1",
+        "source_values_are": "requested prescribed simulator controls, not measured physiology"
+      },
+      "frame_sha256": "67faee221929b07bed5df58cff14ed87d762f4de7eb8db0d6b86e22db771f2b1",
+      "path": "anatomy-0-source-1-u.pcm.f32",
+      "pose": "u",
+      "pose_gain": 6.75589899021318,
+      "raw_synthesis_sha256": "5419ded7150c326e8f100194f205e7b9e58c9aa207c751cc85199a93e5522537",
+      "source_kind": "development-fixture"
+    },
+    "anatomy-1-source-0-a": {
+      "anatomy": {
+        "hard_palate_length": 4.5,
+        "larynx_length": 3.2,
+        "larynx_width": 3.3,
+        "lip_width": 1.2,
+        "lower_molars_height": 0.5,
+        "mandible_height": 1.5,
+        "oral_pharyngeal_angle": -98.0,
+        "palate_depth": 3.6,
+        "palate_height": 1.6,
+        "pharynx_length": 6.35,
+        "soft_palate_length": 2.372,
+        "upper_molars_height": 0.5,
+        "vocal_fold_length": 1.2000000000000002
+      },
+      "controls": {
+        "articulation": {
+          "HX": {
+            "applied": 0.1667,
+            "requested": 0.1667
+          },
+          "HY": {
+            "applied": -3.9392,
+            "requested": -3.9392
+          },
+          "JA": {
+            "applied": -3.0,
+            "requested": -3.0
+          },
+          "JX": {
+            "applied": 0.0,
+            "requested": 0.0
+          },
+          "LD": {
+            "applied": 0.9937,
+            "requested": 0.9937
+          },
+          "LP": {
+            "applied": 0.0718,
+            "requested": 0.0718
+          },
+          "TBX": {
+            "applied": 2.5488,
+            "requested": 2.5488
+          },
+          "TBY": {
+            "applied": -0.675,
+            "requested": -0.675
+          },
+          "TCX": {
+            "applied": 0.15239999999999998,
+            "requested": 0.1524
+          },
+          "TCY": {
+            "applied": -1.8333000000000084,
+            "requested": -1.8333
+          },
+          "TRX": {
+            "applied": -2.7745581737244636,
+            "requested": -2.8371
+          },
+          "TRY": {
+            "applied": -2.8619310507336886,
+            "requested": -2.9034
+          },
+          "TS1": {
+            "applied": 0.2064,
+            "requested": 0.2064
+          },
+          "TS2": {
+            "applied": 0.0384,
+            "requested": 0.0384
+          },
+          "TS3": {
+            "applied": 0.1488,
+            "requested": 0.1488
+          },
+          "TTX": {
+            "applied": 4.246972385400206,
+            "requested": 4.2474
+          },
+          "TTY": {
+            "applied": -1.5732526980534658,
+            "requested": -1.694
+          },
+          "VO": {
+            "applied": -0.1,
+            "requested": -0.1
+          },
+          "VS": {
+            "applied": 0.8,
+            "requested": 0.8
+          }
+        },
+        "source_controls": {
+          "AS": -40.0,
+          "CA": 0.05,
+          "DP": 0.0,
+          "F0": 180.0,
+          "FL": 0.0,
+          "PL": 1.22,
+          "PR": 8000.0,
+          "PS": -0.15,
+          "RA": 1.0,
+          "XB": 0.01,
+          "XT": 0.02
+        },
+        "source_model_version": "vtl-geometric-pulse-skew-v1",
+        "source_values_are": "requested prescribed simulator controls, not measured physiology"
+      },
+      "frame_sha256": "66f44760d319a74c19361f10e22de3baca15bf217a35d5f343cd77c974fb8c25",
+      "path": "anatomy-1-source-0-a.pcm.f32",
+      "pose": "a",
+      "pose_gain": 1.758378912350766,
+      "raw_synthesis_sha256": "aadc56b8aea56e8b5d32a9a822cb3c8366aa94dbce1e11f5072d37e6ba90e0e0",
+      "source_kind": "development-fixture"
+    },
+    "anatomy-1-source-0-e": {
+      "anatomy": {
+        "hard_palate_length": 4.5,
+        "larynx_length": 3.2,
+        "larynx_width": 3.3,
+        "lip_width": 1.2,
+        "lower_molars_height": 0.5,
+        "mandible_height": 1.5,
+        "oral_pharyngeal_angle": -98.0,
+        "palate_depth": 3.6,
+        "palate_height": 1.6,
+        "pharynx_length": 6.35,
+        "soft_palate_length": 2.372,
+        "upper_molars_height": 0.5,
+        "vocal_fold_length": 1.2000000000000002
+      },
+      "controls": {
+        "articulation": {
+          "HX": {
+            "applied": 0.7193,
+            "requested": 0.7193
+          },
+          "HY": {
+            "applied": -4.1402,
+            "requested": -4.1402
+          },
+          "JA": {
+            "applied": -3.0,
+            "requested": -3.0
+          },
+          "JX": {
+            "applied": -0.1,
+            "requested": -0.1
+          },
+          "LD": {
+            "applied": 0.8441,
+            "requested": 0.8441
+          },
+          "LP": {
+            "applied": -0.0949,
+            "requested": -0.0949
+          },
+          "TBX": {
+            "applied": 3.829787234042553,
+            "requested": 4.0
+          },
+          "TBY": {
+            "applied": 0.5086141809574816,
+            "requested": 0.4265
+          },
+          "TCX": {
+            "applied": 2.5669,
+            "requested": 2.5669
+          },
+          "TCY": {
+            "applied": -0.7754999999999654,
+            "requested": -0.7755
+          },
+          "TRX": {
+            "applied": -0.9828811483615633,
+            "requested": -0.9966
+          },
+          "TRY": {
+            "applied": -0.7754999999999654,
+            "requested": -0.8969
+          },
+          "TS1": {
+            "applied": 0.2736,
+            "requested": 0.2736
+          },
+          "TS2": {
+            "applied": 0.0,
+            "requested": 0.0
+          },
+          "TS3": {
+            "applied": 0.0,
+            "requested": 0.0
+          },
+          "TTX": {
+            "applied": 4.554799999999999,
+            "requested": 4.5548
+          },
+          "TTY": {
+            "applied": -1.070600000000013,
+            "requested": -1.0706
+          },
+          "VO": {
+            "applied": -0.1,
+            "requested": -0.1
+          },
+          "VS": {
+            "applied": 0.857,
+            "requested": 0.857
+          }
+        },
+        "source_controls": {
+          "AS": -40.0,
+          "CA": 0.05,
+          "DP": 0.0,
+          "F0": 180.0,
+          "FL": 0.0,
+          "PL": 1.22,
+          "PR": 8000.0,
+          "PS": -0.15,
+          "RA": 1.0,
+          "XB": 0.01,
+          "XT": 0.02
+        },
+        "source_model_version": "vtl-geometric-pulse-skew-v1",
+        "source_values_are": "requested prescribed simulator controls, not measured physiology"
+      },
+      "frame_sha256": "1d4565da06ccb7e0566a563cc43dfa6fd67d412a5d6c136768450a5655dc5ece",
+      "path": "anatomy-1-source-0-e.pcm.f32",
+      "pose": "e",
+      "pose_gain": 5.7442588079530434,
+      "raw_synthesis_sha256": "ca7fdaa8bfbe96cad6e27290aad4a73248ee48e68ac57470f87dfcc1633ab8a5",
+      "source_kind": "development-fixture"
+    },
+    "anatomy-1-source-0-i": {
+      "anatomy": {
+        "hard_palate_length": 4.5,
+        "larynx_length": 3.2,
+        "larynx_width": 3.3,
+        "lip_width": 1.2,
+        "lower_molars_height": 0.5,
+        "mandible_height": 1.5,
+        "oral_pharyngeal_angle": -98.0,
+        "palate_depth": 3.6,
+        "palate_height": 1.6,
+        "pharynx_length": 6.35,
+        "soft_palate_length": 2.372,
+        "upper_molars_height": 0.5,
+        "vocal_fold_length": 1.2000000000000002
+      },
+      "controls": {
+        "articulation": {
+          "HX": {
+            "applied": 1.0,
+            "requested": 1.0
+          },
+          "HY": {
+            "applied": -5.5284,
+            "requested": -5.5284
+          },
+          "JA": {
+            "applied": -3.0,
+            "requested": -3.0
+          },
+          "JX": {
+            "applied": -0.075,
+            "requested": -0.075
+          },
+          "LD": {
+            "applied": 0.9251,
+            "requested": 0.9251
+          },
+          "LP": {
+            "applied": 0.0771,
+            "requested": 0.0771
+          },
+          "TBX": {
+            "applied": 3.829787234042553,
+            "requested": 4.0
+          },
+          "TBY": {
+            "applied": 0.641214180957395,
+            "requested": 0.521
+          },
+          "TCX": {
+            "applied": 2.6045,
+            "requested": 2.6045
+          },
+          "TCY": {
+            "applied": -0.6805000000000518,
+            "requested": -0.6805
+          },
+          "TRX": {
+            "applied": 0.04636338458616518,
+            "requested": 0.0607
+          },
+          "TRY": {
+            "applied": -0.6992310958782879,
+            "requested": -0.8657
+          },
+          "TS1": {
+            "applied": 0.2476,
+            "requested": 0.2476
+          },
+          "TS2": {
+            "applied": 0.0548,
+            "requested": 0.0548
+          },
+          "TS3": {
+            "applied": -0.05,
+            "requested": -0.05
+          },
+          "TTX": {
+            "applied": 4.642,
+            "requested": 4.642
+          },
+          "TTY": {
+            "applied": -0.8663999999999987,
+            "requested": -0.8664
+          },
+          "VO": {
+            "applied": -0.1,
+            "requested": -0.1
+          },
+          "VS": {
+            "applied": 0.0,
+            "requested": 0.0
+          }
+        },
+        "source_controls": {
+          "AS": -40.0,
+          "CA": 0.05,
+          "DP": 0.0,
+          "F0": 180.0,
+          "FL": 0.0,
+          "PL": 1.22,
+          "PR": 8000.0,
+          "PS": -0.15,
+          "RA": 1.0,
+          "XB": 0.01,
+          "XT": 0.02
+        },
+        "source_model_version": "vtl-geometric-pulse-skew-v1",
+        "source_values_are": "requested prescribed simulator controls, not measured physiology"
+      },
+      "frame_sha256": "acb3c7f8cdb63250898c1e9182bfa56b2beba826238dfafeb1723de9bcfc591c",
+      "path": "anatomy-1-source-0-i.pcm.f32",
+      "pose": "i",
+      "pose_gain": 24.316286275454594,
+      "raw_synthesis_sha256": "3cc20b1628566248c9b051e3734fd41940298c824cfd14f479d3407ce22e533b",
+      "source_kind": "development-fixture"
+    },
+    "anatomy-1-source-0-o": {
+      "anatomy": {
+        "hard_palate_length": 4.5,
+        "larynx_length": 3.2,
+        "larynx_width": 3.3,
+        "lip_width": 1.2,
+        "lower_molars_height": 0.5,
+        "mandible_height": 1.5,
+        "oral_pharyngeal_angle": -98.0,
+        "palate_depth": 3.6,
+        "palate_height": 1.6,
+        "pharynx_length": 6.35,
+        "soft_palate_length": 2.372,
+        "upper_molars_height": 0.5,
+        "vocal_fold_length": 1.2000000000000002
+      },
+      "controls": {
+        "articulation": {
+          "HX": {
+            "applied": 0.4929,
+            "requested": 0.4929
+          },
+          "HY": {
+            "applied": -5.1837,
+            "requested": -5.1837
+          },
+          "JA": {
+            "applied": -3.0,
+            "requested": -3.0
+          },
+          "JX": {
+            "applied": 0.0,
+            "requested": 0.0
+          },
+          "LD": {
+            "applied": 0.2607,
+            "requested": 0.2607
+          },
+          "LP": {
+            "applied": 0.6935,
+            "requested": 0.6935
+          },
+          "TBX": {
+            "applied": 1.7447,
+            "requested": 1.7447
+          },
+          "TBY": {
+            "applied": 0.0791,
+            "requested": 0.0791
+          },
+          "TCX": {
+            "applied": -0.19429999999999992,
+            "requested": -0.1943
+          },
+          "TCY": {
+            "applied": -1.112100000000055,
+            "requested": -1.1121
+          },
+          "TRX": {
+            "applied": -1.2370778168710437,
+            "requested": -1.2577
+          },
+          "TRY": {
+            "applied": -3.167713063844234,
+            "requested": -3.1915
+          },
+          "TS1": {
+            "applied": 0.1056,
+            "requested": 0.1056
+          },
+          "TS2": {
+            "applied": 0.0,
+            "requested": 0.0
+          },
+          "TS3": {
+            "applied": 0.0,
+            "requested": 0.0
+          },
+          "TTX": {
+            "applied": 2.0052,
+            "requested": 2.0052
+          },
+          "TTY": {
+            "applied": -0.8047000000000253,
+            "requested": -0.8047
+          },
+          "VO": {
+            "applied": -0.1,
+            "requested": -0.1
+          },
+          "VS": {
+            "applied": 0.5422,
+            "requested": 0.5422
+          }
+        },
+        "source_controls": {
+          "AS": -40.0,
+          "CA": 0.05,
+          "DP": 0.0,
+          "F0": 180.0,
+          "FL": 0.0,
+          "PL": 1.22,
+          "PR": 8000.0,
+          "PS": -0.15,
+          "RA": 1.0,
+          "XB": 0.01,
+          "XT": 0.02
+        },
+        "source_model_version": "vtl-geometric-pulse-skew-v1",
+        "source_values_are": "requested prescribed simulator controls, not measured physiology"
+      },
+      "frame_sha256": "8e202dc3c940735553ad6a4ccb31d0ef9bb95a0dc66a3ca96630d1fe9f15f9fe",
+      "path": "anatomy-1-source-0-o.pcm.f32",
+      "pose": "o",
+      "pose_gain": 4.330456960149653,
+      "raw_synthesis_sha256": "42113244c4e9678f4126c309039702777aa7f86de52499ac884687f7c917b014",
+      "source_kind": "development-fixture"
+    },
+    "anatomy-1-source-0-u": {
+      "anatomy": {
+        "hard_palate_length": 4.5,
+        "larynx_length": 3.2,
+        "larynx_width": 3.3,
+        "lip_width": 1.2,
+        "lower_molars_height": 0.5,
+        "mandible_height": 1.5,
+        "oral_pharyngeal_angle": -98.0,
+        "palate_depth": 3.6,
+        "palate_height": 1.6,
+        "pharynx_length": 6.35,
+        "soft_palate_length": 2.372,
+        "upper_molars_height": 0.5,
+        "vocal_fold_length": 1.2000000000000002
+      },
+      "controls": {
+        "articulation": {
+          "HX": {
+            "applied": 1.0,
+            "requested": 1.0
+          },
+          "HY": {
+            "applied": -6.0,
+            "requested": -6.0
+          },
+          "JA": {
+            "applied": -3.0,
+            "requested": -3.0
+          },
+          "JX": {
+            "applied": 0.0,
+            "requested": 0.0
+          },
+          "LD": {
+            "applied": 0.3446,
+            "requested": 0.3446
+          },
+          "LP": {
+            "applied": 1.0,
+            "requested": 1.0
+          },
+          "TBX": {
+            "applied": 1.8387,
+            "requested": 1.8387
+          },
+          "TBY": {
+            "applied": 0.6311,
+            "requested": 0.6311
+          },
+          "TCX": {
+            "applied": 0.5154,
+            "requested": 0.5154
+          },
+          "TCY": {
+            "applied": -0.9786000000000286,
+            "requested": -0.9786
+          },
+          "TRX": {
+            "applied": -0.43127591497881923,
+            "requested": -0.4071
+          },
+          "TRY": {
+            "applied": -2.54177278491561,
+            "requested": -2.6017
+          },
+          "TS1": {
+            "applied": 0.292,
+            "requested": 0.292
+          },
+          "TS2": {
+            "applied": 0.0,
+            "requested": 0.0
+          },
+          "TS3": {
+            "applied": 0.0,
+            "requested": 0.0
+          },
+          "TTX": {
+            "applied": 3.2438000000000002,
+            "requested": 3.2438
+          },
+          "TTY": {
+            "applied": -0.7467000000000326,
+            "requested": -0.7467
+          },
+          "VO": {
+            "applied": -0.1,
+            "requested": -0.1
+          },
+          "VS": {
+            "applied": 0.5872,
+            "requested": 0.5872
+          }
+        },
+        "source_controls": {
+          "AS": -40.0,
+          "CA": 0.05,
+          "DP": 0.0,
+          "F0": 180.0,
+          "FL": 0.0,
+          "PL": 1.22,
+          "PR": 8000.0,
+          "PS": -0.15,
+          "RA": 1.0,
+          "XB": 0.01,
+          "XT": 0.02
+        },
+        "source_model_version": "vtl-geometric-pulse-skew-v1",
+        "source_values_are": "requested prescribed simulator controls, not measured physiology"
+      },
+      "frame_sha256": "0a87a6f180f21d5365e22f3e66174dfaf9b341b17b091e0b2b86c10d6b2405eb",
+      "path": "anatomy-1-source-0-u.pcm.f32",
+      "pose": "u",
+      "pose_gain": 6.75589899021318,
+      "raw_synthesis_sha256": "b0a889083e5b310d6041a9ed6b19fefa368904c1dd3b3528666c554c07ecee71",
+      "source_kind": "development-fixture"
+    },
+    "anatomy-1-source-1-a": {
+      "anatomy": {
+        "hard_palate_length": 4.5,
+        "larynx_length": 3.2,
+        "larynx_width": 3.3,
+        "lip_width": 1.2,
+        "lower_molars_height": 0.5,
+        "mandible_height": 1.5,
+        "oral_pharyngeal_angle": -98.0,
+        "palate_depth": 3.6,
+        "palate_height": 1.6,
+        "pharynx_length": 6.35,
+        "soft_palate_length": 2.372,
+        "upper_molars_height": 0.5,
+        "vocal_fold_length": 1.2000000000000002
+      },
+      "controls": {
+        "articulation": {
+          "HX": {
+            "applied": 0.1667,
+            "requested": 0.1667
+          },
+          "HY": {
+            "applied": -3.9392,
+            "requested": -3.9392
+          },
+          "JA": {
+            "applied": -3.0,
+            "requested": -3.0
+          },
+          "JX": {
+            "applied": 0.0,
+            "requested": 0.0
+          },
+          "LD": {
+            "applied": 0.9937,
+            "requested": 0.9937
+          },
+          "LP": {
+            "applied": 0.0718,
+            "requested": 0.0718
+          },
+          "TBX": {
+            "applied": 2.5488,
+            "requested": 2.5488
+          },
+          "TBY": {
+            "applied": -0.675,
+            "requested": -0.675
+          },
+          "TCX": {
+            "applied": 0.15239999999999998,
+            "requested": 0.1524
+          },
+          "TCY": {
+            "applied": -1.8333000000000084,
+            "requested": -1.8333
+          },
+          "TRX": {
+            "applied": -2.7745581737244636,
+            "requested": -2.8371
+          },
+          "TRY": {
+            "applied": -2.8619310507336886,
+            "requested": -2.9034
+          },
+          "TS1": {
+            "applied": 0.2064,
+            "requested": 0.2064
+          },
+          "TS2": {
+            "applied": 0.0384,
+            "requested": 0.0384
+          },
+          "TS3": {
+            "applied": 0.1488,
+            "requested": 0.1488
+          },
+          "TTX": {
+            "applied": 4.246972385400206,
+            "requested": 4.2474
+          },
+          "TTY": {
+            "applied": -1.5732526980534658,
+            "requested": -1.694
+          },
+          "VO": {
+            "applied": -0.1,
+            "requested": -0.1
+          },
+          "VS": {
+            "applied": 0.8,
+            "requested": 0.8
+          }
+        },
+        "source_controls": {
+          "AS": -40.0,
+          "CA": 0.05,
+          "DP": 0.0,
+          "F0": 180.0,
+          "FL": 0.0,
+          "PL": 1.22,
+          "PR": 8000.0,
+          "PS": 0.15,
+          "RA": 1.0,
+          "XB": 0.01,
+          "XT": 0.02
+        },
+        "source_model_version": "vtl-geometric-pulse-skew-v1",
+        "source_values_are": "requested prescribed simulator controls, not measured physiology"
+      },
+      "frame_sha256": "b2d9f47cbbd6196515268f42b4c5db6bde5f41dcc03480c150cd972d50232159",
+      "path": "anatomy-1-source-1-a.pcm.f32",
+      "pose": "a",
+      "pose_gain": 1.758378912350766,
+      "raw_synthesis_sha256": "71ba8ad1550fbe293614cfe315d8c03c22cfa750189331c8665715d3b6647268",
+      "source_kind": "development-fixture"
+    },
+    "anatomy-1-source-1-e": {
+      "anatomy": {
+        "hard_palate_length": 4.5,
+        "larynx_length": 3.2,
+        "larynx_width": 3.3,
+        "lip_width": 1.2,
+        "lower_molars_height": 0.5,
+        "mandible_height": 1.5,
+        "oral_pharyngeal_angle": -98.0,
+        "palate_depth": 3.6,
+        "palate_height": 1.6,
+        "pharynx_length": 6.35,
+        "soft_palate_length": 2.372,
+        "upper_molars_height": 0.5,
+        "vocal_fold_length": 1.2000000000000002
+      },
+      "controls": {
+        "articulation": {
+          "HX": {
+            "applied": 0.7193,
+            "requested": 0.7193
+          },
+          "HY": {
+            "applied": -4.1402,
+            "requested": -4.1402
+          },
+          "JA": {
+            "applied": -3.0,
+            "requested": -3.0
+          },
+          "JX": {
+            "applied": -0.1,
+            "requested": -0.1
+          },
+          "LD": {
+            "applied": 0.8441,
+            "requested": 0.8441
+          },
+          "LP": {
+            "applied": -0.0949,
+            "requested": -0.0949
+          },
+          "TBX": {
+            "applied": 3.829787234042553,
+            "requested": 4.0
+          },
+          "TBY": {
+            "applied": 0.5086141809574816,
+            "requested": 0.4265
+          },
+          "TCX": {
+            "applied": 2.5669,
+            "requested": 2.5669
+          },
+          "TCY": {
+            "applied": -0.7754999999999654,
+            "requested": -0.7755
+          },
+          "TRX": {
+            "applied": -0.9828811483615633,
+            "requested": -0.9966
+          },
+          "TRY": {
+            "applied": -0.7754999999999654,
+            "requested": -0.8969
+          },
+          "TS1": {
+            "applied": 0.2736,
+            "requested": 0.2736
+          },
+          "TS2": {
+            "applied": 0.0,
+            "requested": 0.0
+          },
+          "TS3": {
+            "applied": 0.0,
+            "requested": 0.0
+          },
+          "TTX": {
+            "applied": 4.554799999999999,
+            "requested": 4.5548
+          },
+          "TTY": {
+            "applied": -1.070600000000013,
+            "requested": -1.0706
+          },
+          "VO": {
+            "applied": -0.1,
+            "requested": -0.1
+          },
+          "VS": {
+            "applied": 0.857,
+            "requested": 0.857
+          }
+        },
+        "source_controls": {
+          "AS": -40.0,
+          "CA": 0.05,
+          "DP": 0.0,
+          "F0": 180.0,
+          "FL": 0.0,
+          "PL": 1.22,
+          "PR": 8000.0,
+          "PS": 0.15,
+          "RA": 1.0,
+          "XB": 0.01,
+          "XT": 0.02
+        },
+        "source_model_version": "vtl-geometric-pulse-skew-v1",
+        "source_values_are": "requested prescribed simulator controls, not measured physiology"
+      },
+      "frame_sha256": "b188c68f722714b51e810c69bba24cf31c4b3b5509fb3dcb04dad898b6bf208a",
+      "path": "anatomy-1-source-1-e.pcm.f32",
+      "pose": "e",
+      "pose_gain": 5.7442588079530434,
+      "raw_synthesis_sha256": "81270dab58264bd860230018341acad8753314306f62e174fbaa2db1ce262503",
+      "source_kind": "development-fixture"
+    },
+    "anatomy-1-source-1-i": {
+      "anatomy": {
+        "hard_palate_length": 4.5,
+        "larynx_length": 3.2,
+        "larynx_width": 3.3,
+        "lip_width": 1.2,
+        "lower_molars_height": 0.5,
+        "mandible_height": 1.5,
+        "oral_pharyngeal_angle": -98.0,
+        "palate_depth": 3.6,
+        "palate_height": 1.6,
+        "pharynx_length": 6.35,
+        "soft_palate_length": 2.372,
+        "upper_molars_height": 0.5,
+        "vocal_fold_length": 1.2000000000000002
+      },
+      "controls": {
+        "articulation": {
+          "HX": {
+            "applied": 1.0,
+            "requested": 1.0
+          },
+          "HY": {
+            "applied": -5.5284,
+            "requested": -5.5284
+          },
+          "JA": {
+            "applied": -3.0,
+            "requested": -3.0
+          },
+          "JX": {
+            "applied": -0.075,
+            "requested": -0.075
+          },
+          "LD": {
+            "applied": 0.9251,
+            "requested": 0.9251
+          },
+          "LP": {
+            "applied": 0.0771,
+            "requested": 0.0771
+          },
+          "TBX": {
+            "applied": 3.829787234042553,
+            "requested": 4.0
+          },
+          "TBY": {
+            "applied": 0.641214180957395,
+            "requested": 0.521
+          },
+          "TCX": {
+            "applied": 2.6045,
+            "requested": 2.6045
+          },
+          "TCY": {
+            "applied": -0.6805000000000518,
+            "requested": -0.6805
+          },
+          "TRX": {
+            "applied": 0.04636338458616518,
+            "requested": 0.0607
+          },
+          "TRY": {
+            "applied": -0.6992310958782879,
+            "requested": -0.8657
+          },
+          "TS1": {
+            "applied": 0.2476,
+            "requested": 0.2476
+          },
+          "TS2": {
+            "applied": 0.0548,
+            "requested": 0.0548
+          },
+          "TS3": {
+            "applied": -0.05,
+            "requested": -0.05
+          },
+          "TTX": {
+            "applied": 4.642,
+            "requested": 4.642
+          },
+          "TTY": {
+            "applied": -0.8663999999999987,
+            "requested": -0.8664
+          },
+          "VO": {
+            "applied": -0.1,
+            "requested": -0.1
+          },
+          "VS": {
+            "applied": 0.0,
+            "requested": 0.0
+          }
+        },
+        "source_controls": {
+          "AS": -40.0,
+          "CA": 0.05,
+          "DP": 0.0,
+          "F0": 180.0,
+          "FL": 0.0,
+          "PL": 1.22,
+          "PR": 8000.0,
+          "PS": 0.15,
+          "RA": 1.0,
+          "XB": 0.01,
+          "XT": 0.02
+        },
+        "source_model_version": "vtl-geometric-pulse-skew-v1",
+        "source_values_are": "requested prescribed simulator controls, not measured physiology"
+      },
+      "frame_sha256": "e3c1b89485e6975569ef3929211abb5132c050549071db9442487edc87b40632",
+      "path": "anatomy-1-source-1-i.pcm.f32",
+      "pose": "i",
+      "pose_gain": 24.316286275454594,
+      "raw_synthesis_sha256": "b10a9607bba1123534017bc743dd5f33c39f2714b955b0caf8cdd86a421a511f",
+      "source_kind": "development-fixture"
+    },
+    "anatomy-1-source-1-o": {
+      "anatomy": {
+        "hard_palate_length": 4.5,
+        "larynx_length": 3.2,
+        "larynx_width": 3.3,
+        "lip_width": 1.2,
+        "lower_molars_height": 0.5,
+        "mandible_height": 1.5,
+        "oral_pharyngeal_angle": -98.0,
+        "palate_depth": 3.6,
+        "palate_height": 1.6,
+        "pharynx_length": 6.35,
+        "soft_palate_length": 2.372,
+        "upper_molars_height": 0.5,
+        "vocal_fold_length": 1.2000000000000002
+      },
+      "controls": {
+        "articulation": {
+          "HX": {
+            "applied": 0.4929,
+            "requested": 0.4929
+          },
+          "HY": {
+            "applied": -5.1837,
+            "requested": -5.1837
+          },
+          "JA": {
+            "applied": -3.0,
+            "requested": -3.0
+          },
+          "JX": {
+            "applied": 0.0,
+            "requested": 0.0
+          },
+          "LD": {
+            "applied": 0.2607,
+            "requested": 0.2607
+          },
+          "LP": {
+            "applied": 0.6935,
+            "requested": 0.6935
+          },
+          "TBX": {
+            "applied": 1.7447,
+            "requested": 1.7447
+          },
+          "TBY": {
+            "applied": 0.0791,
+            "requested": 0.0791
+          },
+          "TCX": {
+            "applied": -0.19429999999999992,
+            "requested": -0.1943
+          },
+          "TCY": {
+            "applied": -1.112100000000055,
+            "requested": -1.1121
+          },
+          "TRX": {
+            "applied": -1.2370778168710437,
+            "requested": -1.2577
+          },
+          "TRY": {
+            "applied": -3.167713063844234,
+            "requested": -3.1915
+          },
+          "TS1": {
+            "applied": 0.1056,
+            "requested": 0.1056
+          },
+          "TS2": {
+            "applied": 0.0,
+            "requested": 0.0
+          },
+          "TS3": {
+            "applied": 0.0,
+            "requested": 0.0
+          },
+          "TTX": {
+            "applied": 2.0052,
+            "requested": 2.0052
+          },
+          "TTY": {
+            "applied": -0.8047000000000253,
+            "requested": -0.8047
+          },
+          "VO": {
+            "applied": -0.1,
+            "requested": -0.1
+          },
+          "VS": {
+            "applied": 0.5422,
+            "requested": 0.5422
+          }
+        },
+        "source_controls": {
+          "AS": -40.0,
+          "CA": 0.05,
+          "DP": 0.0,
+          "F0": 180.0,
+          "FL": 0.0,
+          "PL": 1.22,
+          "PR": 8000.0,
+          "PS": 0.15,
+          "RA": 1.0,
+          "XB": 0.01,
+          "XT": 0.02
+        },
+        "source_model_version": "vtl-geometric-pulse-skew-v1",
+        "source_values_are": "requested prescribed simulator controls, not measured physiology"
+      },
+      "frame_sha256": "74777cddeeb995b2e6767bc60812102daf1b93fa53da2c284fd1539f76b5ed6f",
+      "path": "anatomy-1-source-1-o.pcm.f32",
+      "pose": "o",
+      "pose_gain": 4.330456960149653,
+      "raw_synthesis_sha256": "1e82b87fb6d6a507091b86436fe85f8d7a3852874125a2cb89cc3bc4cc225f82",
+      "source_kind": "development-fixture"
+    },
+    "anatomy-1-source-1-u": {
+      "anatomy": {
+        "hard_palate_length": 4.5,
+        "larynx_length": 3.2,
+        "larynx_width": 3.3,
+        "lip_width": 1.2,
+        "lower_molars_height": 0.5,
+        "mandible_height": 1.5,
+        "oral_pharyngeal_angle": -98.0,
+        "palate_depth": 3.6,
+        "palate_height": 1.6,
+        "pharynx_length": 6.35,
+        "soft_palate_length": 2.372,
+        "upper_molars_height": 0.5,
+        "vocal_fold_length": 1.2000000000000002
+      },
+      "controls": {
+        "articulation": {
+          "HX": {
+            "applied": 1.0,
+            "requested": 1.0
+          },
+          "HY": {
+            "applied": -6.0,
+            "requested": -6.0
+          },
+          "JA": {
+            "applied": -3.0,
+            "requested": -3.0
+          },
+          "JX": {
+            "applied": 0.0,
+            "requested": 0.0
+          },
+          "LD": {
+            "applied": 0.3446,
+            "requested": 0.3446
+          },
+          "LP": {
+            "applied": 1.0,
+            "requested": 1.0
+          },
+          "TBX": {
+            "applied": 1.8387,
+            "requested": 1.8387
+          },
+          "TBY": {
+            "applied": 0.6311,
+            "requested": 0.6311
+          },
+          "TCX": {
+            "applied": 0.5154,
+            "requested": 0.5154
+          },
+          "TCY": {
+            "applied": -0.9786000000000286,
+            "requested": -0.9786
+          },
+          "TRX": {
+            "applied": -0.43127591497881923,
+            "requested": -0.4071
+          },
+          "TRY": {
+            "applied": -2.54177278491561,
+            "requested": -2.6017
+          },
+          "TS1": {
+            "applied": 0.292,
+            "requested": 0.292
+          },
+          "TS2": {
+            "applied": 0.0,
+            "requested": 0.0
+          },
+          "TS3": {
+            "applied": 0.0,
+            "requested": 0.0
+          },
+          "TTX": {
+            "applied": 3.2438000000000002,
+            "requested": 3.2438
+          },
+          "TTY": {
+            "applied": -0.7467000000000326,
+            "requested": -0.7467
+          },
+          "VO": {
+            "applied": -0.1,
+            "requested": -0.1
+          },
+          "VS": {
+            "applied": 0.5872,
+            "requested": 0.5872
+          }
+        },
+        "source_controls": {
+          "AS": -40.0,
+          "CA": 0.05,
+          "DP": 0.0,
+          "F0": 180.0,
+          "FL": 0.0,
+          "PL": 1.22,
+          "PR": 8000.0,
+          "PS": 0.15,
+          "RA": 1.0,
+          "XB": 0.01,
+          "XT": 0.02
+        },
+        "source_model_version": "vtl-geometric-pulse-skew-v1",
+        "source_values_are": "requested prescribed simulator controls, not measured physiology"
+      },
+      "frame_sha256": "dea9dc6ce737557655a5a9a66aaedd7a91c460c35fffad2c26d5535e97a53eef",
+      "path": "anatomy-1-source-1-u.pcm.f32",
+      "pose": "u",
+      "pose_gain": 6.75589899021318,
+      "raw_synthesis_sha256": "36aee2a415c34f29a0e9bb73049493793bde2fbdb0f7309ed558d446f8937d65",
+      "source_kind": "development-fixture"
+    },
+    "near-duplicate-a": {
+      "anatomy": {
+        "hard_palate_length": 4.22,
+        "larynx_length": 3.2,
+        "larynx_width": 3.3,
+        "lip_width": 0.8,
+        "lower_molars_height": 0.5,
+        "mandible_height": 1.5,
+        "oral_pharyngeal_angle": -98.0,
+        "palate_depth": 3.6,
+        "palate_height": 1.6,
+        "pharynx_length": 6.35,
+        "soft_palate_length": 2.372,
+        "upper_molars_height": 0.5,
+        "vocal_fold_length": 1.2000000000000002
+      },
+      "controls": {
+        "articulation": {
+          "HX": {
+            "applied": 0.1667,
+            "requested": 0.1667
+          },
+          "HY": {
+            "applied": -3.9392,
+            "requested": -3.9392
+          },
+          "JA": {
+            "applied": -3.0,
+            "requested": -3.0
+          },
+          "JX": {
+            "applied": 0.0,
+            "requested": 0.0
+          },
+          "LD": {
+            "applied": 0.9937,
+            "requested": 0.9937
+          },
+          "LP": {
+            "applied": 0.0718,
+            "requested": 0.0718
+          },
+          "TBX": {
+            "applied": 2.5488,
+            "requested": 2.5488
+          },
+          "TBY": {
+            "applied": -0.675,
+            "requested": -0.675
+          },
+          "TCX": {
+            "applied": 0.15239999999999998,
+            "requested": 0.1524
+          },
+          "TCY": {
+            "applied": -1.8333000000000084,
+            "requested": -1.8333
+          },
+          "TRX": {
+            "applied": -2.6859878033562956,
+            "requested": -2.8371
+          },
+          "TRY": {
+            "applied": -2.8002744228108583,
+            "requested": -2.9034
+          },
+          "TS1": {
+            "applied": 0.2064,
+            "requested": 0.2064
+          },
+          "TS2": {
+            "applied": 0.0384,
+            "requested": 0.0384
+          },
+          "TS3": {
+            "applied": 0.1488,
+            "requested": 0.1488
+          },
+          "TTX": {
+            "applied": 4.245964835520192,
+            "requested": 4.2474
+          },
+          "TTY": {
+            "applied": -1.3183936749658187,
+            "requested": -1.694
+          },
+          "VO": {
+            "applied": -0.1,
+            "requested": -0.1
+          },
+          "VS": {
+            "applied": 0.8,
+            "requested": 0.8
+          }
+        },
+        "source_controls": {
+          "AS": -40.0,
+          "CA": 0.05,
+          "DP": 0.0,
+          "F0": 180.0,
+          "FL": 0.0,
+          "PL": 1.22,
+          "PR": 8000.0,
+          "PS": -0.15,
+          "RA": 1.0,
+          "XB": 0.01,
+          "XT": 0.02
+        },
+        "source_model_version": "vtl-geometric-pulse-skew-v1",
+        "source_values_are": "requested prescribed simulator controls, not measured physiology"
+      },
+      "frame_sha256": "c6762a62ebe2d8bc7ef439afbc008b68e33457922a261e3b616cba6b72aac73a",
+      "path": "near-duplicate-a.pcm.f32",
+      "pose": "a",
+      "pose_gain": 1.758378912350766,
+      "raw_synthesis_sha256": "596850ff256d14c775a21699ba4a3014c40f4bc3b3ec34f77c6eb81cfa1a6675",
+      "source_kind": "development-fixture"
+    },
+    "near-duplicate-e": {
+      "anatomy": {
+        "hard_palate_length": 4.22,
+        "larynx_length": 3.2,
+        "larynx_width": 3.3,
+        "lip_width": 0.8,
+        "lower_molars_height": 0.5,
+        "mandible_height": 1.5,
+        "oral_pharyngeal_angle": -98.0,
+        "palate_depth": 3.6,
+        "palate_height": 1.6,
+        "pharynx_length": 6.35,
+        "soft_palate_length": 2.372,
+        "upper_molars_height": 0.5,
+        "vocal_fold_length": 1.2000000000000002
+      },
+      "controls": {
+        "articulation": {
+          "HX": {
+            "applied": 0.7193,
+            "requested": 0.7193
+          },
+          "HY": {
+            "applied": -4.1402,
+            "requested": -4.1402
+          },
+          "JA": {
+            "applied": -3.0,
+            "requested": -3.0
+          },
+          "JX": {
+            "applied": -0.1,
+            "requested": -0.1
+          },
+          "LD": {
+            "applied": 0.8441,
+            "requested": 0.8441
+          },
+          "LP": {
+            "applied": -0.0949,
+            "requested": -0.0949
+          },
+          "TBX": {
+            "applied": 3.5914893617021275,
+            "requested": 4.0
+          },
+          "TBY": {
+            "applied": 0.8081719958186273,
+            "requested": 0.4265
+          },
+          "TCX": {
+            "applied": 2.5667683004165935,
+            "requested": 2.5669
+          },
+          "TCY": {
+            "applied": -0.7141083578958387,
+            "requested": -0.7755
+          },
+          "TRX": {
+            "applied": -0.9752035524081855,
+            "requested": -0.9966
+          },
+          "TRY": {
+            "applied": -0.7141083578958387,
+            "requested": -0.8969
+          },
+          "TS1": {
+            "applied": 0.2736,
+            "requested": 0.2736
+          },
+          "TS2": {
+            "applied": 0.0,
+            "requested": 0.0
+          },
+          "TS3": {
+            "applied": 0.0,
+            "requested": 0.0
+          },
+          "TTX": {
+            "applied": 4.543400388334067,
+            "requested": 4.5548
+          },
+          "TTY": {
+            "applied": -1.0357019040854993,
+            "requested": -1.0706
+          },
+          "VO": {
+            "applied": -0.1,
+            "requested": -0.1
+          },
+          "VS": {
+            "applied": 0.857,
+            "requested": 0.857
+          }
+        },
+        "source_controls": {
+          "AS": -40.0,
+          "CA": 0.05,
+          "DP": 0.0,
+          "F0": 180.0,
+          "FL": 0.0,
+          "PL": 1.22,
+          "PR": 8000.0,
+          "PS": -0.15,
+          "RA": 1.0,
+          "XB": 0.01,
+          "XT": 0.02
+        },
+        "source_model_version": "vtl-geometric-pulse-skew-v1",
+        "source_values_are": "requested prescribed simulator controls, not measured physiology"
+      },
+      "frame_sha256": "bbc38b52ac146e672ab215cb5b3af22329985579f66676186b0251850347281d",
+      "path": "near-duplicate-e.pcm.f32",
+      "pose": "e",
+      "pose_gain": 5.7442588079530434,
+      "raw_synthesis_sha256": "0293cc3b7693aafc234a48bdcddfc026f89b0b974521b9fa4064f502289e87b8",
+      "source_kind": "development-fixture"
+    },
+    "near-duplicate-i": {
+      "anatomy": {
+        "hard_palate_length": 4.22,
+        "larynx_length": 3.2,
+        "larynx_width": 3.3,
+        "lip_width": 0.8,
+        "lower_molars_height": 0.5,
+        "mandible_height": 1.5,
+        "oral_pharyngeal_angle": -98.0,
+        "palate_depth": 3.6,
+        "palate_height": 1.6,
+        "pharynx_length": 6.35,
+        "soft_palate_length": 2.372,
+        "upper_molars_height": 0.5,
+        "vocal_fold_length": 1.2000000000000002
+      },
+      "controls": {
+        "articulation": {
+          "HX": {
+            "applied": 1.0,
+            "requested": 1.0
+          },
+          "HY": {
+            "applied": -5.5284,
+            "requested": -5.5284
+          },
+          "JA": {
+            "applied": -3.0,
+            "requested": -3.0
+          },
+          "JX": {
+            "applied": -0.075,
+            "requested": -0.075
+          },
+          "LD": {
+            "applied": 0.9251,
+            "requested": 0.9251
+          },
+          "LP": {
+            "applied": 0.0771,
+            "requested": 0.0771
+          },
+          "TBX": {
+            "applied": 3.5914893617021275,
+            "requested": 4.0
+          },
+          "TBY": {
+            "applied": 0.8795120532978205,
+            "requested": 0.521
+          },
+          "TCX": {
+            "applied": 2.6045,
+            "requested": 2.6045
+          },
+          "TCY": {
+            "applied": -0.6805000000000518,
+            "requested": -0.6805
+          },
+          "TRX": {
+            "applied": 0.009331486632675665,
+            "requested": 0.0607
+          },
+          "TRY": {
+            "applied": -0.6805000000000518,
+            "requested": -0.8657
+          },
+          "TS1": {
+            "applied": 0.2476,
+            "requested": 0.2476
+          },
+          "TS2": {
+            "applied": 0.0548,
+            "requested": 0.0548
+          },
+          "TS3": {
+            "applied": -0.05,
+            "requested": -0.05
+          },
+          "TTX": {
+            "applied": 4.5435746606334835,
+            "requested": 4.642
+          },
+          "TTY": {
+            "applied": -0.9347895252406033,
+            "requested": -0.8664
+          },
+          "VO": {
+            "applied": -0.1,
+            "requested": -0.1
+          },
+          "VS": {
+            "applied": 0.0,
+            "requested": 0.0
+          }
+        },
+        "source_controls": {
+          "AS": -40.0,
+          "CA": 0.05,
+          "DP": 0.0,
+          "F0": 180.0,
+          "FL": 0.0,
+          "PL": 1.22,
+          "PR": 8000.0,
+          "PS": -0.15,
+          "RA": 1.0,
+          "XB": 0.01,
+          "XT": 0.02
+        },
+        "source_model_version": "vtl-geometric-pulse-skew-v1",
+        "source_values_are": "requested prescribed simulator controls, not measured physiology"
+      },
+      "frame_sha256": "672bb418a7f865bf0e279aeef092f4a9aac60e3e1b511d236d8344ad7d06a4db",
+      "path": "near-duplicate-i.pcm.f32",
+      "pose": "i",
+      "pose_gain": 24.316286275454594,
+      "raw_synthesis_sha256": "e6ba7ac8a3d135a63633321fec011fc4eb9cba112a2b2bb1141039d78eb92b10",
+      "source_kind": "development-fixture"
+    },
+    "near-duplicate-o": {
+      "anatomy": {
+        "hard_palate_length": 4.22,
+        "larynx_length": 3.2,
+        "larynx_width": 3.3,
+        "lip_width": 0.8,
+        "lower_molars_height": 0.5,
+        "mandible_height": 1.5,
+        "oral_pharyngeal_angle": -98.0,
+        "palate_depth": 3.6,
+        "palate_height": 1.6,
+        "pharynx_length": 6.35,
+        "soft_palate_length": 2.372,
+        "upper_molars_height": 0.5,
+        "vocal_fold_length": 1.2000000000000002
+      },
+      "controls": {
+        "articulation": {
+          "HX": {
+            "applied": 0.4929,
+            "requested": 0.4929
+          },
+          "HY": {
+            "applied": -5.1837,
+            "requested": -5.1837
+          },
+          "JA": {
+            "applied": -3.0,
+            "requested": -3.0
+          },
+          "JX": {
+            "applied": 0.0,
+            "requested": 0.0
+          },
+          "LD": {
+            "applied": 0.2607,
+            "requested": 0.2607
+          },
+          "LP": {
+            "applied": 0.6935,
+            "requested": 0.6935
+          },
+          "TBX": {
+            "applied": 1.7447,
+            "requested": 1.7447
+          },
+          "TBY": {
+            "applied": 0.0791,
+            "requested": 0.0791
+          },
+          "TCX": {
+            "applied": -0.19430000000000003,
+            "requested": -0.1943
+          },
+          "TCY": {
+            "applied": -1.112100000000055,
+            "requested": -1.1121
+          },
+          "TRX": {
+            "applied": -1.2144740326090193,
+            "requested": -1.2577
+          },
+          "TRY": {
+            "applied": -3.135694104665686,
+            "requested": -3.1915
+          },
+          "TS1": {
+            "applied": 0.1056,
+            "requested": 0.1056
+          },
+          "TS2": {
+            "applied": 0.0,
+            "requested": 0.0
+          },
+          "TS3": {
+            "applied": 0.0,
+            "requested": 0.0
+          },
+          "TTX": {
+            "applied": 2.0052,
+            "requested": 2.0052
+          },
+          "TTY": {
+            "applied": -0.8047000000000253,
+            "requested": -0.8047
+          },
+          "VO": {
+            "applied": -0.1,
+            "requested": -0.1
+          },
+          "VS": {
+            "applied": 0.5422,
+            "requested": 0.5422
+          }
+        },
+        "source_controls": {
+          "AS": -40.0,
+          "CA": 0.05,
+          "DP": 0.0,
+          "F0": 180.0,
+          "FL": 0.0,
+          "PL": 1.22,
+          "PR": 8000.0,
+          "PS": -0.15,
+          "RA": 1.0,
+          "XB": 0.01,
+          "XT": 0.02
+        },
+        "source_model_version": "vtl-geometric-pulse-skew-v1",
+        "source_values_are": "requested prescribed simulator controls, not measured physiology"
+      },
+      "frame_sha256": "f50b2ed7aa62c0b6207f7137ee3d4b4b6a7b821c016cc5ddb143357284d5ac37",
+      "path": "near-duplicate-o.pcm.f32",
+      "pose": "o",
+      "pose_gain": 4.330456960149653,
+      "raw_synthesis_sha256": "929a40cad44eea57bf865c763420a957a3b4d257953cc625a7d8c9c2b59a24e0",
+      "source_kind": "development-fixture"
+    },
+    "near-duplicate-u": {
+      "anatomy": {
+        "hard_palate_length": 4.22,
+        "larynx_length": 3.2,
+        "larynx_width": 3.3,
+        "lip_width": 0.8,
+        "lower_molars_height": 0.5,
+        "mandible_height": 1.5,
+        "oral_pharyngeal_angle": -98.0,
+        "palate_depth": 3.6,
+        "palate_height": 1.6,
+        "pharynx_length": 6.35,
+        "soft_palate_length": 2.372,
+        "upper_molars_height": 0.5,
+        "vocal_fold_length": 1.2000000000000002
+      },
+      "controls": {
+        "articulation": {
+          "HX": {
+            "applied": 1.0,
+            "requested": 1.0
+          },
+          "HY": {
+            "applied": -6.0,
+            "requested": -6.0
+          },
+          "JA": {
+            "applied": -3.0,
+            "requested": -3.0
+          },
+          "JX": {
+            "applied": 0.0,
+            "requested": 0.0
+          },
+          "LD": {
+            "applied": 0.3446,
+            "requested": 0.3446
+          },
+          "LP": {
+            "applied": 1.0,
+            "requested": 1.0
+          },
+          "TBX": {
+            "applied": 1.8387,
+            "requested": 1.8387
+          },
+          "TBY": {
+            "applied": 0.6311,
+            "requested": 0.6311
+          },
+          "TCX": {
+            "applied": 0.5154,
+            "requested": 0.5154
+          },
+          "TCY": {
+            "applied": -0.9786000000000286,
+            "requested": -0.9786
+          },
+          "TRX": {
+            "applied": -0.47482902902933155,
+            "requested": -0.4071
+          },
+          "TRY": {
+            "applied": -2.4490850818437324,
+            "requested": -2.6017
+          },
+          "TS1": {
+            "applied": 0.292,
+            "requested": 0.292
+          },
+          "TS2": {
+            "applied": 0.0,
+            "requested": 0.0
+          },
+          "TS3": {
+            "applied": 0.0,
+            "requested": 0.0
+          },
+          "TTX": {
+            "applied": 3.2438,
+            "requested": 3.2438
+          },
+          "TTY": {
+            "applied": -0.7467000000000326,
+            "requested": -0.7467
+          },
+          "VO": {
+            "applied": -0.1,
+            "requested": -0.1
+          },
+          "VS": {
+            "applied": 0.5872,
+            "requested": 0.5872
+          }
+        },
+        "source_controls": {
+          "AS": -40.0,
+          "CA": 0.05,
+          "DP": 0.0,
+          "F0": 180.0,
+          "FL": 0.0,
+          "PL": 1.22,
+          "PR": 8000.0,
+          "PS": -0.15,
+          "RA": 1.0,
+          "XB": 0.01,
+          "XT": 0.02
+        },
+        "source_model_version": "vtl-geometric-pulse-skew-v1",
+        "source_values_are": "requested prescribed simulator controls, not measured physiology"
+      },
+      "frame_sha256": "bc9e7220f6b71745c2a4a6f2b2cfe53752191590308108b89dc9e426bead0c4b",
+      "path": "near-duplicate-u.pcm.f32",
+      "pose": "u",
+      "pose_gain": 6.75589899021318,
+      "raw_synthesis_sha256": "aa7e953d9664c49b39e6e01018e79503508052180eb9678e34b983666bda8c5f",
+      "source_kind": "development-fixture"
+    }
+  },
+  "level_jumps": {
+    "a": {
+      "flagged": false,
+      "neighbour_anatomy_difference_db": {
+        "source-0": 0.22906303489197555,
+        "source-1": 0.2271402232630031
+      },
+      "rms_dbfs_native": {
+        "anatomy-0-source-0": -29.08591396806033,
+        "anatomy-0-source-1": -27.542492510319452,
+        "anatomy-1-source-0": -28.856850933168353,
+        "anatomy-1-source-1": -27.31535228705645
+      }
+    },
+    "e": {
+      "flagged": true,
+      "neighbour_anatomy_difference_db": {
+        "source-0": 45.697340208647965,
+        "source-1": 45.892651717455166
+      },
+      "rms_dbfs_native": {
+        "anatomy-0-source-0": -80.22403235471721,
+        "anatomy-0-source-1": -80.17982315567536,
+        "anatomy-1-source-0": -34.526692146069244,
+        "anatomy-1-source-1": -34.2871714382202
+      }
+    },
+    "i": {
+      "flagged": true,
+      "neighbour_anatomy_difference_db": {
+        "source-0": 29.97591805029245,
+        "source-1": 29.975841810664612
+      },
+      "rms_dbfs_native": {
+        "anatomy-0-source-0": -74.85735974627163,
+        "anatomy-0-source-1": -74.7462991358316,
+        "anatomy-1-source-0": -44.88144169597918,
+        "anatomy-1-source-1": -44.770457325166994
+      }
+    },
+    "o": {
+      "flagged": false,
+      "neighbour_anatomy_difference_db": {
+        "source-0": 1.854408934504029,
+        "source-1": 1.9712996739313695
+      },
+      "rms_dbfs_native": {
+        "anatomy-0-source-0": -33.74817141281374,
+        "anatomy-0-source-1": -33.45978591553492,
+        "anatomy-1-source-0": -31.89376247830971,
+        "anatomy-1-source-1": -31.488486241603553
+      }
+    },
+    "u": {
+      "flagged": false,
+      "neighbour_anatomy_difference_db": {
+        "source-0": 1.7947886254188106,
+        "source-1": 1.8257200318466502
+      },
+      "rms_dbfs_native": {
+        "anatomy-0-source-0": -36.789632310531836,
+        "anatomy-0-source-1": -36.64756917086285,
+        "anatomy-1-source-0": -34.994843685113025,
+        "anatomy-1-source-1": -34.8218491390162
+      }
+    }
+  },
+  "native_provenance": {
+    "build_type": "Release",
+    "geometry_basis": "vtl-anatomy-params-reconstructed-v1",
+    "library_sha256": "0d064eab49a06ede2f16f07479544f1b2c196873465ba9ef53694b6540beed0a",
+    "patch_sha256": "8f3df0996b4444cd17810ea3f8e48b4feac2d86d51e06036ce9d4c676f8ad1ab",
+    "sanitized": false,
+    "speaker_sha256": "e1e592dae13991e981c17bcc326cccc7bce3705e3862eb77fdeaeb238418a503",
+    "upstream_revision": "df30392f18dc5e175b577c3ba734caaa65a3927f"
+  },
+  "pose_gains": {
+    "a": 1.758378912350766,
+    "e": 5.7442588079530434,
+    "i": 24.316286275454594,
+    "o": 4.330456960149653,
+    "u": 6.75589899021318
+  },
+  "predictions": {
+    "anatomy-0-source-0": {
+      "a": "anatomy-0-source-0-a",
+      "e": "anatomy-0-source-0-e",
+      "i": "anatomy-0-source-0-i",
+      "o": "anatomy-0-source-0-o",
+      "u": "anatomy-0-source-0-u"
+    },
+    "anatomy-0-source-1": {
+      "a": "anatomy-0-source-1-a",
+      "e": "anatomy-0-source-1-e",
+      "i": "anatomy-0-source-1-i",
+      "o": "anatomy-0-source-1-o",
+      "u": "anatomy-0-source-1-u"
+    },
+    "anatomy-1-source-0": {
+      "a": "anatomy-1-source-0-a",
+      "e": "anatomy-1-source-0-e",
+      "i": "anatomy-1-source-0-i",
+      "o": "anatomy-1-source-0-o",
+      "u": "anatomy-1-source-0-u"
+    },
+    "anatomy-1-source-1": {
+      "a": "anatomy-1-source-1-a",
+      "e": "anatomy-1-source-1-e",
+      "i": "anatomy-1-source-1-i",
+      "o": "anatomy-1-source-1-o",
+      "u": "anatomy-1-source-1-u"
+    },
+    "near-duplicate": {
+      "a": "near-duplicate-a",
+      "e": "near-duplicate-e",
+      "i": "near-duplicate-i",
+      "o": "near-duplicate-o",
+      "u": "near-duplicate-u"
+    }
+  }
+}

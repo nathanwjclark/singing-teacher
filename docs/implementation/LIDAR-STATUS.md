@@ -18,7 +18,7 @@ In **Experiments → Experimental rear LiDAR comparison**, use the latest pulled
 
 The observation is metric distance between explicitly corresponding outer-lip markers (native surfaces 4/5, vertex 89). Rigid distance invariance avoids inventing an unmeasured camera-to-head transform; it does not validate the landmark correspondence. Up to 32 retained anatomies × three declared jaw states require at most 96 geometry calls. Measurement/model sigmas and jaw weights are assumptions. A declared numerical equivalence rule retains acoustic order for indistinguishable predictions. All anatomy alternatives remain; these are not calibrated posterior probabilities.
 
-The ordinary voice search now varies palate length and lip width. Its complete two-dimensional initial design uses 60 synthesis calls, explicitly increased from 36; five retained anatomies, forecasts and two geometry exports total 77 synthesis calls. Existing palate-only models can correctly yield tied depth predictions. They are never changed by inventing a distinguishing measurement.
+The ordinary voice search now varies palate length and lip width. Its complete two-dimensional initial design is capped at 60 synthesis calls, explicitly increased from 36. Its three nuisance profiles differ only by gain and share each synthesized waveform, so the search makes 20 calls; with 15 forecast calls for the five retained anatomies and two geometry exports the run makes 37 synthesis calls. Existing palate-only models can correctly yield tied depth predictions. They are never changed by inventing a distinguishing measurement.
 
 ## Recovery and provenance
 

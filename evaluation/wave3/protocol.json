@@ -1,0 +1,28 @@
+{
+  "version": "wave3-independent-1",
+  "evidence_source": "development-fixture",
+  "native_source_model": "Geometric glottis",
+  "sample_rate_hz": 44100,
+  "duration_s": 0.25,
+  "frame_start_sample": 4410,
+  "frame_size": 4096,
+  "calibration_poses": ["a", "i"],
+  "heldout_pose": "e",
+  "pose_gain": {"a": 0.8, "i": 16.0, "e": 32.0},
+  "nominal_controls": {"JA": -3.0, "F0": 180.0, "PR": 8000.0},
+  "candidate_anatomies": [
+    {"hard_palate_length": 4.2, "lip_width": 0.8},
+    {"hard_palate_length": 4.5, "lip_width": 1.2}
+  ],
+  "candidate_source_skews": [-0.15, 0.15],
+  "generating_anatomy": {"hard_palate_length": 4.35, "lip_width": 1.0},
+  "generating_source_skew": 0.05,
+  "outside_anatomy": {"hard_palate_length": 3.4, "lip_width": 0.6},
+  "mismatched_controls": {"JA": -4.2, "F0": 215.0, "PR": 8000.0},
+  "cases": ["clean", "gain", "tilt", "noise", "wrong-fixed-control", "outside-support", "all-missing", "degeneracy"],
+  "stress": {"gain_factor": 0.5, "lowpass_cutoff_hz": 1350.0, "noise_snr_db": 10.0, "noise_seed": 190219},
+  "hard_synthesis_limit": 21,
+  "comparison": "Both objectives score the same frozen candidate PCM; no objective receives additional synthesis calls.",
+  "selection": "Calibration a/i only; freeze rankings before decoding heldout e for scoring. Retain all failed and tied candidates.",
+  "interpretation": "Conditional finite support stress test. No anatomical uniqueness, calibrated probability, tissue recovery or human efficacy inference."
+}

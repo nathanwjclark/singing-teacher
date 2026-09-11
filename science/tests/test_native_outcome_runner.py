@@ -100,9 +100,11 @@ def test_actual_http_update_resumes_lost_submit_response_and_completed_replay(tm
         if interruption=='stopped':
             assert first['status']=='stopped_without_model_update' and first['modelId']=='initial'
             assert first['scientificStatus'] is None and not first['modelUpdated']
+            assert first['objective'] is None and first['scorerPinStatus'] is None
         else:
             assert first['status']=='succeeded' and first['modelId']!='initial'
             assert first['scientificStatus'] in ('conditional_support_updated','model_mismatch','no_design_separation')
+            assert first['objective']=='canonical-coarse-v1' and first['scorerPinStatus']=='verified'
         raw_result=json.loads((out/'result.json').read_text())
         assert first['scores']==(raw_result['scores'] if interruption!='stopped' else [])
         assert first['previousHypotheses']==2

@@ -202,6 +202,7 @@ def _run(run_directory, source, output, config_path, timeout_s, node_binary):
     return retain_result({'status':disposition['status'],'sessionId':session_id,'runId':summary.get('runId'),'jobId':job_id,
         'designId':command['design_id'],'observationId':command['parameters']['observation_id'],'submitted':True,
         'scientificStatus':result.get('status') if applied else None,'modelUpdated':applied,
+        'objective':result.get('objective') if applied else None,'scorerPinStatus':result.get('scorer_pin_status') if applied else None,
         'scores':result.get('scores',[]) if applied else [],
         'missingReason':result.get('missing_reason') if applied else None,
         'retainedHypotheses':len(result['updated_snapshot']['hypotheses']) if applied else None,
