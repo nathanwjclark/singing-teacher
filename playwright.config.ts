@@ -12,7 +12,7 @@ export default defineConfig({
   // A CI retry is reported as flaky rather than hidden; local runs never retry.
   retries: process.env.CI ? 1 : 0,
   // Need the scientific worker as well; each has its own config (tests/<name>.config.ts).
-  testIgnore: ['spectral-objective.spec.ts', 'session-recompute.spec.ts'],
+  testIgnore: ['spectral-objective.spec.ts', 'session-recompute.spec.ts', 'motion-timeline.spec.ts'],
   use: { baseURL: `http://127.0.0.1:${port}`, browserName: 'chromium', channel: 'chrome' },
   webServer: {
     command: `rm -rf ${dataDir} && npm run build && node server/local.mjs`,

@@ -4,7 +4,7 @@ import type { TrackingFrame } from '../../types'
 import type { MotionObservation, MotionMarker } from '../../contracts/learning'
 import { validateLearningRecord } from '../../contracts/learning'
 import { motionSample, observedEnvelope, phaseAt, motionMediaBinding, verifyMotionMedia } from '../../capture/motion'
-import {importMotionCapture,readMotionStatus,motionAssetUrl,readMotionAnalysis,analyzeMotionAudio,rankMotionCandidates,motionAnalysisRequestIdentity} from './motionClient'
+import {importMotionCapture,readMotionStatus,motionAssetUrl,readMotionAnalysis,analyzeMotionAudio,rankMotionCandidates,motionAnalysisRequestIdentity,earlierAnalysisVersion} from './motionClient'
 import type {SavedMotionStatus,MotionAnalysisStatus,MotionVowel} from './motionClient'
 import './MotionCapturePanel.css'
 const save=(blob:Blob,name:string)=>{const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
@@ -32,7 +32,7 @@ export function MotionCapturePanel({frame,videoStream,audioStream}:{frame:Tracki
    setAnalysisEntry({captureId,value:latest});
    if(latest.status==='running'){setAnalysisRefresh(value=>value+1);return}
    if(!latest.availability.available)throw Error(latest.availability.reason||'Audio analysis unavailable');
-   analysisRequest.current=motionAnalysisRequestIdentity(analysisRequest.current,captureId,analysisPose,latest.currentModelId);
+   analysisRequest.current=motionAnalysisRequestIdentity(analysisRequest.current,captureId,analysisPose,latest.currentModelId,latest.analysisPolicy);
    await analyzeMotionAudio(captureId,analysisPose,analysisRequest.current.id);
    if(mounted.current){setConfirmedAnalysis('');setAnalysisRefresh(value=>value+1)}
   }
@@ -113,7 +113,7 @@ export function MotionCapturePanel({frame,videoStream,audioStream}:{frame:Tracki
  {saveNotice&&<p role="status">{saveNotice}</p>}
  {saved?.capture&&<div><h4>Latest motion saved in the app</h4><p>{saved.capture.sampleCount} frames · {saved.capture.timingGaps} timing gaps · {saved.capture.unsuccessfulMarkers} unsuccessful markers. Original JSON and media bytes verified.</p><p>Retained as visible 2D evidence; not included in a physical fit. Media synchronization uncertainty remains unknown.</p><a href={motionAssetUrl(saved.capture.id,'record')}>Download saved motion JSON</a> · <a href={motionAssetUrl(saved.capture.id,'media')}>Download saved video</a></div>}
  {saved?.capture&&<fieldset><legend>Motion audio analysis</legend>
- <p>Compare audio windows with the retained anatomy hypotheses using a declared vowel. This does not fit the visible 2D motion or infer synchronized depth, and does not change the baseline model.</p>
+ <p>Compare a time course of audio windows with the retained anatomy hypotheses using a declared vowel. This does not fit the visible 2D motion or infer synchronized depth, and does not change the baseline model.</p>
  <label>Vowel recorded throughout the analyzed audio <select disabled={analysisBusy} value={analysisPose} onChange={event=>setAnalysisPose(event.target.value as MotionVowel)}><option value="a">a (ah)</option><option value="e">e (eh)</option><option value="i">i (ee)</option><option value="o">o (oh)</option><option value="u">u (oo)</option></select></label>
  <label><input type="checkbox" checked={confirmedAnalysis===analysisKey} disabled={analysisBusy} onChange={event=>setConfirmedAnalysis(event.target.checked?analysisKey:'')}/> This saved audio contains my declared vowel with no external sound or played probe.</label>
  <button type="button" onClick={()=>void analyze()} disabled={analysisBusy||confirmedAnalysis!==analysisKey||analysis?.availability.available===false}>{analysisBusy?'Analyzing saved audio…':'Analyze saved audio once'}</button>
@@ -122,10 +122,14 @@ export function MotionCapturePanel({frame,videoStream,audioStream}:{frame:Tracki
  {analysisError&&<p role="alert">{analysisError} Saved motion replay and downloads remain available.</p>}
  {analysis?.error&&<p role="alert">{analysis.error}</p>}
  {analysis?.result&&<div>{!analysis.resultCurrent&&<p><strong>Historical analysis:</strong> these results use an earlier model, not the current baseline {analysis.currentModelId||'(unavailable)'}.</p>}<p>Numerical result: {analysis.result.status} · declared vowel {analysis.result.pose} · {analysis.result.actualSynthesisCalls} synthesis calls. Baseline model unchanged; visual synchronization unknown.</p>
- <p>Used {analysis.result.hypothesisSubset.selectedIds.length} of {analysis.result.hypothesisSubset.totalRetained} retained anatomy hypotheses. Selection: {analysis.result.hypothesisSubset.selection}.</p>
+ {earlierAnalysisVersion(analysis)?<p role="note">This saved result comes from an earlier analysis version ({analysis.result.analysisPolicy??'unversioned'}); the current version is {analysis.analysisPolicy}. Its time course is not shown because its fields differ. Analyze the saved audio again to see it.</p>:<>
+ {analysis.result.warnings?.map(warning=><p key={warning.code} role="note"><strong>Warning:</strong> {warning.message}</p>)}
+ <p>Used {analysis.result.hypothesisSubset.selectedIds.length} of {analysis.result.hypothesisSubset.totalRetained} retained anatomy hypotheses. Selection: {analysis.result.hypothesisSubset.selection}{analysis.result.hypothesisSubset.rankingBasis&&` (${analysis.result.hypothesisSubset.rankingBasis})`}, fixed before the audio was scored.</p>
+ {analysis.result.objective&&<p>Scored with the {analysis.result.objective.rescoring} objective; the baseline model was fitted with {analysis.result.objective.baseline}{analysis.result.objective.baselineDeclared?'':' (not recorded; legacy default)'}.</p>}
  <details><summary>Model subset and fixed simulation assumptions</summary><p>Session: {analysis.result.sessionId} · Model: {analysis.result.modelId}</p><p>{analysis.result.hypothesisSubset.selectedIds.join(', ')}</p><ul>{analysis.result.assumptions.map((assumption,i)=><li key={i}>{assumption}</li>)}</ul></details>
+ {analysis.result.trajectoryBank&&<p>Recorded pitch anchors: {analysis.result.trajectoryBank.pitchAnchorsHz.map(value=>value.toFixed(1)).join(', ')||'none'} Hz; supported distance ±{analysis.result.trajectoryBank.maxPitchDistanceCents} cents. Up to {analysis.result.trajectoryBank.maxWindows} measured windows share a native prediction bank ({analysis.result.trajectoryBank.synthesisRequests} synthesis requests, at most {analysis.result.trajectoryBank.maxSynthesisCalls}).</p>}
  <TemporalAnalysis result={analysis.result.temporalAnalysis}/>
- {analysis.result.windows.map(window=><details key={window.index}><summary>Window {window.index+1} · sample {window.startSample} · {window.status}</summary>{window.reason&&<p>{window.reason}</p>}{window.fit?.joint.candidates.length?<table><thead><tr><th>Ranked hypothesis</th><th>Weighted mean-square discrepancy</th></tr></thead><tbody>{rankMotionCandidates(window.fit.joint.candidates).map(candidate=><tr key={candidate.candidate_id}><td>{candidate.candidate_id}</td><td>{candidate.weighted_mean_square_discrepancy==null?`Unavailable: ${candidate.status}. ${candidate.missing_features?.map(m=>m.reason).join('; ')||''}`:candidate.weighted_mean_square_discrepancy.toFixed(3)}</td></tr>)}</tbody></table>:<p>No numerical hypothesis scores are available for this window.</p>}</details>)}
+ {analysis.result.windows.map(window=><details key={window.index}><summary>Window {window.index+1} · sample {window.startSample} · {window.status}</summary>{window.reason&&<p>{window.reason}</p>}{window.pitchAnchorHz!=null&&<p>Compared with pitch anchor {window.pitchAnchorHz.toFixed(2)} Hz · measured pitch difference {window.pitchDistanceCents?.toFixed(1)} cents.</p>}{window.fit?.joint.candidates.length?<table><thead><tr><th>Ranked hypothesis</th><th>Weighted mean-square discrepancy</th></tr></thead><tbody>{rankMotionCandidates(window.fit.joint.candidates).map(candidate=><tr key={candidate.candidate_id}><td>{candidate.candidate_id}</td><td>{candidate.weighted_mean_square_discrepancy==null?`Unavailable: ${candidate.status}. ${candidate.missing_features?.map(m=>m.reason).join('; ')||''}`:candidate.weighted_mean_square_discrepancy.toFixed(3)}</td></tr>)}</tbody></table>:<p>No numerical hypothesis scores are available for this window.</p>}</details>)}</>}
  </div>}
  </fieldset>}
  <small>Eye-relative 2D coordinates remove approximate image translation, scale and roll. Yaw, perspective and reference movement can remain. These are uncalibrated visible estimates, not millimeters, internal muscle motion or anatomical limits. Media alignment uncertainty is unknown; this export cannot enter calibrated depth fitting.</small></section>

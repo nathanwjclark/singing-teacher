@@ -2,6 +2,8 @@
 
 Scope: original retained motion-media audio → decoding → bounded conditional native PCM comparison. This is an audio-only analysis. Visual synchronization remains unknown; 2D landmarks do not enter the objective. No calibrated human motion evidence is required to verify this software path.
 
+> **Superseded analysis design.** This review covers the earlier three-window runner. `motion-forward-bank-4` replaced the three declared slots, the per-slot fits and the ledger-order hypothesis subset with a recording-wide window grid, a shared pitch bank and the snapshot's frozen rank order. The call counts and window statements below describe that earlier runner; see [temporal comparisons](../../science/MOTION_PATH.md) for the current design.
+
 ## Findings and resolution
 
 | Priority | Finding | Resolution |

@@ -2,7 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import {createHash} from 'node:crypto';
-import {mkdtemp,rm,stat,mkdir,writeFile} from 'node:fs/promises';
+import {mkdtemp,rm,stat,mkdir,writeFile,readFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {createMotionRoutes} from './motion.mjs';
@@ -59,6 +59,9 @@ test('actual HTTP motion persistence preserves exact originals, unknown timing, 
   assert.equal((await (await fetch(base+'/api/motion/status')).json()).capture.id,saved.capture.id);
   const analysis=await (await fetch(base+`/api/motion/analysis?captureId=${saved.capture.id}`)).json();
   assert.equal(analysis.status,'not-run');assert.equal(analysis.availability.available,false);
+  // The server reports the version declared by the Python analysis, which the client binds into its request identity.
+  const source=await readFile(join(import.meta.dirname,'../science/src/singing_physics/motion_trajectory.py'),'utf8');
+  assert.match(analysis.analysisPolicy,/^motion-forward-bank-\d+$/);assert.ok(source.includes(`VERSION = '${analysis.analysisPolicy}'`));
   const declaration={requestId:'analysis',captureId:saved.capture.id,pose:'a',containsExternalExcitation:false};
   const analyze=body=>fetch(base+'/api/motion/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
   assert.equal((await analyze({...declaration,containsExternalExcitation:true})).status,400);
@@ -68,4 +71,15 @@ test('actual HTTP motion persistence preserves exact originals, unknown timing, 
   assert.equal((await analyze(declaration)).status,409);
   assert.equal((await (await fetch(base+'/api/motion/status')).json()).capture.id,saved.capture.id);
  }finally{if(priorFfmpeg===undefined)delete process.env.SINGING_FFMPEG;else process.env.SINGING_FFMPEG=priorFfmpeg;if(server?.listening)await stop();await rm(dataRoot,{recursive:true,force:true});}
+});
+
+test('an unreadable analysis version is retried on the next request instead of cached',async()=>{
+ const repo=await mkdtemp(join(tmpdir(),'motion-version-')),dataRoot=await mkdtemp(join(tmpdir(),'motion-version-data-'));
+ const route=createMotionRoutes({dataRoot,repo,json:(res,status,value)=>{res.status=status;res.value=value;}});
+ const status=async()=>{const res={};await route({method:'GET',headers:{host:'127.0.0.1'},socket:{remoteAddress:'127.0.0.1'}},res,new URL('http://127.0.0.1/api/motion/analysis?captureId='+'a'.repeat(64)));return res;};
+ try{
+  assert.equal((await status()).status,400);
+  await mkdir(join(repo,'science/src/singing_physics'),{recursive:true});await writeFile(join(repo,'science/src/singing_physics/motion_trajectory.py'),"VERSION = 'motion-forward-bank-9'\n");
+  const later=await status();assert.equal(later.status,200);assert.equal(later.value.analysisPolicy,'motion-forward-bank-9');
+ }finally{await rm(repo,{recursive:true,force:true});await rm(dataRoot,{recursive:true,force:true});}
 });
