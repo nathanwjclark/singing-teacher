@@ -80,11 +80,13 @@ jobs:
         run: npm test
       - name: Science tests
         run: npm run test:science -- -n auto
+      # The motion timeline check needs the scientific worker, so it runs with its own config.
       - name: Browser checks
         run: |
           npx playwright test
           npx playwright test -c tests/spectral-objective.config.ts
           npx playwright test -c tests/session-recompute.config.ts
+          npx playwright test -c tests/motion-timeline.config.ts
       - if: failure()
         uses: actions/upload-artifact@v7
         with:
