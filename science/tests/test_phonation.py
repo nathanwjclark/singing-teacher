@@ -125,5 +125,5 @@ def test_frozen_scoring_policy_cannot_change_with_live_feature_scales(monkeypatc
         changed=deepcopy(phonation.FEATURES);changed['harmonicSpectralSlopeDbOctave']=('dB/octave',30.)
         monkeypatch.setattr(phonation,'FEATURES',changed)
         result=score_phonation_forecast(frozen,[0.]*4096,_metadata('policy-target',44100,'c'*64,'engine-generated'))
-        assert result['status']=='unsupported' and result['score'] is None
+        assert result['status']=='unsupported' and result['score'] is None and result['score_excluding_pitch'] is None
         assert not result['model_updated'] and frozen==before
