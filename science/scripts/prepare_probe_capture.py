@@ -57,10 +57,11 @@ def prepare(data_root, output):
     except (ValueError, OSError):
         configuration, setup = None, None
         setup_error = 'Saved calibration setup could not be verified; upload its original evidence again in Calibration setup.'
-    # A new capture needs its own explicit binding; retain an uncalibrated review
-    # so the next setup can be completed in-app instead of failing import.
+    # A setup binds one capture manifest; retain an uncalibrated review of any other
+    # capture so its own setup can be completed in-app instead of failing import.
     if setup and setup['manifestSha256'] != hashlib.sha256((capture/'manifest.json').read_bytes()).hexdigest():
         configuration = None
+        setup_error = f"The saved calibration setup {setup['setupId']} belongs to a different capture; each probe capture needs its own setup."
     if configuration and configuration.exists():
         subprocess.run(['node', '--experimental-strip-types', str(ROOT/'science/scripts/import_probe_science.ts'),
                         str(capture), str(output/'science'), str(configuration)], check=True, stdout=subprocess.DEVNULL)
