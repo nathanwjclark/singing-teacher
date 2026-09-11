@@ -24,7 +24,7 @@ export function createAnatomyMotion(){
   state.jawOpen=ease(state.jawOpen,bound(m?.mouthOpen,0,1)*.5,.18);
   if(lastDemo!==undefined && demo!==lastDemo){lastTongue=undefined;lastSeen=-Infinity;lastFrameTimestamp=undefined;}
   lastDemo=demo;
-  const observed=frame?.tongue?.trackingMode==='region'?undefined:frame?.tongue;
+  const observed=frame?.tongue?.trackingMode==='tip'?frame.tongue:undefined;
   // A cached frame must not refresh an old tip forever when the camera stalls.
   if(observed && (demo || (observed.observedAt??frame?.timestamp)!==lastFrameTimestamp)){lastTongue=observed;lastSeen=time;}
   lastFrameTimestamp=observed?.observedAt??frame?.timestamp;

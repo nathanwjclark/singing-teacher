@@ -17,7 +17,7 @@ try{
    const pose={...rest,[key]:value};model.applyPose(pose);const state=emptyAnatomyState();state.tongue=pose;rows.push({axis,key,value,tip:model.tipPosition().toArray(),root:[positions.getX(root),positions.getY(root),positions.getZ(root)],side:deformAtlasPoint(175.8,877.8,state)});
   }
   const state=emptyAnatomyState(),side=deformAtlasPoint(175.8,877.8,state);model.dispose();
-  const motion=createAnatomyMotion();const frame={face:[],pose:[],timestamp:0,metrics:{mouthOpen:0,headTilt:0,shoulderTilt:0,brightness:0,motion:0},tongue:{x:.5,y:.5,lateral:.5,lift:0,elevation:.3,extension:.2,visibleFraction:0,observedAt:0}};
+  const motion=createAnatomyMotion();const frame={face:[],pose:[],timestamp:0,metrics:{mouthOpen:0,headTilt:0,shoulderTilt:0,brightness:0,motion:0},tongue:{trackingMode:'tip',x:.5,y:.5,lateral:.5,lift:0,elevation:.3,extension:.2,visibleFraction:0,observedAt:0}};
   motion.update(frame,false,0);const first=motion.state.tongue.visible;motion.update({...frame,timestamp:300},false,300);const expired=!motion.state.tongue.visible;
   const crops=[];for(const [w,h] of [[1280,720],[720,1280]]){const face=Array.from({length:478},()=>({x:.5,y:.5}));face[78]={x:.45,y:.4};face[308]={x:.55,y:.4};face[13]={x:.5,y:.4};const c=tongueCrop(face,w,h);crops.push({pixelWidth:c.width*w,pixelHeight:c.height*h});}
   return {base,rootBase,side,rows,first,expired,crops};

@@ -16,3 +16,8 @@ test('a tip observation drives it, and a later region box does not keep or exten
  motion.update(frame(300,{trackingMode:'region',box:[.1,.1,.9,.9],observedAt:300,confidence:.99}),false,300);
  assert.equal(motion.state.tongue.visible,false);
 });
+test('an observation without an explicit tip mode drives nothing',()=>{
+ const motion=createAnatomyMotion(),unlabeled={x:.5,y:.5,lateral:.9,lift:1,visibleFraction:1,extension:.9} as unknown as TongueObservation;
+ motion.update(frame(0,unlabeled),false,0);
+ assert.deepEqual(motion.state.tongue,{lateral:0,lift:0,extension:0,curl:0,visible:false});
+});
