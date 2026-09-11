@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import type { QRCodeToDataURLOptions } from 'qrcode';
 import { createPhonePeer, phoneRequest } from '../../lib/phonePeer';
+import { importFeature } from '../../lib/importFeature';
 import type { PhoneSession } from '../../lib/phonePeer';
 import './PhoneCapture.css';
 
 // The QR library loads with the first code the open dialog draws, not with the studio.
-const qrCode = async (text: string, options: QRCodeToDataURLOptions) => (await import('qrcode')).toDataURL(text, options);
+const qrCode = async (text: string, options: QRCodeToDataURLOptions) => (await importFeature('The QR code generator', () => import('qrcode'))).toDataURL(text, options);
 
 type Props = { open: boolean; onClose: () => void; onMicrophoneStream: (stream: MediaStream | null) => void };
 export default function PhonePairing({ open, onClose, onMicrophoneStream }: Props) {

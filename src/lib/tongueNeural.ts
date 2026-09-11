@@ -2,6 +2,7 @@ import type {InferenceSession} from 'onnxruntime-web/wasm';
 import wasmUrl from 'onnxruntime-web/ort-wasm-simd-threaded.wasm?url';
 import type {Landmark, TongueDiagnostic, TongueObservation, TongueTipObservation} from '../types';
 import {sha256} from '../contracts';
+import {importFeature} from './importFeature';
 import {observationInFrame, resultCurrent, type Crop} from './tongueTracking';
 
 const mean=[.485,.456,.406],std=[.229,.224,.225];
@@ -13,14 +14,14 @@ export async function loadTongueNetwork(signal?:AbortSignal){
  // The manifest decides: 404 (or a dev server's HTML page) means none is installed; 403 means the server keeps it for its own
  // computer, so another device such as a phone gets the public region detector. The cause stays visible in the diagnostic.
  const fallback=meta.status===403?'personal tip model is served only to the computer running the app':meta.status===404||(meta.ok&&meta.headers.get('content-type')?.includes('text/html'))?'no personal tip model installed':undefined;
- if(fallback)return {...await (await import('./tongueBaseline')).loadTongueBaseline(signal),fallback};
+ if(fallback)return {...await (await importFeature('Tongue region detection',()=>import('./tongueBaseline'))).loadTongueBaseline(signal),fallback};
  if(!meta.ok)throw Error(`Personal tongue model unavailable (HTTP ${meta.status})`);
  if(!weights.ok)throw Error(`Personal tongue model is incomplete: weights unavailable (HTTP ${weights.status})`);
  const manifest=await meta.json();if(manifest.schema!=='personal-tongue-neural/v1')throw Error('Unknown tongue network format');
  const buffer=await weights.arrayBuffer();
  if(await sha256(new Uint8Array(buffer))!==manifest.modelSha256)throw Error('Tongue model verification failed');
  // The runtime is loaded only for an installed, verified personal model; the region fallback runs it in its own worker.
- const ort=await import('onnxruntime-web/wasm');ort.env.wasm.numThreads=1;ort.env.wasm.wasmPaths={wasm:wasmUrl};
+ const ort=await importFeature('Tongue tip tracking',()=>import('onnxruntime-web/wasm'));ort.env.wasm.numThreads=1;ort.env.wasm.wasmPaths={wasm:wasmUrl};
  const session=await ort.InferenceSession.create(buffer,{executionProviders:['wasm'],graphOptimizationLevel:'all'});
  const canvas=document.createElement('canvas');canvas.width=128;canvas.height=128;const ctx=canvas.getContext('2d',{willReadFrequently:true})!;
  const source=document.createElement('canvas');const sc=source.getContext('2d')!;

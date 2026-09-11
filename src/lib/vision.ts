@@ -1,6 +1,7 @@
 import type { PoseLandmarker } from '@mediapipe/tasks-vision';
 import type { Landmark, TrackingFrame } from '../types';
 import { tongueCrop } from './tongueCrop';
+import { importFeature } from './importFeature';
 import { createNeuralTongueTracker } from './tongueNeural';
 import { depthMetrics } from './depth';
 import { createTrackingStabilizer } from './trackingStability';
@@ -9,7 +10,7 @@ export interface VisionEngine { process(video: HTMLVideoElement, timestamp: numb
 
 export async function createVisionEngine(): Promise<VisionEngine> {
   // Loaded when a camera session starts; a page that never starts the camera never downloads it.
-  const { FaceLandmarker, FilesetResolver, PoseLandmarker } = await import('@mediapipe/tasks-vision');
+  const { FaceLandmarker, FilesetResolver, PoseLandmarker } = await importFeature('Camera tracking', () => import('@mediapipe/tasks-vision'));
   const fileset = await FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/wasm');
   const face = await FaceLandmarker.createFromOptions(fileset, {
     baseOptions: { modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task', delegate: 'CPU' },
