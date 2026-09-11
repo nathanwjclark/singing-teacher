@@ -47,11 +47,23 @@ The source kind comes from the manifest's own fields, not only its `provenance`
 label. A manifest with any field only the iPhone recorder writes is treated as a
 human recording even if it says `software-fixture` or `physical-reference`, and a
 `software-fixture` label counts only with the fixture generator's marker. The
-panel shows when a label was overridden. Provenance is still self-declared: the
-manifest and pull receipt are unsigned, so an edited manifest without those fields
-is not caught. The recommended fix is for the USB pull to record the source device
-and archive hash in its own receipt, or for the iPhone to sign the manifest, with
-the importer checking that. See [the import specification](../../science/PROBE_IMPORT.md).
+panel shows when a label was overridden.
+
+The USB pull receipt also counts. Each import keeps the pull receipt as
+`usb-receipt.json` beside `original.zip`, and the importer checks the archive's
+SHA-256 and byte count against it. A receipt that says the archive came from the
+iPhone by devicectl, or an older receipt with no transport, makes a
+`software-fixture` label a human recording, so a pulled recording whose manifest
+was stripped and given the fixture marker is still refused. Only receipts written by
+the repository's test fixtures (`transport: "repository-fixture"`) let a marked
+fixture through, and such a receipt on any other manifest refuses the import.
+
+This does not make provenance authenticated. Nothing is signed yet
+(`signature.status` is `not-provided`), so it does not stop someone with shell
+access editing `.local-data` (receipt included), files pushed into the
+development-signed app container with `devicectl device copy to`, a human recording
+whose manifest is edited to say `physical-reference`, AirDrop imports, or a synthetic sound played into the
+microphone. See [the import specification](../../science/PROBE_IMPORT.md).
 
 The calibration package is measurement-workflow output, not a new estimate made
 by the app. It is JSON with `schema_version: "0.1.0"` and
