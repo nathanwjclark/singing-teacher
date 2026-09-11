@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 import re
+import signal
 import tempfile
 import subprocess
 import time
@@ -29,6 +30,10 @@ OUTCOMES = {'verified': 'matched', 'legacy_version_unverified': 'matched', 'nume
             'invalid_evidence': 'failed', 'missing_media': 'unavailable', 'missing_artifacts': 'unavailable',
             'version_mismatch': 'unsupported'}
 MAX_SECONDS = 240
+# The process ends itself at this deadline (SIGALRM default action), so a verifier
+# orphaned by a server restart cannot outlive the attempt the server still tracks.
+# server/sessionRecompute.mjs uses the same deadline.
+HARD_SECONDS = 300
 
 
 def now():
@@ -208,6 +213,7 @@ def main():
     parser.add_argument('--output', required=True)
     parser.add_argument('--max-operations', type=int, default=MAX_OPERATIONS)
     args = parser.parse_args()
+    signal.alarm(HARD_SECONDS)
     try:
         report = run(args.data_root, args.output, max_operations=args.max_operations)
         print(json.dumps({'status': report['status'], 'counts': report['counts']}))

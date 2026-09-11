@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
 import {mkdtemp,mkdir,writeFile,readFile,rm} from 'node:fs/promises';
-import {spawn} from 'node:child_process';
+import {execFileSync,spawn} from 'node:child_process';
 import {createServer} from 'node:net';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
@@ -60,6 +60,32 @@ test('invalid limits and nonlocal requests never launch a numerical worker',asyn
  for(const maxOperations of [0,17,1.5]){await route(request({requestId:first,maxOperations}),'invalid',run);assert.equal(replies.get('invalid').code,409);}
  await route({...request({requestId:first,maxOperations:1}),socket:{remoteAddress:'192.0.2.1'}},'remote',run);
  assert.equal(replies.get('remote').code,403);assert.equal(children.length,0);
+});
+
+test('a verifier left by a stopped server blocks a second one until it exits, then the new server records it',async t=>{
+ const {root,replies,options}=await fixture(t);
+ // A real detached process stands in for the Python verifier, waiting for a release file.
+ const gate=join(root,'release'),verifier=join(root,'verifier.sh');
+ await writeFile(verifier,`#!/bin/sh\nwhile [ ! -e '${gate}' ]; do sleep 0.05; done\nexit 1\n`,{mode:0o755});
+ const real={...options,env:{...process.env,SINGING_PYTHON:verifier}};delete real.spawnImpl;
+ // The first server is a separate Node process that starts the verifier and exits.
+ const started=JSON.parse(execFileSync(process.execPath,['--input-type=module','-e',`
+import {createSessionRecomputeRoutes} from './server/sessionRecompute.mjs';
+const route=createSessionRecomputeRoutes({repo:process.cwd(),dataRoot:${JSON.stringify(root)},env:{...process.env,SINGING_PYTHON:${JSON.stringify(verifier)}},json:(_r,code,body)=>{process.stdout.write(JSON.stringify({code,body}));process.exit(0);}});
+await route({method:'POST',headers:{host:'localhost'},socket:{remoteAddress:'127.0.0.1'},async *[Symbol.asyncIterator](){yield Buffer.from(JSON.stringify({requestId:'${first}',maxOperations:2}));}},{},new URL('http://localhost/api/session-recompute/run'));
+`],{cwd:process.cwd()}).toString());
+ assert.equal(started.code,202);assert.ok(Number.isInteger(started.body.pid));
+ t.after(()=>{try{process.kill(started.body.pid,'SIGKILL');}catch{}});
+ const restarted=createSessionRecomputeRoutes(real);
+ await restarted(request(null,'GET'),'orphan',status);
+ assert.equal(replies.get('orphan').body.status,'running');assert.equal(replies.get('orphan').body.attemptId,first);
+ await restarted(request({requestId:second,maxOperations:2}),'second',run);
+ assert.equal(replies.get('second').code,409);assert.match(replies.get('second').body.error,/already running/);
+ await writeFile(gate,'');
+ await poll(()=>restarted(request(null,'GET'),'settled',status),()=>replies.get('settled')?.body.status==='failed');
+ assert.equal(replies.get('settled').body.attemptId,first);
+ await restarted(request({requestId:second,maxOperations:2}),'after',run);assert.equal(replies.get('after').code,202);
+ await poll(()=>restarted(request(null,'GET'),'done',status),()=>replies.get('done')?.body.status==='failed'&&replies.get('done').body.attemptId===second);
 });
 
 test('status without a baseline model is unavailable with a plain reason, not a path',async t=>{

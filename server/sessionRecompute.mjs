@@ -8,6 +8,12 @@ const safeId=value=>typeof value==='string'&&/^[A-Za-z0-9_-]{1,160}$/.test(value
 const attemptId=value=>typeof value==='string'&&/^replay-[a-f0-9-]{36}$/.test(value);
 const read=async(path,limit=8*1024*1024)=>{if((await stat(path)).size>limit)throw Error('Verification artifact exceeds size limit');return JSON.parse(await readFile(path,'utf8'));};
 const save=async(path,value)=>{const temp=path+'.'+randomUUID();await writeFile(temp,JSON.stringify(value),{mode:0o600});await rename(temp,path);};
+// science/scripts/app_recompute.py ends itself (SIGALRM) at the same deadline, so a
+// verifier left by an earlier server process is never trusted, or killed, after it.
+const DEADLINE_MS=300000;
+// Single flight across restarts: a verifier started by an earlier server process is
+// still running while its recorded pid exists inside the attempt deadline.
+const alive=value=>{if(!Number.isInteger(value.pid)||value.pid<=0||!(Date.now()<Date.parse(value.startedAt)+DEADLINE_MS))return false;try{process.kill(value.pid,0);return true;}catch{return false;}};
 
 export function createSessionRecomputeRoutes({repo,dataRoot,json,env=process.env,spawnImpl=spawn}){
  let running=null;
@@ -45,11 +51,15 @@ export function createSessionRecomputeRoutes({repo,dataRoot,json,env=process.env
   let c;try{c=await context();}catch(error){return {status:'unavailable',reason:error.message};}
   let value;try{value=await read(index);}catch(error){if(error.code==='ENOENT')return {status:'not-run',...c};throw error;}
   if(value.runId!==c.runId||value.sessionId!==c.sessionId)return {status:'not-run',...c,reason:'No verification has run for this session.'};
-  if(value.status==='running'&&running!==value.attemptId){
-   try{await finish(value.attemptId,0);}catch{await finish(value.attemptId,1);}
-   value=await read(index);
-  }
+  value=await settle(value);
   return value.status==='completed'?await receipt(value.attemptId):value;
+ }
+ // Record the outcome of an attempt whose verifier is gone: this process did not
+ // start it (server restart) and its pid no longer runs.
+ async function settle(value){
+  if(value.status!=='running'||running===value.attemptId||alive(value))return value;
+  try{await finish(value.attemptId,0);}catch{await finish(value.attemptId,1);}
+  return read(index);
  }
  return async(req,res,url)=>{
   if(!url.pathname.startsWith('/api/session-recompute/'))return false;
@@ -64,6 +74,8 @@ export function createSessionRecomputeRoutes({repo,dataRoot,json,env=process.env
    const chunks=[];let length=0;for await(const chunk of req){length+=chunk.length;if(length>1024)throw Error('Verification request too large');chunks.push(chunk);}
    const body=JSON.parse(Buffer.concat(chunks).toString());
    if(Object.keys(body).sort().join(',')!=='maxOperations,requestId'||!attemptId(body.requestId)||!Number.isInteger(body.maxOperations)||body.maxOperations<1||body.maxOperations>16)throw Error('Select one to sixteen operations and a fresh request identity');
+   let current=null;try{current=await settle(await read(index));}catch(error){if(error.code!=='ENOENT')throw error;}
+   if(current?.status==='running')throw Error('A bounded numerical verification is already running.');
    const c=await context(),attempt=body.requestId,dir=resolve(dataRoot,'replay-verifications',attempt),request={...c,maxOperations:body.maxOperations};
    await mkdir(dir,{recursive:true,mode:0o700});
    try{
@@ -72,14 +84,17 @@ export function createSessionRecomputeRoutes({repo,dataRoot,json,env=process.env
     try{const saved=await receipt(attempt);json(res,200,saved);return true;}catch(error){if(error.code!=='ENOENT')throw error;}
     throw Error('This earlier attempt was interrupted. Start a new verification attempt.');
    }catch(error){if(error.code!=='ENOENT')throw error;}
-   await save(resolve(dir,'request.json'),request);
-   const value={status:'running',attemptId:attempt,...c};await save(index,value);running=attempt;
+   await save(resolve(dir,'request.json'),request);running=attempt;
+   // Detached: the verifier leads its own process group, so the deadline stops its
+   // extractor subprocesses too. It is not killed when this server exits.
    const child=spawnImpl(env.SINGING_PYTHON||resolve(repo,'science/.venv/bin/python'),[resolve(repo,'science/scripts/app_recompute.py'),'--data-root',dataRoot,'--output',dir,'--max-operations',String(body.maxOperations)],{cwd:repo,env:{...env,PYTHONPATH:repo+':'+resolve(repo,'science/src')},stdio:['ignore','ignore','ignore'],detached:true});
    launched=true;
-   const timer=setTimeout(()=>{try{process.kill(-child.pid,'SIGTERM');}catch{child.kill('SIGTERM');}},300000);
-   child.once('error',()=>{});
-   child.once('close',async code=>{clearTimeout(timer);try{await finish(attempt,code);}catch{await save(index,{...value,status:'failed',reason:'Verification output unavailable or failed integrity validation.'}).catch(()=>{});}finally{if(running===attempt)running=null;}});
-   json(res,202,value);return true;
+   const value={status:'running',attemptId:attempt,...c,pid:child.pid,startedAt:new Date().toISOString()},saved=save(index,value);
+   const timer=setTimeout(()=>{try{process.kill(-child.pid,'SIGTERM');}catch{child.kill('SIGTERM');}},DEADLINE_MS);
+   let ended=false;
+   const end=async code=>{if(ended)return;ended=true;clearTimeout(timer);await saved.catch(()=>{});try{await finish(attempt,code);}catch{await save(index,{...value,status:'failed',reason:'Verification output unavailable or failed integrity validation.'}).catch(()=>{});}finally{if(running===attempt)running=null;}};
+   child.once('error',()=>end(1));child.once('close',end);
+   await saved;json(res,202,value);return true;
   }catch(error){json(res,409,{error:error.message||'Numerical verification unavailable'});return true;}finally{if(reserved&&!launched)running=null;}
  };
 }
