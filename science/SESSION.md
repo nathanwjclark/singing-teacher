@@ -187,9 +187,13 @@ rebuild a state's canonical text without recursion and parse it once, as they
 parsed a full-state event, so every depth canonical JSON can hold stays readable.
 A state may not exceed 64 MiB of canonical JSON (`MAX_STATE_BYTES`, the largest
 replay `app_recompute.py` and `recompute_session_score` accept): the writer
-refuses such a state, and a read stops rebuilding any value that grows past it,
-so a few crafted nodes that reference each other repeatedly cannot force
-unbounded work.
+refuses such a state, and a read stops rebuilding any value that grows past it.
+Each rebuild expands a shared node once. A read rebuilds only the final state
+and, in the control digest check of the `state` and `replay` actions, each
+event's pending job; the per-event root checks read `version` and `session_id`
+inline and expand nothing. Crafted nodes that reference each other repeatedly
+can therefore cost at most one bounded rebuild per such value, not an
+expansion per path.
 
 Every read (`state`, `replay`, `GET /sessions/:id/ledger`, and
 `recompute_session_score.verify_replay` for a supplied replay) runs the same

@@ -14,6 +14,7 @@ import sqlite3
 import sys
 import threading
 import time
+import tracemalloc
 
 import pytest
 
@@ -216,17 +217,44 @@ def test_writer_and_reader_agree_at_any_depth_json_can_serialize(tmp_path):
     assert events(tmp_path) == 1
 
 
+def fanout(levels):
+    """A few kilobytes of self-consistent nodes, each listing the previous one twice."""
+    bodies = {}; digest = _put(bodies, '["v","%s"]' % ('x'*1000))
+    for _ in range(levels): digest = _put(bodies, '["l",[["h","%s"],["h","%s"]]]' % (digest, digest))
+    return bodies, digest
+
+
+def chain(bodies, roots):
+    rows, previous = [], '0'*64
+    for version, root in enumerate(roots, 1):
+        body = canonical({'format': 2, 'session_id': 's', 'version': version, 'previous_sha256': previous, 'action': 'fanout',
+                          'received_at': '2026-01-01T00:00:00+00:00', 'details': {}, 'state_root': root})
+        previous = sha(body.encode()); rows.append((version, body, previous))
+    return rows
+
+
 def test_shared_references_cannot_expand_past_the_state_bound():
-    # A few kilobytes of self-consistent nodes, each listing the previous one twice.
-    bodies = {}; digest = _put(bodies, '["v",1]')
-    for _ in range(40): digest = _put(bodies, '["l",[["h","%s"],["h","%s"]]]' % (digest, digest))
+    bodies, digest = fanout(40)
     root = _put(bodies, canonical(['d', {'session_id': ['v', 's'], 'version': ['v', 1], 'fanout': ['h', digest]}]))
-    body = canonical({'format': 2, 'session_id': 's', 'version': 1, 'previous_sha256': '0'*64, 'action': 'fanout',
-                      'received_at': '2026-01-01T00:00:00+00:00', 'details': {}, 'state_root': root})
     started = time.perf_counter()
     with pytest.raises(RuntimeError, match='Session ledger integrity failure') as failure:
-        _verify('s', [(1, body, sha(body.encode()))], bodies.items)
+        _verify('s', chain(bodies, [root]), bodies.items)
     assert str(failure.value.__cause__) == 'state size' and time.perf_counter()-started < 1
+
+
+def test_per_event_root_checks_expand_nothing():
+    # Every event's root names its version through its own small node over one shared subtree that
+    # expands to about 64 MiB. Checking the roots must not expand any of them, so memory stays flat.
+    bodies, digest = fanout(16)
+    roots = [_put(bodies, canonical(['d', {'session_id': ['v', 's'], 'version': ['h', _put(bodies, canonical(['l', [['h', digest], ['v', version]]]))]}]))
+             for version in range(1, 7)]
+    tracemalloc.start(); started = time.perf_counter()
+    try:
+        with pytest.raises(RuntimeError, match='Session ledger integrity failure') as failure:
+            _verify('s', chain(bodies, roots), bodies.items)
+        peak = tracemalloc.get_traced_memory()[1]
+    finally: tracemalloc.stop()
+    assert str(failure.value.__cause__) == 'root' and time.perf_counter()-started < 1 and peak < 5_000_000
 
 
 def test_a_state_readers_would_refuse_is_never_committed(tmp_path, monkeypatch):

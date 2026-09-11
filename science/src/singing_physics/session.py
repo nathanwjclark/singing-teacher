@@ -108,7 +108,7 @@ def _text(entry, nodes):
     """Canonical JSON text of a child entry over verified parsed nodes, built in one pass without recursion.
 
     A node referenced more than once below the entry is expanded once and its text reused, and the
-    text may not exceed MAX_STATE_BYTES, so a few crafted shared references cannot force unbounded work."""
+    text may not exceed MAX_STATE_BYTES, so crafted shared references cost at most one bounded expansion."""
     references, queue = {}, [entry]
     while queue:
         tag, value = queue.pop()
@@ -189,8 +189,12 @@ def _verify(session_id, rows, load_nodes):
                 digest = queue.pop()
                 if digest not in reachable: reachable.add(digest); queue.extend(c[1] for c in _entries(nodes[digest]) if c[0] == 'h')
             if reachable != set(nodes): raise ValueError('unreachable node')
-            versions, identities = state_fields(upgraded, nodes, 'version'), state_fields(upgraded, nodes, 'session_id')
-            if versions != [event['version'] for event in upgraded] or any(identity != session_id for identity in identities): raise ValueError('root')
+            for event in upgraded:
+                # The writer always inlines both fields in the root, so checking them expands nothing:
+                # a root that names them through a stored node could make every event cost a full expansion.
+                tag, root = nodes[event['state_root']]
+                version, identity = ((['v', root[key]] if tag == 'v' else root[key]) for key in ('version', 'session_id'))
+                if version[0] != 'v' or identity[0] != 'v' or version[1] != event['version'] or identity[1] != session_id: raise ValueError('root')
             state = join(upgraded[-1]['state_root'], nodes)
         elif events: state = events[-1]['state']
     except INTEGRITY_ERRORS as exc:
