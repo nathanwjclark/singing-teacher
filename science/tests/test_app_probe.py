@@ -46,6 +46,24 @@ def test_changed_archive_rejected_before_import(tmp_path):
     with pytest.raises(ValueError,match='hash mismatch'):prepare(root,root/'probe-imports'/'bad')
 
 
+def saved_setup(root, receipt):
+    folder=root/'probe-setups'/receipt['setupId'];folder.mkdir(parents=True)
+    (folder/'configuration.json').write_text('{}');(folder/'profile.json').write_text('{}')
+    receipt={**receipt,**{key:hashlib.sha256(b'{}').hexdigest() for key in ('configurationSha256','profileSha256')}}
+    (folder/'summary.json').write_text(json.dumps(receipt))
+    (root/'probe-setup-current.json').write_text(json.dumps({'setupId':receipt['setupId'],'receiptSha256':hashlib.sha256((folder/'summary.json').read_bytes()).hexdigest()}))
+
+
+@pytest.mark.parametrize('receipt,reason',[({'setupId':'no-manifest','eligible':True},'could not be verified'),
+    ({'setupId':'other-capture','eligible':True,'manifestSha256':'b'*64},'belongs to a different capture; each probe capture needs its own setup')])
+def test_unusable_saved_setup_keeps_review_with_explicit_reason(tmp_path,receipt,reason):
+    root,_=archive_fixture(tmp_path);saved_setup(root,receipt)
+    result=prepare(root,root/'probe-imports'/'one')
+    assert not result['eligible'] and 'setupId' not in result
+    assert reason in result['reasons'][-1]
+    assert (root/'probe-imports'/'one'/result['measurementPath']).exists()
+
+
 @pytest.mark.parametrize('crash_after,app_setup',[(None,False),(None,True),('fit_probe',False),('collect_job',False),('cancelled_submit',False)])
 def test_original_probe_runs_joint_session_adoption(tmp_path, monkeypatch,crash_after,app_setup):
     import os

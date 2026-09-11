@@ -33,8 +33,11 @@ def resolve_setup(root, setup_id=None, *, legacy=False):
     if current and hashlib.sha256(receipt_bytes).hexdigest() != current.get('receiptSha256'):
         raise ValueError('Probe setup receipt hash mismatch')
     receipt = json.loads(receipt_bytes)
-    if receipt.get('setupId') != identity or receipt.get('eligible') is not True:
+    if not isinstance(receipt, dict) or receipt.get('setupId') != identity or receipt.get('eligible') is not True:
         raise ValueError('Probe setup was not verified')
+    if not all(isinstance(receipt.get(key), str) and re.fullmatch(r'[0-9a-f]{64}', receipt[key])
+               for key in ('configurationSha256', 'profileSha256', 'manifestSha256')):
+        raise ValueError('Probe setup receipt lacks its configuration, controls or capture hash')
     for name, key in [('configuration.json', 'configurationSha256'), ('profile.json', 'profileSha256')]:
         if hashlib.sha256(_read(folder / name)).hexdigest() != receipt.get(key):
             raise ValueError('Probe setup configuration hash mismatch')
