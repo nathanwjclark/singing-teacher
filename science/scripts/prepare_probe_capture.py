@@ -49,7 +49,8 @@ def prepare(data_root, output):
         raise ValueError('USB probe archive hash mismatch')
     output.mkdir(mode=0o700, parents=True, exist_ok=False)
     write(output/'original.zip', raw)
-    write(output/'usb-receipt.json', receipt)
+    receipt_bytes = json.dumps(receipt, allow_nan=False).encode()
+    write(output/'usb-receipt.json', receipt_bytes)
     if name.startswith('session-'):
         import_session_bundle(output/'original.zip', output/'unpacked')
         capture = output/'unpacked/sound'
@@ -87,7 +88,7 @@ def prepare(data_root, output):
             result['reasons'].append(setup_error)
     # The fit's re-import must use this same receipt; its hash lets the fit refuse a lost or edited one.
     result.update(importId=output.name, archiveSha256=receipt['sha256'], includedInFit=False,
-                  receiptSha256=hashlib.sha256((output/'usb-receipt.json').read_bytes()).hexdigest(),
+                  receiptSha256=hashlib.sha256(receipt_bytes).hexdigest(),
                   captureDirectory=str(capture.relative_to(output)))
     write(output/'summary.json', result)
     return result

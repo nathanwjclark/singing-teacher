@@ -9,7 +9,7 @@ export const SOFTWARE_FIXTURE_CALIBRATION_ID = 'digital-fixture-no-human-playbac
 export type ProbeAttestation = 'none' | 'devicectl-receipt' | 'legacy-receipt' | 'repository-fixture-receipt' | 'contradicted-fixture-receipt'
 const record=(value:unknown)=>(value&&typeof value==='object'&&!Array.isArray(value)?value:{}) as Record<string,unknown>
 /** The `acquisition` argument for probeSource from a parsed pull receipt: undefined when there is no receipt, null for
- * a receipt without an acquisition record. It reads the receipt only; pullAcquisition in scripts/import-acoustic-probe.ts
+ * a receipt without an acquisition record. It reads the receipt only; pullReceipt in scripts/import-acoustic-probe.ts
  * also checks the archive against it. */
 export function receiptAcquisition(receipt:unknown):unknown { return receipt===null||receipt===undefined?undefined:record(receipt).acquisition??null }
 /** Source kind a probe manifest supports. Provenance is self-declared in an unsigned manifest, so this cannot prove

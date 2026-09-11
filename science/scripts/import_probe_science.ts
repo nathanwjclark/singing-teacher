@@ -4,7 +4,7 @@ import { realpath, mkdir, writeFile, chmod, readdir } from 'node:fs/promises'
 import { resolve, dirname, basename } from 'node:path'
 import { createHash } from 'node:crypto'
 import { pathToFileURL } from 'node:url'
-import { importAcousticProbe, pullAcquisition, readFrom, receiptSource } from '../../scripts/import-acoustic-probe.ts'
+import { importAcousticProbe, pullReceipt, readFrom, receiptSource } from '../../scripts/import-acoustic-probe.ts'
 
 const hash = (b: Uint8Array) => createHash('sha256').update(b).digest('hex')
 const finite = (x: unknown): x is number => typeof x === 'number' && Number.isFinite(x)
@@ -58,7 +58,7 @@ export async function importProbeScience(captureDirectory: string, outputDirecto
     }
   }
   await verifyOriginals()
-  const acquisition = receiptPath === undefined ? undefined : await pullAcquisition(receiptPath)
+  const pull = receiptPath === undefined ? undefined : await pullReceipt(receiptPath), acquisition = pull?.acquisition
   // The gate uses the source kind the manifest's own fields and pull receipt support, never the bare provenance label.
   const source = receiptSource(native, acquisition), human = source.kind === 'human-recording', fixture = source.kind === 'software-fixture'
   requireValue(human || fixture || cal.kind === 'measured', 'Physical reference capture requires measured instrument calibration evidence')
@@ -122,7 +122,7 @@ export async function importProbeScience(captureDirectory: string, outputDirecto
     selected_indices: config.selected_indices, configuration_sha256: hash(configBytes), supplemental_evidence: evidence,
     extractor: measurement.extractor, timing: measurement.timing, quality: measurement.quality,
     provenance: source.kind, declared_provenance: source.declared, native_capture_fields: source.nativeCaptureFields,
-    attestation: source.attestation, acquisition: acquisition ?? null, processing: processing ?? null, capture_binding: binding ?? null, calibration_authenticity_verified: false,
+    attestation: source.attestation, acquisition: acquisition ?? null, receipt_sha256: pull?.receiptSha256 ?? null, processing: processing ?? null, capture_binding: binding ?? null, calibration_authenticity_verified: false,
     limitations: ['Evidence bytes verified; physical calibration validity is caller-supported, not authenticated.', 'Immutable B measurement remains includedInFit=false; only an actual fitter may report evidence use.', 'No sampled summary, additional DSP, generated phase alignment or anatomical recovery claim.'] }
   await writeFile(resolve(out, 'probe-science-document.json'), JSON.stringify(probe_document, null, 2), { flag: 'wx', mode: 0o600 })
   await writeFile(resolve(out, 'probe-science-receipt.json'), JSON.stringify(receipt, null, 2), { flag: 'wx', mode: 0o600 })

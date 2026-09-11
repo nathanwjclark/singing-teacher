@@ -102,14 +102,11 @@ def _run(root, import_id, expected_model_id, output):
     imported = root/'probe-imports'/import_id
     summary = json.loads((imported/'summary.json').read_text())
     if not summary['eligible']: raise ValueError('Probe calibration/import is not eligible for fitting')
-    # An import analyzed from a USB pull is re-imported with that same pull receipt, so losing or editing the receipt
-    # cannot downgrade it to the no-receipt rule. An import made without a receipt is re-imported without one.
+    # Every app import is analyzed from a USB pull; the fit re-imports with that same pull receipt, so losing or editing
+    # it cannot downgrade the capture to the no-receipt rule. The importer records the hash of the receipt bytes it read.
     receipt=imported/'usb-receipt.json'
-    if 'archiveSha256' in summary:
-        try:pulled=hashlib.sha256(receipt.read_bytes()).hexdigest()
-        except FileNotFoundError:pulled=None
-        if pulled is None or pulled!=summary.get('receiptSha256'):
-            raise ValueError('The USB pull receipt recorded when this probe was analyzed is missing or changed; analyze the latest probe again before fitting')
+    lost='The USB pull receipt recorded when this probe was analyzed is missing or changed; analyze the latest probe again before fitting'
+    if not isinstance(summary.get('receiptSha256'),str) or not receipt.is_file(): raise ValueError(lost)
     current = json.loads((root/'science-current.json').read_text())
     if current.get('status') != 'succeeded': raise ValueError('Complete a voice model fit first')
     run_dir = root/'science-runs'/current['runId']
@@ -122,13 +119,11 @@ def _run(root, import_id, expected_model_id, output):
     if set(profile) != {'JA','gain','direct_gain','coupling_gain','delay_s'}:
         raise ValueError('Probe profile requires JA, gain, direct_gain, coupling_gain and delay_s')
     # Re-import original bytes and supplemental evidence immediately before use.
-    import subprocess
-    from science.scripts.prepare_probe_capture import ROOT
+    from science.scripts.prepare_probe_capture import run_importer
     import tempfile
     verified=Path(tempfile.mkdtemp(prefix='verification-',dir=output))/'import'
-    subprocess.run(['node','--experimental-strip-types',str(ROOT/'science/scripts/import_probe_science.ts'),
-                    str(imported/summary['captureDirectory']),str(verified),
-                    str(configuration),*([str(receipt)] if 'archiveSha256' in summary else [])], check=True, stdout=subprocess.DEVNULL)
+    run_importer('science/scripts/import_probe_science.ts',imported/summary['captureDirectory'],verified,configuration,receipt)
+    if json.loads((verified/'probe-science-receipt.json').read_text())['receipt_sha256']!=summary['receiptSha256']: raise ValueError(lost)
     document = json.loads((verified/'probe-science-document.json').read_text())
     if document is None: raise ValueError('Probe evidence is no longer eligible')
     fit = json.loads((run_dir/'fit.json').read_text())

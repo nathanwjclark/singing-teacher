@@ -14,14 +14,15 @@ const finite=(v:unknown)=>typeof v==='number'&&Number.isFinite(v)
 const integer=(v:unknown)=>finite(v)&&Number.isSafeInteger(v)&&(v as number)>=0
 /** Reads one regular file by safe basename from `root` without following symlinks, bounded by `limit` bytes. */
 export async function readFrom(root:string,name:string,limit=128*1024*1024){if(typeof name!=='string'||name!==basename(name)||!/^[\w][\w.-]*$/.test(name))throw Error('Unsafe artifact path');const file=await open(resolve(root,name),constants.O_RDONLY|constants.O_NOFOLLOW);try{const stat=await file.stat();if(!stat.isFile()||stat.size>limit)throw Error('Invalid artifact size/type');const bytes=await file.readFile();if(bytes.length!==stat.size)throw Error('File changed during read');return bytes}finally{await file.close()}}
-/** The acquisition record of the app's `usb-receipt.json` (null for a receipt that has none), after checking the
- * sha256 and byte count of the `original.zip` beside it. Pass the result to receiptSource. */
-export async function pullAcquisition(receiptPath:string):Promise<unknown>{
- const root=await realpath(dirname(resolve(receiptPath))),pull=JSON.parse((await readFrom(root,basename(receiptPath),1024*1024)).toString())
+/** The app's `usb-receipt.json`, after checking the sha256 and byte count of the `original.zip` beside it: its
+ * acquisition record (null for a receipt that has none; pass it to receiptSource) and the sha256 of the exact receipt
+ * bytes read, which importers record so a later check compares these bytes rather than re-reading the file. */
+export async function pullReceipt(receiptPath:string):Promise<{acquisition:unknown;receiptSha256:string}>{
+ const root=await realpath(dirname(resolve(receiptPath))),bytes=await readFrom(root,basename(receiptPath),1024*1024),pull=JSON.parse(bytes.toString())
  if(!pull||typeof pull!=='object'||typeof pull.sha256!=='string'||!/^[a-f0-9]{64}$/.test(pull.sha256)||!Number.isSafeInteger(pull.bytes))throw Error('Pull receipt lacks the archive hash and byte count')
  const archive=await readFrom(root,'original.zip',512*1024*1024)
  if(archive.length!==pull.bytes||hash(archive)!==pull.sha256)throw Error('Pulled archive does not match its pull receipt')
- return receiptAcquisition(pull)
+ return {acquisition:receiptAcquisition(pull),receiptSha256:hash(bytes)}
 }
 /** probeSource with the pull receipt's acquisition record. Both importers classify through this, so both refuse a
  * repository-fixture receipt the manifest contradicts. */
@@ -30,7 +31,7 @@ export function receiptSource(manifest:unknown,acquisition?:unknown){
  if(source.attestation==='contradicted-fixture-receipt')throw Error('Repository-fixture pull receipt contradicts the capture manifest: only a marked software fixture without iPhone recorder fields may carry one')
  return source
 }
-/** `acquisition` is the pull receipt's record from pullAcquisition; omit it for an import with no receipt. */
+/** `acquisition` is the pull receipt's record from pullReceipt; omit it for an import with no receipt. */
 export async function importAcousticProbe(directory:string,output:string,acquisition?:unknown){
  const root=await realpath(directory)
  const read=(name:string)=>readFrom(root,name)
@@ -77,4 +78,4 @@ export async function importAcousticProbe(directory:string,output:string,acquisi
  await writeFile(resolve(outputRoot,'probe-measurement.json'),JSON.stringify(measurement,null,2))
  return measurement
 }
-if(process.argv[1]&&import.meta.url===pathToFileURL(resolve(process.argv[1])).href){const [directory,output,receipt]=process.argv.slice(2);if(!directory||!output)throw Error('Usage: node --experimental-strip-types scripts/import-acoustic-probe.ts CAPTURE_DIRECTORY PRIVATE_OUTPUT_DIRECTORY [USB_RECEIPT_JSON]');const r=await importAcousticProbe(directory,output,receipt===undefined?undefined:await pullAcquisition(receipt));console.log(JSON.stringify({id:r.id,captured:r.captured,responseUsable:r.responseUsable,includedInFit:r.includedInFit,quality:r.quality},null,2))}
+if(process.argv[1]&&import.meta.url===pathToFileURL(resolve(process.argv[1])).href){const [directory,output,receipt]=process.argv.slice(2);if(!directory||!output)throw Error('Usage: node --experimental-strip-types scripts/import-acoustic-probe.ts CAPTURE_DIRECTORY PRIVATE_OUTPUT_DIRECTORY [USB_RECEIPT_JSON]');const r=await importAcousticProbe(directory,output,receipt===undefined?undefined:(await pullReceipt(receipt)).acquisition);console.log(JSON.stringify({id:r.id,captured:r.captured,responseUsable:r.responseUsable,includedInFit:r.includedInFit,quality:r.quality},null,2))}

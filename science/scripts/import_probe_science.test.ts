@@ -158,6 +158,7 @@ test('a pull receipt decides whether a fixture label counts, and must match its 
   // A repository-fixture receipt on a marked fixture keeps the synthetic path and is recorded.
   const fixtureReceipt = await pulled(root, { transport: 'repository-fixture', generator: 'science/scripts/import_probe_science.test.ts' })
   let r = await importProbeScience(capture, join(root, 'fixture'), configPath, fixtureReceipt)
+  assert.equal(r.receipt.receipt_sha256, createHash('sha256').update(await readFile(fixtureReceipt)).digest('hex'))
   assert.equal(r.receipt.eligible_for_fit, true); assert.equal(r.receipt.attestation, 'repository-fixture-receipt'); assert.deepEqual(r.receipt.acquisition, { transport: 'repository-fixture', generator: 'science/scripts/import_probe_science.test.ts' })
   // The attack: the same stripped, marked manifest arriving through a devicectl pull is a human recording.
   r = await importProbeScience(capture, join(root, 'pulled'), configPath, await pulled(root, devicectl))
@@ -171,7 +172,7 @@ test('a pull receipt decides whether a fixture label counts, and must match its 
   assert.equal(r.receipt.eligible_for_fit, false); assert.equal(r.receipt.attestation, 'legacy-receipt'); assert.equal(r.receipt.acquisition, null); assert.match(r.receipt.reasons.join(), /does not name a known transport/)
   // Without a receipt (direct command-line import) the manifest-only rule applies and says so.
   r = await importProbeScience(capture, join(root, 'direct'), configPath)
-  assert.equal(r.receipt.eligible_for_fit, true); assert.equal(r.receipt.attestation, 'none'); assert.equal(r.receipt.acquisition, null)
+  assert.equal(r.receipt.eligible_for_fit, true); assert.equal(r.receipt.attestation, 'none'); assert.equal(r.receipt.acquisition, null); assert.equal(r.receipt.receipt_sha256, null)
   // An archive that differs from its receipt is refused before any output is written.
   const receipt = await pulled(root, devicectl), archive = await readFile(join(root, 'original.zip')); archive[0] ^= 1; await writeFile(join(root, 'original.zip'), archive)
   await assert.rejects(importProbeScience(capture, join(root, 'changed'), configPath, receipt), /does not match its pull receipt/)
