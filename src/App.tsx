@@ -17,10 +17,10 @@ import type { RecordingController } from './components/recording/RecordingContro
 import type { FinishedRecording } from './lib/recording'
 import type { AudioMeasurement, ObservationBundle, CandidateAnatomy, ContractRecord } from './contracts'
 import { measureRecording } from './lib/recordingMeasurements'
+import ExperimentDashboard from './components/experiments/ExperimentDashboard'
+import { AnatomyModes } from './components/anatomy/AnatomyModes'
 // The lazy Experiments panels import their own styles too; importing them here as well keeps each
 // stylesheet at its original place in the one app stylesheet (vite.config.ts), before App.css.
-import './components/experiments/ExperimentDashboard.css'
-import { AnatomyModes } from './components/anatomy/AnatomyModes'
 import './components/experiments/AcousticMappingPanel.css'
 import { readExperimentLedger, subscribeExperimentLedger } from './experiment/ledger'
 import { evaluatePrediction } from './evaluation'
@@ -47,6 +47,8 @@ import './App.css'
 // once their chunk arrives. Panels the studio depends on from its first render are imported statically instead:
 // - ScientificModelPanel runs the fit that the studio's Pull iPhone flow requests by window event.
 // - CoachLearningPanel hides the studio and its cues before the first paint during cue-free learning stages.
+// - ExperimentDashboard feeds engine candidates to the studio's Movement map and hosts the scoring setup;
+//   the three lazy panels inside it load alongside the others rather than after it.
 // A panel whose chunk fails to load, or that throws while rendering, shows a message in its own place and the
 // studio and other panels keep working. React logs the caught error to the console.
 class PanelBoundary extends Component<{children:ReactNode},{failed:boolean}>{
@@ -55,7 +57,6 @@ class PanelBoundary extends Component<{children:ReactNode},{failed:boolean}>{
   render(){return this.state.failed?<section><p role="alert" className="probe-error">This panel could not load. Reload the page to try again.</p></section>:this.props.children}
 }
 function panel<P extends object>(Panel:(props:P)=>ReactNode){return (props:P)=><PanelBoundary><Suspense fallback={null}><Panel {...props}/></Suspense></PanelBoundary>}
-const ExperimentDashboard=panel(lazy(()=>import('./components/experiments/ExperimentDashboard')))
 const ExperimentRunner=panel(lazy(()=>import('./components/experiments/ExperimentRunner').then(m=>({default:m.ExperimentRunner}))))
 const ReproducibilityPanel=panel(lazy(()=>import('./components/experiments/ReproducibilityPanel').then(m=>({default:m.ReproducibilityPanel}))))
 const AcousticMappingPanel=panel(lazy(()=>import('./components/experiments/AcousticMappingPanel').then(m=>({default:m.AcousticMappingPanel}))))
