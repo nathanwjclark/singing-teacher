@@ -118,6 +118,8 @@ VALUES = {
     'empty': {'dict': {}, 'list': [], 'rows': [{}, [], '', {'nested': []}] * 300, 'large': [[] for _ in range(600)]},
     'keys': {'outer': {1: 'x' * 1500, 2: {3: [0.5] * 300, 4: None}}, 'flat': {7: True, 8: False}},
     'list_root': [{'value': 'y' * 1100}, {'value': 'y' * 1100}, 1, None],
+    # State content shaped like node entries stays content: every child the writer emits is tagged.
+    'lookalike': {'reference': ['h', '0' * 64], 'rows': [['h', 'x' * 64], ['v', 1], ['d', {}]] * 40, 'leaf': ['l', ['h' * 1100]]},
 }
 
 
