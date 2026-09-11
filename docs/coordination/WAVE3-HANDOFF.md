@@ -5,6 +5,8 @@
 **Handoff date:** 2026-09-10  
 **Purpose:** give the next agent enough context to continue the prototype, finish the remaining first- and second-wave connections, and begin the third wave of scientific model improvement without confusing software execution with anatomical validation.
 
+Shareable rendering: [PDF handoff](../../output/pdf/TractStar-Wave3-Handoff.pdf). The Markdown file remains the editable source of truth.
+
 ## The product objective
 
 TractStar is an open-source singing research prototype. Its distinctive goal is to let a singer provide voice recordings, images/video and optional depth or acoustic-probe evidence; maintain competing hypotheses about that singer's vocal acoustics and visible anatomy; ask Astra to choose a safe, supported experiment; record the attempt and subjective sensation; compare the result with a prediction frozen before the attempt; and update or retain hypotheses with an explicit reason.
