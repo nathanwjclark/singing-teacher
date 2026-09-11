@@ -21,6 +21,8 @@ TongueSAM segmentation model; it does not say which data trained this prompt
 detector. The TongueSAM repository states no licence for those datasets.
 Whether any dataset terms apply to use of these weights is unknown.
 
-smoke-results.json lists the export script's output on the twelve upstream
-example images (image SHA-256, best box and score). It shows the export runs
-and agrees with PyTorch; it is not an accuracy measurement.
+smoke-results.json lists the exported ONNX model's output on the twelve
+upstream example images (image SHA-256, best box and score). The export
+script also compared every output with PyTorch and stops on disagreement,
+but these rows record only the ONNX output. They are not an accuracy
+measurement.
