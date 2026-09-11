@@ -23,6 +23,7 @@ window.setup=async()=>{const image=new Image();image.src='/public-example';await
 window.check=()=>({diagnostic:tracker.diagnostics(),tongue:frame.current.tongue,motion:createAnatomyMotion().update(frame.current,false,performance.now()).tongue,shared:{...anatomy.state.tongue}});
 // Sample every frame: a region shown continuously must never drop between results.
 window.continuity=milliseconds=>new Promise(resolve=>{const start=performance.now(),seen=new Map();let frames=0,missing=0;const sample=now=>{frames++;const t=frame.current.tongue;if(!t)missing++;else if(!seen.has(t.observedAt))seen.set(t.observedAt,now-t.observedAt);if(now-start<milliseconds)requestAnimationFrame(sample);else resolve({frames,missing,results:seen.size,lags:[...seen.values()]});};requestAnimationFrame(sample);});
+window.restart=()=>{tracker.close();tracker=createNeuralTongueTracker();};
 window.calibrate=()=>{tracker.resetMotionReference();window.calibratedAt=performance.now();};
 window.hold=()=>cancelAnimationFrame(raf);
 window.resume=()=>{raf=requestAnimationFrame(tick);};
@@ -32,7 +33,7 @@ window.grayInference=async()=>{const network=await loadTongueNetwork();try{const
 await window.setup();
 </script></body></html>`;
 
-type Harness={check():{diagnostic:{reason:string;capability?:string;abstained?:boolean};tongue?:Record<string,unknown>&{trackingMode?:string};motion:{visible:boolean;extension:number};shared:{visible:boolean;lift:number;extension:number}};continuity(ms:number):Promise<{frames:number;missing:number;results:number;lags:number[]}>;calibrate():void;calibratedAt:number;hold():void;resume():void;showGray():void;stop():void;grayInference():Promise<{kind:string;result:{box:unknown};milliseconds:number}>};
+type Harness={check():{diagnostic:{reason:string;capability?:string;abstained?:boolean};tongue?:Record<string,unknown>&{trackingMode?:string};motion:{visible:boolean;extension:number};shared:{visible:boolean;lift:number;extension:number}};continuity(ms:number):Promise<{frames:number;missing:number;results:number;lags:number[]}>;calibrate():void;calibratedAt:number;restart():void;hold():void;resume():void;showGray():void;stop():void;grayInference():Promise<{kind:string;result:{box:unknown};milliseconds:number}>};
 // The window handle is passed as the function's argument, so harness calls stay typed.
 const harness=(page:Page)=>async<T>(fn:(w:Harness)=>T|Promise<T>):Promise<T>=>{const w=await page.evaluateHandle(()=>window);try{return await w.evaluate(fn as never) as T;}finally{await w.dispose();}};
 
@@ -118,6 +119,16 @@ test('real public detector: continuous region, independent review export, real-s
   await expect.poll(()=>run(w=>w.check?.().diagnostic),{timeout:10000}).toEqual({state:'lost',reason:'Personal tongue model is incomplete: weights unavailable (HTTP 404)',abstained:false});
   await run(w=>w.stop());await page.unroute('**/api/tongue-neural/manifest');await page.unroute('**/api/tongue-neural/model');
 
+  // Weights that still fail verification after one fresh download are reported and not downloaded again on a camera restart.
+  let detectorRequests=0;
+  await page.route('**/models/tonguesam/detector.onnx',route=>{detectorRequests++;return route.fulfill({status:200,contentType:'application/octet-stream',body:Buffer.from('not the pinned model')});});
+  await page.goto(url);
+  const mismatch='Tongue baseline verification failed · the model file does not match its manifest; reload the page to retry';
+  await expect.poll(()=>run(w=>w.check?.().diagnostic.reason),{timeout:20000}).toBe(mismatch);
+  expect(detectorRequests).toBe(2);
+  await run(w=>w.restart());await expect.poll(()=>run(w=>w.check().diagnostic.reason),{timeout:10000}).toBe(mismatch);
+  expect(detectorRequests).toBe(2);
+  await run(w=>w.stop());await page.unroute('**/models/tonguesam/detector.onnx');
 
   // No model at all: capture and labeling continue, and nothing is recorded as a region result.
   expectedMissing.push('/models/tonguesam/manifest.json');
