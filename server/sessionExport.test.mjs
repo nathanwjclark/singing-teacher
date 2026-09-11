@@ -6,7 +6,8 @@ import {join, resolve} from 'node:path';
 import {createHash} from 'node:crypto';
 import {spawn} from 'node:child_process';
 import {createServer} from 'node:net';
-import {createSessionExportRoutes} from './sessionExport.mjs';
+import {MAX_FILE_BYTES, createSessionExportRoutes} from './sessionExport.mjs';
+import {REPORT_BYTES} from './sessionRecompute.mjs';
 
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
 async function fixture(t) {
@@ -73,7 +74,7 @@ test('cross-origin/nonlocal writes and changing current run cannot export mislea
 
 test('oversized optional receipt remains missing without breaking baseline replay', async t => {
   const {root, put} = await fixture(t);
-  await put('learning-memory/session-one.json', {sessionId: 'session-one', text: 'x'.repeat(2 * 1024 * 1024)});
+  await put('learning-memory/session-one.json', {sessionId: 'session-one', text: 'x'.repeat(MAX_FILE_BYTES)});
   let result;
   const route = createSessionExportRoutes({dataRoot: root, env, fetchImpl: async () => Response.json(replay()), json: (_r, _s, data) => {result = data;}});
   await request(route); assert.equal(result.summary.modelId, 'updated-model'); assert.ok(result.missing.some(row => row.source.startsWith('learning-memory/')));
@@ -233,8 +234,9 @@ test('exports the latest score recomputation only while its report matches the r
   data=await exported();
   assert.ok(!data.artifacts.some(a=>a.source.startsWith('replay-verifications/')));
   assert.deepEqual(data.missing.find(row=>row.source===dir),{source:dir,reason:'Completed score recomputation receipt or report is missing'});
-  // Reports may reach the verifier's 8 MiB cap, above the 2 MiB limit for other receipts.
-  const large={...report,operations:[{jobId:'x',padding:'p'.repeat(3*1024*1024)}]},largeBytes=JSON.stringify(large);
+  // Reports may reach the verifier's cap (REPORT_BYTES), above the limit for other receipts.
+  const large={...report,operations:[{jobId:'x',padding:'p'.repeat(MAX_FILE_BYTES)}]},largeBytes=JSON.stringify(large);
+  assert.ok(MAX_FILE_BYTES<Buffer.byteLength(largeBytes)&&Buffer.byteLength(largeBytes)<=REPORT_BYTES);
   const largeReceipt={...receipt,reportSha256:createHash('sha256').update(largeBytes).digest('hex'),reportByteLength:Buffer.byteLength(largeBytes)};
   await put(dir+'/report.json',large);await put(dir+'/receipt.json',largeReceipt);await put('session-recompute-current.json',largeReceipt);
   data=await exported();

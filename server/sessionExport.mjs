@@ -8,7 +8,7 @@ import {isDeepStrictEqual} from 'node:util';
 const safeId = value => typeof value === 'string' && /^[A-Za-z0-9_-]{1,160}$/.test(value);
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 const MAX_BYTES = 24 * 1024 * 1024;
-const MAX_FILE_BYTES = 2 * 1024 * 1024;
+export const MAX_FILE_BYTES = 2 * 1024 * 1024;
 const MAX_FILES = 100;
 const sensitive = /^(authorization|api[_-]?key|openai_api_key|science_token|token|access_token|refresh_token|password|secret|credential)$/i;
 const media = /^(pcm|base64|pcm_base64|audio_base64|data_base64|imageDataUrl|audioDataUrl)$/i;
