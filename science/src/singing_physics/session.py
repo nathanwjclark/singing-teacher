@@ -48,15 +48,13 @@ def _put(nodes, body):
 def _split(value, nodes):
     """Child entry of value: (canonical text if inline else None, stored node digest or None, canonical length).
 
-    Iterative and bottom-up, so any depth canonical() can serialize can be stored. A value whose
+    value is JSON data as json.loads returns it (lists, string keys). Iterative and bottom-up, so any depth canonical() can serialize can be stored. A value whose
     canonical JSON reaches INLINE_BYTES is stored once in nodes as ["v",value], ["d",{key:child}] or
     ["l",[child]]; smaller values stay inline in their parent, so no text is copied more than once per node."""
     def leaf(text):
         return (text, None, len(text)) if len(text) < INLINE_BYTES else (None, _put(nodes, '["v",'+text+']'), len(text))
     def opened(value, out):
         """A frame [keys, items, next index, parts, out] for a container holding containers; any other value is finished into out."""
-        if isinstance(value, dict) and any(type(key) is not str for key in value):
-            value = json.loads(canonical(value))  # The key normalization v1 storage and reload applied.
         keys = sorted(value) if isinstance(value, dict) else None
         items = [value[key] for key in keys] if keys is not None else value if isinstance(value, list) else ()
         if any(isinstance(item, (dict, list)) for item in items): return [keys, items, 0, [], out]
@@ -277,14 +275,15 @@ class SessionController:
         # A format 2 event binds the state by its root node digest; nodes are stored once per session.
         _,previous,_,stored=self._read(db)
         state['version']+=1
-        nodes={}; root=_root(state,nodes); text=canonical(state)
+        text=canonical(state)
         if len(text)>MAX_STATE_BYTES: raise ValueError('Session state exceeds the ledger size bound')
-        # Prove, before anything is written, that readers rebuild exactly this state from the stored tree:
-        # a state they could not read back rolls the whole command back instead of bricking the session.
-        tree=_text(['h',root],{**stored,**{key:_node(body) for key,body in nodes.items()}})
-        if tree!=text: text=canonical(json.loads(text))  # Non-string keys sort as strings once stored, as v1 reads did.
+        # Store the form readers get back (as a v1 reload did: string keys, tuples as lists, surrogate pairs
+        # joined), then prove before anything is written that the stored tree rebuilds exactly its canonical
+        # text. A state readers or verify_replay could not reproduce rolls the command back.
+        value=json.loads(text); text=canonical(value)
+        nodes={}; root=_root(value,nodes)
+        tree=_text(['h',root],{**stored,**{key:_node(body) for key,body in nodes.items() if key not in stored}})
         if tree!=text: raise ValueError('Session state cannot be stored readably')
-        json.loads(text)
         db.executemany('INSERT OR IGNORE INTO nodes VALUES(?,?,?)',[(self.session_id,key,body) for key,body in nodes.items() if key not in stored])
         event={'format':2,'session_id':self.session_id,'version':state['version'],'previous_sha256':previous,'action':action,
                'received_at':_now(),'details':details,'state_root':root}

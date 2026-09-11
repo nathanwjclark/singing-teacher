@@ -128,8 +128,8 @@ VALUES = {
 
 
 def stored(value):
-    """Root digest and the parsed node set the writer produces for value."""
-    bodies = {}; root = _root(value, bodies)
+    """Root digest and the parsed node set the writer produces for value (it splits the parsed form)."""
+    bodies = {}; root = _root(json.loads(canonical(value)), bodies)
     assert all(sha(body.encode()) == digest for digest, body in bodies.items())
     return root, {digest: _node(body) for digest, body in bodies.items()}
 
@@ -139,7 +139,7 @@ def test_split_and_join_round_trip_canonical_json(name):
     value = VALUES[name]; root, nodes = stored(value)
     # Non-string keys are stored as the strings v1 storage and reload produced (sorted as strings).
     expected = canonical(json.loads(canonical(value)))
-    assert _split(value, {})[2] == len(expected) and canonical(join(root, nodes)) == expected
+    assert _split(json.loads(canonical(value)), {})[2] == len(expected) and canonical(join(root, nodes)) == expected
     assert name in ('tiny', 'text', 'flat_root', 'scalar_root') or len(nodes) > 1  # Large values really are split into several nodes.
 
 
@@ -277,3 +277,21 @@ def test_non_string_keys_are_stored_as_v1_read_them_back(tmp_path):
         state['sensations'] = [{2: 'a', 10: 'b' * 1100}]
         with controller._db() as db: controller._append(db, state, 'integer-keys', {})
         assert read_ledger(tmp_path/'sessions', 'keys')['state']['sensations'] == [{'2': 'a', '10': 'b' * 1100}]
+
+
+@pytest.mark.parametrize('extra', [({2: 'a', 10: 'b'},), {chr(0xd800)+chr(0xdfff): 1, chr(0xdfff): 2}, {2: 'a', 10: 'b'}],
+                         ids=['tuple-holding-integer-keys', 'adjacent-surrogates-in-keys', 'integer-keys'])
+def test_every_stored_state_verifies_as_a_supplied_replay(tmp_path, extra):
+    # Values whose parsed form differs from the Python value: the ledger stores what readers get back,
+    # so the stored ledger reads and verifies as a supplied replay, or the write is refused with nothing written.
+    with JobService(tmp_path/'jobs') as service:
+        controller = SessionController(tmp_path/'sessions', service, 'reparse')
+        state = controller.execute({'action': 'state'})['state']
+        state['sensations'] = [extra]
+        try:
+            with controller._db() as db: controller._append(db, state, 'reparse', {})
+        except ValueError:
+            assert events(tmp_path) == 0; return
+    replay = json.loads(json.dumps(read_ledger(tmp_path/'sessions', 'reparse')))
+    assert verify_replay(replay, 'reparse', replay['ledger_sha256']) == replay['ledger_sha256']
+    assert replay['state']['sensations'] == json.loads(canonical([extra]))
