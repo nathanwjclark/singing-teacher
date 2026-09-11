@@ -28,12 +28,13 @@ jobs:
       - name: Typecheck and build
         run: npm run build
 
-  # The native build and the numerical suite are verified on macOS arm64
-  # (science/README.md). On Linux the library builds and the Node tests pass,
-  # but 15 science tests that pass on macOS fail, so Linux stays unsupported
-  # until that is investigated rather than masked here.
+  # The native build and the numerical suite are verified on macOS 15 arm64
+  # (science/README.md); the numbers depend on the toolchain, so the image is
+  # pinned rather than macos-latest. On Linux the library builds and the Node
+  # tests pass, but 15 science tests that pass on macOS fail, so Linux stays
+  # unsupported until that is investigated rather than masked here.
   test:
-    runs-on: macos-latest
+    runs-on: macos-15
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
@@ -53,18 +54,21 @@ jobs:
         run: |
           python -m venv science/.venv
           science/.venv/bin/python -m pip install -e './science[test]'
-      - name: Identify the pinned native source
+      - name: Identify the pinned native source and toolchain image
         id: native
-        run: echo "revision=$(git rev-parse HEAD:science/vendor/vocaltractlab)" >> "$GITHUB_OUTPUT"
+        run: |
+          echo "revision=$(git rev-parse HEAD:science/vendor/vocaltractlab)" >> "$GITHUB_OUTPUT"
+          echo "image=${ImageOS}-${ImageVersion}" >> "$GITHUB_OUTPUT"
       # The build script exports the pinned submodule revision, applies the
-      # versioned patch and runs the native tests, so these inputs fully
-      # determine the cached library. The engine re-checks its hash at load.
+      # versioned patch and runs the native tests. Those inputs plus the runner
+      # image (compiler) determine the library, so a change to any of them
+      # rebuilds and retests it; the engine re-checks the library hash at load.
       - name: Restore the native build
         id: native-cache
         uses: actions/cache@v6
         with:
           path: science/.build/native
-          key: vtl-${{ runner.os }}-${{ steps.native.outputs.revision }}-${{ hashFiles('science/patches/**', 'science/scripts/build_native.py', 'science/tests/anatomy_lifecycle.cpp') }}
+          key: vtl-${{ runner.arch }}-${{ steps.native.outputs.image }}-${{ steps.native.outputs.revision }}-${{ hashFiles('science/patches/**', 'science/scripts/build_native.py', 'science/tests/anatomy_lifecycle.cpp') }}
       - name: Build and test the native library
         if: steps.native-cache.outputs.cache-hit != 'true'
         run: science/.venv/bin/python science/scripts/build_native.py
