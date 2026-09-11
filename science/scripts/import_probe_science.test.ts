@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { createHash } from 'node:crypto'
 import { makeFixture } from '../../scripts/import-acoustic-probe.test.ts'
-import { importProbeScience } from './import_probe_science.ts'
+import { importProbeScience, DECLARED_CALIBRATION_REASON } from './import_probe_science.ts'
 
 export async function setupFixture() {
   const root = await mkdtemp(join(tmpdir(), 'probe-science-'))
@@ -72,14 +72,44 @@ test('corrupt source/evidence, incompatible grid and physical fixture calibratio
   config.calibration.frequency_hz[0] += 1; await writeFile(configPath, JSON.stringify(config))
   await assert.rejects(importProbeScience(capture, join(root, 'grid'), configPath), /grid/)
   config.calibration.frequency_hz[0] -= 1; await writeFile(configPath, JSON.stringify(config))
-  native.provenance = 'human-recording'; await writeFile(join(capture, 'manifest.json'), JSON.stringify(native))
+  native.provenance = 'physical-reference'; await writeFile(join(capture, 'manifest.json'), JSON.stringify(native))
   await assert.rejects(importProbeScience(capture, join(root, 'physical'), configPath), /measured/)
+  native.provenance = 'human-recording'; await writeFile(join(capture, 'manifest.json'), JSON.stringify(native))
+  const human = await importProbeScience(capture, join(root, 'human'), configPath)
+  assert.equal(human.probe_document, null); assert.equal(human.receipt.reasons[0], DECLARED_CALIBRATION_REASON)
   native.provenance = 'software-fixture'; await writeFile(join(capture, 'manifest.json'), JSON.stringify(native))
   const original = await readFile(join(capture, 'received.f32le')); original[0] ^= 1
   await writeFile(join(capture, 'received.f32le'), original)
   await assert.rejects(importProbeScience(capture, join(root, 'corrupt'), configPath), /hash\/byte/)
   await writeFile(join(root, 'calibration-evidence.txt'), 'changed')
   await assert.rejects(importProbeScience(capture, join(root, 'evidence'), configPath), /evidence hash/)
+})
+
+// A self-declared "measured" package (hand-written arrays, typed placement) is metadata, not measurement.
+export async function declaredMeasuredPackage(provenance: 'human-recording' | 'physical-reference') {
+  const fixture = await setupFixture(), { capture, native, config, configPath } = fixture
+  Object.assign(native, { provenance, pose: 'a' }); native.calibration = { ...native.calibration, placementId: 'placement', levelCheck: { routeSignature: 'declared-route' } }
+  await writeFile(join(capture, 'manifest.json'), JSON.stringify(native))
+  config.calibration.kind = 'measured'; Object.assign(config.processing, { kind: 'characterized-measurement' })
+  Object.assign(config.capture_binding, { manifest_sha256: createHash('sha256').update(await readFile(join(capture, 'manifest.json'))).digest('hex'), native_route_signature: 'declared-route' })
+  await writeFile(configPath, JSON.stringify(config))
+  return fixture
+}
+
+test('real-voice capture with a metadata-only calibration package stays ineligible with the declared-calibration reason', async () => {
+  const { root, capture, configPath } = await declaredMeasuredPackage('human-recording')
+  const r = await importProbeScience(capture, join(root, 'human'), configPath)
+  assert.equal(r.receipt.eligible_for_fit, false); assert.equal(r.probe_document, null); assert.equal(r.receipt.captured, true)
+  assert.deepEqual(r.receipt.reasons, [DECLARED_CALIBRATION_REASON])
+  assert.equal(JSON.parse(await readFile(join(root, 'human', 'probe-science-document.json'), 'utf8')), null)
+})
+
+test('reference-object and synthetic captures keep the existing calibrated import path', async () => {
+  const reference = await declaredMeasuredPackage('physical-reference')
+  const r = await importProbeScience(reference.capture, join(reference.root, 'reference'), reference.configPath)
+  assert.equal(r.receipt.eligible_for_fit, true); assert.equal(r.probe_document!.trials[0].source.kind, 'physical-reference')
+  const synthetic = await setupFixture()
+  assert.equal((await importProbeScience(synthetic.capture, join(synthetic.root, 'synthetic'), synthetic.configPath)).probe_document!.trials[0].source.kind, 'synthetic-fixture')
 })
 
 // This test runs the genuine native consumer; the Python runtime must have science dependencies.

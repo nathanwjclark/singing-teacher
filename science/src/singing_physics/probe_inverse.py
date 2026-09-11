@@ -100,6 +100,9 @@ def _parse_record(record):
         raise ValueError('Explicit calibration and placement required')
     if source['kind'] != 'synthetic-fixture' and calibration.get('kind') != 'measured':
         raise ValueError('physical_response_requires_measured_calibration')
+    if source['kind'] == 'human-recording':
+        # A "measured" label is a declaration; no step derives calibration from measurement recordings yet.
+        raise ValueError('human_recording_calibration_declared_not_measured')
     for key in ('calibration_id', 'route_id', 'placement_id'):
         _id(calibration.get(key))
     if not isinstance(calibration.get('source_hashes'), list) or not calibration['source_hashes']:
