@@ -26,7 +26,8 @@ test('source policy changes invalidate fit and forecast cache while preserving h
  await writeFile(join(repo,'science/src/singing_physics/phonation.py'),'science/src/singing_physics/phonation.py');
  assert.equal((await readSourceInferenceContext({repo,dataRoot:root,enabled:true})).fit.status,'succeeded');
  assert.equal(policy.sourceModel,'geometric');const model=process.env.PHONATION_SOURCE_MODEL;process.env.PHONATION_SOURCE_MODEL='two_mass';
- try{const switched=await readSourceInferenceContext({repo,dataRoot:root,enabled:true});assert.equal(switched.fit.status,'unsupported');assert.notEqual(sourceFitKey(switched),sourceFitKey(before));}
+ try{const switched=await readSourceInferenceContext({repo,dataRoot:root,enabled:true});assert.equal(switched.fit.status,'unsupported');assert.notEqual(sourceFitKey(switched),sourceFitKey(before));
+  process.env.PHONATION_SOURCE_MODEL='two-mass';await assert.rejects(sourceRuntimePolicy(repo),/geometric or two_mass/);const invalid=await readSourceInferenceContext({repo,dataRoot:root,enabled:true});assert.equal(invalid.fit.status,'unsupported');assert.equal(invalid.sourcePolicySha256,null);}
  finally{if(model===undefined)delete process.env.PHONATION_SOURCE_MODEL;else process.env.PHONATION_SOURCE_MODEL=model;}
 });
 test('forecast identity changes with bank/ranking content rather than receipt count alone',()=>{
