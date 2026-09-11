@@ -19,7 +19,7 @@ The output directory must be new. It receives full fit, bank and score artifacts
 
 ## Results (revision 1)
 
-Scientific outcome: **inconclusive** under the frozen decision rule. Evidence source: synthetic. The committed results come from executing `run.py` at commit `d3a1d28` (now `aad0385`, see "Commit identities") on a clean checkout: 374 of the 592 allowed native calls, about 2 minutes. Neither family reached 6 wins under both scores. The geometric glottis won 4 of 8 cases under the primary score and 6 of 8 under the pitch-excluded score; the two-mass model won 1 and 0. Read these counts only together with the main limitation below.
+Scientific outcome: **inconclusive** under the frozen decision rule. Evidence source: synthetic. The committed results come from executing `run.py` at original commit `d3a1d28` (see "Commit provenance") on a clean checkout: 374 of the 592 allowed native calls, about 2 minutes. Neither family reached 6 wins under both scores. The geometric glottis won 4 of 8 cases under the primary score and 6 of 8 under the pitch-excluded score; the two-mass model won 1 and 0. Read these counts only together with the main limitation below.
 
 ### Main limitation: the frozen F0 rule favours the geometric glottis
 
@@ -56,19 +56,31 @@ The protocol counts an unscorable selected candidate as a failure under every sc
 
 ### Execution history
 
-The first execution stopped before any held-out frame existed because of a harness identity bug (fixed in `a622381`, now `0f07340`); its one completed fit was not read. The second, complete execution at `a622381` gave exactly the case metrics and decision above with 376 calls. Review then found that its compact records lacked the extractor's failure reasons, so the harness was changed to keep them (`d3a1d28`, now `aad0385`, which also stops synthesizing held-out frames when no bank exists) and the comparison was executed a third time. Native synthesis and extraction are deterministic here: every case metric and the decision matched the second execution exactly. `protocol.json` never changed. `test_protocol.py` gained its results-consistency test after the second execution.
+The first execution stopped before any held-out frame existed because of a harness identity bug (fixed in original commit `a622381`); its one completed fit was not read. The second, complete execution at `a622381` gave exactly the case metrics and decision above with 376 calls. Review then found that its compact records lacked the extractor's failure reasons, so the harness was changed to keep them (original commit `d3a1d28`, which also stops synthesizing held-out frames when no bank exists) and the comparison was executed a third time. Native synthesis and extraction are deterministic here: every case metric and the decision matched the second execution exactly. `protocol.json` never changed. `test_protocol.py` gained its results-consistency test after the second execution.
 
-### Commit identities
+### Commit provenance
 
-This branch was later rebased onto `claude/wave3-probe`, which changed every commit id. Pre-rebase ids quoted above and recorded in `report.json` map as follows: `2591001` (protocol freeze) → `655c5f4`, `a622381` → `0f07340`, `e578181` → `9f6eabd`, `d3a1d28` (the executed commit) → `aad0385`, `5359e8d` → `b70b39a`. The subject of `9f6eabd` ("inconclusive, leaning geometric") predates the F0-rule finding; `b70b39a` and this README supersede its framing.
+`report.json` and the text above name the commits where the protocol was frozen and the comparison ran. Those commits are not ancestors of this branch: the branch was later rebased twice onto `claude/wave3-probe`. The originals are preserved under two tags that are pushed alongside this branch: `wave3-source-run-original` (the original chain, `2591001` to `5359e8d`, including the executed commits `a622381` and `d3a1d28`) and `wave3-source-before-restack` (the same work after the first rebase). Each original maps to a commit on this branch, named by subject, whose `evaluation/wave3/source/` tree and source-adapter files are byte-identical. Tree and blob ids do not change when a branch is rebased, so check with `git rev-parse <commit>:<path>`. The rest of `science/src/` differs because the base branch changed other modules.
+
+| Original commit (tag) | Role | Commit on this branch (subject) | Identical `evaluation/wave3/source/` tree | Identical `phonation.py` blob |
+|---|---|---|---|---|
+| `2591001` (`wave3-source-run-original`) | Protocol, harness and integrity tests frozen before any run | "Freeze the equal-budget source-family comparison before running it" | `a5b20be6d55736ab5b65c29b7550bbc18a8d469f` | `511d85544f6fef5463f098c516a270e3e463e5ed` |
+| `a622381` (`wave3-source-run-original`) | Harness identity fix; the second execution ran here | "Bind calibration frames to their trial ids in the source comparison harness" | `48ad0a653452d05f9ba4dfbdc20e8c88864725b3` | `511d85544f6fef5463f098c516a270e3e463e5ed` |
+| `e578181` (`wave3-source-run-original`) | Second-execution results | "Record the source-family comparison: inconclusive, leaning geometric" | `0476020f505cf7278fc8b7b97fc690658e4bb51d` | `511d85544f6fef5463f098c516a270e3e463e5ed` |
+| `d3a1d28` (`wave3-source-run-original`) | Harness keeping failure reasons; the committed results ran here (`report.json` provenance) | "Keep failure reasons and all comparison families in the comparison records" | `fd5e6e88e4a3a67fe3932b40f181d3a8b67034a3` | `9e63e3675537644040ad4013c1ab9974ec6e3615` |
+| `5359e8d` (`wave3-source-run-original`) | Committed results and report | "Replace comparison records with the re-execution that keeps failure reasons" | `72a1af23c22291dcd788bc69ed2f67c8337ad1e8` | `9e63e3675537644040ad4013c1ab9974ec6e3615` |
+
+At all five, `engine.py` is blob `760be92941fe75b2f7431bace8284350a8b1b5fc`, `pcm_inverse.py` is `bc5e4727367e3bff00d76902016373d50ba20ae0` and `science/scripts/phonation_bridge.ts` is `193a6b1b8ddab417fafee2458197c98ceb45e9a8`, identical on the matching branch commits. The ordering evidence is in the original commit and run times: `2591001` was committed at 04:41:03 UTC and the complete second execution started at 04:43:06 UTC; `d3a1d28` was committed at 05:05:29 UTC and the third execution started at 05:05:34 UTC (`report.json` `started_at`). The subject "inconclusive, leaning geometric" predates the F0-rule finding; the "Replace comparison records…" commit and this README supersede its framing.
 
 ## Code changes since the run
 
-`report.json` pins the adapter, dependency and extractor hashes the run used; `test_protocol.py` fails if a file differs from them without being listed here. The results were not re-executed after these changes.
+`report.json` pins the SHA-256 of the adapter, its dependencies and every extractor file the run used. `test_protocol.py` fails unless each file that now differs has a row here with both the recorded and the current hash (first 12 hex digits), so a later edit to a listed file also needs a new row. The results were not re-executed after these changes.
 
-- `src/contracts/probes.ts`: changed on `claude/wave3-probe`, which this branch was rebased onto. It is in the extractor signature because every contract file is hashed; the phonation descriptor code (`src/phonation/measure.ts`, `src/lib/audio.ts`, `src/phonation/types.ts`) is unchanged.
-- `science/src/singing_physics/engine.py`: the speaker file is read once at start-up and every native load, including the certified one, uses those verified bytes through a private temporary copy; stale copies from killed processes are removed on start. The loaded bytes are the same as in the run, and native tests assert bit-identical synthesis after restoration.
-- `science/src/singing_physics/phonation.py`: `source_capability` uses the engine's verified speaker bytes; `forecast_phonation_bank` rejects banks whose alternatives were fitted with different reference gains and does not commit a mixed-family bank that a deadline left partly covered. The run used gain 2 for every candidate and had no deadline or cancellation, so neither rule applies to it.
+| File | SHA-256 recorded with the run | Current SHA-256 | Change and effect on this run |
+|---|---|---|---|
+| `src/contracts/probes.ts` | `2c9001d74f1e` | `825b09b37dab` | Changed on `claude/wave3-probe`, the base branch. Hashed because every contract file is in the extractor signature; the phonation descriptor code (`src/phonation/measure.ts`, `src/lib/audio.ts`, `src/phonation/types.ts`) is unchanged. |
+| `science/src/singing_physics/engine.py` | `180e1d6c1779` | `d2801d1b0177` | The speaker file is read once at start-up and every native load, including the certified one, uses those verified bytes through a private temporary copy; stale copies from killed processes are removed on start. The loaded bytes are the same as in the run, and native tests assert bit-identical synthesis after restoration. |
+| `science/src/singing_physics/phonation.py` | `58ed517ccc63` | `d0f42d19e23d` | `source_capability` uses the engine's verified speaker bytes. `forecast_phonation_bank` rejects banks whose alternatives were fitted with different reference gains or whose declared gain differs from the fitted one, and does not commit a mixed-family bank that a deadline left partly covered. The run used gain 2 for every fit and bank and had no deadline or cancellation, so none of these rules applies to it. |
 
 ## Reading the results
 

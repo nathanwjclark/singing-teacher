@@ -113,5 +113,8 @@ def test_code_changed_since_the_run_is_listed_in_the_readme():
               **{f'science/src/singing_physics/{name}': value for name, value in recorded['source_adapter_dependencies'].items()}, **recorded['extractor_signature']}
     drifted = sorted(path for path in set(current) | set(pinned) if current.get(path) != pinned.get(path))
     readme = (Path(__file__).parent/'README.md').read_text()
-    disclosed = readme[readme.index('## Code changes since the run'):]
-    assert all(f'`{path}`' in disclosed for path in drifted), drifted
+    section = readme[readme.index('## Code changes since the run'):]
+    rows = {line.split('|')[1].strip(): line for line in section.splitlines() if line.startswith('| `')}
+    for path in drifted:
+        row = rows.get(f'`{path}`')
+        assert row and f'`{pinned.get(path, "absent")[:12]}`' in row and f'`{current.get(path, "absent")[:12]}`' in row, (path, pinned.get(path), current.get(path))
