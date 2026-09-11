@@ -254,6 +254,10 @@ def test_an_attempt_no_alternative_fits_is_kept_but_never_shifts_execution_weigh
     frozen = learning['forecasts'][-1]
     bound = frozen['artifact']['maximum_best_fit_square_sum']
     assert bound == pytest.approx(chi2.ppf(.99, len(SCALES)))
+    assert frozen['artifact']['compatibility']['policy']['absolute_fit'].endswith('not a calibrated test')
+    old = deepcopy(frozen['artifact']); del old['maximum_best_fit_square_sum']
+    with pytest.raises(ValueError, match='predates the absolute-fit policy'):
+        score_control_pcm(frozen=seal(old), pcm=frame(FIRST, CONTROLS[0], 10), metadata=metadata('target-3', 10))
     # 300 Hz lies five pitch scales above the highest alternative: a relative softmax would still
     # hand the mass to 'higher', which would read an offset as an execution preference.
     offset = score_control_pcm(frozen=frozen, pcm=frame(FIRST, {'JA': -3., 'f0_hz': 300.}, 8), metadata=metadata('target-3', 8))['artifact']
@@ -267,6 +271,15 @@ def test_an_attempt_no_alternative_fits_is_kept_but_never_shifts_execution_weigh
     # The offset stays visible where it belongs: in the separately reported residuals.
     calibration = residual_calibration(learning['history'] + [receipt], key, anatomies, SCALES)
     assert calibration['by_anatomy'][anatomies[0]]['count'] == 4
+    # With one anatomy stopped and the other not fitting, the reason names both.
+    mixed = deepcopy(frozen['artifact']); second = anatomies[1]
+    for row in mixed['alternatives']:
+        if row['anatomy_sha256'] == second: row.update(status='stopped', features=None, reason='Control forecast timed out before this alternative was synthesized')
+    for row in mixed['conditional_predictions']:
+        if row['anatomy_sha256'] == second: row.update(status='incomplete', features=None)
+    both = score_control_pcm(frozen=seal(mixed), pcm=frame(FIRST, {'JA': -3., 'f0_hz': 300.}, 9), metadata=metadata('target-3', 9))['artifact']
+    assert both['status'] == 'no-alternative-fits'
+    assert both['reason'] == 'No frozen alternative fits within the declared bound for some anatomies; Some frozen anatomy predictions are incomplete'
     fitted = learning['history'][0]['artifact']['absolute_fit']['by_anatomy']
     assert all(row['status'] == 'fits' and row['best_standardized_square_sum'] <= bound for row in fitted)
 

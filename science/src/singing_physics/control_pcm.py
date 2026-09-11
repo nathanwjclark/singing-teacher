@@ -49,7 +49,7 @@ def policy():
             'gain': 'one declared acquisition nuisance for the whole bank; not an execution alternative',
             'absolute_fit': f'an anatomy counts for an attempt only if its best alternative has a standardized square sum at or below the chi-square {FIT_QUANTILE} '
                             'quantile for the declared descriptor count; otherwise no alternative fits (acquisition chain, anatomy or bank mismatch) '
-                            'and relative affinities would absorb that bias as execution preference',
+                            'and relative affinities would absorb that bias as execution preference; an engineering bound under engineering scales, not a calibrated test',
             'interpretation': 'Standardized-descriptor affinities under engineering scales; not execution probabilities, measured movement or a calibrated posterior'}
 
 
@@ -277,6 +277,7 @@ def score_control_pcm(*, frozen, pcm, metadata, node_binary=None):
                             start_ms=profile['frame_start_sample'] / profile['sample_rate_hz'] * 1000,
                             source_kind=metadata['sourceKind'], node_binary=node_binary)
     observed, missing = _available(canonical, scales)
+    if 'maximum_best_fit_square_sum' not in data: raise ValueError('Forecast predates the absolute-fit policy; freeze a new prediction')
     bound = finite(data['maximum_best_fit_square_sum'], 'maximum_best_fit_square_sum')
     scores, support, residuals, fits = [], {}, [], []
     for row in data['alternatives']:
@@ -308,8 +309,9 @@ def score_control_pcm(*, frozen, pcm, metadata, node_binary=None):
                  'target_id': data['target_id'], 'attempt_id': metadata['attemptId'], 'artifact_id': metadata['artifactId'],
                  'observed_at': metadata['evidenceAt'], 'received_at': received, 'observation_hashes': sorted(set(hashes) | {frame_sha}),
                  'canonical': canonical, 'alternatives': scores, 'control_support': support, 'status': status,
-                 'reason': None if status == 'scored' else missing or ('No frozen alternative fits within the declared bound for some anatomies'
-                           if any(row['status'] == 'no-alternative-fits' for row in fits) else 'Some frozen anatomy predictions are incomplete'),
+                 'reason': None if status == 'scored' else missing or '; '.join(text for text, present in (
+                           ('No frozen alternative fits within the declared bound for some anatomies', any(row['status'] == 'no-alternative-fits' for row in fits)),
+                           ('Some frozen anatomy predictions are incomplete', any(row['status'] == 'unscorable' for row in fits))) if present),
                  'absolute_fit': {'maximum_best_fit_square_sum': bound, 'by_anatomy': fits},
                  'residual_summary': {'by_anatomy': residuals, 'scope': 'Observed minus frozen weighted acoustic prediction; reported separately, never a correction or physical attribution'},
                  'actual_synthesis_calls': 0, 'actual_extractions': 1, 'model_updated': False, 'movement_measured': False})
