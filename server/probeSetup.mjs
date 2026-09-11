@@ -39,7 +39,8 @@ export async function probeSetupStatus(dataRoot,importId){
    requireValue(['capture','unpacked/sound'].includes(summary.captureDirectory),'Invalid original probe capture path');
    const manifestBytes=await bytes(join(folder,summary.captureDirectory,'manifest.json'));
    const manifest=JSON.parse(manifestBytes);
-   const source=probeSource(manifest);
+   // The pull receipt copied beside the archive at import; a legacy receipt has no acquisition record.
+   const pull=await read(join(folder,'usb-receipt.json')),source=probeSource(manifest,pull?pull.acquisition??null:undefined);
    capture={importId,captureId:manifest.captureId,manifestSha256:hash(manifestBytes),provenance:source.kind,declaredProvenance:source.declared,
     pose:manifest.pose??null,placementId:manifest.calibration?.placementId??null,routeSignature:manifest.calibration?.levelCheck?.routeSignature??null};
   }
@@ -100,7 +101,7 @@ export async function saveProbeSetup({repo,dataRoot,body,runProcess}){
   await write(join(staging,'configuration.json'),configuration);await write(join(staging,'profile.json'),body.profile);
   for(const [name,data] of supplied)await write(join(staging,name),data);
   const imported=await read(join(dataRoot,'probe-imports',body.importId,'summary.json'));
-  await runProcess(process.execPath,['--experimental-strip-types',join(repo,'science/scripts/import_probe_science.ts'),join(dataRoot,'probe-imports',body.importId,imported.captureDirectory),join(staging,'verification'),join(staging,'configuration.json')],{cwd:repo,timeout:60000,maxBuffer:65536});
+  await runProcess(process.execPath,['--experimental-strip-types',join(repo,'science/scripts/import_probe_science.ts'),join(dataRoot,'probe-imports',body.importId,imported.captureDirectory),join(staging,'verification'),join(staging,'configuration.json'),join(dataRoot,'probe-imports',body.importId,'usb-receipt.json')],{cwd:repo,timeout:60000,maxBuffer:65536});
   const verified=await read(join(staging,'verification/probe-science-receipt.json'));
   requireValue(verified?.eligible_for_fit,`Calibration is not eligible: ${(verified?.reasons??['verification unavailable']).join('; ')}`);
   const receipt={setupId:body.requestId,importId:body.importId,createdAt:new Date().toISOString(),requestSha256,configurationSha256:hash(await bytes(join(staging,'configuration.json'))),profileSha256:hash(await bytes(join(staging,'profile.json'))),packageSha256:hash(packageBytes),manifestSha256:capture.manifestSha256,

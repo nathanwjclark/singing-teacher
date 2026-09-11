@@ -120,7 +120,7 @@ def _run(root, import_id, expected_model_id, output):
     verified=Path(tempfile.mkdtemp(prefix='verification-',dir=output))/'import'
     subprocess.run(['node','--experimental-strip-types',str(ROOT/'science/scripts/import_probe_science.ts'),
                     str(imported/summary['captureDirectory']),str(verified),
-                    str(configuration)], check=True, stdout=subprocess.DEVNULL)
+                    str(configuration),str(imported/'usb-receipt.json')], check=True, stdout=subprocess.DEVNULL)
     document = json.loads((verified/'probe-science-document.json').read_text())
     if document is None: raise ValueError('Probe evidence is no longer eligible')
     fit = json.loads((run_dir/'fit.json').read_text())

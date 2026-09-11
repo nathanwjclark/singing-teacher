@@ -6,7 +6,7 @@ import {mkdtemp,readFile,writeFile,rm,readdir,mkdir,utimes} from 'node:fs/promis
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {createProbeRoutes} from './probe.mjs';
-import {createProbeSetupFixture} from '../tests/helpers/probe-setup-fixture.mjs';
+import {createProbeSetupFixture,devicectlAcquisition} from '../tests/helpers/probe-setup-fixture.mjs';
 import {DECLARED_CALIBRATION_REASON} from '../science/scripts/import_probe_science.ts';
 
 async function poll(call){
@@ -36,7 +36,8 @@ function declaredMeasured(fixture,importId){
  const pkg=structuredClone(fixture.calibration);pkg.calibration.kind='measured';pkg.processing.kind='characterized-measurement';
  return {...fixture.request,requestId:'declared-measured',importId,packageBase64:Buffer.from(JSON.stringify(pkg)).toString('base64')};
 }
-const device=provenance=>({manifest:{provenance,pose:'a',calibration:{placementId:'fixture-placement',levelCheck:{routeSignature:'declared-route'}}}});
+// A capture pulled from an iPhone whose manifest declares this provenance.
+const device=provenance=>({acquisition:devicectlAcquisition,manifest:{provenance,pose:'a',calibration:{placementId:'fixture-placement',levelCheck:{routeSignature:'declared-route'}}}});
 
 test('actual route verifies original calibration, atomically saves setup and reimports with immutable lineage',async t=>{
  const {fixture,call,setups}=await serve(t);
@@ -106,11 +107,31 @@ test('a reference-object capture still freezes a declared-measured setup and imp
 });
 
 test('an iPhone-shaped capture relabelled as a software fixture is reported and refused as a human recording',async t=>{
- const {fixture,call,setups}=await serve(t,{manifest:{provenance:'software-fixture',route:{output:'Speaker'},calibration:{placementId:'fixture-placement',deviceResponseCalibrated:false}}});
+ const {fixture,call,setups}=await serve(t,{acquisition:devicectlAcquisition,manifest:{provenance:'software-fixture',route:{output:'Speaker'},calibration:{placementId:'fixture-placement',deviceResponseCalibrated:false}}});
  assert.equal((await call('import',{requestId:'import-relabelled'})).status,202);
  const status=await poll(call);
  assert.equal(status.setup.capture.provenance,'human-recording');assert.equal(status.setup.capture.declaredProvenance,'software-fixture');assert.equal(status.measurement.provenance,'human-recording');
  const refused=await call('setup',{...fixture.request,importId:status.import.importId});
  assert.equal(refused.status,400);assert.match(refused.body.error,/declared, not measured.*Manifest says software-fixture but carries iPhone recorder fields \(route, calibration.deviceResponseCalibrated\)/);
+ assert.deepEqual(await setups(),[]);
+});
+
+test('a pulled capture stripped to look like a fixture stays a human recording and its setup is refused',async t=>{
+ // The generator's own manifest, marker included and no iPhone fields, but its pull receipt says devicectl copied it from an iPhone.
+ const {fixture,call,setups}=await serve(t,{acquisition:devicectlAcquisition});
+ assert.equal((await call('import',{requestId:'import-stripped'})).status,202);
+ const status=await poll(call);
+ assert.equal(status.setup.capture.provenance,'human-recording');assert.equal(status.setup.capture.declaredProvenance,'software-fixture');assert.match(status.fitBlockedReason,/Human recordings cannot be fitted/);
+ const refused=await call('setup',{...fixture.request,importId:status.import.importId});
+ assert.equal(refused.status,400);assert.ok(refused.body.error.startsWith(`Calibration is not eligible: ${DECLARED_CALIBRATION_REASON}; Manifest says software-fixture but its pull receipt shows it was copied from an iPhone by devicectl; it is treated as a human recording.`),refused.body.error);
+ assert.deepEqual(await setups(),[]);
+});
+
+test('a repository-fixture receipt on a human-labelled capture refuses the calibrated import',async t=>{
+ const {fixture,call,setups}=await serve(t,{manifest:{provenance:'human-recording'}});
+ assert.equal((await call('import',{requestId:'import-contradicted'})).status,202);
+ const status=await poll(call);assert.equal(status.setup.capture.provenance,'human-recording');
+ const refused=await call('setup',{...fixture.request,importId:status.import.importId});
+ assert.equal(refused.status,400);assert.match(refused.body.error,/verification failed: Repository-fixture pull receipt contradicts the capture manifest/);
  assert.deepEqual(await setups(),[]);
 });

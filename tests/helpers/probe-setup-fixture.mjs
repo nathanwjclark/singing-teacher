@@ -5,9 +5,15 @@ import {promisify} from 'node:util';
 import {createHash} from 'node:crypto';
 const execute=promisify(execFile);
 const hash=b=>createHash('sha256').update(b).digest('hex');
+/** Input data for an archive simulated as pulled from an iPhone: the acquisition record server/nativePull.mjs writes,
+ * with a fictional device identity. */
+export const devicectlAcquisition={transport:'devicectl',connection:{transportType:'wired',tunnelState:'connected'},
+ container:{domainType:'appDataContainer',bundleId:'com.singingteacher.depth',path:'Documents/probe-12345678-1234-1234-1234-123456789abc.zip'},
+ device:{coreDeviceId:'0B1C2D3E-4F50-4A6B-8C7D-9E0F1A2B3C4D',udid:'00008130-000A1B2C3D4E5F60',productType:'iPhone16,1',osVersion:'26.0'}};
 /** Generated probe archive in `dataRoot` plus a calibration package whose evidence is a text file.
- * `manifest` overrides native manifest fields (for example provenance) before the archive is built. */
-export async function createProbeSetupFixture(root,{repo=process.cwd(),dataRoot=join(root,'private-data'),manifest={}}={}){
+ * `manifest` overrides native manifest fields (for example provenance) before the archive is built. The pull receipt
+ * says the archive is a repository fixture unless `acquisition` (for example devicectlAcquisition) says otherwise. */
+export async function createProbeSetupFixture(root,{repo=process.cwd(),dataRoot=join(root,'private-data'),manifest={},acquisition={transport:'repository-fixture',generator:'tests/helpers/probe-setup-fixture.mjs'}}={}){
  const capture=join(root,'generated-capture');
  await execute(process.execPath,['--experimental-strip-types','--input-type=module','-e',"import {makeFixture} from './scripts/acoustic-probe-fixture.ts'; await makeFixture(process.argv[1]);",capture],{cwd:repo});
  const native={...JSON.parse(await readFile(join(capture,'manifest.json'))),captureId:'12345678-1234-1234-1234-123456789abc',...manifest};
@@ -16,7 +22,7 @@ export async function createProbeSetupFixture(root,{repo=process.cwd(),dataRoot=
  const name=`probe-${native.captureId}.zip`;
  await execute('python3',['-c',"import pathlib,sys,zipfile\nwith zipfile.ZipFile(sys.argv[2],'w') as z:\n for p in pathlib.Path(sys.argv[1]).iterdir(): z.write(p,p.name)",capture,join(dataRoot,'usb-imports',name)]);
  const archive=await readFile(join(dataRoot,'usb-imports',name));
- await writeFile(join(dataRoot,'native-pull-latest.json'),JSON.stringify({name,sha256:hash(archive),bytes:archive.length}));
+ await writeFile(join(dataRoot,'native-pull-latest.json'),JSON.stringify({name,sha256:hash(archive),bytes:archive.length,acquisition}));
  const evidence=Buffer.from('Generated FIR calibration test evidence; not measured hardware or a human recording.');
  const descriptor={path:'calibration-evidence.txt',sha256:hash(evidence),byteCount:evidence.length};
  const placement={placement_id:'fixture-placement',coordinate_frame:'fixture-metres',source_m:[.15,0,0],microphone_m:[.12,.05,0],mouth_m:[0,0,0]};

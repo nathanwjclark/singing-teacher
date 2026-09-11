@@ -9,6 +9,8 @@ import pytest
 from science.scripts.prepare_probe_capture import prepare
 
 ROOT=Path(__file__).resolve().parents[2]
+# Generated archives say so in their pull receipt; the app's own pulls record devicectl instead.
+FIXTURE_ACQUISITION={'transport':'repository-fixture','generator':'science/tests/test_app_probe.py'}
 
 
 def archive_fixture(tmp_path):
@@ -24,7 +26,7 @@ def archive_fixture(tmp_path):
     with zipfile.ZipFile(root/'usb-imports'/name,'w') as z:
         for source in capture.iterdir():z.write(source,source.name)
     raw=(root/'usb-imports'/name).read_bytes()
-    receipt={'name':name,'bytes':len(raw),'sha256':hashlib.sha256(raw).hexdigest()}
+    receipt={'name':name,'bytes':len(raw),'sha256':hashlib.sha256(raw).hexdigest(),'acquisition':FIXTURE_ACQUISITION}
     (root/'native-pull-latest.json').write_text(json.dumps(receipt))
     return root,receipt
 
@@ -112,6 +114,8 @@ def test_original_probe_runs_joint_session_adoption(tmp_path, monkeypatch,crash_
         original=save_setup(root,'review','original-setup',config,evidence,-3.)
         summary=prepare(root,imported)
         assert summary['eligible'] and summary['setupId']=='original-setup' and summary['setupProfileSha256']==original['profileSha256']
+        bridge=json.loads((imported/'science/probe-science-receipt.json').read_text())
+        assert bridge['attestation']=='repository-fixture-receipt' and bridge['acquisition']==FIXTURE_ACQUISITION
         # A later setup must not replace the controls already bound to this import.
         save_setup(root,'imported','later-setup',config,evidence,-4.)
         assert json.loads((root/'probe-setup-current.json').read_text())['setupId']=='later-setup'
@@ -123,6 +127,10 @@ def test_original_probe_runs_joint_session_adoption(tmp_path, monkeypatch,crash_
         imported.mkdir(parents=True)
         # Importer verifies original capture bytes again inside runner, not review JSON.
         shutil.copytree(fixture['capture'],imported/'capture')
+        with zipfile.ZipFile(imported/'original.zip','w') as z:
+            for source in (imported/'capture').iterdir():z.write(source,source.name)
+        raw=(imported/'original.zip').read_bytes()
+        (imported/'usb-receipt.json').write_text(json.dumps({'name':'probe-known-filter-fixture.zip','bytes':len(raw),'sha256':hashlib.sha256(raw).hexdigest(),'acquisition':FIXTURE_ACQUISITION}))
         (imported/'summary.json').write_text(json.dumps({'eligible':True,'captureDirectory':'capture'}))
     voice=root/'science-runs'/'voice';voice.mkdir(parents=True)
     (root/'science-current.json').write_text(json.dumps({'status':'succeeded','runId':'voice'}))

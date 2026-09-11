@@ -64,7 +64,7 @@ def prepare(data_root, output):
         setup_error = f"The saved calibration setup {setup['setupId']} belongs to a different capture; each probe capture needs its own setup."
     if configuration and configuration.exists():
         subprocess.run(['node', '--experimental-strip-types', str(ROOT/'science/scripts/import_probe_science.ts'),
-                        str(capture), str(output/'science'), str(configuration)], check=True, stdout=subprocess.DEVNULL)
+                        str(capture), str(output/'science'), str(configuration), str(output/'usb-receipt.json')], check=True, stdout=subprocess.DEVNULL)
         bridge = _json((output/'science/probe-science-receipt.json').read_bytes())
         result = {'eligible': bridge['eligible_for_fit'], 'reasons': bridge.get('reasons', []),
                   'measurementPath': 'science/b-import/probe-measurement.json'}
