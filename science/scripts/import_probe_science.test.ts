@@ -180,13 +180,18 @@ test('a pull receipt decides whether a fixture label counts, and must match its 
   await assert.rejects(stat(join(root, 'changed')), { code: 'ENOENT' })
 })
 
-test('a repository-fixture receipt that contradicts the manifest refuses the import', async t => {
+test('a contradicted fixture receipt refuses the import and a pulled reference label is a human recording', async t => {
   const human = owned(t, await declaredMeasuredPackage('human-recording')), repository = { transport: 'repository-fixture', generator: 'science/scripts/import_probe_science.test.ts' }
   await assert.rejects(importProbeScience(human.capture, join(human.root, 'human'), human.configPath, await pulled(human.root, repository)), /Repository-fixture pull receipt contradicts the capture manifest/)
   const reference = owned(t, await declaredMeasuredPackage('physical-reference'))
   await assert.rejects(importProbeScience(reference.capture, join(reference.root, 'reference'), reference.configPath, await pulled(reference.root, repository)), /contradicts the capture manifest/)
-  // A devicectl receipt keeps a reference-object label as declared.
-  assert.equal((await importProbeScience(reference.capture, join(reference.root, 'pulled'), reference.configPath, await pulled(reference.root, devicectl))).receipt.provenance, 'physical-reference')
+  // The app's recorder writes only human-recording, so a reference label on a pulled or legacy-receipt archive was edited:
+  // it is a human recording, ineligible even with a declared-measured package. Without a receipt the label is kept.
+  for (const [name, acquisition, why] of [['pulled', devicectl, 'shows it was copied from an iPhone by devicectl'], ['legacy', undefined, 'does not name a known transport']] as const) {
+    const r = await importProbeScience(reference.capture, join(reference.root, name), reference.configPath, await pulled(reference.root, acquisition))
+    assert.equal(r.receipt.eligible_for_fit, false); assert.equal(r.receipt.provenance, 'human-recording'); assert.equal(r.measurement.provenance, 'human-recording')
+    assert.deepEqual(r.receipt.reasons.slice(0, 2), [DECLARED_CALIBRATION_REASON, `Manifest says physical-reference but its pull receipt ${why}; it is treated as a human recording.`])
+  }
   const phoneShaped = owned(t, await setupFixture()); await relabelled(phoneShaped, 'software-fixture')
   await assert.rejects(importProbeScience(phoneShaped.capture, join(phoneShaped.root, 'phone'), phoneShaped.configPath, await pulled(phoneShaped.root, repository)), /contradicts the capture manifest/)
   await assert.rejects(stat(join(human.root, 'human')), { code: 'ENOENT' })

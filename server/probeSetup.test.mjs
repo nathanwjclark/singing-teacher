@@ -96,14 +96,15 @@ test('a human recording stays ineligible whether a declared-measured package arr
  status=await poll(call);assert.equal(status.import.eligible,false);assert.deepEqual(status.import.reasons,[DECLARED_CALIBRATION_REASON]);assert.equal(status.canFit,false);
 });
 
-test('a reference-object capture still freezes a declared-measured setup and imports eligible',async t=>{
- const {fixture,call}=await serve(t,device('physical-reference'));
+// The app's recorder writes only human-recording, so a pulled archive labelled physical-reference was edited or injected.
+test('a pulled capture labelled physical-reference is a human recording, so a declared-measured setup is refused',async t=>{
+ const {fixture,call,setups}=await serve(t,device('physical-reference'));
  assert.equal((await call('import',{requestId:'import-reference'})).status,202);
- let status=await poll(call);
- const saved=await call('setup',declaredMeasured(fixture,status.import.importId));
- assert.equal(saved.status,200);assert.equal(saved.body.setup.provenance,'physical-reference');assert.equal(saved.body.setup.calibrationAuthenticityVerified,false);
- assert.equal((await call('import',{requestId:'import-reference-calibrated'})).status,202);
- status=await poll(call);assert.equal(status.import.eligible,true);assert.equal(status.import.setupId,'declared-measured');
+ const status=await poll(call);
+ assert.equal(status.setup.capture.provenance,'human-recording');assert.equal(status.setup.capture.declaredProvenance,'physical-reference');assert.equal(status.measurement.provenance,'human-recording');
+ const refused=await call('setup',declaredMeasured(fixture,status.import.importId));
+ assert.equal(refused.status,400);assert.equal(refused.body.error,`Calibration is not eligible: ${DECLARED_CALIBRATION_REASON}; Manifest says physical-reference but its pull receipt shows it was copied from an iPhone by devicectl; it is treated as a human recording.`);
+ assert.deepEqual(await setups(),[]);
 });
 
 test('an iPhone-shaped capture relabelled as a software fixture is reported and refused as a human recording',async t=>{

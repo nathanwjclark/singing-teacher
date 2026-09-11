@@ -2,7 +2,7 @@ import {constants} from 'node:fs';
 import {open,writeFile,mkdir,rename,readdir,rm,lstat} from 'node:fs/promises';
 import {join} from 'node:path';
 import {createHash,randomUUID} from 'node:crypto';
-import {probeSource} from '../src/contracts/probes.ts';
+import {probeSource,receiptAcquisition} from '../src/contracts/probes.ts';
 
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
 const safeId=value=>typeof value==='string'&&/^[A-Za-z0-9_-]{1,100}$/.test(value);
@@ -39,8 +39,9 @@ export async function probeSetupStatus(dataRoot,importId){
    requireValue(['capture','unpacked/sound'].includes(summary.captureDirectory),'Invalid original probe capture path');
    const manifestBytes=await bytes(join(folder,summary.captureDirectory,'manifest.json'));
    const manifest=JSON.parse(manifestBytes);
-   // The pull receipt copied beside the archive at import; a legacy receipt has no acquisition record.
-   const pull=await read(join(folder,'usb-receipt.json')),source=probeSource(manifest,pull?pull.acquisition??null:undefined);
+   // Display only: the importers classify with the receipt after checking original.zip against it. Hashing the
+   // archive on every status poll is too slow, so this reads the receipt kept beside the import unverified.
+   const source=probeSource(manifest,receiptAcquisition(await read(join(folder,'usb-receipt.json'))));
    capture={importId,captureId:manifest.captureId,manifestSha256:hash(manifestBytes),provenance:source.kind,declaredProvenance:source.declared,
     pose:manifest.pose??null,placementId:manifest.calibration?.placementId??null,routeSignature:manifest.calibration?.levelCheck?.routeSignature??null};
   }

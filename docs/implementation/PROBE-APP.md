@@ -53,17 +53,22 @@ The USB pull receipt also counts. Each import keeps the pull receipt as
 `usb-receipt.json` beside `original.zip`, and the importer checks the archive's
 SHA-256 and byte count against it. A receipt that says the archive came from the
 iPhone by devicectl, or an older receipt with no transport, makes a
-`software-fixture` label a human recording, so a pulled recording whose manifest
-was stripped and given the fixture marker is still refused. Only receipts written by
+`software-fixture` or `physical-reference` label a human recording, so a pulled
+recording whose manifest was stripped and relabelled is still refused. The only
+probe writer in the app container, `apps/ios/SingingDepth/SingingDepth/AcousticProbe.swift`,
+always writes `human-recording`, so another label on a pulled archive was edited
+or injected. A reference-object capture can therefore reach the calibrated path
+only through a direct command-line import; keeping that is an owner decision. Only receipts written by
 the repository's test fixtures (`transport: "repository-fixture"`) let a marked
 fixture through, and such a receipt on any other manifest refuses the import.
 
 This does not make provenance authenticated. Nothing is signed yet
 (`signature.status` is `not-provided`), so it does not stop someone with shell
 access editing `.local-data` (receipt included), files pushed into the
-development-signed app container with `devicectl device copy to`, a human recording
-whose manifest is edited to say `physical-reference`, AirDrop imports, or a synthetic sound played into the
-microphone. See [the import specification](../../science/PROBE_IMPORT.md).
+development-signed app container with `devicectl device copy to` (pulled like the app's
+own recordings, as human recordings), a human recording relabelled
+`physical-reference` and imported from the command line without a receipt, AirDrop
+imports, or a synthetic sound played into the microphone. See [the import specification](../../science/PROBE_IMPORT.md).
 
 The calibration package is measurement-workflow output, not a new estimate made
 by the app. It is JSON with `schema_version: "0.1.0"` and
