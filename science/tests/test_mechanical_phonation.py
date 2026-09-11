@@ -5,13 +5,16 @@ evaluation/wave3/source; nothing here is evidence that either family predicts be
 """
 from copy import deepcopy
 import hashlib
+import os
 from pathlib import Path
+import subprocess
 import sys
+import tempfile
 
 import numpy as np
 import pytest
 
-from singing_physics.engine import BUILD, Engine, select_speaker_source, speaker_source_selection
+from singing_physics.engine import BUILD, SPEAKER_COPY_PREFIX, Engine, select_speaker_source, speaker_source_selection
 import singing_physics.phonation as source
 
 sys.path.insert(0,str(Path(__file__).parents[1]/'scripts'))
@@ -44,14 +47,14 @@ def test_selected_speaker_changes_only_selection_digits():
     with pytest.raises(ValueError):select_speaker_source(raw,'invented family')
 
 
-def test_restoration_reloads_the_certified_file_and_restores_exact_state(monkeypatch):
+def test_restoration_loads_the_verified_certified_bytes_and_restores_exact_state(monkeypatch):
     with Engine() as engine:
         engine.set_anatomy({'hard_palate_length':4.2})
         anatomy,provenance,info=engine.anatomy(),deepcopy(engine.provenance),deepcopy(engine.source_info)
         base={pose:engine.synthesize(pose,duration_s=.1) for pose in 'aeiou'}
         geometric,_=source.synthesize_phonation(engine,pose='o',JA=-3,F0=190,PR=8000,PS=.1)
         loaded=[];native=engine.lib.vtlInitialize
-        def initialize(path):loaded.append(path.decode());return native(path)
+        def initialize(path):loaded.append(hashlib.sha256(Path(path.decode()).read_bytes()).hexdigest());return native(path)
         monkeypatch.setattr(engine.lib,'vtlInitialize',initialize)
         for _ in range(2):
             with pytest.raises(RuntimeError,match='test interruption'):
@@ -65,12 +68,24 @@ def test_restoration_reloads_the_certified_file_and_restores_exact_state(monkeyp
             assert engine.source_model_family=='Geometric glottis' and engine.source_info==info
             assert engine.anatomy()==anatomy and engine.provenance==provenance
             assert 'selected_source_speaker_sha256' not in engine.provenance
-        assert len(loaded)==4 and loaded[1]==loaded[3]==str(SPEAKER) and SPEAKER.name not in loaded[0]
+        derived=hashlib.sha256(select_speaker_source(SPEAKER.read_bytes(),'Two-mass model')).hexdigest()
+        assert loaded==[derived,provenance['speaker_sha256']]*2  # the verified certified bytes are what native code loads
+        assert not list(Path(tempfile.gettempdir()).glob(f'{SPEAKER_COPY_PREFIX}{os.getpid()}-*'))
         for pose,audio in base.items():np.testing.assert_array_equal(engine.synthesize(pose,duration_s=.1),audio)
         np.testing.assert_array_equal(source.synthesize_phonation(engine,pose='o',JA=-3,F0=190,PR=8000,PS=.1)[0],geometric)
         with pytest.raises(ValueError):
             with engine.source_model('invented family'):pass
         assert engine.anatomy()==anatomy
+
+
+def test_speaker_copies_left_by_dead_processes_are_removed_on_start():
+    finished=subprocess.Popen(['true']);finished.wait()
+    stale=[Path(tempfile.mkdtemp(prefix=f'{SPEAKER_COPY_PREFIX}{pid}-')) for pid in (finished.pid,os.getpid())]
+    live=Path(tempfile.mkdtemp(prefix=f'{SPEAKER_COPY_PREFIX}{os.getppid()}-'))
+    try:
+        with Engine():pass
+        assert not any(path.exists() for path in stale) and live.exists()
+    finally:live.rmdir()
 
 
 def test_nested_family_contexts_restore_each_level_and_failed_restore_closes_the_engine(monkeypatch):
