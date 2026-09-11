@@ -27,3 +27,15 @@ test('after a reload in cue-free recall the studio and its cues are hidden on ev
  expect(frames.at(-1)?.studioTabDisabled).toBe(true);
  expect(errors).toEqual([]);
 });
+
+test('a lazy panel whose chunk fails shows one message in its place and the studio keeps working',async({page})=>{
+ const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));
+ await noAstra(page);await page.route('**/assets/TeachingPanel-*.js',route=>route.abort());
+ await page.goto('/');await page.getByRole('button',{name:'Demo',exact:true}).click();
+ await expect(page.getByText('Demo · camera is off')).toBeVisible();await expect(page.locator('.coaching-tips li:not(.astra-review-card)')).toHaveCount(3);
+ await page.getByRole('button',{name:'Experiments',exact:true}).click();
+ await expect(page.getByRole('alert').filter({hasText:'This panel could not be shown. Reload the page to try again.'})).toHaveCount(1);
+ await expect(page.getByRole('region',{name:'Scientific session replay'})).toBeVisible();await expect(page.getByRole('heading',{name:'Understand your singing cue'})).toHaveCount(0);
+ await page.screenshot({path:'test-results/lazy-panel-failure.png'});
+ expect(errors).toEqual([]);
+});

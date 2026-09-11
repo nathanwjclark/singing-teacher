@@ -54,7 +54,7 @@ import './App.css'
 class PanelBoundary extends Component<{children:ReactNode},{failed:boolean}>{
   state={failed:false}
   static getDerivedStateFromError(){return {failed:true}}
-  render(){return this.state.failed?<section><p role="alert" className="probe-error">This panel could not load. Reload the page to try again.</p></section>:this.props.children}
+  render(){return this.state.failed?<section><p role="alert" className="probe-error">This panel could not be shown. Reload the page to try again.</p></section>:this.props.children}
 }
 function panel<P extends object>(Panel:(props:P)=>ReactNode){return (props:P)=><PanelBoundary><Suspense fallback={null}><Panel {...props}/></Suspense></PanelBoundary>}
 const ExperimentRunner=panel(lazy(()=>import('./components/experiments/ExperimentRunner').then(m=>({default:m.ExperimentRunner}))))
