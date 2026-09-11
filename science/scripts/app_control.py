@@ -18,7 +18,6 @@ from live_capture_jobs import HTTPBackend
 from app_source import capture, load, save
 
 SEMITONE = 2 ** (1 / 12)
-BANK_SIZE = 5
 MAX_CALLS = 96
 CONTEXT = {'capture_context_id': 'native-usb-pcm', 'level': 'comfortable', 'posture': 'not-instructed'}
 
@@ -48,21 +47,43 @@ def delivered_binding(root, directory, state, summary):
         raise ValueError('The current Astra decision is not a completed recording decision')
     wording = decision['decision']['cue']
     experiment = next(r['experiment'] for r in design['data']['rankings'] if r['experiment']['experiment_id'] == design['data']['selected_experiment_id'])
-    pitches = [m['value'] for t in state['calibration']['trials'] for m in t['measurement']['measurements'] if m['name'] == 'pitchHz' and m['value'] is not None]
-    if not pitches: raise ValueError('Calibration has no measured pitch to centre the F0 alternatives')
-    pitch, ja = round(statistics.median(pitches), 1), experiment['JA']
-    if not -4. <= ja <= -2.: raise ValueError('Selected experiment jaw angle leaves no room for the JA alternatives')
-    controls = [{'control_id': 'selected', 'JA': ja, 'f0_hz': pitch}, {'control_id': 'jaw-less-open', 'JA': ja + 1, 'f0_hz': pitch},
-                {'control_id': 'jaw-more-open', 'JA': ja - 1, 'f0_hz': pitch},
-                {'control_id': 'pitch-lower', 'JA': ja, 'f0_hz': round(pitch / SEMITONE, 1)}, {'control_id': 'pitch-higher', 'JA': ja, 'f0_hz': round(pitch * SEMITONE, 1)}]
-    if len(state['snapshot']['hypotheses']) * BANK_SIZE > MAX_CALLS:
-        raise ValueError(f'{len(state["snapshot"]["hypotheses"])} retained anatomies exceed the {MAX_CALLS}-call budget for a {BANK_SIZE}-alternative bank')
-    binding = {'cue': {'cue_id': 'astra-delivered-cue', 'cue_version': '1', 'wording': wording,
-                       'wording_sha256': hashlib.sha256(wording.encode()).hexdigest(), 'mode': 'elicited'},
-               'context': {**CONTEXT, 'source_kind': summary['source'], 'pitch_hz': pitch, 'vowel': experiment['pose']},
-               'controls': controls, 'gain': experiment['gain']}
-    # Content-derived identity: repeating the same wording, context and bank reuses one binding.
-    return 'cue-' + hashlib.sha256(canonical(binding).encode()).hexdigest()[:32], binding, pointer, design['data']['profile']
+    chosen = decision['decision'].get('cueBindingId')
+    if chosen is not None:
+        # Astra repeated a declared cue: reuse that binding verbatim so its history matches.
+        declared = state.get('control_bindings', {}).get(chosen)
+        if not declared or declared['cue']['wording'] != wording or declared['context']['vowel'] != experiment['pose']:
+            raise ValueError('The repeated cue binding does not match the delivered wording and vowel')
+        binding_id, binding = chosen, {key: declared[key] for key in ('cue', 'context', 'controls', 'gain')}
+    else:
+        pitches = [m['value'] for t in state['calibration']['trials'] for m in t['measurement']['measurements'] if m['name'] == 'pitchHz' and m['value'] is not None]
+        if not pitches: raise ValueError('Calibration has no measured pitch to centre the F0 alternatives')
+        pitch, ja = round(statistics.median(pitches), 1), experiment['JA']
+        if not -4. <= ja <= -2.: raise ValueError('Selected experiment jaw angle leaves no room for the JA alternatives')
+        lower, higher = round(pitch / SEMITONE, 1), round(pitch * SEMITONE, 1)
+        if not (65. <= lower and higher <= 1000.): raise ValueError(f'Calibration pitch {pitch} Hz leaves no room for one-semitone F0 alternatives within 65-1000 Hz')
+        controls = [{'control_id': 'selected', 'JA': ja, 'f0_hz': pitch}, {'control_id': 'jaw-less-open', 'JA': ja + 1, 'f0_hz': pitch},
+                    {'control_id': 'jaw-more-open', 'JA': ja - 1, 'f0_hz': pitch},
+                    {'control_id': 'pitch-lower', 'JA': ja, 'f0_hz': lower}, {'control_id': 'pitch-higher', 'JA': ja, 'f0_hz': higher}]
+        binding = {'cue': {'cue_id': 'astra-delivered-cue', 'cue_version': '1', 'wording': wording,
+                           'wording_sha256': hashlib.sha256(wording.encode()).hexdigest(), 'mode': 'elicited'},
+                   'context': {**CONTEXT, 'source_kind': summary['source'], 'pitch_hz': pitch, 'vowel': experiment['pose']},
+                   'controls': controls, 'gain': experiment['gain']}
+        # Content-derived identity: the same wording, context and bank reuses one binding.
+        binding_id = 'cue-' + hashlib.sha256(canonical(binding).encode()).hexdigest()[:32]
+    calls = len(state['snapshot']['hypotheses']) * len(binding['controls'])
+    if calls > MAX_CALLS: raise ValueError(f'{len(state["snapshot"]["hypotheses"])} retained anatomies need {calls} synthesis calls; the control bank budget is {MAX_CALLS}')
+    return binding_id, binding, pointer, design['data']['profile']
+
+
+def collect_pending(backend, state):
+    """Wait for and collect an outstanding control job, including one left by an interrupted run."""
+    pending = state['pending']
+    if not pending or not pending.get('control_binding') or not pending.get('job_id'): return state
+    deadline = time.monotonic() + 125
+    while backend.status(pending['job_id'])['status'] not in ('succeeded', 'failed', 'cancelled'):
+        if time.monotonic() > deadline: raise ValueError('Control job is still running; retry to recover')
+        time.sleep(.15)
+    return execute(backend, {'action': 'collect_job', 'command_id': 'control-collect-' + pending['job_id'], 'expected_version': state['version'], 'job_id': pending['job_id']})
 
 
 def run(root, phase, output):
@@ -70,7 +91,7 @@ def run(root, phase, output):
     if current.get('status') != 'succeeded' or not re.fullmatch(r'run-[A-Za-z0-9_-]+', run_id): raise ValueError('A completed voice model is required')
     directory = root / 'science-runs' / run_id; summary = load(directory / 'summary.json'); session_id = summary['sessionId']
     backend = HTTPBackend(os.environ['SCIENCE_URL'], os.environ['SCIENCE_TOKEN'], session_id)
-    state = execute(backend, {'action': 'state'})
+    state = collect_pending(backend, execute(backend, {'action': 'state'}))
     if state['snapshot'] is None: raise ValueError('A fitted baseline model is required')
     baseline, identity = state['snapshot']['model_id'], 'control-app-' + output.name
     intent_path = output / 'intent.json'; existing = load(intent_path) if intent_path.exists() else None
@@ -85,8 +106,8 @@ def run(root, phase, output):
         receipt = {'bindingId': binding_id, 'forecastId': identity, 'decisionId': pointer['decisionId'], 'designId': pointer['designId'],
                    'deliveredCue': binding['cue']['wording']}
     elif phase in ('score', 'stop'):
-        committed = sorted(((k, v) for k, v in state.get('control_forecasts', {}).items() if v['status'] == 'committed' and v['baseline_model_id'] == baseline),
-                           key=lambda row: row[1]['committed_at'])
+        # The ledger keeps at most one committed control forecast.
+        committed = [(k, v) for k, v in state.get('control_forecasts', {}).items() if v['status'] == 'committed' and v['baseline_model_id'] == baseline]
         if not committed: raise ValueError('Freeze a current cue-execution forecast before recording')
         target, frozen = committed[-1]; artifact = frozen['artifact']['artifact']
         receipt = {'bindingId': frozen['binding_id'], 'forecastId': target, 'forecastSha256': frozen['artifact']['sha256'], 'deliveredCue': artifact['cue']['wording']}
@@ -107,20 +128,13 @@ def run(root, phase, output):
         state = execute(backend, command)
     if commands[-1]['action'] in ('forecast_control', 'score_control'):
         key = 'session:' + hashlib.sha256(canonical([session_id, commands[-1]['command_id']]).encode()).hexdigest()
-        pending = state['pending']
-        if pending and pending['key'] == key:
-            deadline = time.monotonic() + 125
-            while backend.status(pending['job_id'])['status'] not in ('succeeded', 'failed', 'cancelled'):
-                if time.monotonic() > deadline: raise ValueError('Control job is still running; retry to recover')
-                time.sleep(.15)
-            state = execute(backend, {'action': 'collect_job', 'command_id': identity + '-collect', 'expected_version': state['version'], 'job_id': pending['job_id']})
-        elif pending: raise ValueError('Unrelated scientific job is running')
+        state = collect_pending(backend, state)
         job = next(j for j in state['jobs'] if j['key'] == key)
         receipt.update(jobId=job['job_id'], workerStatus=job['status'], workerError=job.get('error'), result=job['result'])
     control = next(r for r in reversed(state['control_receipts']) if r['forecast_id'] == receipt['forecastId'])
     save(output / 'result.json', {**receipt, 'phase': phase, 'status': control['status'], 'reason': control['reason'],
         'sessionId': session_id, 'baselineModelId': baseline, 'sessionVersion': state['version'], 'modelUpdated': False})
-    if control['status'] in ('failed', 'cancelled', 'submission_failed'):
+    if control['status'] in ('failed', 'cancelled', 'submission_failed', 'rejected'):
         raise ValueError(f"Control worker {control['status']} ({receipt.get('workerError')}); baseline retained; the attempt is preserved as failed")
 
 

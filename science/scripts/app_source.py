@@ -75,10 +75,10 @@ def capture(root,output,session_id,target,committed_at,rate,kind,pose):
     if len(raw)!=receipt['bytes'] or sha(raw)!=receipt['sha256']:raise ValueError('Original USB archive integrity mismatch')
     files=_archive(raw,[512*1024*1024]);manifest=_phase(files,'videoDepth')
     if manifest.get('capture_id','').upper()!=name[8:-4].upper():raise ValueError('USB identity mismatch')
-    if manifest.get('pose') is not None and manifest['pose']!=pose:raise ValueError('Capture vowel differs from the source forecast')
+    if manifest.get('pose') is not None and manifest['pose']!=pose:raise ValueError('Capture vowel differs from the frozen forecast')
     if manifest.get('drive') or manifest.get('protocol') or manifest.get('containsProbe') or manifest.get('contains_external_excitation') or manifest.get('audio',{}).get('containsProbe'):raise ValueError('External excitation is not singing evidence')
     observed=datetime.fromisoformat(manifest['created_at'].replace('Z','+00:00'));committed=datetime.fromisoformat(committed_at.replace('Z','+00:00'))
-    if observed.tzinfo is None or not committed<observed<=datetime.now(timezone.utc):raise ValueError('Original capture must follow source forecast commitment')
+    if observed.tzinfo is None or not committed<observed<=datetime.now(timezone.utc):raise ValueError('Original capture must follow the forecast commitment')
     original=output/'original';original.mkdir(exist_ok=True,mode=0o700)
     for name,data in files.items():
         path=original/name
