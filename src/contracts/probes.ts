@@ -5,15 +5,24 @@ export type ProbeProvenance = 'software-fixture' | 'physical-reference' | 'human
 export const NATIVE_CAPTURE_FIELDS = ['route','playbackSchedule','rgbDepth','linkedDepthCaptureId','collectionSessionId','calibration.levelCheckArtifact','calibration.deviceResponseCalibrated'] as const
 /** Calibration id written only by the software fixture generator (scripts/acoustic-probe-fixture.ts). */
 export const SOFTWARE_FIXTURE_CALIBRATION_ID = 'digital-fixture-no-human-playback'
+/** What the pull receipt beside an archive says about where it came from. None of these is a signature. */
+export type ProbeAttestation = 'none' | 'devicectl-receipt' | 'legacy-receipt' | 'repository-fixture-receipt' | 'contradicted-fixture-receipt'
 /** Source kind a probe manifest supports. Provenance is self-declared in an unsigned manifest, so this cannot prove
- * a label; it only refuses labels the manifest's own fields contradict. Any iPhone recorder field, a human label, or a
- * software-fixture label without the generator's marker all mean human-recording. */
-export function probeSource(manifest:unknown):{kind:ProbeProvenance;declared:unknown;nativeCaptureFields:string[]} {
+ * a label; it only refuses labels the manifest's own fields or its pull receipt contradict. Any iPhone recorder field,
+ * a human label, or a software-fixture label without the generator's marker all mean human-recording.
+ * `acquisition` is the pull receipt's `acquisition` record: omit it when there is no receipt (a direct CLI import) and
+ * pass null for a receipt that has none. A software-fixture label counts only with no receipt or with a
+ * repository-fixture receipt; a devicectl receipt, or one that predates transport recording or names a transport this
+ * code does not know, makes it human-recording. A repository-fixture receipt on anything but a marked fixture manifest
+ * without iPhone fields is contradicted: importers refuse it, and it reads as human-recording. */
+export function probeSource(manifest:unknown,acquisition?:unknown):{kind:ProbeProvenance;declared:unknown;nativeCaptureFields:string[];attestation:ProbeAttestation} {
  const m=(manifest&&typeof manifest==='object'?manifest:{}) as Record<string,unknown>,calibration=(m.calibration&&typeof m.calibration==='object'?m.calibration:{}) as Record<string,unknown>
  const nativeCaptureFields=NATIVE_CAPTURE_FIELDS.filter(path=>path.startsWith('calibration.')?path.slice(12) in calibration:path in m)
- const declared=m.provenance
- const human=nativeCaptureFields.length>0||declared==='human-recording'||(declared==='software-fixture'&&calibration.id!==SOFTWARE_FIXTURE_CALIBRATION_ID)
- return {kind:human?'human-recording':declared as ProbeProvenance,declared,nativeCaptureFields}
+ const declared=m.provenance,marked=declared==='software-fixture'&&calibration.id===SOFTWARE_FIXTURE_CALIBRATION_ID&&!nativeCaptureFields.length
+ const transport=acquisition&&typeof acquisition==='object'?(acquisition as Record<string,unknown>).transport:undefined
+ const attestation:ProbeAttestation=acquisition===undefined?'none':transport==='devicectl'?'devicectl-receipt':transport==='repository-fixture'?(marked?'repository-fixture-receipt':'contradicted-fixture-receipt'):'legacy-receipt'
+ const human=nativeCaptureFields.length>0||declared==='human-recording'||attestation==='contradicted-fixture-receipt'||(declared==='software-fixture'&&!(marked&&(attestation==='none'||attestation==='repository-fixture-receipt')))
+ return {kind:human?'human-recording':declared as ProbeProvenance,declared,nativeCaptureFields,attestation}
 }
 export interface ProbeMedia { path:string; sha256:string; byteCount:number; format:'float32-le'; channels:1; sampleCount:number }
 export interface ProbeDefinition { id:string; bandHz:[number,number]; gain:number; [key:string]:unknown }

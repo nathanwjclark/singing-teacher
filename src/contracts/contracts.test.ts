@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { CONTRACT_VERSION, createPredictionCommit, validateRecord, verifyPredictionCommit, validateProspectiveEvaluation } from './index.ts'
 import type { Forecast, ObservationBundle, EvaluationRecord } from './index.ts'
+import { probeSource, SOFTWARE_FIXTURE_CALIBRATION_ID } from './probes.ts'
 
 test('contract boundary preserves missing depth, frozen predictions and held-out chronology', async () => {
   const provenance = { kind: 'development-fixture' as const, producer: 'contracts-smoke', producerVersion: '1', sourceIds: [], sourceHashes: [] }
@@ -21,4 +22,40 @@ test('contract boundary preserves missing depth, frozen predictions and held-out
   assert.deepEqual(await validateProspectiveEvaluation(commit, evaluation), [])
   assert.ok((await validateProspectiveEvaluation(commit, { ...evaluation, captureStartedAt: '2026-09-10T12:00:00Z', observationIds: ['fit-1'] })).length >= 2)
   assert.equal(validateRecord({ ...forecast, availability: 'unavailable', missingReason: 'engine-unavailable' }).valid, false)
+})
+
+test('probe source follows the pull receipt: a pulled recording cannot be relabelled as a fixture', () => {
+  const fixture = { provenance: 'software-fixture', calibration: { id: SOFTWARE_FIXTURE_CALIBRATION_ID } }
+  const phoneShaped = { ...fixture, route: { output: 'Speaker' } }, unmarked = { provenance: 'software-fixture', calibration: {} }
+  const human = { provenance: 'human-recording', calibration: { placementId: 'fixture-placement' } }, reference = { provenance: 'physical-reference', calibration: { placementId: 'fixture-placement' } }
+  const devicectl = { transport: 'devicectl', connection: { transportType: 'wired', tunnelState: 'connected' }, device: { coreDeviceId: '0B1C2D3E-4F50-4A6B-8C7D-9E0F1A2B3C4D', udid: null, productType: 'iPhone16,1', osVersion: '26.0' } }
+  const repository = { transport: 'repository-fixture', generator: 'src/contracts/contracts.test.ts' }
+  const cases: [string, unknown, unknown, string, string][] = [
+    // The attack: a manifest stripped of iPhone fields and given the fixture marker, pulled by devicectl.
+    ['devicectl + stripped fixture manifest', fixture, devicectl, 'human-recording', 'devicectl-receipt'],
+    ['devicectl + human', human, devicectl, 'human-recording', 'devicectl-receipt'],
+    ['devicectl + reference', reference, devicectl, 'physical-reference', 'devicectl-receipt'],
+    ['repository fixture + marked fixture', fixture, repository, 'software-fixture', 'repository-fixture-receipt'],
+    ['repository fixture + iPhone fields', phoneShaped, repository, 'human-recording', 'contradicted-fixture-receipt'],
+    ['repository fixture + unmarked fixture', unmarked, repository, 'human-recording', 'contradicted-fixture-receipt'],
+    ['repository fixture + human', human, repository, 'human-recording', 'contradicted-fixture-receipt'],
+    ['repository fixture + reference', reference, repository, 'human-recording', 'contradicted-fixture-receipt'],
+    ['legacy receipt + marked fixture', fixture, null, 'human-recording', 'legacy-receipt'],
+    ['receipt with empty acquisition + marked fixture', fixture, {}, 'human-recording', 'legacy-receipt'],
+    ['unknown transport + marked fixture', fixture, { transport: 'airdrop' }, 'human-recording', 'legacy-receipt'],
+    ['legacy receipt + human', human, null, 'human-recording', 'legacy-receipt'],
+    ['legacy receipt + reference', reference, null, 'physical-reference', 'legacy-receipt'],
+    ['no receipt + marked fixture', fixture, undefined, 'software-fixture', 'none'],
+    ['no receipt + unmarked fixture', unmarked, undefined, 'human-recording', 'none'],
+    ['no receipt + iPhone fields', phoneShaped, undefined, 'human-recording', 'none'],
+    ['no receipt + human', human, undefined, 'human-recording', 'none'],
+    ['no receipt + reference', reference, undefined, 'physical-reference', 'none'],
+  ]
+  for (const [name, manifest, acquisition, kind, attestation] of cases) {
+    const source = probeSource(manifest, acquisition)
+    assert.deepEqual([source.kind, source.attestation, source.declared], [kind, attestation, (manifest as { provenance: string }).provenance], name)
+  }
+  assert.deepEqual(probeSource(phoneShaped, devicectl).nativeCaptureFields, ['route'])
+  // Omitting the argument is the no-receipt row, unchanged from the manifest-only rule.
+  assert.deepEqual(probeSource(fixture), { kind: 'software-fixture', declared: 'software-fixture', nativeCaptureFields: [], attestation: 'none' })
 })
