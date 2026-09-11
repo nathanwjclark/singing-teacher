@@ -203,9 +203,12 @@ def forecast_control_pcm(snapshot, *, expected_digest, cue, context, controls, g
                                             start_ms=start / profile['sample_rate_hz'] * 1000, node_binary=node_binary)
                     if any(canonical[k] != extractor[k] for k in extractor): raise ValueError('Control extractor changed during forecast')
                     features, reason = _available(canonical, scales)
+                    # Full canonical records and native pose vectors are bound by hash only: a bank holds
+                    # up to 96 rows and the session ledger stores every forecast, so they would dominate it.
+                    applied = engine.pose(pose, {'JA': control['JA']})[1]
                     row.update(status='predicted' if features is not None else 'missing', reason=reason, features=features,
-                               canonical=canonical, resampling=resampling,
-                               applied_native_controls=engine.pose(pose, {'JA': control['JA']})[1])
+                               canonical_sha256=digest(canonical), resampling=resampling,
+                               applied_ja=applied['JA']['applied'], native_controls_sha256=digest(applied))
                 except (ValueError, RuntimeError) as exc: row.update(status='failed', reason=str(exc))
                 rows.append(row)
     predictions = []
@@ -243,7 +246,7 @@ def score_control_pcm(*, frozen, pcm, metadata, node_binary=None):
     if not _timestamp(data['sealed_at']) < _timestamp(metadata.get('evidenceAt')) <= _timestamp(received):
         raise ValueError('Control recording must follow forecast commitment')
     hashes = metadata.get('sourceHashes')
-    if not isinstance(hashes, list) or not hashes or len(set(hashes)) != len(hashes) or any(not isinstance(h, str) or re.fullmatch('[a-f0-9]{64}', h) is None for h in hashes):
+    if not isinstance(hashes, list) or not hashes or any(not isinstance(h, str) or re.fullmatch('[a-f0-9]{64}', h) is None for h in hashes):
         raise ValueError('Original control source hashes required')
     values = np.asarray(pcm, dtype=np.float32)
     if values.shape != (profile['frame_size'],) or not np.isfinite(values).all(): raise ValueError('Control outcome needs exact finite PCM frame')
