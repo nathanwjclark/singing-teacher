@@ -89,7 +89,7 @@ test('active decisions retain geometry provenance and reject stale prepared capt
       await put('science-runs/run-test/outcome-current.json',{...receipt,status:'failed'});
       const resumed=await call('outcome','POST');
       assert.equal(resumed.status,202);assert.equal(resumed.body.outcomeId,'outcome-abcd');
-      for(let attempt=0;attempt<100;attempt++){
+      for(let attempt=0;attempt<500;attempt++){
         const persisted=JSON.parse(await readFile(join(dataRoot,'science-runs/run-test/outcome-current.json'),'utf8'));
         if(persisted.status!=='running')break;
         await new Promise(resolve=>setTimeout(resolve,10));

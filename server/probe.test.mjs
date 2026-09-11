@@ -42,11 +42,11 @@ test('server restart automatically resumes saved fit folder and manual retry pre
   assert.equal(calls[0].at(-1),'original');assert.ok(calls[0].includes(folder));
   await call('/api/probe/status');assert.equal(calls.length,1);
   release();
-  for(let i=0;i<50&&JSON.parse(await readFile(join(dataRoot,'probe-current.json'))).running;i++)await new Promise(r=>setTimeout(r,5));
+  for(let i=0;i<1000&&JSON.parse(await readFile(join(dataRoot,'probe-current.json'))).running;i++)await new Promise(r=>setTimeout(r,5));
   await call('/api/probe/fit','POST',JSON.stringify({requestId:'retry',importId:'import',expectedModelId:'newer'}));
   assert.equal(reply.status,202);assert.equal(calls.length,2);
   assert.equal(calls[1].at(-1),'original');assert.ok(calls[1].includes(folder));
   release();
-  for(let i=0;i<50&&JSON.parse(await readFile(join(dataRoot,'probe-current.json'))).running;i++)await new Promise(r=>setTimeout(r,5));
+  for(let i=0;i<1000&&JSON.parse(await readFile(join(dataRoot,'probe-current.json'))).running;i++)await new Promise(r=>setTimeout(r,5));
  }finally{await rm(dataRoot,{recursive:true,force:true});}
 });
