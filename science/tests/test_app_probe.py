@@ -46,8 +46,8 @@ def test_changed_archive_rejected_before_import(tmp_path):
     with pytest.raises(ValueError,match='hash mismatch'):prepare(root,root/'probe-imports'/'bad')
 
 
-@pytest.mark.parametrize('crash_after',[None,'fit_probe','collect_job','cancelled_submit'])
-def test_original_probe_runs_joint_session_adoption(tmp_path, monkeypatch,crash_after):
+@pytest.mark.parametrize('crash_after,app_setup',[(None,False),(None,True),('fit_probe',False),('collect_job',False),('cancelled_submit',False)])
+def test_original_probe_runs_joint_session_adoption(tmp_path, monkeypatch,crash_after,app_setup):
     import os
     import sys
     from contextlib import contextmanager
@@ -83,6 +83,26 @@ def test_original_probe_runs_joint_session_adoption(tmp_path, monkeypatch,crash_
             fitted=fit_pcm(engine,state['calibration'],candidates=[{k:c[k] for k in ('candidate_id','anatomy','trials')} for c in candidates],max_synthesis_calls=4)
         (voice/'fit.json').write_text(json.dumps(fitted))
         (root/'probe-fit-profile.json').write_text(json.dumps({'JA':-3.,'gain':1.,'direct_gain':1.,'coupling_gain':1.,'delay_s':0.}))
+        if app_setup:
+            def publish(identity, jaw):
+                folder=root/'probe-setups'/identity;folder.mkdir(parents=True)
+                shutil.copyfile(root/'probe-science-config.json',folder/'configuration.json')
+                shutil.copyfile(root/evidence.name,folder/evidence.name)
+                profile=json.loads((root/'probe-fit-profile.json').read_text());profile['JA']=jaw
+                (folder/'profile.json').write_text(json.dumps(profile))
+                receipt={'setupId':identity,'eligible':True,
+                    'configurationSha256':hashlib.sha256((folder/'configuration.json').read_bytes()).hexdigest(),
+                    'profileSha256':hashlib.sha256((folder/'profile.json').read_bytes()).hexdigest()}
+                (folder/'summary.json').write_text(json.dumps(receipt))
+                (root/'probe-setup-current.json').write_text(json.dumps({'setupId':identity,
+                    'receiptSha256':hashlib.sha256((folder/'summary.json').read_bytes()).hexdigest()}))
+                return receipt
+            original=publish('original-setup',-3.)
+            summary=json.loads((imported/'summary.json').read_text())
+            summary.update(setupId=original['setupId'],setupConfigurationSha256=original['configurationSha256'],setupProfileSha256=original['profileSha256'])
+            (imported/'summary.json').write_text(json.dumps(summary))
+            # A later setup must not replace the controls already bound to this import.
+            publish('later-setup',-4.)
         @contextmanager
         def backend(_output,session_id):
             value=LocalBackend(service,session_id)
@@ -115,6 +135,10 @@ def test_original_probe_runs_joint_session_adoption(tmp_path, monkeypatch,crash_
         assert result['modelId']!=parent['model_id']
         assert result['score']['probe_discrepancy']>100
         assert (root/'probe-fits/fit/session-ledger.json').exists()
+        if app_setup:
+            intent=json.loads((root/'probe-fits/fit/intent.json').read_text())
+            assert intent['setupId']=='original-setup'
+            assert all(t['JA']==-3. for c in intent['command']['parameters']['candidates'] for t in c['probe_trials'].values())
         state=controller.execute({'action':'state'})['state']
         assert state['pending'] is None
         version=state['version']
