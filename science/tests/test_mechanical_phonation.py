@@ -204,6 +204,8 @@ def test_rows_record_requested_and_simulated_f0_and_a_pitch_excluded_score(monke
         refit=source.fit_phonation(engine,document,candidates=mixed,max_synthesis_calls=6,enabled=True)
         with pytest.raises(ValueError,match='mixed-gain'):
             source.forecast_phonation_bank(engine,refit,reference_trial_id='cal',pose='o',controls={'JA':-3.,'F0':190.,'PR':8000.,'gain':2.},target_id='mixed-gain')
+        with pytest.raises(ValueError,match='differs from the fitted reference gain'):
+            source.forecast_phonation_bank(engine,fitted,reference_trial_id='cal',pose='o',controls={'JA':-3.,'F0':190.,'PR':8000.,'gain':4.},target_id='other-gain')
 
 
 def test_app_grids_vary_one_declared_axis_and_family_gains_do_not_clip():
@@ -249,7 +251,7 @@ def test_on_grid_mixed_family_plumbing_is_not_a_comparison(monkeypatch):
         assert all(fitted[family]['actual_synthesis_calls']==8 for family in ('joint','fixed_source','fixed_anatomy'))
         assert fitted['joint']['best']['candidate_id']=='mechanical-4.2' and fitted['joint']['best']['score']<1e-8
         assert fitted['identifiability']=='not_established' and not fitted['closure_contact_inference']
-        held={'JA':-3.,'F0':190.,'PR':8500.,'gain':1.3}
+        held={'JA':-3.,'F0':190.,'PR':8500.,'gain':2.}  # the bank gain must equal the fitted cal-a gain
         banks={pose:source.forecast_phonation_bank(engine,fitted,reference_trial_id='cal-a',pose=pose,
             controls=held,target_id='held-'+pose,max_synthesis_calls=12) for pose in ('e','o')}
         observations={pose:frame(engine,pose,{**held,**SHAPE},'held-'+pose) for pose in banks}

@@ -432,8 +432,12 @@ def forecast_phonation_bank(engine,fit_result,*,reference_trial_id,pose,controls
         if len(refs)!=1:entry['reason']='Fitted source reference unavailable';continue
         control=_controls({**controls,**_source_shape(refs[0]['controls'])})
         entry.update(controls=control,source_model=_family(control),requested_f0_hz=control['F0']);pending.append((entry,row,refs[0]['controls']['gain']))
-    if len({gain for *_,gain in pending})>1:
+    fitted_gains={gain for *_,gain in pending}
+    if len(fitted_gains)>1:
         raise ValueError('A frozen bank applies one declared gain; fitted alternatives use different reference gains, so this mixed-gain bank is rejected')
+    if fitted_gains and fitted_gains!={finite(controls['gain'],'gain')}:
+        # Gain only scales the prediction frame; a gain the fit never used moves predictions toward clipping or the analysis floor.
+        raise ValueError('Declared bank gain differs from the fitted reference gain')
     def expired():return time.monotonic()>=deadline or cancelled is not None and cancelled.is_set()
     try:
         for source_family,group in _by_family(pending,lambda item:item[0]['source_model']):
