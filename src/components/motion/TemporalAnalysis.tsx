@@ -1,15 +1,15 @@
 import {useState} from 'react'
-interface TemporalSupport {position:number;startSeconds:number;endSeconds:number;JASet:number[];gainSet:number[];anatomyCount:number}
-interface ConstantComparison {anatomySha256:string;JA:number;gain:number;objective:number;improvement:number;admissible:boolean}
+interface TemporalSupport {position:number;startSeconds:number;endSeconds:number;JASet:number[];gainSet:number[];anatomyCount:number;bankIndex?:number|null}
+interface ConstantComparison {anatomySha256:string;JA:number;gain:number;objective:number;improvement:number;improvementPerWindow:number;tolerance:number;admissible:boolean}
 export interface TemporalWarning {code:string;message:string}
 export interface TemporalResult {
  status:string;reason?:string;includedWindowCount?:number;partialEvidence?:boolean;
- informationOverConstant?:'present'|'none'|'not-evaluated';warnings?:TemporalWarning[];
- settings:{maxLinkGapSeconds:number;transitionInterpretation:string;objectiveGapTolerance?:number;uncertaintyInterpretation?:string};
+ informationOverConstant?:'exceeds-tolerance'|'within-tolerance'|'not-evaluated';warnings?:TemporalWarning[];
+ settings:{maxLinkGapSeconds:number;transitionInterpretation:string;objectiveGapTolerance?:number;uncertaintyInterpretation?:string;constantTolerancePerWindow?:number};
  segments:Array<{positions:number[];transitionCount:number}>;
  excludedWindows:Array<{position:number;startSeconds?:number|null;reason:string}>;
  independent:Array<{position:number;candidateId:string;dataCost:number}>;
- sensitivity:Array<{lambda:number;uncertainty?:TemporalSupport[];transitionUncertainty?:Array<{fromPosition:number;toPosition:number;JAChangeSet:number[];gainRatioSet:number[]}>;tiedBestAnatomyHashes?:string[];constantComparison?:ConstantComparison|null;alternatives:Array<{anatomySha256:string;objective:number;dataCost:number;weightedTransitionCost:number;timeScaledTransitionCost:number;path:Array<{position:number;candidateId:string;JA:number;gain:number}>}>}>;
+ sensitivity:Array<{lambda:number;uncertainty?:TemporalSupport[];transitionUncertainty?:Array<{fromPosition:number;toPosition:number;JAChangeSet:number[];gainRatioSet:number[]}>;tiedBestAnatomyHashes?:string[];constantComparison?:ConstantComparison|null;pathChangesAtPitchBankSwitch?:Array<{fromPosition:number;toPosition:number}>;alternatives:Array<{anatomySha256:string;objective:number;dataCost:number;weightedTransitionCost:number;timeScaledTransitionCost:number;path:Array<{position:number;candidateId:string;JA:number;gain:number}>}>}>;
 }
 const seconds=(value:number|null|undefined)=>value==null?'time unknown':`${value.toFixed(2)} s`;
 export function TemporalAnalysis({result}:{result?:TemporalResult}){
@@ -29,12 +29,12 @@ export function TemporalAnalysis({result}:{result?:TemporalResult}){
  </details>
 }
 
-function ConstantNote({comparison,lambda,tolerance}:{comparison?:ConstantComparison|null;lambda:number;tolerance?:number}){
+function ConstantNote({comparison,lambda,perWindow}:{comparison?:ConstantComparison|null;lambda:number;perWindow?:number}){
  if(!comparison)return <p>No single JA/gain control was scored in every usable window, so no constant path is compared.</p>;
- const constant=`JA ${comparison.JA}°, digital gain ${comparison.gain}`;
+ const constant=`JA ${comparison.JA}°, digital gain ${comparison.gain}`,tolerance=`${comparison.tolerance.toPrecision(3)} (${perWindow} per window)`;
  return comparison.admissible
-  ?<p>At λ {lambda} the best constant path ({constant}) is within the objective-gap tolerance {tolerance} of the best path. At this setting the recording gives no evidence of control change.</p>
-  :<p>At λ {lambda} the best path improves on the best constant path ({constant}) by {comparison.improvement.toPrecision(3)}, more than the tolerance {tolerance}. Source changes the bank cannot represent can also produce this difference.</p>;
+  ?<p>At λ {lambda} the improvement over the best constant control ({constant}) is within the tolerance {tolerance} at this setting. Measurement noise and pitch-bank switches can also produce improvement.</p>
+  :<p>At λ {lambda} the best path improves on the best constant control ({constant}) by {comparison.improvement.toPrecision(3)}, more than the tolerance {tolerance}. Measurement noise, pitch-bank switches and source changes the bank cannot represent can also produce this difference.</p>;
 }
 
 function TrajectoryTimeline({result,lambda,setLambda}:{result:TemporalResult;lambda:number;setLambda:(value:number)=>void}){
@@ -48,6 +48,9 @@ function TrajectoryTimeline({result,lambda,setLambda}:{result:TemporalResult;lam
  const x=(value:number)=>45+510*(value-start)/span,y=(ja:number)=>20+(-ja-2)*55;
  const time=new Map(support.map(row=>[row.position,row.startSeconds]));
  const path=new Map((selected.alternatives[0]?.path??[]).map(row=>[row.position,row.JA]));
+ // Dashed lines mark where consecutive measured windows use different pitch-bank anchors.
+ const bankSwitches=support.flatMap((row,i)=>i&&row.bankIndex!=null&&support[i-1].bankIndex!=null&&row.bankIndex!==support[i-1].bankIndex?[{position:row.position,seconds:(support[i-1].startSeconds+row.startSeconds)/2}]:[]);
+ const switchChanges=selected.pathChangesAtPitchBankSwitch??[];
  // Lines join consecutive measured frames inside one linked segment only; gaps stay open.
  const links=result.segments.flatMap(segment=>segment.positions.slice(1).map((position,i)=>[segment.positions[i],position])).filter(([a,b])=>path.has(a)&&path.has(b));
  return <section aria-label="Audio trajectory sensitivity"><h4>Audio trajectory and competing controls</h4>
@@ -56,6 +59,7 @@ function TrajectoryTimeline({result,lambda,setLambda}:{result:TemporalResult;lam
  <svg role="img" aria-label="Time course of conditional jaw angle hypotheses with missing windows" viewBox="0 0 600 196" style={{width:'100%',maxWidth:800}}>
  {[-4,-3,-2].map(ja=><g key={ja}><line x1="40" x2="565" y1={y(ja)} y2={y(ja)} stroke="currentColor" opacity=".2"/><text x="3" y={y(ja)+4} fill="currentColor" fontSize="12">{ja}°</text></g>)}
  <text x="3" y="157" fill="currentColor" fontSize="12">gap</text>
+ {bankSwitches.map(row=><line key={'bank-'+row.position} data-pitch-bank-switch={row.position+1} x1={x(row.seconds)} x2={x(row.seconds)} y1="8" y2="142" stroke="currentColor" strokeDasharray="3 3" opacity=".6"><title>Pitch-bank anchor changes before window {row.position+1}</title></line>)}
  {support.map(row=><g key={row.position}><line x1={x(row.startSeconds)} x2={x(row.startSeconds)} y1={y(Math.min(...row.JASet))} y2={y(Math.max(...row.JASet))} stroke="currentColor" opacity=".5" strokeWidth="4"/>{row.JASet.map(ja=><circle key={ja} cx={x(row.startSeconds)} cy={y(ja)} r="3" fill="currentColor" opacity=".6"/>)}<title>Window {row.position+1}, {row.startSeconds.toFixed(3)} s; JA candidates {row.JASet.join(', ')}</title></g>)}
  {links.map(([a,b])=><line key={a+'-'+b} x1={x(time.get(a)!)} x2={x(time.get(b)!)} y1={y(path.get(a)!)} y2={y(path.get(b)!)} stroke="#de8d33" strokeWidth="2"/>)}
  {[...path].map(([position,ja])=>time.has(position)?<circle key={position} cx={x(time.get(position)!)} cy={y(ja)} r="5" fill="#de8d33"/>:null)}
@@ -63,7 +67,8 @@ function TrajectoryTimeline({result,lambda,setLambda}:{result:TemporalResult;lam
  <text x="40" y="186" fill="currentColor" fontSize="12">{start.toFixed(2)} s</text><text x="530" y="186" fill="currentColor" fontSize="12">{end.toFixed(2)} s</text>
  </svg>
  <p>Orange: minimum-objective path. JA is a simulator angle hypothesis; source changes can produce competing acoustic explanations.</p>
- <ConstantNote comparison={selected.constantComparison} lambda={selected.lambda} tolerance={result.settings.objectiveGapTolerance}/>
+ <ConstantNote comparison={selected.constantComparison} lambda={selected.lambda} perWindow={result.settings.constantTolerancePerWindow}/>
+ {bankSwitches.length>0&&<p>Dashed lines: the pitch-bank anchor changes there. {switchChanges.length?`${switchChanges.length} of the path's control changes at λ ${selected.lambda} coincide with a switch (${switchChanges.map(row=>`window ${row.fromPosition+1} → ${row.toPosition+1}`).join(', ')}); they may reflect the pitch change rather than articulation.`:`No control change of the path at λ ${selected.lambda} coincides with a switch.`}</p>}
  <details><summary>Window and transition ambiguity</summary><table><thead><tr><th>Audio time (s)</th><th>JA candidates (°)</th><th>Gain candidates</th><th>Anatomy alternatives</th></tr></thead><tbody>{support.map(row=><tr key={row.position}><td>{row.startSeconds.toFixed(3)}–{row.endSeconds.toFixed(3)}</td><td>{row.JASet.join(', ')}</td><td>{row.gainSet.join(', ')}</td><td>{row.anatomyCount}</td></tr>)}</tbody></table>
  <ul>{selected.transitionUncertainty?.map(row=><li key={row.toPosition}>Window {row.fromPosition+1} → {row.toPosition+1}: JA change candidates {row.JAChangeSet.join(', ')}°; gain ratios {row.gainRatioSet.join(', ')}</li>)}</ul></details>
  </section>

@@ -254,7 +254,7 @@ def test_encoded_motion_audio_ranks_native_windows_without_changing_baseline(tmp
                     candidate = next(c for c in windows[step['position']]['fit']['joint']['candidates'] if c['candidate_id'] == step['candidateId'])
                     assert candidate['anatomySha256'] == alternative['anatomySha256'] and (candidate['JA'], candidate['gain']) == (step['JA'], step['gain'])
         assert {row['position']: row['reason'] for row in temporal['excludedWindows']}.items() >= {i: 'Unvoiced or invalid canonical window' for i in silent}.items()
-        assert len(temporal['segments']) >= 2 and temporal['informationOverConstant'] in ('present', 'none')
+        assert len(temporal['segments']) >= 2 and temporal['informationOverConstant'] in ('exceeds-tolerance', 'within-tolerance')
         # The server's Astra reduction of this real summary keeps ambiguity, gaps and reasons within its limit.
         compact = call('/test/motion-context?session=' + result['sessionId'] + '&model=' + result['modelId'])
         assert compact['receiptSha256'] and compact['temporal']['status'] == temporal['status']

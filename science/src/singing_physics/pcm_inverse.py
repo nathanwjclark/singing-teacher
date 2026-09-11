@@ -132,6 +132,11 @@ def planned_synthesis_calls(document, candidates):
     return len({_synthesis_key(candidate, trial) for candidate in candidates for trial in document['trials']})
 
 
+def feature_scale(name, observed):
+    """Declared engineering scale, widened only by this observation's own reported uncertainty."""
+    return max(FEATURES[name][1], observed['uncertainty'] or 0.)
+
+
 def score_prediction(frame, trial, target, *, objective, measurement_id, node_binary=None):
     """Extract one predicted frame and score it against one validated calibration trial.
 
@@ -163,8 +168,7 @@ def score_prediction(frame, trial, target, *, objective, measurement_id, node_bi
         if value is None:
             missing.append({'trial_id': trial['id'], 'feature': name, 'reason': predicted[name]['missingReason']})
             continue
-        scale = max(FEATURES[name][1], observed['uncertainty'] or 0.)
-        residuals.append((value-observed['value'])/scale)
+        residuals.append((value-observed['value'])/feature_scale(name, observed))
     return {'canonical': canonical, 'clipped': False, 'spectral_observation': spectral,
             'objective_components': components, 'residuals': residuals, 'missing': missing}
 

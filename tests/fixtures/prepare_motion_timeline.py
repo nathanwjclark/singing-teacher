@@ -2,8 +2,10 @@
 baseline fit and an encoded native motion recording for the real analysis.
 
 Generated synthetic evidence only. The motion audio holds one-second JA segments,
-a silent half second (unvoiced windows) and one quarter second an octave up
-(outside the pitch-bank support), so the timeline shows both kinds of gap.
+a silent half second (unvoiced windows) and a last quarter second an octave up
+(outside the pitch-bank support), so the timeline shows both kinds of gap. From
+3 s the pitch rises from 180 to 200 Hz while JA changes, so a path change can
+coincide with a switch between pitch-bank anchors.
 """
 import json
 from pathlib import Path
@@ -28,7 +30,8 @@ manifest = json.loads((voice / 'manifest.json').read_text())
 manifest['capture_id'] = '00000000-0000-4000-8000-000000000031'
 (voice / 'manifest.json').write_text(json.dumps(manifest))
 publish_capture(data, voice)
-controls = [(ja, 360. if window == 12 else 180.) for window, ja in enumerate(ja for ja in (-4., -3., -2., -3.) for _ in range(4))]
+pitch = [180.]*12 + [200.]*3 + [360.]
+controls = list(zip((ja for ja in (-4., -3., -2., -3.) for _ in range(4)), pitch))
 with Engine() as engine:
     native = np.concatenate([engine.synthesize('a', {'JA': ja}, f0_hz=f0, duration_s=.25) for ja, f0 in controls])
 pcm, _ = resample_native_pcm(native, 44100, 48000)

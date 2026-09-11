@@ -3,7 +3,7 @@ import hashlib
 import json
 import math
 
-from .pcm_inverse import FEATURES, fit_pcm
+from .pcm_inverse import FEATURES, candidate_discrepancy, feature_scale, fit_pcm
 from .pcm_spectral import COARSE_OBJECTIVE
 
 VERSION = 'motion-forward-bank-3'
@@ -16,6 +16,10 @@ GAIN_GRID = (1., 4.)
 MAX_SYNTHESIS_CALLS = 3*2*MAX_HYPOTHESES*len(JA_GRID)*len(GAIN_GRID)
 MAX_PITCH_DISTANCE_CENTS = 100.
 ANCHOR_PERCENTILES = (10, 50, 90)
+# Nearest-rank 10th/90th percentiles exclude the extremes only from 11 measured windows up.
+MIN_PERCENTILE_WINDOWS = 11
+# Anchors closer than half the 100-cent support duplicate one bank; only the lower is kept.
+ANCHOR_MERGE_CENTS = 50.
 # Rescoring always uses the coarse canonical descriptors (COARSE_OBJECTIVE, FEATURES), whatever the baseline fit used.
 SCALE_POLICY = ('per window: declared engineering scale, widened only by that window\'s own reported '
                 'descriptor uncertainty (the fit_pcm per-trial rule)')
@@ -60,19 +64,27 @@ def select_hypotheses(snapshot):
 
 
 def pitch_anchors(pitches):
-    """Nearest-rank 10th, 50th and 90th percentiles of measured voiced pitch.
+    """Pitch-bank anchors from measured voiced pitch, with the policy that produced them.
 
-    With ten or more measured windows a single octave error or other outlier
-    cannot become an anchor; with fewer, the percentiles reach the extremes.
+    From 11 measured windows: nearest-rank 10th, 50th and 90th percentiles, so a
+    single octave error or other outlier cannot become an anchor. With fewer
+    windows those percentiles would be the extremes, so only the median is used.
+    Anchors within 50 cents of a lower kept anchor are merged into it.
     """
     ordered = sorted(pitches)
-    return sorted({ordered[max(0, math.ceil(p*len(ordered)/100)-1)] for p in ANCHOR_PERCENTILES})
+    rank = lambda p: ordered[max(0, math.ceil(p*len(ordered)/100)-1)]
+    if len(ordered) < MIN_PERCENTILE_WINDOWS:
+        return [rank(50)], f'median only: fewer than {MIN_PERCENTILE_WINDOWS} measured voiced windows'
+    anchors = []
+    for pitch in sorted({rank(p) for p in ANCHOR_PERCENTILES}):
+        if not anchors or 1200*math.log2(pitch/anchors[-1]) >= ANCHOR_MERGE_CENTS:
+            anchors.append(pitch)
+    return anchors, f'10th, 50th and 90th percentiles; anchors within {ANCHOR_MERGE_CENTS:g} cents merged'
 
 
 def window_scales(measurement):
     values = _values(measurement)
-    return {name: {'unit': unit, 'scale': max(scale, values[name].get('uncertainty') or 0.)}
-            for name, (unit, scale) in FEATURES.items()}
+    return {name: {'unit': unit, 'scale': feature_scale(name, values[name])} for name, (unit, _) in FEATURES.items()}
 
 
 def _values(measurement):
@@ -80,29 +92,21 @@ def _values(measurement):
 
 
 def _bank_table(fitted):
-    """Compact predicted descriptors, one row per distinct anatomy/JA/gain.
+    """Compact predicted descriptors of the joint candidates.
 
-    The fixed-anatomy comparator repeats the reference anatomy for every
-    hypothesis; its duplicates are identical predictions and keep only the first
-    candidate ID. The complete fit is retained once as a separate artifact.
+    fit_pcm also synthesizes its fixed-anatomy comparator at equal compute; the
+    time course does not use it, so it stays only in the complete bank artifact.
     """
-    table = {}
-    for model in ('joint', 'fixed_anatomy_baseline'):
-        rows, seen = [], set()
-        for candidate in fitted[model]['candidates']:
-            prediction = candidate['predictions'][0] if candidate.get('predictions') else None
-            measurement = prediction['canonical']['measurement'] if prediction else None
-            predicted = _values(measurement) if measurement else {}
-            key = (_hash(candidate['anatomy']), json.dumps(prediction['controls'], sort_keys=True) if prediction else candidate['candidate_id'])
-            if key in seen:
-                continue
-            seen.add(key)
-            rows.append({'candidate_id': candidate['candidate_id'], 'anatomySha256': key[0],
-                'JA': prediction['controls']['JA'] if prediction else None, 'gain': prediction['controls']['gain'] if prediction else None,
-                'status': candidate['status'], 'qualityFlags': sorted(measurement['quality']['flags']) if measurement else ['invalid'],
-                'predictedFeatures': {name: predicted.get(name, {}).get('value') for name in FEATURES}})
-        table[model] = rows
-    return table
+    rows = []
+    for candidate in fitted['joint']['candidates']:
+        prediction = candidate['predictions'][0] if candidate.get('predictions') else None
+        measurement = prediction['canonical']['measurement'] if prediction else None
+        predicted = _values(measurement) if measurement else {}
+        rows.append({'candidate_id': candidate['candidate_id'], 'anatomySha256': _hash(candidate['anatomy']),
+            'JA': prediction['controls']['JA'] if prediction else None, 'gain': prediction['controls']['gain'] if prediction else None,
+            'status': candidate['status'], 'qualityFlags': sorted(measurement['quality']['flags']) if measurement else ['invalid'],
+            'predictedFeatures': {name: predicted.get(name, {}).get('value') for name in FEATURES}})
+    return rows
 
 
 def score_forward_bank(engine, windows, hypotheses, pose, sample_rate, frame_start, frame_size, *, fitter=fit_pcm):
@@ -115,7 +119,8 @@ def score_forward_bank(engine, windows, hypotheses, pose, sample_rate, frame_sta
     usable = [row for row in windows if row['status'] == 'measured']
     metadata = {'kind': VERSION, 'maxWindows': MAX_WINDOWS, 'maxSynthesisCalls': MAX_SYNTHESIS_CALLS,
         'pitchAnchorsHz': [], 'maxPitchDistanceCents': MAX_PITCH_DISTANCE_CENTS,
-        'pitchPolicy': 'nearest-rank 10th, 50th and 90th percentiles of measured voiced pitch; each window uses its nearest anchor (lower on ties) only within 100 cents',
+        'pitchPolicy': 'from 11 measured voiced windows the nearest-rank 10th, 50th and 90th percentiles (anchors within 50 cents merged), otherwise the median only; each window uses its nearest anchor (lower on ties) only within 100 cents',
+        'pitchAnchorPolicy': None,
         'measurementPolicy': 'disjoint canonical frames on an evenly spaced recording-wide grid; no quality-based window selection',
         'interpretation': 'retrospective fixed-source candidate comparison; not a forecast or recovered movement',
         'objectiveInterpretation': 'per-window-scaled coarse-descriptor discrepancy against a reused fixed-source pitch bank; not a likelihood',
@@ -126,13 +131,13 @@ def score_forward_bank(engine, windows, hypotheses, pose, sample_rate, frame_sta
         return metadata, []
     if not hypotheses:
         raise ValueError('Motion forward bank requires declared hypotheses')
-    anchors = pitch_anchors([_values(row['measurement'])['pitchHz']['value'] for row in usable])
+    anchors, anchor_policy = pitch_anchors([_values(row['measurement'])['pitchHz']['value'] for row in usable])
     per_bank = len(hypotheses)*len(JA_GRID)*len(GAIN_GRID)
     # Declared before any synthesis: the joint and fixed-anatomy models each synthesize every candidate once per anchor.
     requested = 2*per_bank*len(anchors)
     if requested > MAX_SYNTHESIS_CALLS:
         raise ValueError(f'Motion forward bank would request {requested} syntheses; the limit is {MAX_SYNTHESIS_CALLS}')
-    metadata.update(pitchAnchorsHz=anchors, synthesisRequests=requested)
+    metadata.update(pitchAnchorsHz=anchors, pitchAnchorPolicy=anchor_policy, synthesisRequests=requested)
     banks = []
     for anchor_index, pitch in enumerate(anchors):
         representative = min(usable, key=lambda row: abs(_values(row['measurement'])['pitchHz']['value'] - pitch))
@@ -177,26 +182,23 @@ def score_forward_bank(engine, windows, hypotheses, pose, sample_rate, frame_sta
         score = {'kind': banks[bank_index]['kind'], 'identifiability': banks[bank_index]['identifiability'],
             'bankIndex': bank_index, 'bankSha256': bank['sha256'], 'comparisonSha256': metadata['comparisonSha256'],
             'objective': COARSE_OBJECTIVE, 'featureScales': scales}
-        for model, table in bank['candidates'].items():
-            candidates = []
-            # Every comparator row uses the one reference anatomy, stated once per window.
-            anatomy = model == 'joint'
-            for entry in table:
-                predicted = entry['predictedFeatures']
-                missing = [{'feature': name, 'reason': 'Unavailable comparable descriptor'}
-                           for name in FEATURES if target[name]['value'] is None or predicted[name] is None]
-                flags = sorted(set(entry['qualityFlags']) & {'clipping', 'invalid', 'dropped', 'low-signal-to-noise'})
-                if flags:
-                    missing.append({'feature': 'prediction-quality', 'reason': 'Predicted PCM flagged: ' + ', '.join(flags)})
-                candidates.append({'candidate_id': entry['candidate_id'], **({'anatomySha256': entry['anatomySha256']} if anatomy else {}),
-                    'JA': entry['JA'], 'gain': entry['gain'], 'status': 'missing_predicted_features' if missing else 'scored',
-                    'weighted_mean_square_discrepancy': None if missing else sum(
-                        ((predicted[name]-target[name]['value'])/scales[name]['scale'])**2 for name in FEATURES)/len(FEATURES),
-                    **({'missing_features': missing} if missing else {})})
-            valid = [candidate for candidate in candidates if candidate['status'] == 'scored']
-            score[model] = {'candidates': candidates,
-                'best': min(valid, key=lambda item: (item['weighted_mean_square_discrepancy'], item['candidate_id'])) if valid else None,
-                **({} if anatomy else {'anatomySha256': table[0]['anatomySha256'] if table else None})}
+        candidates = []
+        for entry in bank['candidates']:
+            predicted = entry['predictedFeatures']
+            missing = [{'feature': name, 'reason': 'Unavailable comparable descriptor'}
+                       for name in FEATURES if target[name]['value'] is None or predicted[name] is None]
+            flags = sorted(set(entry['qualityFlags']) & {'clipping', 'invalid', 'dropped', 'low-signal-to-noise'})
+            if flags:
+                missing.append({'feature': 'prediction-quality', 'reason': 'Predicted PCM flagged: ' + ', '.join(flags)})
+            # The same combination rule fit_pcm uses: mean of squared standardized residuals.
+            cost = None if missing else candidate_discrepancy([{'missing': [], 'residuals': [
+                (predicted[name]-target[name]['value'])/scales[name]['scale'] for name in FEATURES]}], COARSE_OBJECTIVE)[0]
+            candidates.append({'candidate_id': entry['candidate_id'], 'anatomySha256': entry['anatomySha256'],
+                'JA': entry['JA'], 'gain': entry['gain'], 'status': 'missing_predicted_features' if missing else 'scored',
+                'weighted_mean_square_discrepancy': cost, **({'missing_features': missing} if missing else {})})
+        valid = [candidate for candidate in candidates if candidate['status'] == 'scored']
+        score['joint'] = {'candidates': candidates,
+            'best': min(valid, key=lambda item: (item['weighted_mean_square_discrepancy'], item['candidate_id'])) if valid else None}
         row.update(fit=score, status='scored' if score['joint']['best'] else 'insufficient-quality',
             reason=None if score['joint']['best'] else 'No complete comparable native predictions')
     return metadata, banks

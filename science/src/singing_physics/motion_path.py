@@ -9,6 +9,8 @@ OBJECTIVE_GAP=.1
 REFERENCE_INTERVAL_SECONDS=.25
 PENALTIES=(0.,.1,1.)
 MAX_LINK_GAP_SECONDS=.5
+# The constant-path tolerance grows with the evidence: a summed improvement is compared with this per included window.
+CONSTANT_TOLERANCE_PER_WINDOW=.01
 
 
 def _canonical(value):return json.dumps(value,sort_keys=True,separators=(',',':'),allow_nan=False)
@@ -35,13 +37,16 @@ def couple_motion_hypotheses(windows):
         'referenceIntervalSeconds':REFERENCE_INTERVAL_SECONDS,'objectiveGapTolerance':OBJECTIVE_GAP,
         'uncertaintyInterpretation':'minimum complete-path objective gaps; sensitivity sets, not confidence intervals or probabilities',
         'candidateObjectiveGapsOrder':'aligned with the window fit.joint.candidates list; null where a candidate has no finite comparable score',
-        'constantComparison':'best constant JA/gain path for one anatomy (zero transition cost) against the best path; admissible when within objectiveGapTolerance',
+        'constantComparison':'best constant JA/gain path for one anatomy (zero transition cost) against the best path; admissible when its summed improvement is within constantTolerancePerWindow times the included window count',
+        'constantTolerancePerWindow':CONSTANT_TOLERANCE_PER_WINDOW,
+        'pitchBankSwitches':'a path control change between linked windows compared with different pitch-bank anchors may reflect the source pitch change rather than articulation',
         'linkGapPolicy':'recordings are limited to 30 s, so adjacent frames on the evenly spaced grid are at most about 0.41 s apart and always link; longer spacing breaks every link'},
         'inputSha256':hashlib.sha256(json.dumps(windows,sort_keys=True,separators=(',',':'),allow_nan=True).encode()).hexdigest(),'inputHashScope':'Python canonical JSON including explicit nonfinite tokens if supplied','segments':[],'excludedWindows':[],'independent':[],'sensitivity':[],
         'additionalSynthesisCalls':0,'modelUpdated':False,'informationOverConstant':'not-evaluated','warnings':[],'limitations':['Discrete observed frames only; unmeasured intervals are not interpolated or aligned to video.',
             'Source F0 uses the declared per-frame pitch bank; remaining source assumptions are inherited unchanged.',
             'Scores are not probabilities; low cost does not identify anatomy or observed JA.',
-            'Source changes the fixed-source bank cannot represent can appear as JA/gain changes; a path that beats the constant path is not evidence of articulation change on its own.']}
+            'Source changes the fixed-source bank cannot represent can appear as JA/gain changes; a path that beats the constant path is not evidence of articulation change on its own.',
+            'Measurement noise and pitch-bank switches can also make a time-varying path improve on a constant control.']}
     parsed=[];signature=None;previous=None;segments=[];current=[]
     for position,window in enumerate(windows):
         reason=None;rows=[]
@@ -88,7 +93,8 @@ def couple_motion_hypotheses(windows):
         if reason is not None:
             if current:segments.append(current);current=[]
             result['excludedWindows'].append({'position':position,'startSeconds':_seconds(window) if isinstance(window,dict) else None,'reason':reason});previous=None;continue
-        node={'position':position,'start':start,'end':end,'rows':rows,'candidateCount':len(raw)}
+        bank=fit.get('bankIndex')
+        node={'position':position,'start':start,'end':end,'rows':rows,'candidateCount':len(raw),'bank':bank if type(bank) is int else None}
         if previous is not None and start-previous['end']>MAX_LINK_GAP_SECONDS:
             if current:segments.append(current)
             current=[]
@@ -169,27 +175,33 @@ def couple_motion_hypotheses(windows):
                 if gap<=OBJECTIVE_GAP+1e-10:support.append(row)
             uncertainty.append({'position':node['position'],'startSeconds':node['start'],'endSeconds':node['end'],
                 'JASet':sorted({row['JA'] for row in support}),'gainSet':sorted({row['gain'] for row in support}),
-                'anatomyCount':len({row['anatomySha256'] for row in support}),'candidateObjectiveGaps':gaps})
+                'anatomyCount':len({row['anatomySha256'] for row in support}),'bankIndex':node['bank'],'candidateObjectiveGaps':gaps})
         for segment in segments:
             for prior,node in zip(segment,segment[1:]):
                 rows=[row for row in transition_marginals if row['fromPosition']==prior['position'] and row['toPosition']==node['position']
                     and row['minimumPathObjective']-best<=OBJECTIVE_GAP+1e-10]
                 transitions.append({'fromPosition':prior['position'],'toPosition':node['position'],
                     'JAChangeSet':sorted({row['JAChange'] for row in rows}),'gainRatioSet':sorted({row['gainRatio'] for row in rows}),
-                    'admissiblePairCount':len(rows),'intervalSeconds':node['start']-prior['start']})
+                    'admissiblePairCount':len(rows),'intervalSeconds':node['start']-prior['start'],
+                    'pitchBankSwitch':None not in (prior['bank'],node['bank']) and prior['bank']!=node['bank']})
         comparison=None
         if constant:
-            cost,(anatomy_hash,ja,gain)=constant[0]
-            comparison={'anatomySha256':anatomy_hash,'JA':ja,'gain':gain,'objective':cost,'improvement':max(0.,cost-best),'admissible':cost-best<=OBJECTIVE_GAP+1e-10}
+            cost,(anatomy_hash,ja,gain)=constant[0];tolerance=CONSTANT_TOLERANCE_PER_WINDOW*len(parsed)
+            comparison={'anatomySha256':anatomy_hash,'JA':ja,'gain':gain,'objective':cost,'improvement':max(0.,cost-best),
+                'improvementPerWindow':max(0.,cost-best)/len(parsed),'tolerance':tolerance,'admissible':cost-best<=tolerance+1e-10}
+        # Path control changes that coincide with a switch between pitch-bank anchors.
+        steps={row['position']:(row['JA'],row['gain']) for row in alternatives[0]['path']}
+        switches=[{'fromPosition':row['fromPosition'],'toPosition':row['toPosition']} for row in transitions
+            if row['pitchBankSwitch'] and steps[row['fromPosition']]!=steps[row['toPosition']]]
         # Alternatives are sorted, so the first is the minimum-objective path; it is not repeated.
         result['sensitivity'].append({'lambda':penalty,'alternatives':alternatives,
             'tiedBestAnatomyHashes':[r['anatomySha256'] for r in alternatives if abs(r['objective']-best)<=1e-12],
-            'uncertainty':uncertainty,'transitionUncertainty':transitions,'constantComparison':comparison})
+            'uncertainty':uncertainty,'transitionUncertainty':transitions,'constantComparison':comparison,'pathChangesAtPitchBankSwitch':switches})
     # The lambda=0 optimum is the lowest objective at any lambda, so a constant path admissible there is admissible everywhere.
     if len(parsed)>1 and constant:
-        result['informationOverConstant']='none' if result['sensitivity'][0]['constantComparison']['admissible'] else 'present'
-    if result['informationOverConstant']=='none':
-        result['warnings'].append({'code':'no-information-over-constant','message':'A constant JA/gain path is within the objective-gap tolerance of the best time-varying path at every regularization setting. This recording gives no evidence of control change under this bank.'})
+        result['informationOverConstant']='within-tolerance' if result['sensitivity'][0]['constantComparison']['admissible'] else 'exceeds-tolerance'
+    if result['informationOverConstant']=='within-tolerance':
+        result['warnings'].append({'code':'constant-within-tolerance','message':f'At every regularization setting the improvement over a constant JA/gain control is within the tolerance ({CONSTANT_TOLERANCE_PER_WINDOW:g} per measured window). Measurement noise and pitch-bank switches can also produce improvement, so neither result on its own shows or rules out control change.'})
     result['status']='available' if any(len(segment)>1 for segment in segments) else 'no-temporal-links'
     result['includedWindowCount']=len(parsed);result['partialEvidence']=bool(result['excludedWindows'])
     return result

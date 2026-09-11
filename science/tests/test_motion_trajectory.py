@@ -50,15 +50,22 @@ def test_adaptive_grid_has_disjoint_frames_and_hard_bound():
 
 def test_robust_pitch_anchors_ignore_a_single_octave_error():
     pitches=[160,164,168,172,176,370,185,190,195,200,205,210]
-    anchors=pitch_anchors(pitches)
-    assert anchors==[164,185,210]
+    anchors,policy=pitch_anchors(pitches)
+    assert anchors==[164,185,210] and policy.startswith('10th, 50th and 90th')
     cents=lambda pitch:min(abs(1200*math.log2(pitch/anchor)) for anchor in anchors)
     assert all(cents(pitch)<=MAX_PITCH_DISTANCE_CENTS for pitch in pitches if pitch!=370) and cents(370)>900
     # Minimum, median and maximum would anchor the octave error, score it, and leave four real pitches unsupported.
     legacy=sorted({min(pitches),sorted(pitches)[(len(pitches)-1)//2],max(pitches)})
     unsupported=[p for p in pitches if min(abs(1200*math.log2(p/a)) for a in legacy)>MAX_PITCH_DISTANCE_CENTS]
     assert legacy==[160,185,370] and unsupported==[172,200,205,210]
-    assert pitch_anchors([180.])==[180.] and pitch_anchors([170.,190.])==[170.,190.]
+    # At exactly ten windows the nearest-rank 10th percentile is the minimum, so an octave error
+    # would become an anchor; below 11 windows only the median anchors the bank.
+    assert pitch_anchors([90.]+[180.+i for i in range(9)])==([183.],'median only: fewer than 11 measured voiced windows')
+    # From 11 windows the octave error is excluded; 184 Hz lies within 50 cents of 180 Hz and merges.
+    assert pitch_anchors([90.]+[180.+i for i in range(10)])[0]==[180.,188.]
+    assert pitch_anchors([180.])[0]==[180.] and pitch_anchors([170.,190.])[0]==[170.]
+    # Percentile anchors within 50 cents of a lower kept anchor duplicate one bank and merge.
+    assert pitch_anchors([179.+i/10 for i in range(20)])[0]==[179.1]
 
 
 def test_window_scales_use_only_that_windows_uncertainty():
@@ -71,7 +78,8 @@ def test_window_scales_use_only_that_windows_uncertainty():
 
 
 def test_synthesis_budget_refuses_before_any_native_call():
-    windows=[{'index':i,'status':'measured','measurement':{'measurements':[{'name':'pitchHz','value':pitch}]}} for i,pitch in enumerate((150.,180.,220.))]
+    # Eleven windows at three well-separated pitches give three anchors.
+    windows=[{'index':i,'status':'measured','measurement':{'measurements':[{'name':'pitchHz','value':pitch}]}} for i,pitch in enumerate([150.]*4+[180.]*4+[220.]*3)]
     before=deepcopy(windows)
     # Four hypotheses at three anchors would need 144 syntheses; no engine is supplied, so any synthesis attempt would fail differently.
     with pytest.raises(ValueError,match='144 syntheses; the limit is 108'):
@@ -94,7 +102,7 @@ def test_hypothesis_selection_is_declared_from_the_frozen_snapshot_rank():
 
 
 @contextmanager
-def baseline(tmp_path,monkeypatch):
+def baseline(tmp_path,monkeypatch,hypotheses=({'hypothesis_id':'known','anatomy':{}},)):
     data=tmp_path/'data';data.mkdir()
     server=ScientificHTTPServer(tmp_path/'jobs','t'*48,port=0)
     thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
@@ -102,7 +110,7 @@ def baseline(tmp_path,monkeypatch):
     try:
         with Engine() as engine:provenance=engine.provenance
         model=freeze_pcm_hypotheses(model_id='trajectory-baseline',evidence_ids=['prior-independent-recording'],evidence_hashes=['a'*64],
-            provenance=provenance,hypotheses=[dict(hypothesis_id='known',anatomy={})],frozen_at=datetime.now(timezone.utc).isoformat()).data
+            provenance=provenance,hypotheses=list(hypotheses),frozen_at=datetime.now(timezone.utc).isoformat()).data
         backend=app_motion.HTTPBackend(os.environ['SCIENCE_URL'],os.environ['SCIENCE_TOKEN'],'trajectory-session')
         backend.execute(dict(action='register_model',command_id='register',expected_version=0,snapshot=model))
         (data/'science-current.json').write_text(json.dumps(dict(status='succeeded',runId='run-test')))
@@ -173,7 +181,7 @@ def test_native_encoded_known_trajectory_noise_dropout_source_mismatch_and_varyi
             assert result['warnings']==temporal['warnings']
             if name=='known-native-controls':
                 assert len(predicted)==12 and mae<static_mae and truth_coverage>=.75
-                assert temporal['informationOverConstant']=='present' and not smoothed['constantComparison']['admissible']
+                assert temporal['informationOverConstant']=='exceeds-tolerance' and not smoothed['constantComparison']['admissible']
             if name=='noise-and-dropout':
                 assert {4,5}.issubset({row['position'] for row in temporal['excludedWindows']})
                 assert all(row['reason'] and row['startSeconds'] is not None for row in temporal['excludedWindows'])
@@ -188,8 +196,16 @@ def test_native_encoded_known_trajectory_noise_dropout_source_mismatch_and_varyi
                 assert [w['index'] for w in scored]==[i for i in range(12) if i!=5]
                 assert all(abs(w['pitchDistanceCents'])<=MAX_PITCH_DISTANCE_CENTS for w in scored)
                 assert 5 in {row['position'] for row in temporal['excludedWindows']}
+                # Rising pitch crosses pitch-bank anchors; those transitions and any path change there are flagged.
+                banks={w['index']:w['fit']['bankIndex'] for w in scored}
+                for row in plain['transitionUncertainty']:
+                    assert row['pitchBankSwitch']==(banks[row['fromPosition']]!=banks[row['toPosition']])
+                assert any(row['pitchBankSwitch'] for row in plain['transitionUncertainty'])
+                steps={row['position']:(row['JA'],row['gain']) for row in predicted}
+                assert plain['pathChangesAtPitchBankSwitch']==[{'fromPosition':row['fromPosition'],'toPosition':row['toPosition']} for row in plain['transitionUncertainty']
+                    if row['pitchBankSwitch'] and steps[row['fromPosition']]!=steps[row['toPosition']]]
             # Mismatched source is retained as a challenge, never relabeled measured jaw.
-            assert 'Source F0' in temporal['limitations'][1] and 'Source changes' in temporal['limitations'][3]
+            assert 'Source F0' in temporal['limitations'][1] and 'Source changes' in temporal['limitations'][3] and 'pitch-bank switches' in temporal['limitations'][4]
             assert all(math.isfinite(row['dataCost']) for row in predicted)
         # A noisy neighbour widens only its own scale: rescoring with one inflated uncertainty leaves every other window's costs unchanged.
         known=json.loads((tmp_path/'known-native-controls-analysis'/'summary.json').read_text())['windows']
@@ -207,19 +223,23 @@ def test_native_encoded_known_trajectory_noise_dropout_source_mismatch_and_varyi
         (tmp_path/'metrics.json').write_text(json.dumps({'interpretation':'Simulator-control recovery benchmark, not held-out acoustic prediction or human anatomy validation','results':metrics},indent=2))
 
 
-def test_native_long_recording_keeps_gaps_and_bounded_outputs(tmp_path,monkeypatch):
-    # Twelve 2.5 s control segments with one second of silence at 15 s. The encoded container
-    # adds codec padding, so 29.9 s is the longest generated recording the 30 s duration check admits.
+def test_native_thirty_second_three_hypothesis_recording_keeps_gaps_and_bounded_outputs(tmp_path,monkeypatch):
+    # Twelve 2.5 s control segments filling the 30 s limit, one second of silence at 15 s, and three
+    # anatomy hypotheses: the worst-case summary size (120 windows x 18 candidates).
     segments=[-4.,-3.,-2.,-3.]*3
     with Engine() as engine:
-        pcm=np.concatenate([engine.synthesize('a',{'JA':ja},f0_hz=180.,duration_s=2.5) for ja in segments])[:round(29.9*44100)]
+        pcm=np.concatenate([engine.synthesize('a',{'JA':ja},f0_hz=180.,duration_s=2.5) for ja in segments])
     pcm[15*44100:16*44100]=0
-    with baseline(tmp_path,monkeypatch) as (data,backend):
+    hypotheses=[dict(hypothesis_id='known',anatomy={}),dict(hypothesis_id='wide-lips',anatomy={'lip_width':1.4}),dict(hypothesis_id='long-palate',anatomy={'hard_palate_length':5.})]
+    with baseline(tmp_path,monkeypatch,hypotheses) as (data,backend):
         original=tmp_path/'long';original.mkdir();identity=encoded_capture(data,original,pcm=pcm)
         output=tmp_path/'long-analysis'
         result=app_motion.run(data,identity,'a',output,'trajectory-baseline')
     windows=result['windows'];temporal=result['temporalAnalysis']
-    assert len(windows)==119 and 0<result['actualSynthesisCalls']<=9
+    # Codec padding makes the container slightly longer than 30 s; it is accepted and cut at 30 s.
+    assert result['decode']['decodedSampleCount']==30*48000 and result['decode']['truncated']==(result['decode']['durationSeconds']>30)
+    assert len(windows)==120 and len(result['hypothesisSubset']['selectedIds'])==3 and 0<result['actualSynthesisCalls']<=36
+    assert all(len(w['fit']['joint']['candidates'])==18 for w in windows if w['status']=='scored')
     frame=lambda w:(w['sourceStartSample']+w['windowOffsetWithinExcerpt'])/w['sampleRateHz']
     truth={w['index']:segments[int((frame(w)+2048/w['sampleRateHz'])//2.5)] for w in windows}
     silent=[w['index'] for w in windows if 15<frame(w) and frame(w)+4096/w['sampleRateHz']<16]
@@ -229,15 +249,15 @@ def test_native_long_recording_keeps_gaps_and_bounded_outputs(tmp_path,monkeypat
     assert not any(row['fromPosition']<silent[0] and row['toPosition']>silent[-1] for row in temporal['sensitivity'][0]['transitionUncertainty'])
     path=temporal['sensitivity'][0]['alternatives'][0]['path']
     mae=np.mean([abs(row['JA']-truth[row['position']]) for row in path]);static=min(np.mean([abs(ja-truth[row['position']]) for row in path]) for ja in (-4.,-3.,-2.))
-    assert mae<static and temporal['informationOverConstant']=='present'
+    assert mae<static and temporal['informationOverConstant']=='exceeds-tolerance'
     size=(output/'summary.json').stat().st_size
-    assert size<=summary_budget(len(windows))
+    assert size<=summary_budget(len(windows))<EXPORT_FILE_LIMIT
     context=compact_context(output/'summary.json')
     compact=context['compact']
     assert context['length']<=24000 and compact['timeline']['sampleSize']==12
-    assert compact['timeline']['totalWindows']==119 and compact['timeline']['missingWindows']==len(excluded)
+    assert compact['timeline']['totalWindows']==120 and compact['timeline']['missingWindows']==len(excluded)
     assert compact['temporal']['excludedWindows']['count']==len(excluded) and all(row['reason'] for row in compact['temporal']['excludedWindows']['sample'])
     assert {row['reason'] for row in compact['temporal']['excludedWindows']['reasons']}=={'Unvoiced or invalid canonical window'}
     assert len(compact['temporal']['sensitivity'])==3 and all(row['uncertainty']['sample'] and row['transitionUncertainty']['sample'] for row in compact['temporal']['sensitivity'])
     (tmp_path/'metrics.json').write_text(json.dumps({'windows':len(windows),'summaryBytes':size,'contextChars':context['length'],'segments':len(temporal['segments']),
-        'trajectoryMAEDeg':float(mae),'bestConstantControlMAEDeg':float(static)}))
+        'trajectoryMAEDeg':float(mae),'bestConstantControlMAEDeg':float(static),'constantImprovementPerWindow':temporal['sensitivity'][0]['constantComparison']['improvementPerWindow']}))

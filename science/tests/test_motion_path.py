@@ -2,7 +2,9 @@ from copy import deepcopy
 import json
 import math
 
-from singing_physics.motion_path import MAX_LINK_GAP_SECONDS,OBJECTIVE_GAP,couple_motion_hypotheses
+import numpy as np
+
+from singing_physics.motion_path import CONSTANT_TOLERANCE_PER_WINDOW,MAX_LINK_GAP_SECONDS,couple_motion_hypotheses
 
 ANATOMY={length:format(length,'064x') for length in (4,5)}
 LENGTH={digest:length for length,digest in ANATOMY.items()}
@@ -122,24 +124,50 @@ def test_link_gap_boundary_between_measured_frames():
         assert result['status']==status and len(result['segments'])==(1 if status=='available' else 2)
 
 
-def test_constant_path_comparison_flags_no_information_over_constant():
-    # Changing controls fit better than any constant path by more than the tolerance: information present.
+def test_constant_path_comparison_uses_a_per_window_tolerance():
+    # Changing controls fit better than any constant path by more than 0.01 per window.
     varying=[window(i,i*12000,[(4,-4,0 if i%2 else .5),(4,-2,.5 if i%2 else 0)]) for i in range(4)]
     result=couple_motion_hypotheses(varying)
-    assert result['informationOverConstant']=='present' and result['warnings']==[]
+    assert result['settings']['constantTolerancePerWindow']==CONSTANT_TOLERANCE_PER_WINDOW==.01
+    assert result['informationOverConstant']=='exceeds-tolerance' and result['warnings']==[]
     plain=result['sensitivity'][0]['constantComparison']
-    assert plain['objective']==1.0 and plain['improvement']==1.0 and plain['admissible'] is False
+    assert plain['objective']==1.0 and plain['improvement']==1.0 and plain['improvementPerWindow']==.25 and plain['tolerance']==.04 and plain['admissible'] is False
     # The strongest smoothing selects the constant path itself, so it is admissible there.
     assert result['sensitivity'][2]['constantComparison']['admissible'] is True
-    # Small improvements inside the tolerance give no evidence of control change at any lambda.
-    flat=[window(i,i*12000,[(4,-4,0 if i%2 else .02),(4,-2,.02 if i%2 else 0)]) for i in range(4)]
+    # Improvements within the tolerance at lambda 0 stay within it at every lambda.
+    flat=[window(i,i*12000,[(4,-4,0 if i%2 else .01),(4,-2,.01 if i%2 else 0)]) for i in range(4)]
     result=couple_motion_hypotheses(flat)
-    assert result['informationOverConstant']=='none'
-    assert [w['code'] for w in result['warnings']]==['no-information-over-constant']
-    assert all(row['constantComparison']['improvement']<=OBJECTIVE_GAP for row in result['sensitivity'])
-    assert math.isclose(result['sensitivity'][0]['constantComparison']['improvement'],.04)
+    assert result['informationOverConstant']=='within-tolerance'
+    assert [w['code'] for w in result['warnings']]==['constant-within-tolerance'] and 'noise and pitch-bank switches' in result['warnings'][0]['message']
+    assert all(row['constantComparison']['admissible'] for row in result['sensitivity'])
+    assert math.isclose(result['sensitivity'][0]['constantComparison']['improvement'],.02)
     # A control missing from one window cannot form a constant path; one window cannot show change.
     partial=[window(0,0,[(4,-4,0)]),window(1,12000,[(4,-2,0)])]
     assert couple_motion_hypotheses(partial)['informationOverConstant']=='not-evaluated'
     assert couple_motion_hypotheses(partial)['sensitivity'][0]['constantComparison'] is None
     assert couple_motion_hypotheses([window(0,0,[(4,-4,0)])])['informationOverConstant']=='not-evaluated'
+
+
+def test_constant_control_with_small_noise_stays_within_tolerance_at_any_length():
+    # True constant control (-3) with the same small score noise at 12 and 120 windows. A fixed
+    # 0.1 tolerance on the summed improvement read 12 windows as within it and 120 as exceeding it.
+    for count in (12,120):
+        rng=np.random.default_rng(5)
+        rows=[window(i,i*12000,[(4,ja,float(base+abs(rng.normal(0,.01)))) for ja,base in ((-4,.01),(-3,0.),(-2,.01))]) for i in range(count)]
+        result=couple_motion_hypotheses(rows);comparison=result['sensitivity'][0]['constantComparison']
+        assert comparison['JA']==-3 and result['informationOverConstant']=='within-tolerance'
+        assert comparison['improvementPerWindow']<CONSTANT_TOLERANCE_PER_WINDOW
+        assert (comparison['improvement']>.1)==(count==120)
+
+
+def test_path_changes_at_pitch_bank_switches_are_flagged():
+    rows=[window(i,i*12000,[(4,-4,0 if i<2 else .5),(4,-2,.5 if i<2 else 0)]) for i in range(4)]
+    for i,row in enumerate(rows):row['fit']['bankIndex']=0 if i<2 else 1
+    result=couple_motion_hypotheses(rows);plain=result['sensitivity'][0]
+    assert [row['pitchBankSwitch'] for row in plain['transitionUncertainty']]==[False,True,False]
+    assert [row['bankIndex'] for row in plain['uncertainty']]==[0,0,1,1]
+    assert plain['pathChangesAtPitchBankSwitch']==[{'fromPosition':1,'toPosition':2}]
+    # Lambda 1 keeps one control throughout, so no change coincides with the switch.
+    assert result['sensitivity'][2]['pathChangesAtPitchBankSwitch']==[]
+    # Windows without a bank index never report a switch.
+    assert not any(row['pitchBankSwitch'] for row in couple_motion_hypotheses([window(i,i*12000,[(4,-4,0)]) for i in range(3)])['sensitivity'][0]['transitionUncertainty'])

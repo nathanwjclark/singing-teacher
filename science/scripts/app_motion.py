@@ -21,6 +21,9 @@ from singing_physics.motion_trajectory import window_offsets,score_forward_bank,
 from singing_physics.pcm_spectral import COARSE_OBJECTIVE
 
 
+CONTAINER_PADDING_SECONDS=.5
+
+
 def sha(raw):return hashlib.sha256(raw).hexdigest()
 def load(path,limit=64*1024*1024):
     fd=os.open(path,os.O_RDONLY|os.O_NOFOLLOW)
@@ -94,13 +97,15 @@ def run(data_root,capture_id,pose,output,expected_model_id=None):
     if len(streams)!=1:
         result['reason']='Exactly one recorded audio stream required';write(output/'summary.json',result);return result
     stream=streams[0];rate=int(stream['sample_rate']);channels=int(stream['channels']);duration=float(info.get('format',{}).get('duration',stream.get('duration',0)))
-    if rate not in (44100,48000,96000) or not 1<=channels<=8 or not 0<duration<=MAX_RECORDING_SECONDS:raise ValueError(f'Unsupported audio rate/channels or duration outside 0..{MAX_RECORDING_SECONDS} seconds')
+    if rate not in (44100,48000,96000) or not 1<=channels<=8:raise ValueError('Unsupported audio sample rate or channel count')
+    # Encoders pad the container slightly past the recorded audio; up to half a second is accepted and cut at the limit.
+    if not 0<duration<=MAX_RECORDING_SECONDS+CONTAINER_PADDING_SECONDS:raise ValueError(f'Recording must be at most {MAX_RECORDING_SECONDS} seconds (the container may report up to {CONTAINER_PADDING_SECONDS:g} s more)')
     decoded=process([ffmpeg,'-v','error','-nostdin','-i',str(local),'-map',f'0:{stream["index"]}','-vn','-t',str(MAX_RECORDING_SECONDS),'-f','f32le','-acodec','pcm_f32le','pipe:1'])
     if len(decoded)%(4*channels) or len(decoded)>rate*MAX_RECORDING_SECONDS*channels*4:raise ValueError('Decoded PCM dimensions exceed bounds')
     samples=np.frombuffer(decoded,dtype='<f4').reshape(-1,channels)
     if not len(samples) or not np.isfinite(samples).all():raise ValueError('Invalid decoded PCM')
     channel=int(np.argmax(np.mean(samples[::8].astype(float)**2,axis=0)));mono=samples[:,channel].copy();chunk_size=round(.25*rate);frame_start=round(.1*rate);frame_size=8192 if rate==96000 else 4096
-    result['decode']={'sampleRateHz':rate,'channelCount':channels,'selectedChannel':channel+1,'decodedSampleCount':len(mono),'pcmSha256':sha(mono.astype('<f4').tobytes()),'codec':stream.get('codec_name'),'durationSeconds':duration,'policy':'highest energy every eighth sample; earliest tie'}
+    result['decode']={'sampleRateHz':rate,'channelCount':channels,'selectedChannel':channel+1,'decodedSampleCount':len(mono),'pcmSha256':sha(mono.astype('<f4').tobytes()),'codec':stream.get('codec_name'),'durationSeconds':duration,'truncated':duration>MAX_RECORDING_SECONDS,'policy':'highest energy every eighth sample; earliest tie'}
     # Grid selection uses only duration, never the agreement of a window with a model.
     offsets=window_offsets(len(mono),rate,chunk_size);used=[]
     result['analysisPolicy']=VERSION

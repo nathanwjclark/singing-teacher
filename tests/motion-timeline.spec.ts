@@ -4,7 +4,7 @@ import {join} from 'node:path';
 
 // Real app and scientific worker (tests/motion-timeline.config.ts). The baseline is
 // fitted through the app from a generated native voice capture; the motion audio is
-// generated native vowel audio with a silent gap and one octave jump.
+// generated native vowel audio with a silent gap, a pitch rise across two bank anchors and one octave jump.
 // Synthetic evidence only: the timeline shows software behaviour, not human anatomy.
 test('motion audio timeline shows the time course, gaps with reasons and ambiguous alternatives',async({page,request})=>{
  const fixture=process.env.MOTION_E2E_FIXTURE;
@@ -62,7 +62,12 @@ test('motion audio timeline shows the time course, gaps with reasons and ambiguo
  expect(ambiguous.length).toBeGreaterThan(0);
  for(const row of ambiguous)await expect(rows.nth(smoothed.uncertainty.indexOf(row))).toContainText(row.JASet.join(', '));
  const comparison=smoothed.constantComparison;
- await expect(timeline).toContainText(comparison.admissible?`At λ 0.1 the best constant path (JA ${comparison.JA}°, digital gain ${comparison.gain}) is within the objective-gap tolerance`:`At λ 0.1 the best path improves on the best constant path (JA ${comparison.JA}°, digital gain ${comparison.gain}) by ${comparison.improvement.toPrecision(3)}`);
+ await expect(timeline).toContainText(comparison.admissible?`At λ 0.1 the improvement over the best constant control (JA ${comparison.JA}°, digital gain ${comparison.gain}) is within the tolerance ${comparison.tolerance.toPrecision(3)} (0.01 per window)`:`At λ 0.1 the best path improves on the best constant control (JA ${comparison.JA}°, digital gain ${comparison.gain}) by ${comparison.improvement.toPrecision(3)}, more than the tolerance ${comparison.tolerance.toPrecision(3)} (0.01 per window)`);
+ // Pitch-bank anchors: the rise to 200 Hz switches banks; the switch is drawn and path changes there are named.
+ expect(result.trajectoryBank.pitchAnchorsHz.length).toBe(2);
+ const switches=smoothed.uncertainty.filter((row:{bankIndex:number},i:number)=>i&&row.bankIndex!==smoothed.uncertainty[i-1].bankIndex).length;
+ expect(switches).toBeGreaterThan(0);await expect(timeline.locator('[data-pitch-bank-switch]')).toHaveCount(switches);
+ await expect(timeline).toContainText(smoothed.pathChangesAtPitchBankSwitch.length?`${smoothed.pathChangesAtPitchBankSwitch.length} of the path's control changes at λ 0.1 coincide with a switch`:'No control change of the path at λ 0.1 coincides with a switch.');
  await timeline.getByRole('img').screenshot({path:'test-results/motion-timeline/timeline-lambda-0.1.png'});
  await group.getByText('Numerical result:',{exact:false}).scrollIntoViewIfNeeded();await page.screenshot({path:'test-results/motion-timeline/analysis-lambda-0.1.png'});
 
@@ -71,7 +76,8 @@ test('motion audio timeline shows the time course, gaps with reasons and ambiguo
  const plain=temporal.sensitivity[0];
  await expect(rows).toHaveCount(plain.uncertainty.length);
  await expect(timeline.locator('circle[fill="#de8d33"]')).toHaveCount(plain.alternatives[0].path.length);
- await expect(timeline).toContainText(plain.constantComparison.admissible?'At λ 0 the best constant path':'At λ 0 the best path improves on the best constant path');
+ await expect(timeline).toContainText(plain.constantComparison.admissible?'At λ 0 the improvement over the best constant control':'At λ 0 the best path improves on the best constant control');
+ await expect(timeline).toContainText(plain.pathChangesAtPitchBankSwitch.length?`${plain.pathChangesAtPitchBankSwitch.length} of the path's control changes at λ 0 coincide with a switch`:'No control change of the path at λ 0 coincides with a switch.');
  await timeline.getByRole('img').screenshot({path:'test-results/motion-timeline/timeline-lambda-0.png'});
  await page.setViewportSize({width:390,height:844});
  await timeline.scrollIntoViewIfNeeded();await page.screenshot({path:'test-results/motion-timeline/timeline-narrow.png'});
