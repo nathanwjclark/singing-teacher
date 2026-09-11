@@ -1,37 +1,32 @@
 import { test, expect } from '@playwright/test';
 
-const appUrl = process.env.SOURCE_BANK_APP_URL;
+// Real app and scientific worker (tests/source-bank-runtime.config.ts) with
+// PHONATION_SOURCE_ENABLED, over the app/worker data that
+// tests/fixtures/prepare_source_bank_runtime.py leaves: a fitted source model, a
+// conditional ranking from two scored banks and a forecast the app could not run.
+// The browser freezes the next bank; no API response is intercepted.
 test('actual local native bank and held-out ranking render without disrupting baseline', async ({ page, request }) => {
-  test.setTimeout(120000);
-  test.skip(!appUrl, 'Set SOURCE_BANK_APP_URL to a local app with retained native source-bank evidence.');
-  const url = new URL(appUrl!);
-  expect(['127.0.0.1', 'localhost']).toContain(url.hostname);
-  const response = await request.get(new URL('/api/source/status', url).href);
-  expect(response.ok()).toBe(true);
-  let status = await response.json();
-  await expect.poll(async () => {
-    status = await (await request.get(new URL('/api/source/status', url).href)).json();
-    return Boolean(status.fit.result && status.score.result);
-  }, { timeout: 20000, intervals: [1000, 2000] }).toBe(true);
+  test.skip(!process.env.SOURCE_BANK_E2E_DATA, 'Run with -c tests/source-bank-runtime.config.ts');
+  const read = async () => (await request.get('/api/source/status')).json();
+  let status = await read();
+  expect(status.fit.result).toBeTruthy();
+  expect(status.score.result).toBeTruthy();
+  expect(status.forecast).toMatchObject({ status: 'failed', result: null });
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
-  await page.goto(url.href);
+  await page.goto('/');
   await page.getByRole('button', { name: 'Experiments', exact: true }).click();
   const panel = page.getByRole('region', { name: 'Optional source and tract inference' });
-  await expect(panel).toBeVisible();
-  if (!status.forecast.result) {
-    const before = { baseline: status.baselineModelId, source: status.sourceModelId, ranking: status.score.result.conditionalRanking.rankingId };
-    await panel.getByLabel('Enable optional source experiments').check();
-    await panel.getByRole('button', { name: 'Freeze optional prediction' }).click();
-    await expect.poll(async () => {
-      status = await (await request.get(new URL('/api/source/status', url).href)).json();
-      return status.forecast.status;
-    }, { timeout: 90000, intervals: [1000, 2000] }).toBe('succeeded');
-    expect(status.baselineModelId).toBe(before.baseline);
-    expect(status.sourceModelId).toBe(before.source);
-    expect(status.score.result.conditionalRanking.rankingId).toBe(before.ranking);
-    await panel.getByRole('button', { name: 'Refresh optional status' }).click();
-  }
+  await expect(panel).toContainText('Forecast: failed. Optional source job failed; baseline retained');
+  const before = { baseline: status.baselineModelId, source: status.sourceModelId, ranking: status.score.result.conditionalRanking.rankingId };
+  await panel.getByLabel('Enable optional source experiments').check();
+  await panel.getByRole('button', { name: 'Freeze optional prediction' }).click();
+  await expect.poll(async () => (status = await read()).forecast.status, { timeout: 90000, intervals: [1000, 2000] }).toBe('succeeded');
+  expect(status.forecast.current).toBe(true);
+  expect(status.baselineModelId).toBe(before.baseline);
+  expect(status.sourceModelId).toBe(before.source);
+  expect(status.score.result.conditionalRanking.rankingId).toBe(before.ranking);
+  await panel.getByRole('button', { name: 'Refresh optional status' }).click();
   const forecast = status.forecast.result.forecast;
   const score = status.score.result;
   expect(status.enabled).toBe(true);
@@ -62,7 +57,9 @@ test('actual local native bank and held-out ranking render without disrupting ba
   await ranked.scrollIntoViewIfNeeded();
   await page.screenshot({ path: 'test-results/source-bank-runtime-ranking.png' });
   await expect(panel).toContainText('No model update was applied; the baseline is retained');
-  if (!status.forecast.current) await expect(panel.getByRole('button', { name: 'Score later capture against source prediction' })).toHaveCount(0);
+  // The new bank is current, so scoring waits for the declaration of a later capture.
+  await expect(panel.getByRole('heading', { name: 'Prospective source experiment' })).toBeVisible();
+  await expect(panel.getByRole('button', { name: 'Score later capture against source prediction' })).toBeDisabled();
   await expect(page.getByRole('heading', { name: 'Scientific model', exact: true })).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
   const bounds = await panel.boundingBox();
