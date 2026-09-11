@@ -1,5 +1,5 @@
 import {CaptureProcessingOverlay} from './components/science/CaptureProcessingOverlay';
-import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react'
+import { Component, Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Activity, Camera, CircleHelp, MicVocal, Play, Square } from 'lucide-react'
 import CameraPanel from './components/CameraPanel'
@@ -46,7 +46,14 @@ import './App.css'
 // Panels shown only under Experiments load after the studio. They still mount at start-up (hidden), as before,
 // each as soon as its own chunk arrives. ScientificModelPanel is not among them: it runs the fit that the
 // studio's Pull iPhone flow requests by window event, so it must be listening from the first render.
-function panel<P extends object>(Panel:(props:P)=>ReactNode){return (props:P)=><Suspense fallback={null}><Panel {...props}/></Suspense>}
+// A panel whose chunk fails to load, or that throws while rendering, shows a message in its own place and the
+// studio and other panels keep working. React logs the caught error to the console.
+class PanelBoundary extends Component<{children:ReactNode},{failed:boolean}>{
+  state={failed:false}
+  static getDerivedStateFromError(){return {failed:true}}
+  render(){return this.state.failed?<section><p role="alert" className="probe-error">This panel could not load. Reload the page to try again.</p></section>:this.props.children}
+}
+function panel<P extends object>(Panel:(props:P)=>ReactNode){return (props:P)=><PanelBoundary><Suspense fallback={null}><Panel {...props}/></Suspense></PanelBoundary>}
 const ExperimentDashboard=panel(lazy(()=>import('./components/experiments/ExperimentDashboard')))
 const ExperimentRunner=panel(lazy(()=>import('./components/experiments/ExperimentRunner').then(m=>({default:m.ExperimentRunner}))))
 const ReproducibilityPanel=panel(lazy(()=>import('./components/experiments/ReproducibilityPanel').then(m=>({default:m.ReproducibilityPanel}))))
