@@ -7,7 +7,7 @@ import pytest
 
 from singing_physics.engine import Engine
 from singing_physics.pcm_design import design_pcm, freeze_pcm_hypotheses, update_pcm
-from singing_physics.pcm_inverse import resample_native_pcm
+from singing_physics.pcm_inverse import FEATURES, resample_native_pcm
 from singing_physics.prediction import Artifact, _encode
 
 
@@ -100,6 +100,20 @@ def test_missing_predicted_and_observed_features_never_improve_rank_or_prune():
     assert result['status'] == 'missing_required_features'
     assert len(result['updated_snapshot']['hypotheses']) == 2
     assert result['scores'] == []
+
+
+def test_several_missing_predicted_features_survive_sorted_design_storage():
+    # Sealed designs store feature_scales with sorted keys. Declare scales in
+    # canonical extractor order so the missing-feature reason must not depend on it.
+    scales = {name: {'unit': unit, 'scale': scale, 'assumption': 'Synthetic test scale'}
+              for name, (unit, scale) in FEATURES.items()}
+    snapshot = freeze()
+    ranking = design(snapshot, feature_scales=scales, experiments=[{**EXPERIMENTS[0], 'gain': .01}])
+    prediction = ranking.data['rankings'][0]['predictions'][0]
+    assert prediction['missing_reason'] == 'Required canonical features missing: centroidHz, flatness, periodicity, pitchHz'
+    result = update(ranking, snapshot, observed_frame(snapshot)).data
+    assert result['status'] == 'missing_required_features'
+    assert len(result['updated_snapshot']['hypotheses']) == 2
 
 
 def test_validation_budget_and_receipt_identity():

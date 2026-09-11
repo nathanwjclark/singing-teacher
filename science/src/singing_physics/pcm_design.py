@@ -161,7 +161,7 @@ def _available(canonical, scales):
         features = _features(record)
     except ValueError as exc:
         return None, str(exc)
-    missing = [name for name in scales if features[name]['value'] is None]
+    missing = sorted(name for name in scales if features[name]['value'] is None)
     if missing:
         return None, 'Required canonical features missing: '+', '.join(missing)
     return {name: features[name]['value'] for name in scales}, None
