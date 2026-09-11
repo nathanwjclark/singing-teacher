@@ -147,15 +147,17 @@ export function createNativePullRoutes({ repo, dataRoot, json, runProcess = run 
     if (url.search || Number(req.headers['content-length'] ?? 0) > 0 || req.headers['transfer-encoding']) {
       json(res, 400, { error: 'This action takes no parameters.' }); return true;
     }
+    // The page never shows device identity, so the UDID, CoreDevice id, model and OS version stay in the receipt on disk.
+    const forPage = receipt => receipt?.acquisition ? { ...receipt, acquisition: { ...receipt.acquisition, device: undefined } } : receipt;
     if (url.pathname.endsWith('/latest') && req.method === 'GET') {
       let receipt = null;
       try { receipt = JSON.parse(await readFile(receiptFile, 'utf8')); } catch { /* No previous receipt. */ }
-      json(res, 200, { inFlight, receipt }); return true;
+      json(res, 200, { inFlight, receipt: forPage(receipt) }); return true;
     }
     if (!url.pathname.endsWith('/pull') || req.method !== 'POST') { json(res, 405, { error: 'Method not allowed' }); return true; }
     if (inFlight) { json(res, 409, { error: 'An iPhone pull is already running. Keep the phone unlocked until it finishes.' }); return true; }
     inFlight = true;
-    try { json(res, 200, { receipt: await pull() }); }
+    try { json(res, 200, { receipt: forPage(await pull()) }); }
     catch (error) { json(res, error.status ?? 500, { error: error.status ? error.message : 'The private import could not finish. Existing files were preserved.' }); }
     finally { inFlight = false; }
     return true;

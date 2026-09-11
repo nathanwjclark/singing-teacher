@@ -45,7 +45,7 @@ async function serve(t,devices,{config={deviceId:deviceId.toLowerCase()},copied=
 test('a pull records the configured device, its connection and the container beside the existing receipt fields',async t=>{
  const {dataRoot,calls,call,jobs}=await serve(t,[other,phone]);
  const pulled=await call('pull','POST');assert.equal(pulled.status,200,JSON.stringify(pulled.body));
- const receipt=pulled.body.receipt;
+ const receipt=JSON.parse(await readFile(join(dataRoot,'native-pull-latest.json'),'utf8'));
  assert.equal(receipt.schemaVersion,'native-pull-receipt-2');
  assert.deepEqual(receipt.acquisition,{transport:'devicectl',connection:{transportType:'wired',tunnelState:'connected'},
   container:{domainType:'appDataContainer',bundleId:'com.singingteacher.depth',path:`Documents/${name}`},
@@ -55,15 +55,17 @@ test('a pull records the configured device, its connection and the container bes
  assert.equal(receipt.name,name);assert.equal(receipt.bytes,archive.length);assert.equal(receipt.sha256,createHash('sha256').update(archive).digest('hex'));
  assert.equal(receipt.phoneModifiedAt,'2026-09-10T12:00:00Z');assert.equal(receipt.reused,false);assert.equal(receipt.verification,'downloaded-only');assert.equal(receipt.source,'configured-iphone-app-container');
  assert.ok(Number.isFinite(Date.parse(receipt.receivedAt)));assert.match(receipt.message,/Import it in Acoustic mapping/);
- assert.deepEqual(JSON.parse(await readFile(join(dataRoot,'native-pull-latest.json'),'utf8')),receipt);
- assert.deepEqual((await call('latest')).body,{inFlight:false,receipt});
+ // Both HTTP responses leave out the device identity; everything else matches the receipt on disk.
+ const {device:_,...shown}=receipt.acquisition;assert.deepEqual(pulled.body.receipt,{...receipt,acquisition:shown});
+ assert.deepEqual((await call('latest')).body,{inFlight:false,receipt:pulled.body.receipt});
+ for(const body of [pulled.body,(await call('latest')).body])assert.equal(JSON.stringify(body).includes('00008130'),false);
  assert.deepEqual(await readFile(join(dataRoot,'usb-imports',name)),archive);
  assert.deepEqual(calls[0].slice(0,6),['xcrun','devicectl','list','devices','--timeout','20']);
  assert.deepEqual(calls.map(c=>c.slice(1,4).join(' ')),['devicectl list devices','devicectl device info','devicectl device copy']);
  // The device list names every device paired with this Mac; it is deleted once the configured entry is read.
  const [job]=await jobs();assert.ok(job);assert.equal((await readdir(join(dataRoot,job))).includes('devices.json'),false);
  // A second pull of the same archive reuses the local copy and records the device again.
- const again=(await call('pull','POST')).body.receipt;assert.equal(again.reused,true);assert.deepEqual(again.acquisition,receipt.acquisition);
+ const again=(await call('pull','POST')).body.receipt;assert.equal(again.reused,true);assert.deepEqual(again.acquisition,pulled.body.receipt.acquisition);
 });
 
 test('a missing configured device refuses the pull with 503 before any file is listed or copied',async t=>{
@@ -76,8 +78,9 @@ test('a missing configured device refuses the pull with 503 before any file is l
 
 test('a wireless pull records its transport and leaves absent fields null',async t=>{
  const sparse={identifier:deviceId,connectionProperties:{transportType:'localNetwork'},hardwareProperties:{productType:'iPhone16,1'}};
- const {call}=await serve(t,[sparse]);
- const receipt=(await call('pull','POST')).body.receipt;
+ const {dataRoot,call}=await serve(t,[sparse]);
+ assert.equal((await call('pull','POST')).status,200);
+ const receipt=JSON.parse(await readFile(join(dataRoot,'native-pull-latest.json'),'utf8'));
  assert.deepEqual(receipt.acquisition.connection,{transportType:'localNetwork',tunnelState:null});
  assert.deepEqual(receipt.acquisition.device,{coreDeviceId:deviceId,udid:null,productType:'iPhone16,1',osVersion:null});
 });
