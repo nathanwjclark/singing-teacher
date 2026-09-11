@@ -1,5 +1,7 @@
+import base64
 import hashlib
 import json
+import shutil
 import subprocess
 import zipfile
 from pathlib import Path
@@ -46,6 +48,20 @@ def test_changed_archive_rejected_before_import(tmp_path):
     with pytest.raises(ValueError,match='hash mismatch'):prepare(root,root/'probe-imports'/'bad')
 
 
+def save_setup(root,import_id,request_id,package,evidence,jaw):
+    """Freeze a setup through the server's real saveProbeSetup, including its importer verification."""
+    encode=lambda raw:base64.b64encode(raw).decode()
+    manifest=(root/'probe-imports'/import_id/'capture'/'manifest.json').read_bytes()
+    body={'requestId':request_id,'importId':import_id,'manifestSha256':hashlib.sha256(manifest).hexdigest(),
+        'packageBase64':encode(json.dumps(package).encode()),'evidence':[{'name':evidence.name,'base64':encode(evidence.read_bytes())}],
+        'placement':package['placement'],'profile':{'JA':jaw,'gain':1.,'direct_gain':1.,'coupling_gain':1.,'delay_s':0.},
+        'trialId':package['trial_id'],'pose':package['pose']}
+    script=("import {saveProbeSetup} from './server/probeSetup.mjs'; import {execFile} from 'node:child_process'; import {promisify} from 'node:util'; import {readFileSync} from 'node:fs';"
+        "console.log(JSON.stringify(await saveProbeSetup({repo:process.cwd(),dataRoot:process.argv[1],body:JSON.parse(readFileSync(0)),runProcess:promisify(execFile)})));")
+    return json.loads(subprocess.run(['node','--experimental-strip-types','--input-type=module','-e',script,str(root)],
+        cwd=ROOT,input=json.dumps(body),text=True,check=True,capture_output=True).stdout)
+
+
 def saved_setup(root, receipt):
     folder=root/'probe-setups'/receipt['setupId'];folder.mkdir(parents=True)
     (folder/'configuration.json').write_text('{}');(folder/'profile.json').write_text('{}')
@@ -81,15 +97,27 @@ def test_original_probe_runs_joint_session_adoption(tmp_path, monkeypatch,crash_
         "import {setupFixture} from './science/scripts/import_probe_science.test.ts'; import {writeFile} from 'node:fs/promises'; await writeFile(process.argv[1],JSON.stringify(await setupFixture()));",str(descriptor)],
         cwd=ROOT,env={**os.environ,'PROBE_PYTHON':sys.executable},check=True,capture_output=True)
     fixture=json.loads(descriptor.read_text());root=tmp_path/'data';root.mkdir()
-    config=fixture['config'];config['capture_binding']['manifest_sha256']=hashlib.sha256((Path(fixture['capture'])/'manifest.json').read_bytes()).hexdigest()
-    (root/'probe-science-config.json').write_text(json.dumps(config))
-    evidence=Path(fixture['root'])/'calibration-evidence.txt'
-    (root/evidence.name).write_bytes(evidence.read_bytes())
-    imported=root/'probe-imports'/'imported';imported.mkdir(parents=True)
-    # Importer verifies original capture bytes again inside runner, not review JSON.
-    import shutil
-    shutil.copytree(fixture['capture'],imported/'capture')
-    (imported/'summary.json').write_text(json.dumps({'eligible':True,'captureDirectory':'capture'}))
+    config=fixture['config'];evidence=Path(fixture['root'])/'calibration-evidence.txt'
+    imported=root/'probe-imports'/'imported'
+    if app_setup:
+        # The whole app path: pull receipt -> review import -> setup frozen by the server's saveProbeSetup -> calibrated import.
+        archive_fixture(tmp_path)
+        prepare(root,root/'probe-imports'/'review')
+        original=save_setup(root,'review','original-setup',config,evidence,-3.)
+        summary=prepare(root,imported)
+        assert summary['eligible'] and summary['setupId']=='original-setup' and summary['setupProfileSha256']==original['profileSha256']
+        # A later setup must not replace the controls already bound to this import.
+        save_setup(root,'imported','later-setup',config,evidence,-4.)
+        assert json.loads((root/'probe-setup-current.json').read_text())['setupId']=='later-setup'
+    else:
+        config['capture_binding']['manifest_sha256']=hashlib.sha256((Path(fixture['capture'])/'manifest.json').read_bytes()).hexdigest()
+        (root/'probe-science-config.json').write_text(json.dumps(config))
+        (root/evidence.name).write_bytes(evidence.read_bytes())
+        (root/'probe-fit-profile.json').write_text(json.dumps({'JA':-3.,'gain':1.,'direct_gain':1.,'coupling_gain':1.,'delay_s':0.}))
+        imported.mkdir(parents=True)
+        # Importer verifies original capture bytes again inside runner, not review JSON.
+        shutil.copytree(fixture['capture'],imported/'capture')
+        (imported/'summary.json').write_text(json.dumps({'eligible':True,'captureDirectory':'capture'}))
     voice=root/'science-runs'/'voice';voice.mkdir(parents=True)
     (root/'science-current.json').write_text(json.dumps({'status':'succeeded','runId':'voice'}))
     (voice/'summary.json').write_text(json.dumps({'sessionId':'probe-runner'}))
@@ -100,27 +128,6 @@ def test_original_probe_runs_joint_session_adoption(tmp_path, monkeypatch,crash_
         with Engine() as engine:
             fitted=fit_pcm(engine,state['calibration'],candidates=[{k:c[k] for k in ('candidate_id','anatomy','trials')} for c in candidates],max_synthesis_calls=4)
         (voice/'fit.json').write_text(json.dumps(fitted))
-        (root/'probe-fit-profile.json').write_text(json.dumps({'JA':-3.,'gain':1.,'direct_gain':1.,'coupling_gain':1.,'delay_s':0.}))
-        if app_setup:
-            def publish(identity, jaw):
-                folder=root/'probe-setups'/identity;folder.mkdir(parents=True)
-                shutil.copyfile(root/'probe-science-config.json',folder/'configuration.json')
-                shutil.copyfile(root/evidence.name,folder/evidence.name)
-                profile=json.loads((root/'probe-fit-profile.json').read_text());profile['JA']=jaw
-                (folder/'profile.json').write_text(json.dumps(profile))
-                receipt={'setupId':identity,'eligible':True,
-                    'configurationSha256':hashlib.sha256((folder/'configuration.json').read_bytes()).hexdigest(),
-                    'profileSha256':hashlib.sha256((folder/'profile.json').read_bytes()).hexdigest()}
-                (folder/'summary.json').write_text(json.dumps(receipt))
-                (root/'probe-setup-current.json').write_text(json.dumps({'setupId':identity,
-                    'receiptSha256':hashlib.sha256((folder/'summary.json').read_bytes()).hexdigest()}))
-                return receipt
-            original=publish('original-setup',-3.)
-            summary=json.loads((imported/'summary.json').read_text())
-            summary.update(setupId=original['setupId'],setupConfigurationSha256=original['configurationSha256'],setupProfileSha256=original['profileSha256'])
-            (imported/'summary.json').write_text(json.dumps(summary))
-            # A later setup must not replace the controls already bound to this import.
-            publish('later-setup',-4.)
         @contextmanager
         def backend(_output,session_id):
             value=LocalBackend(service,session_id)
@@ -155,7 +162,7 @@ def test_original_probe_runs_joint_session_adoption(tmp_path, monkeypatch,crash_
         assert (root/'probe-fits/fit/session-ledger.json').exists()
         if app_setup:
             intent=json.loads((root/'probe-fits/fit/intent.json').read_text())
-            assert intent['setupId']=='original-setup'
+            assert intent['setupId']=='original-setup' and intent['configurationSha256']==original['configurationSha256']
             assert all(t['JA']==-3. for c in intent['command']['parameters']['candidates'] for t in c['probe_trials'].values())
         state=controller.execute({'action':'state'})['state']
         assert state['pending'] is None
