@@ -243,6 +243,7 @@ export function createSessionExportRoutes({dataRoot, json, fetchImpl = fetch, en
           missing.push({source, reason: error.code === 'ENOENT' ? 'Completed score recomputation receipt or report is missing' : 'Latest score recomputation report is invalid, unbound to its receipt or exceeds the export size; excluded'});
         }
       }
+      const boundControl = new Set();
       for (const attemptId of await folders(prefix + '/control-attempts')) {
         const source = `${prefix}/control-attempts/${attemptId}/result.json`;
         if (artifacts.length >= MAX_FILES) { missing.push({source, reason: 'Artifact count limit reached'}); break; }
@@ -253,16 +254,26 @@ export function createSessionExportRoutes({dataRoot, json, fetchImpl = fetch, en
           const receipt = result.phase === 'score' ? state?.control_receipts?.find(row => row.operation === 'score_control_pcm' && row.job_id === result.jobId)
             : result.phase === 'stop' ? state?.control_receipts?.find(row => row.operation === 'record_control_attempt' && row.forecast_id === result.forecastId) : null;
           const bound = result.phase === 'forecast' ? isDeepStrictEqual(forecast?.artifact, result.result)
-            : result.phase === 'score' ? Boolean(receipt) && isDeepStrictEqual(receipt.result, result.result) && receipt.forecast_id === result.forecastId
-            : result.phase === 'stop' && Boolean(receipt);
-          if (!bound || !forecast || forecast.binding_id !== result.bindingId || result.modelUpdated !== false || !knownModels.has(result.baselineModelId)) throw Error('Unbound cue-execution receipt');
+            : result.phase === 'score' ? Boolean(receipt) && isDeepStrictEqual(receipt.result, result.result) && receipt.forecast_id === result.forecastId && receipt.status === result.status
+            : result.phase === 'stop' && Boolean(receipt) && receipt.status === result.status && receipt.reason === result.reason;
+          const identity = result.phase + ':' + (result.jobId || result.forecastId);
+          if (!bound || !forecast || boundControl.has(identity) || forecast.binding_id !== result.bindingId || result.deliveredCue !== forecast.artifact.artifact.cue.wording
+            || result.modelUpdated !== false || !knownModels.has(result.baselineModelId)) throw Error('Unbound or duplicate cue-execution receipt');
           let originalBytesVerified = false;
           if (result.phase === 'score' && result.result) {
-            // The retained original manifest must be the one whose hash the scored receipt carries.
-            const manifest = await digestOriginal(`${prefix}/control-attempts/${attemptId}/original/manifest.json`, 1024 * 1024);
-            if (manifest.sha256 !== result.source_manifest_sha256 || !result.result.artifact.observation_hashes.includes(manifest.sha256)) throw Error('Changed original control capture');
+            // The retained original manifest and every audio file it lists must hash to values the scored receipt carries.
+            const directory = `${prefix}/control-attempts/${attemptId}/original`, hashes = result.result.artifact.observation_hashes;
+            const manifest = await read(`${directory}/manifest.json`), samples = manifest.data.audio?.samples || [];
+            if (manifest.sha256 !== result.source_manifest_sha256 || !hashes.includes(manifest.sha256) || !samples.length) throw Error('Changed original control capture');
+            for (const sample of samples) {
+              const path = sample.artifact?.path;
+              if (typeof path !== 'string' || !/^[A-Za-z0-9._-]{1,160}$/.test(path) || path.startsWith('.')) throw Error('Invalid original audio path');
+              const audio = await digestOriginal(`${directory}/${path}`, 64 * 1024 * 1024);
+              if (audio.sha256 !== sample.artifact.sha256 || !hashes.includes(audio.sha256)) throw Error('Changed original control audio');
+            }
             originalBytesVerified = true;
           }
+          boundControl.add(identity);
           artifacts.push({...artifact, binding: {sessionId, modelId: result.baselineModelId, current: result.baselineModelId === state.snapshot?.model_id,
             role: 'cue-execution-' + result.phase, bindingId: result.bindingId, originalBytesVerified, modelUpdated: false}});
         } catch { missing.push({source, reason: 'Cue-execution receipt or original capture does not match the authoritative session; excluded'}); }
