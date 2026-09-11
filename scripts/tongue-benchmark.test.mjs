@@ -27,3 +27,10 @@ test('invalid region boxes are rejected and missing box capability is unavailabl
  assert.equal(benchmark(review,undefined,'abc').region.meanBoxIoUIncludingMisses,null);
  assert.throws(()=>benchmark({...review,samples:[{...review.samples[0],regionPrediction:[.9,.1,.2,.8]}]},undefined,'abc'));
 });
+test('recorded frames without a current region result are unobserved, not misses; prediction files keep omitted rows as misses',()=>{
+ const recorded=benchmark({...review,samples:review.samples.map((s,i)=>i===0?s:{...s,regionPrediction:i===1?[.1,.1,.9,.9]:null})},undefined,'abc');
+ assert.equal(recorded.region.meanBoxIoUIncludingMisses,1);assert.equal(recorded.region.detected,1);assert.equal(recorded.region.reviewedFramesWithoutObservation,1);assert.equal(recorded.region.visibleSurfaceReferences,1);assert.equal(recorded.region.absentSurfaceReferences,1);assert.equal(recorded.rows[0].regionBoxIoU,undefined);
+ const predicted=benchmark(review,{schema:'tongue-predictions/v1',reviewSha256:'abc',modelId:'test',samples:[{index:1,region:[.1,.1,.9,.9]}]},'abc');
+ assert.equal(predicted.region.meanBoxIoUIncludingMisses,.5);assert.equal(predicted.region.reviewedFramesWithoutObservation,0);assert.equal(predicted.region.visibleSurfaceReferences,2);
+ assert.equal(benchmark(review,undefined,'abc').region.reviewedFramesWithoutObservation,null);
+});

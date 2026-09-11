@@ -1,6 +1,7 @@
 import * as ort from 'onnxruntime-web/wasm';
 import wasmUrl from 'onnxruntime-web/ort-wasm-simd-threaded.wasm?url';
 import type {Landmark, TongueDiagnostic, TongueObservation, TongueTipObservation} from '../types';
+import {resultCurrent} from './tongueTracking';
 
 ort.env.wasm.numThreads=1;
 ort.env.wasm.wasmPaths={wasm:wasmUrl};
@@ -40,30 +41,38 @@ export function neuralTipObservation(tip:NeuralTip,face:Landmark[],width:number,
 }
 
 export function createNeuralTongueTracker(){
- let network:Awaited<ReturnType<typeof loadTongueNetwork>>|undefined,closed=false,busy=false,generation=0,last:TongueObservation|undefined,failures=0;
- let diagnostic:TongueDiagnostic={state:'unselected',reason:'Loading personal neural tongue model'};
+ let network:Awaited<ReturnType<typeof loadTongueNetwork>>|undefined,closed=false,busy=false,generation=0,failures=0;
+ type Result={observation?:TongueObservation;observedAt:number};
+ // arrived: delivered by inference, not yet seen by a frame. current: stamped with the frame clock on arrival.
+ let arrived:Result|undefined,current:(Result&{arrivedAt:number})|undefined;
+ let diagnostic:TongueDiagnostic={state:'unselected',reason:'Loading tongue model'};
  const abort=new AbortController();
- void loadTongueNetwork(abort.signal).then(n=>{if(closed){void n.close();return;}network=n;diagnostic={state:'selected',reason:n.kind==='region'?'TongueSAM baseline ready · visible region only':'Neural model ready · show the tongue tip'};}).catch(e=>{if(!closed)diagnostic={state:'lost',reason:e instanceof Error?e.message:'Tongue network unavailable'};});
+ void loadTongueNetwork(abort.signal).then(n=>{if(closed){void n.close();return;}network=n;diagnostic={state:'selected',capability:n.kind,reason:n.kind==='region'?'TongueSAM baseline ready · visible region only':'Neural model ready · show the tongue tip'};}).catch(e=>{if(!closed)diagnostic={state:'lost',reason:e instanceof Error?e.message:'Tongue network unavailable'};});
  let reference:{x:number;y:number;z:number}|undefined;
  const track=(pixels:Uint8ClampedArray,width:number,height:number,face:Landmark[],timestamp:number)=>{
-  if(!face.length){if(last||busy)generation++;last=undefined;return;}
-  if(network&&!busy&&!closed){busy=true;const epoch=generation;
+  if(!face.length){if(current||arrived||busy)generation++;current=arrived=undefined;return;}
+  if(arrived){current={...arrived,arrivedAt:timestamp};arrived=undefined;}
+  if(network&&!busy&&!closed){busy=true;const epoch=generation,capability=network.kind;
    void network.infer(pixels,width,height).then(prediction=>{
     if(closed||epoch!==generation)return;
     failures=0;
     let observation:TongueObservation|undefined;
     if('box' in prediction){
      if(prediction.box)observation={trackingMode:'region',box:prediction.box,observedAt:timestamp,confidence:prediction.score};
-     diagnostic={state:observation?'tracking':'lost',reason:observation?'TongueSAM visible-region box · tip and depth unavailable':'TongueSAM cannot identify a visible tongue region',score:prediction.score};
+     diagnostic={state:observation?'tracking':'lost',capability,reason:observation?'TongueSAM visible-region box · tip and depth unavailable':'TongueSAM cannot identify a visible tongue region',score:prediction.score};
     }else{
-     observation=neuralTipObservation(prediction,face,width,height,timestamp);
-     diagnostic={state:observation?'tracking':'lost',reason:observation?'Neural tip detected · depth is a learned estimate':'Neural model cannot identify a visible tip',score:prediction.visibility,margin:prediction.peak};
+     const tip=neuralTipObservation(prediction,face,width,height,timestamp);
+     if(tip&&reference){tip.lateral-=reference.x;tip.elevation=(tip.elevation??0)-reference.y;tip.extension=(tip.extension??0)-reference.z;}
+     observation=tip;
+     diagnostic={state:tip?'tracking':'lost',capability,reason:tip?'Neural tip detected · depth is a learned estimate':'Neural model cannot identify a visible tip',score:prediction.visibility,margin:prediction.peak};
     }
-    if(observation?.trackingMode==='tip'&&reference){observation.lateral-=reference.x;observation.elevation=(observation.elevation??0)-reference.y;observation.extension=(observation.extension??0)-reference.z;}
-    last=observation;
-   }).catch(e=>{if(!closed&&epoch===generation){last=undefined;failures++;diagnostic={state:'lost',reason:`Neural inference failed: ${String(e)}`};if(failures>=3){void network?.close();network=undefined;diagnostic.reason='Tongue inference paused after repeated failures · restart camera to retry';}}}).finally(()=>{busy=false;if(closed)void network?.close();});
+    arrived={observation,observedAt:timestamp};
+   }).catch(e=>{if(!closed&&epoch===generation){current=arrived=undefined;failures++;diagnostic={state:'lost',capability,reason:`Neural inference failed: ${String(e)}`};if(failures>=3){void network?.close();network=undefined;diagnostic.reason='Tongue inference paused after repeated failures · restart camera to retry';}}}).finally(()=>{busy=false;if(closed)void network?.close();});
   }
-  return last&&timestamp-(last.observedAt??0)<(network?.kind==='region'?800:300)?last:undefined;
+  if(current&&!resultCurrent(current,timestamp,network?.kind==='region'?800:300))current=undefined;
+  return current?.observation;
  };
- return Object.assign(track,{diagnostics:()=>({...diagnostic}),resetMotionReference(){reference=last?.trackingMode==='tip'?{x:last.lateral,y:last.elevation??0,z:last.extension??0}:undefined;last=undefined;generation++;},close(){closed=true;generation++;abort.abort();if(!busy)void network?.close();}});
+ return Object.assign(track,{diagnostics:():TongueDiagnostic=>({...diagnostic,abstained:!!current&&!current.observation}),resetMotionReference(){
+  // The current tip is already relative to any earlier reference; add it back so the new reference stays in model units.
+  const last=current?.observation;reference=last&&last.trackingMode!=='region'?{x:last.lateral+(reference?.x??0),y:(last.elevation??0)+(reference?.y??0),z:(last.extension??0)+(reference?.z??0)}:undefined;current=arrived=undefined;generation++;},close(){closed=true;generation++;abort.abort();if(!busy)void network?.close();}});
 }
