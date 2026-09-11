@@ -1,48 +1,55 @@
-# Native mechanical source experiments
+# Native two-mass source family
 
-The optional app source fit now uses VocalTractLab's actual **Two-mass model** by default. The two-mass dynamics run inside the pinned native synthesizer together with the vocal tract. Python does not generate a substitute pulse. The model contains lower/upper masses, springs, collision springs, coupling, damping and pressure-driven motion.
+The optional source fit can use VocalTractLab's actual **Two-mass model** in addition to the prescribed **Geometric glottis**. The two-mass dynamics run inside the pinned native synthesizer together with the vocal tract; Python does not generate a substitute pulse. The model contains lower and upper masses, springs, collision springs, coupling, damping and pressure-driven motion.
 
-This is a conditional low-dimensional simulator. Its tissue masses, stiffnesses, length and other static properties remain the certified JD3 speaker values. Fitting its controls does not identify a singer's tissue mechanics, muscle recruitment, vocal-fold contact or anatomical uniqueness. The tract's `vocal_fold_length` geometry parameter is not an independently measured or fitted two-mass cord length.
+The app default stays the geometric glottis. `PHONATION_SOURCE_MODEL=two_mass` on the local server opts in; choosing a different default is an owner decision, and the [frozen comparison](../evaluation/wave3/source/README.md) reports the evidence for it.
+
+This is a conditional low-dimensional simulator. Its tissue masses, stiffnesses, cord length and other static properties stay at the certified JD3 speaker values. Fitting its controls does not identify a singer's tissue mechanics, muscle activity, vocal-fold contact or closure, or anatomical uniqueness. The tract's `vocal_fold_length` geometry parameter is not an independently measured or fitted two-mass cord length.
 
 ## Controls and finite support
 
-`source_model=two_mass` requires `XB`, `XT` (lower/upper rest displacement, cm), `EAA` (extra arytenoid area, cm²), and `DF` (dimensionless damping factor), alongside `JA`, `F0`, `PR`, and microphone `gain`. Research bounds are narrower than the verified native bounds:
+Each family requires exactly its own shape controls, alongside `JA`, `F0` (65-600 Hz), `PR` (4,000-12,000 dPa) and microphone `gain`:
 
-| Control | Research bounds |
-| --- | --- |
-| XB / XT | −0.01 to 0.06 cm |
-| EAA | 0 to 0.05 cm² |
-| DF | 0.6 to 1.6 |
-| F0 | 65 to 600 Hz |
-| PR | 4,000 to 12,000 dPa |
+| Family | Shape controls | Research bounds | Fixed native controls |
+| --- | --- | --- | --- |
+| `geometric` | `PS` (pulse skew) | -0.3 to 0.3 | `FL=0`, `DP=0`, `AS=-40 dB` |
+| `two_mass` | `XB`, `XT` (lower/upper rest displacement, cm); `EAA` (extra arytenoid area, cm²); `DF` (damping factor) | XB/XT -0.01 to 0.06; EAA 0 to 0.05; DF 0.6 to 1.6 | none |
 
-The app uses two declared source alternatives per retained tract: `(XB=XT=.005, EAA=0, DF=1)` and `(XB=XT=.015, EAA=.005, DF=1)`. It keeps the same source support for every tract. These are a coarse, declared research grid, not a calibrated distribution of human physiology. Each hypothesis retains its source family and shape across calibration trials; vowel, pitch-control, pressure and capture gain can vary by trial.
+`synthesize_phonation` rejects a call that omits its family's shape controls or includes the other family's; `PS` is never filled in silently. Candidate documents may declare `source_model`; without it a candidate is geometric. A hypothesis keeps one family and shape across all calibration trials. The fixed-source ablation uses each family's own reference (`PS=0`; `XB=XT=.01 cm, EAA=0, DF=1`).
 
-Requested native `F0` is a control of the model's tension mapping. The actual simulated acoustic pitch can differ, especially with changes in gap, damping and tract loading. The system preserves both requested controls and extracted acoustic pitch. It never retunes generated audio to manufacture agreement. Silent, weak, aperiodic or unavailable descriptors remain explicit unavailable alternatives.
+The app varies one declared shape axis per family, with the same support for every retained anatomy: geometric `PS` in `[-0.2, 0, 0.2]` (one or two anatomies) or `[-0.2, 0.2]` (three to eight); two-mass `XB=XT` in `[.005, .01, .015]` or `[.005, .015]` cm with `EAA=0` and `DF=1` fixed. A preference among two-mass alternatives is therefore attributable to rest displacement only; the app does not explore arytenoid area or damping. Both families use gain 2. A sweep of both app grids over 65-600 Hz and all five vowels at 8,000 dPa peaks at 0.73 (the former gain of 4 clipped two-mass frames at 600 Hz). A fixed gain trades clipping against the -60 dBFS analysis floor: in the frozen comparison, vowel `u` at 220 Hz with a long pharynx fell below the floor at gain 2 for both families. `XB=.005` returns non-finite native output at some high pitches (vowel `a` at 450 Hz; `e` from 555 Hz; `i`, `o`, `u` from 520 Hz); those calls stay explicit failures.
 
-`PHONATION_SOURCE_MODEL=geometric` retains the prior PS-only app profile. Low-level finite candidate documents can compare both source families with matched tract and nuisance support. The three ablations retain equal simulation allocations: joint source/tract, fixed source within the same source family, and fixed template tract. The fixed two-mass source is `XB=XT=.01 cm, EAA=0 cm², DF=1`; fixed geometric source is `PS=0`.
+## Requested and simulated F0
+
+For the two-mass model, `F0` is the native tension control, not a pitch target. Its simulated pitch can differ from the request depending on shape, vowel, pressure and tract: in the frozen comparison by 12.6 Hz on average and by up to 60 Hz (86.7 Hz simulated for 147 Hz requested on a long tract). Some shapes stop oscillating above the analysis floor at high requests. The app sets the requested `F0` to the observed pitch for both families.
+
+Every fit prediction, frozen-bank alternative, single forecast and held-out score row records `requested_f0_hz` and `simulated_f0_hz` (the pitch the canonical extractor measured in the simulated frame). The primary discrepancy includes a pitch term, so it partly measures F0-control mapping rather than shape. Each row also carries `score_excluding_pitch`, the same terms without `pitchHz`; held-out scores add `heldout_rank_excluding_pitch`. Both scores need the same four descriptors, so availability is identical. The primary score still sets `best` and every rank. The pitch-excluded score does not remove F0 dependence from periodicity, flatness or harmonic slope.
+
+A bounded per-shape secant search on requested F0 was considered and not adopted: it needs extra calls for every (shape, vowel, pitch) combination, which exceeds the app's declared 48-call bank limit at eight anatomies, and it would add search failures that are hard to separate from model failures. Reporting both scores keeps the declared budgets and shows the mismatch instead of tuning it away.
 
 ## Integrity, selection and restoration
 
-`Engine.source_model` derives a temporary speaker file from the certified JD3 file by changing only each glottis model's `selected` attribute. No tissue values are edited. Results retain the reference-speaker hash, derived speaker byte hash, selected family, full native controls, native library provenance and fixed speaker static parameters. No ephemeral file path is used as durable evidence.
+`Engine.source_model(family)` reinitializes the native library with one glottis model selected. The certified family (the one the certified JD3 file selects, the geometric glottis) is always loaded from the certified speaker file itself, and its native source metadata must equal the metadata read at start-up. The two-mass family loads a temporary copy whose bytes differ from the certified file only in the two `selected` digits; the copy's SHA-256 is recorded as `selected_source_speaker_sha256` under policy `certified-JD3-selection-digits-only-v2`. No tissue value is edited. No temporary path is durable evidence.
 
-The native library has global state. Selection is guarded by the existing single-owner engine and restores caller anatomy, source family and provenance after success or an exception. A failed restoration closes the engine rather than continuing with an unknown native state. Switching re-reads the native parameter count and metadata; dimensionless empty units are preserved.
+The native library has global state. Selection is guarded by the single-owner engine and restores caller anatomy, source family and provenance after success or an exception; a failed restoration closes the engine. Fits and banks group calls by source family, so each group selects its family once. `source_capability` requires the certified file to select the geometric glottis and reports each family separately: native controls and their hash, supported bounds, fixed controls, fixed-source reference, provenance and fixed speaker static parameters.
 
-The source policy is versioned as `vtl-finite-geometric-two-mass-v2`. Adapter, engine, resampling dependency and extractor hashes are frozen. The app's policy cache also includes the selected app source family. Old policies are shown as unsupported historical receipts, and a new explicit analysis is allowed. Score-time policy changes return unavailable scores with no extraction or model update. Baseline anatomical state is never replaced by a source score.
+The source policy is versioned `vtl-finite-geometric-two-mass-v2`. Adapter, engine, resampling and extractor hashes are frozen, and the app policy also includes the selected app family, so changing `PHONATION_SOURCE_MODEL` invalidates cached fits. Old results stay visible as historical receipts. Baseline anatomy is never replaced by a source score.
+
+## Cost of family selection
+
+For the app's five-anatomy two-mass profile (30 fit calls, 30 bank calls), native reinitializations fell from 62 to 4 per phase once calls were grouped by family. Wall time per phase fell from 14.0-15.0 s to 11.1-13.6 s on a loaded 8-core host, where extraction subprocesses dominate. A standalone two-mass synthesis still selects and restores its family (0.16-0.20 s per call); inside a family group a call takes 0.09-0.15 s, close to the geometric 0.09-0.11 s.
 
 ## Verification and limitations
 
-`test_mechanical_phonation.py` uses real native synthesis. It verifies exception restoration, dimensionless metadata, finite control validation, pitch-control/output mismatch and damping response. Its matched mixed-family experiment uses two tract alternatives for each source family, two calibration vowels (`a` at 150 Hz nominal / gain 2; `u` at 220 Hz nominal / gain .7), and 24 fit calls. Separate `e` and `o` banks each freeze 12 predictions at 190 Hz nominal, 8,500 dPa, gain 1.3 before scoring. Each score performs zero synthesis and one canonical extraction.
+`test_mechanical_phonation.py` uses real native synthesis. It checks that the derived speaker differs only in selection digits; that restoration reloads the certified file and returns bit-identical synthesis for all five vowels, identical source metadata, anatomy and provenance after exceptions; that capability is family-aware and refuses a non-geometric certified selection; family control validation; requested/simulated F0 and the pitch-excluded score on fit, bank and score rows; one family selection per group; and the app grids and gain. Its on-grid mixed-family test is a plumbing test only: its generator is a grid candidate, so near-zero scores hold by construction. `test_app_source_loop.py` runs fit, bank and score through the app routes and native worker for both the geometric default and `PHONATION_SOURCE_MODEL=two_mass`.
 
-The `e` transfer falls below the canonical analysis floor for the known mechanical generator and is retained as an explicit insufficient-quality case. The `o` case checks recovery of the known in-grid generator. The test retains both outcomes; it does not establish superiority on human singing or broad identifiability. A separate app integration test exercises current source defaults through fit, freeze, original later capture, score, two rounds, restart/recovery and missing-runner fallback.
-
-Physical-device measurements, external validation against vocal-fold imaging/contact instrumentation, off-grid robustness, more physiological parameter recovery and calibrated uncertainty remain experimental questions.
+The off-grid, equal-budget comparison is in [evaluation/wave3/source](../evaluation/wave3/source/README.md). Its first frozen revision is **inconclusive** (synthetic evidence): the geometric glottis won 4 of 8 held-out cases on the primary score and 6 of 8 without the pitch term, the two-mass model 1 and 0, with half the tract support lost to the analysis floor and one two-mass generator unevaluable. It does not support making two-mass the default. Physical-device measurements, validation against vocal-fold imaging or contact instrumentation, recovery of more physiological parameters and calibrated uncertainty remain open.
 
 ## Primary sources and license
 
-- [Pinned native TwoMassModel.cpp](https://github.com/TUD-STKS/VocalTractLabBackend-dev/blob/df30392f18dc5e175b577c3ba734caaa65a3927f/src/VocalTractLabBackend/TwoMassModel.cpp): actual control bounds, fixed tissue parameters and numerical dynamics used here.
+- [Pinned native TwoMassModel.cpp](https://github.com/TUD-STKS/VocalTractLabBackend-dev/blob/df30392f18dc5e175b577c3ba734caaa65a3927f/src/VocalTractLabBackend/TwoMassModel.cpp): control bounds, fixed tissue parameters and numerical dynamics used here.
 - [VocalTractLab manual](https://www.vocaltractlab.de/download-vocaltractlab/VTL2.2-Manual.pdf): source families and speaker/model selection.
 - [Ishizaka and Flanagan, 1972](https://doi.org/10.1002/j.1538-7305.1972.tb02651.x): original two-mass voiced-sound model.
-- [Birkholz et al., 2011](https://www.speechtrainer.eu/documents/Birkholz_etal_2011_Interspeech.pdf): a separate triangular two-mass extension; available in native code but not enabled by this implementation.
+- [Birkholz et al., 2011](https://www.speechtrainer.eu/documents/Birkholz_etal_2011_Interspeech.pdf): a separate triangular two-mass extension; present in native code but not enabled here.
 
-VocalTractLab native code is GPL-3.0-or-later. This feature reuses the repository's pinned native dependency and introduces no additional redistributed dataset or model weights.
+VocalTractLab native code is GPL-3.0-or-later. This feature reuses the repository's pinned native dependency and adds no redistributed dataset or model weights.
