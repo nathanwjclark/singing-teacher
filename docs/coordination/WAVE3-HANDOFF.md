@@ -44,9 +44,9 @@ No merged code proves complete internal anatomy reconstruction, calibrated poste
 
 ## Engineering baseline (September 11 review)
 
-An independent review on September 11 found that none of `main`'s tests gated a merge: CI ran lint and build only, `npm test` ran 1 of 47 Node test files, and on `0e94328` the science suite had 3 failures and the default browser suite 4. Demo mode had also stopped showing coaching cues. The first PR in the queue below fixes all of it and makes CI run every existing suite on macOS 15. Linux builds the native library and passes the Node tests, but 15 science tests that pass on macOS fail there, so Linux remains unsupported until that is investigated.
+An independent review on September 11 found that none of `main`'s tests gated a merge: CI ran lint and build only, `npm test` ran 1 of 47 Node test files, and on `0e94328` the science suite had 3 failures and the default browser suite 4. Demo mode had also stopped showing coaching cues. The first PR in the queue below fixes all of it and makes CI run every existing suite on macOS 15. Getting CI green on a fresh runner also exposed intermittent failures, each root-caused and fixed rather than retried, among them the capture-processing browser race, a parallel-test port collision, a probe status route that reported a finishing job as idle, and an offline phonation extractor that inherited the 200 ms live deadline. Linux builds the native library and passes the Node tests, but 15 science tests that pass on macOS fail there, so Linux remains unsupported until that is investigated.
 
-The ten Wave 3 lane worktrees were preserved, not edited. Their uncommitted work was snapshotted and carried into new branches by cherry-pick, then finished, adversarially reviewed and fixed. None of the original lane commits exists on a remote yet; the push plan includes archive refs for them.
+The ten Wave 3 lane worktrees were preserved, not edited. Their uncommitted work was snapshotted and carried into new branches by cherry-pick, then finished, adversarially reviewed and fixed. Every branch in the queue and the archive refs for the original lane commits are on `origin`.
 
 ## Wave 3 PR queue
 
@@ -65,6 +65,10 @@ The branches form one linear stack, in merge order, so each PR applies cleanly a
 | 9 | `claude/wave3-control` | Cue-to-execution learning: frozen cue bindings, finite PCM control bank, per-anatomy history, separate residual calibration; three matched attempts moved the fourth forecast from uniform weights (0.33 each) to 0.25/0.45/0.30 | untested | none |
 | 10 | `claude/nasal-operator-design` | Design for the coupled oral/nasal operator, with native facts verified by probes (docs only) | untested | Native patch for arbitrary-frequency branch matrices |
 | 11 | `claude/wave3-handoff-refresh` | This handoff refresh | n/a | none |
+| 12 | `claude/ci-fixture-specs` | The five fixture-gated browser checks seed their own data and run in CI | untested (plumbing) | none |
+| 13 | `claude/ledger-v2` | Session ledger stores a content-addressed state tree instead of the full state per event (app loop 23.95 → 0.92 MB stored) | untested (software) | One-way upgrade: rollback needs a pre-upgrade backup |
+| 14 | `claude/bundle-split` | Route and feature code splitting: `/phone` initial JS 443 → 91 kB gzip, studio first paint 443 → 319 kB | untested (software) | none |
+| 15 | `claude/pull-provenance` | USB pull receipt records device and archive hash; importers classify with it, so a pulled recording cannot pass as a fixture or physical reference | untested | Command-line physical-reference imports; devicectl field names need one check on an Xcode Mac |
 
 Worker-backed browser checks (spectral objective, motion timeline, session recompute) run in CI through their own configs after the default suite.
 
@@ -87,7 +91,7 @@ The native library exposes full tract sections and transmission-line matrices co
 3. **Measured probe calibration:** derive calibration arrays from a reference-microphone sweep, and have the USB pull record device and archive hash (or the iPhone sign the manifest) so provenance stops being self-declared.
 4. **Evaluation revisions:** spectral revision 3 (count unscorable kept candidates as unscorable, per-objective margins) and source revision 2 (a calibration condition both tracts can score, more two-mass generators), each frozen before its run.
 5. **Session ledger size:** every ledger event stores the full session state, so the replay grows quadratically with rounds and eventually exceeds the export limit, which drops every lane's receipts from the export. The cue-learning lane stores its own job payloads as digests (82% less state per round), but a four-forecast app loop still reaches 23.9 MB of the 25.2 MB export bound, mostly from the baseline search result and Astra designs copied into every event; a fifth Astra round would exceed it. The systemic fix is delta events or periodic checkpoints.
-6. **Test infrastructure:** automate the five fixture-gated browser specs so CI runs them; investigate the Linux numerical divergence; find the cause of the intermittent capture-processing browser failure (about 1 in 15 runs under load; CI retries once).
+6. **Test infrastructure:** automate the five fixture-gated browser specs so CI runs them; investigate the Linux numerical divergence.
 7. **Physical and human acceptance (blocked on people and devices):** signed iOS build on the iPhone 13 Pro Max and iPhone 15 Pro, rear-LiDAR and probe calibration, two real Astra-guided loops, and the held-out human evaluation matrix. This host has no full Xcode, and live Astra calls cost money.
 
 ## Shared integration contract
