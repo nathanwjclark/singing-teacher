@@ -21,8 +21,13 @@ import fcntl
 TERMINAL = {'succeeded', 'failed', 'cancelled'}
 
 
+# The same encoder json.dumps(value, sort_keys=True, separators=(',', ':'), allow_nan=False) builds, made once:
+# the session ledger encodes every scalar of a state separately, and building an encoder per call dominated that.
+_CANONICAL = json.JSONEncoder(sort_keys=True, separators=(',', ':'), allow_nan=False)
+
+
 def canonical(value):
-    return json.dumps(value, sort_keys=True, separators=(',', ':'), allow_nan=False)
+    return _CANONICAL.encode(value)
 
 
 @contextmanager
