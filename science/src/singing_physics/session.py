@@ -32,10 +32,15 @@ def _id(value):
 
 
 INLINE_BYTES = 1024
-# No verifier accepts a replay above 64 MiB (app_recompute.py, recompute_session_score.evidence), so a
-# state whose canonical JSON exceeds it can be neither exported nor verified. The same bound on writes and
-# reads keeps a small crafted node set (shared references) from expanding into an unbounded state.
-MAX_STATE_BYTES = 64 * 1024 * 1024
+# A replay carries its state twice (the state and the nodes it is stored in). The app's export drops the
+# replay above 24 MiB (about 12 MiB of state), and app_recompute.py and recompute_session_score stop at a
+# 64 MiB replay, so a state above 32 MiB can no longer be verified. The same bound on writes and reads
+# stops crafted shared references from expanding without limit and caps a rebuild's memory.
+MAX_STATE_BYTES = 32 * 1024 * 1024
+# A read that dispatches a persisted intent appends job_dispatched: it adds the job id or, when submission
+# fails, moves the intent into jobs with a status, error and receipt (a few KiB). Every other append stays
+# this far below the bound, so that bookkeeping append always fits and a read never fails on size.
+DISPATCH_HEADROOM = 1024 * 1024
 EVENT_KEYS = {'format','session_id','version','previous_sha256','action','received_at','details','state_root'}
 INTEGRITY_ERRORS = (KeyError, IndexError, TypeError, ValueError, AttributeError, RecursionError)
 
@@ -276,7 +281,7 @@ class SessionController:
         _,previous,_,stored=self._read(db)
         state['version']+=1
         text=canonical(state)
-        if len(text)>MAX_STATE_BYTES: raise ValueError('Session state exceeds the ledger size bound')
+        if len(text)>MAX_STATE_BYTES-(0 if action=='job_dispatched' else DISPATCH_HEADROOM): raise ValueError('Session state exceeds the ledger size bound')
         # Store the form readers get back (as a v1 reload did: string keys, tuples as lists, surrogate pairs
         # joined), then prove before anything is written that the stored tree rebuilds exactly its canonical
         # text. A state readers or verify_replay could not reproduce rolls the command back.

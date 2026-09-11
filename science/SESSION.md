@@ -185,9 +185,15 @@ the stored tree rebuilds exactly the state being written and that the rebuilt
 text parses; otherwise the command fails and nothing is committed. Readers
 rebuild a state's canonical text without recursion and parse it once, as they
 parsed a full-state event, so every depth canonical JSON can hold stays readable.
-A state may not exceed 64 MiB of canonical JSON (`MAX_STATE_BYTES`, the largest
-replay `app_recompute.py` and `recompute_session_score` accept): the writer
-refuses such a state, and a read stops rebuilding any value that grows past it.
+A replay carries its state twice (the state and the nodes that store it), so the
+thresholds are: the app's session export drops the replay above 24 MiB, about
+12 MiB of state; `app_recompute.py` and `recompute_session_score` stop at a
+64 MiB replay, so verification ends at about 32 MiB of state; and the ledger
+refuses a state above 32 MiB of canonical JSON (`MAX_STATE_BYTES`), which also
+stops runaway work. Commands stop 1 MiB lower (`DISPATCH_HEADROOM`), so the
+`job_dispatched` event a `state` or `replay` read may append always fits and a
+read never fails on size. A read stops rebuilding any value that grows past
+the bound.
 Each rebuild expands a shared node once. A read rebuilds only the final state
 and, in the control digest check of the `state` and `replay` actions, each
 event's pending job; the per-event root checks read `version` and `session_id`

@@ -259,7 +259,8 @@ def test_per_event_root_checks_expand_nothing():
 
 def test_a_state_readers_would_refuse_is_never_committed(tmp_path, monkeypatch):
     import singing_physics.session as session
-    monkeypatch.setattr(session, 'MAX_STATE_BYTES', 20_000)  # The 64 MiB bound, scaled down to keep the test small.
+    monkeypatch.setattr(session, 'MAX_STATE_BYTES', 20_000)  # The bounds, scaled down to keep the test small.
+    monkeypatch.setattr(session, 'DISPATCH_HEADROOM', 0)
     with JobService(tmp_path/'jobs') as service:
         controller = SessionController(tmp_path/'sessions', service, 'bounded')
         state = controller.execute({'action': 'state'})['state']
@@ -295,3 +296,25 @@ def test_every_stored_state_verifies_as_a_supplied_replay(tmp_path, extra):
     replay = json.loads(json.dumps(read_ledger(tmp_path/'sessions', 'reparse')))
     assert verify_replay(replay, 'reparse', replay['ledger_sha256']) == replay['ledger_sha256']
     assert replay['state']['sensations'] == json.loads(canonical([extra]))
+
+
+def test_a_read_that_dispatches_an_intent_never_fails_on_size(tmp_path, monkeypatch):
+    import singing_physics.session as session
+    monkeypatch.setattr(session, 'MAX_STATE_BYTES', 60_000); monkeypatch.setattr(session, 'DISPATCH_HEADROOM', 10_000)  # Scaled down.
+    with JobService(tmp_path/'jobs') as service:
+        controller = SessionController(tmp_path/'sessions', service, 'dispatch')
+        def intent(size):
+            state = controller.execute({'action': 'state'})['state']
+            # A persisted intent whose submission fails, so the read's job_dispatched event records a failure.
+            state['pending'] = {'request': {'operation': 'unsupported-fixture', 'parameters': {}, 'session_id': 'dispatch', 'model_id': 'm'},
+                                'key': 'session:'+'c'*64, 'job_id': None, 'base_model_id': 'm'}
+            state['sensations'] = ['']; state['sensations'] = ['x'*(size-len(canonical({**state, 'version': state['version']+1})))]
+            with controller._db() as db: controller._append(db, state, 'intent', {})
+        # Above the command bound (60 000 - 10 000) an intent is refused, so no read can be left needing more room.
+        with pytest.raises(ValueError, match='exceeds the ledger size bound'): intent(50_001)
+        assert events(tmp_path) == 0
+        # At the command bound, the read's job_dispatched event crosses it, fits under the bound and the read answers.
+        intent(50_000)
+        state = controller.execute({'action': 'state'})['state']
+        assert (state['version'], state['pending'], state['jobs'][-1]['status']) == (2, None, 'submission_failed')
+        assert len(canonical(state)) > 50_000 and controller.execute({'action': 'replay'})['state'] == state
