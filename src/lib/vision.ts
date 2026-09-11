@@ -1,3 +1,4 @@
+import type { PoseLandmarker } from '@mediapipe/tasks-vision';
 import type { Landmark, TrackingFrame } from '../types';
 import { tongueCrop } from './tongueCrop';
 import { createNeuralTongueTracker } from './tongueNeural';
@@ -7,14 +8,14 @@ import { createTrackingStabilizer } from './trackingStability';
 export interface VisionEngine { process(video: HTMLVideoElement, timestamp: number): TrackingFrame; draw(context: CanvasRenderingContext2D, frame: TrackingFrame, width: number, height: number): void; calibrate(): boolean; calibrateTongue(): void; close(): void }
 
 export async function createVisionEngine(): Promise<VisionEngine> {
-  // Loaded with the camera, not the page: the phone page and a studio without a camera never need it.
+  // Loaded when a camera session starts; a page that never starts the camera never downloads it.
   const { FaceLandmarker, FilesetResolver, PoseLandmarker } = await import('@mediapipe/tasks-vision');
   const fileset = await FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/wasm');
   const face = await FaceLandmarker.createFromOptions(fileset, {
     baseOptions: { modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task', delegate: 'CPU' },
     runningMode: 'VIDEO', numFaces: 1, outputFaceBlendshapes: true, outputFacialTransformationMatrixes: true,
   });
-  let pose: Awaited<ReturnType<typeof PoseLandmarker.createFromOptions>>;
+  let pose: PoseLandmarker;
   try {
     pose = await PoseLandmarker.createFromOptions(fileset, {
       baseOptions: { modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task', delegate: 'CPU' },
