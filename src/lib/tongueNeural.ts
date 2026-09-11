@@ -12,9 +12,12 @@ export type NeuralTip={x:number;y:number;depth:number;visibility:number;peak:num
  * nearest-template lookup, optical flow, or conversion of vertical motion to depth. */
 export async function loadTongueNetwork(signal?:AbortSignal){
  const [meta,weights]=await Promise.all([fetch('/api/tongue-neural/manifest',{cache:'no-store',signal}),fetch('/api/tongue-neural/model',{cache:'no-store',signal})]);
- // 404: no personal model here. 403: the server keeps personal models on its own machine, so another device (a phone) uses the public baseline.
- if([meta,weights].some(r=>r.status===403||r.status===404)||(meta.ok&&meta.headers.get('content-type')?.includes('text/html')))return (await import('./tongueBaseline')).loadTongueBaseline(signal);
- if(!meta.ok||!weights.ok)throw Error('Personal tongue network is not installed on this Mac');
+ // The manifest decides: 404 (or a dev server's HTML page) means none is installed; 403 means the server keeps it for its own
+ // computer, so another device such as a phone gets the public region detector. The cause stays visible in the diagnostic.
+ const fallback=meta.status===403?'personal tip model is served only to the computer running the app':meta.status===404||(meta.ok&&meta.headers.get('content-type')?.includes('text/html'))?'no personal tip model installed':undefined;
+ if(fallback)return {...await (await import('./tongueBaseline')).loadTongueBaseline(signal),fallback};
+ if(!meta.ok)throw Error(`Personal tongue model unavailable (HTTP ${meta.status})`);
+ if(!weights.ok)throw Error(`Personal tongue model is incomplete: weights unavailable (HTTP ${weights.status})`);
  const manifest=await meta.json();if(manifest.schema!=='personal-tongue-neural/v1')throw Error('Unknown tongue network format');
  const buffer=await weights.arrayBuffer();
  if(await sha256(new Uint8Array(buffer))!==manifest.modelSha256)throw Error('Tongue model verification failed');
@@ -31,7 +34,7 @@ export async function loadTongueNetwork(signal?:AbortSignal){
    for(let y=Math.max(0,by-1);y<=Math.min(31,by+1);y++)for(let x=Math.max(0,bx-1);x<=Math.min(31,bx+1);x++){const v=Math.max(0,heat[y*32+x]);sx+=x*v;sy+=y*v;sum+=v;}
    return {x:sx/Math.max(sum,1e-8)/32,y:sy/Math.max(sum,1e-8)/32,depth:Number(result.depth.data[0]),visibility:Number(result.visibility.data[0]),peak:heat[best]};
   }finally{input.dispose();if(result)Object.values(result).forEach(t=>t.dispose());}
- },close:()=>session.release(),manifest};
+ },close:()=>session.release(),manifest,fallback:undefined};
 }
 
 export function neuralTipObservation(tip:NeuralTip,face:Landmark[],width:number,height:number,timestamp:number):TongueTipObservation|undefined{
@@ -49,8 +52,8 @@ export function createNeuralTongueTracker(){
  let arrived:Result|undefined,current:(Result&{arrivedAt:number})|undefined;
  let diagnostic:TongueDiagnostic={state:'unselected',reason:'Loading tongue model'};
  const abort=new AbortController();
- void loadTongueNetwork(abort.signal).then(n=>{if(closed){void n.close();return;}network=n;diagnostic={state:'selected',capability:n.kind,reason:n.kind==='region'?'TongueSAM baseline ready · visible region only':'Neural model ready · show the tongue tip'};}).catch(e=>{if(!closed)diagnostic={state:'lost',reason:e instanceof Error?e.message:'Tongue network unavailable'};});
- let reference:{x:number;y:number;z:number}|undefined;
+ void loadTongueNetwork(abort.signal).then(n=>{if(closed){void n.close();return;}network=n;note=n.fallback?` (${n.fallback})`:'';diagnostic={state:'selected',capability:n.kind,reason:n.kind==='region'?'TongueSAM baseline ready · visible region only'+note:'Neural model ready · show the tongue tip'};}).catch(e=>{if(!closed)diagnostic={state:'lost',reason:e instanceof Error?e.message:'Tongue network unavailable'};});
+ let reference:{x:number;y:number;z:number}|undefined,note='';
  /** crop: where these pixels sit in the frame. A result is mapped with the crop of the frame it was computed from, not a later one. */
  const track=(pixels:Uint8ClampedArray,width:number,height:number,face:Landmark[],timestamp:number,crop:Crop={x:0,y:0,width:1,height:1})=>{
   if(!face.length){if(current||arrived||busy)generation++;current=arrived=undefined;return;}
@@ -62,7 +65,7 @@ export function createNeuralTongueTracker(){
     let observation:TongueObservation|undefined;
     if('box' in prediction){
      if(prediction.box)observation=observationInFrame({trackingMode:'region',box:prediction.box,observedAt:timestamp,confidence:prediction.score},crop);
-     diagnostic={state:observation?'tracking':'lost',capability,reason:observation?'TongueSAM visible-region box · tip and depth unavailable':'TongueSAM cannot identify a visible tongue region',score:prediction.score};
+     diagnostic={state:observation?'tracking':'lost',capability,reason:(observation?'TongueSAM visible-region box · tip and depth unavailable':'TongueSAM cannot identify a visible tongue region')+note,score:prediction.score};
     }else{
      const tip=neuralTipObservation(prediction,face,width,height,timestamp);
      if(tip&&reference){tip.lateral-=reference.x;tip.elevation=(tip.elevation??0)-reference.y;tip.extension=(tip.extension??0)-reference.z;}
