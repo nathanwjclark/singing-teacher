@@ -4,6 +4,8 @@ import {createHash,randomUUID} from 'node:crypto';
 
 const safe=value=>typeof value==='string'&&/^[A-Za-z0-9_-]{1,150}$/.test(value);
 const read=async path=>JSON.parse(await readFile(path,'utf8'));
+// A required file that does not exist yet means an earlier step has not run; say which one.
+const need=async(path,missing)=>{try{return await read(path)}catch(error){if(error.code==='ENOENT')throw Error(missing);throw error}};
 const save=async(path,value)=>{const temp=path+'.'+randomUUID()+'.tmp';await writeFile(temp,JSON.stringify(value),{mode:0o600});await rename(temp,path)};
 export async function readLearningMemory({dataRoot,sessionId}){
  if(!safe(sessionId))throw Error('Invalid session identity');
@@ -12,11 +14,11 @@ export async function readLearningMemory({dataRoot,sessionId}){
 export function createLearningRoutes({dataRoot,json}){
  let busy=false;
  async function current(){
-  const index=await read(resolve(dataRoot,'science-current.json'));
+  const index=await need(resolve(dataRoot,'science-current.json'),'Completed model run required');
   if(index.status!=='succeeded'||!safe(index.runId))throw Error('Completed model run required');
-  const run=resolve(dataRoot,'science-runs',index.runId),pointer=await read(resolve(run,'outcome-current.json'));
+  const run=resolve(dataRoot,'science-runs',index.runId),pointer=await need(resolve(run,'outcome-current.json'),'Completed outcome required');
   if(pointer.status!=='succeeded'||!safe(pointer.outcomeId))throw Error('Completed outcome required');
-  const outcome=await read(resolve(run,'outcomes',pointer.outcomeId,'summary.json'));
+  const outcome=await need(resolve(run,'outcomes',pointer.outcomeId,'summary.json'),'Completed outcome required');
   if(!safe(outcome.sessionId)||typeof outcome.observationId!=='string'||!outcome.submitted)throw Error('Recorded outcome attempt required');
   return {run,runId:index.runId,outcome};
  }
@@ -57,6 +59,7 @@ export function createLearningRoutes({dataRoot,json}){
     memory.entries.push(intent.entry);await save(resolve(dir,outcome.sessionId+'.json'),memory);
     json(res,200,memory);return true;
    }finally{busy=false}
-  }catch(error){json(res,409,{error:error.message});return true}
+  // A file-system error message carries a private path; never send it to the page.
+  }catch(error){json(res,409,{error:error.syscall?'Learning memory files could not be read':error.message});return true}
  };
 }
