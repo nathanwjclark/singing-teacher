@@ -8,6 +8,7 @@ export interface ControlAnatomy {
   forecastMatchedAttempts: number;
   supportStatus: string;
   leadingControlIds: string[];
+  indistinguishableControlIds: string[][];
   weights: Record<string, number | null>;
   residualCalibration: { status: string; count: number; features: Record<string, ResidualFeature> };
 }
@@ -30,7 +31,7 @@ export interface ControlBinding {
   context: { vowel: string; pitch_hz: number; level: string; posture: string; capture_context_id: string; source_kind: string };
   controls: { controlId: string; JA: number; f0Hz: number }[];
   gain: number;
-  attempts: { scored: number; unscorable: number; stopped: number; failed: number };
+  attempts: { scored: number; noAlternativeFits: number; unscorable: number; stopped: number; failed: number };
   latestForecast: ControlForecast | null;
 }
 export interface ControlPhase { id: string; status: string; reason?: string | null; forecastId?: string | null; result?: Record<string, unknown> | null }

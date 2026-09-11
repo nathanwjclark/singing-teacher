@@ -14,6 +14,7 @@ import re
 import time
 
 import numpy as np
+from scipy.stats import chi2
 
 from .control import _context as _conditions
 from .engine import Engine, finite
@@ -23,6 +24,7 @@ from .prediction import _identity, _timestamp
 
 VERSION = 'conditional-cue-execution-pcm-2'
 MIN_ATTEMPTS = 3
+FIT_QUANTILE = .99
 MAX_SYNTHESIS_CALLS = 96
 SOURCE_KINDS = ('engine-generated', 'human-observation', 'development-fixture')
 # dBFS is deliberately absent: gain is fixed for the bank as an acquisition
@@ -45,6 +47,9 @@ def policy():
             'attempt_weight': 'equal', 'uniform_pseudocount': 1.,
             'control_affinity': 'per anatomy, softmax over alternatives of -0.5 * sum of standardized squared descriptor residuals',
             'gain': 'one declared acquisition nuisance for the whole bank; not an execution alternative',
+            'absolute_fit': f'an anatomy counts for an attempt only if its best alternative has a standardized square sum at or below the chi-square {FIT_QUANTILE} '
+                            'quantile for the declared descriptor count; otherwise no alternative fits (acquisition chain, anatomy or bank mismatch) '
+                            'and relative affinities would absorb that bias as execution preference',
             'interpretation': 'Standardized-descriptor affinities under engineering scales; not execution probabilities, measured movement or a calibrated posterior'}
 
 
@@ -97,27 +102,29 @@ def _read(frozen, kind):
 
 
 def _eligible(history, compatibility):
-    """Split sealed score receipts into matching and excluded; repeated evidence is an error."""
+    """Receipts under this compatibility key, plus reasons for every receipt that cannot count; repeated evidence is an error."""
     if not isinstance(history, list): raise ValueError('Execution history must be a list of sealed score receipts')
-    eligible, excluded, ids, hashes = [], [], set(), set()
+    compatible, excluded, ids, hashes = [], [], set(), set()
     for receipt in history:
         row = _read(receipt, 'scored-control-pcm')
         if row['attempt_id'] in ids or set(row['observation_hashes']) & hashes:
             raise ValueError('Execution history contains repeated physical evidence')
         ids.add(row['attempt_id']); hashes.update(row['observation_hashes'])
-        reason = ('incompatible cue, context, bank, gain, extractor, native runtime or policy' if row['compatibility_sha256'] != compatibility else
-                  'no complete anatomy support: ' + str(row['reason']) if not row['control_support'] else None)
-        if reason: excluded.append({'score_sha256': receipt['sha256'], 'attempt_id': row['attempt_id'], 'reason': reason})
-        else: eligible.append(receipt)
-    return eligible, excluded
+        if row['compatibility_sha256'] != compatibility:
+            excluded.append({'score_sha256': receipt['sha256'], 'attempt_id': row['attempt_id'], 'reason': 'incompatible cue, context, bank, gain, extractor, native runtime or policy'})
+            continue
+        compatible.append(receipt)
+        if not row['control_support']:
+            excluded.append({'score_sha256': receipt['sha256'], 'attempt_id': row['attempt_id'], 'reason': f"{row['status']}: {row['reason']}"})
+    return compatible, excluded
 
 
 def execution_support(history, compatibility, anatomy_shas, control_ids):
     """The only execution-frequency model: equal-weight averaging with one uniform pseudocount per anatomy."""
-    eligible, excluded = _eligible(history, compatibility)
+    compatible, excluded = _eligible(history, compatibility)
     uniform, anatomies = 1 / len(control_ids), {}
     for anatomy in anatomy_shas:
-        rows = [r for r in eligible if anatomy in r['artifact']['control_support']]
+        rows = [r for r in compatible if anatomy in r['artifact']['control_support']]
         for r in rows:
             mass = r['artifact']['control_support'][anatomy]
             if set(mass) != set(control_ids) or any(finite(v, 'support') < 0 for v in mass.values()) or not np.isclose(sum(mass.values()), 1., rtol=0, atol=1e-9):
@@ -131,18 +138,21 @@ def execution_support(history, compatibility, anatomy_shas, control_ids):
     learned = [a for a in anatomies.values() if a['status'] == 'empirical']
     return {'kind': 'empirical-execution-support', 'version': VERSION, 'compatibility_sha256': compatibility,
             'status': 'empirical' if len(learned) == len(anatomies) else 'partially_empirical' if learned else 'uniform_insufficient_matches',
-            'minimum_attempts': MIN_ATTEMPTS, 'eligible_attempts': len(eligible), 'by_anatomy': anatomies,
+            'minimum_attempts': MIN_ATTEMPTS, 'eligible_attempts': sum(bool(r['artifact']['control_support']) for r in compatible), 'by_anatomy': anatomies,
             # Different anatomies preferring different controls means JA/F0 trade off against anatomy.
             'anatomy_control_tradeoff': len({tuple(a['leading_control_ids']) for a in learned}) > 1,
             'excluded': excluded, 'movement_measured': False, 'anatomy_updated': False}
 
 
 def residual_calibration(history, compatibility, anatomy_shas, scales):
-    """Observed minus earlier frozen weighted predictions; reported only, never applied."""
-    eligible, _ = _eligible(history, compatibility)
+    """Observed minus earlier frozen weighted predictions; reported only, never applied.
+
+    Attempts where no alternative fits are included: their residuals are exactly the
+    acquisition or anatomy offsets that the execution weights must not absorb."""
+    compatible, _ = _eligible(history, compatibility)
     anatomies = {}
     for anatomy in anatomy_shas:
-        residuals = [row['residual'] for r in eligible for row in r['artifact']['residual_summary']['by_anatomy']
+        residuals = [row['residual'] for r in compatible for row in r['artifact']['residual_summary']['by_anatomy']
                      if row['anatomy_sha256'] == anatomy and row['residual'] is not None]
         count = len(residuals)
         anatomies[anatomy] = {'status': 'empirical' if count >= MIN_ATTEMPTS else 'insufficient', 'count': count,
@@ -152,6 +162,14 @@ def residual_calibration(history, compatibility, anatomy_shas, scales):
             'minimum_attempts': MIN_ATTEMPTS, 'by_anatomy': anatomies, 'applied_to_weights': False, 'applied_to_predictions': False,
             'scope': 'Microphone descriptor residuals against earlier frozen weighted predictions. Those forecasts used different '
                      'execution weights, so this is not stationary measurement noise and it is not inferred physical execution.'}
+
+
+def indistinguishable(rows):
+    """Groups of alternatives the simulator applies identically (same applied native controls and F0); no recording can separate them."""
+    groups = {}
+    for row in rows:
+        if row.get('applied_controls_sha256'): groups.setdefault((row['applied_controls_sha256'], row['controls']['f0_hz']), []).append(row['control_id'])
+    return sorted(sorted(ids) for ids in groups.values() if len(ids) > 1)
 
 
 def forecast_control_pcm(snapshot, *, expected_digest, cue, context, controls, gain, target_id, history,
@@ -208,7 +226,7 @@ def forecast_control_pcm(snapshot, *, expected_digest, cue, context, controls, g
                     applied = engine.pose(pose, {'JA': control['JA']})[1]
                     row.update(status='predicted' if features is not None else 'missing', reason=reason, features=features,
                                canonical_sha256=digest(canonical), resampling=resampling,
-                               applied_ja=applied['JA']['applied'], native_controls_sha256=digest(applied))
+                               applied_ja=applied['JA']['applied'], applied_controls_sha256=digest({k: v['applied'] for k, v in applied.items()}))
                 except (ValueError, RuntimeError) as exc: row.update(status='failed', reason=str(exc))
                 rows.append(row)
     predictions = []
@@ -216,13 +234,14 @@ def forecast_control_pcm(snapshot, *, expected_digest, cue, context, controls, g
         subset = [row for row in rows if row['anatomy_sha256'] == anatomy_sha]
         complete = all(row['status'] == 'predicted' for row in subset)
         predictions.append({'hypothesis_id': hypothesis['hypothesis_id'], 'anatomy_sha256': anatomy_sha,
-            'status': 'predicted' if complete else 'incomplete',
+            'status': 'predicted' if complete else 'incomplete', 'indistinguishable_control_ids': indistinguishable(subset),
             'features': {name: float(sum(row['features'][name] * row['weight'] for row in subset)) for name in scales} if complete else None})
     return seal({'kind': 'frozen-control-pcm', 'version': VERSION, 'model_id': data['model_id'], 'snapshot_sha256': expected_digest,
                  'target_id': target_id, 'sealed_at': now(), **deepcopy(binding),
                  'compatibility': compatibility, 'compatibility_sha256': key, 'profile': profile, 'feature_scales': scales,
                  'evidence_ids': sorted(evidence_ids), 'evidence_hashes': sorted(evidence_hashes),
                  'execution_support': support, 'empirical_residual_calibration': calibration,
+                 'maximum_best_fit_square_sum': float(chi2.ppf(FIT_QUANTILE, len(scales))),
                  'alternatives': rows, 'conditional_predictions': predictions,
                  'actual_synthesis_calls': calls, 'declared_synthesis_calls': total, 'max_synthesis_calls': max_synthesis_calls,
                  'status': 'available' if all(r['status'] == 'predicted' for r in rows) else 'incomplete',
@@ -258,7 +277,8 @@ def score_control_pcm(*, frozen, pcm, metadata, node_binary=None):
                             start_ms=profile['frame_start_sample'] / profile['sample_rate_hz'] * 1000,
                             source_kind=metadata['sourceKind'], node_binary=node_binary)
     observed, missing = _available(canonical, scales)
-    scores, support, residuals = [], {}, []
+    bound = finite(data['maximum_best_fit_square_sum'], 'maximum_best_fit_square_sum')
+    scores, support, residuals, fits = [], {}, [], []
     for row in data['alternatives']:
         complete = observed is not None and row['status'] == 'predicted'
         residual = {k: observed[k] - row['features'][k] for k in scales} if complete else None
@@ -273,14 +293,23 @@ def score_control_pcm(*, frozen, pcm, metadata, node_binary=None):
                           'residual': {k: observed[k] - prediction['features'][k] for k in scales} if available else None})
         if available and all(row['status'] == 'scored' for row in rows):
             # A sum, not a mean, so declaring an uninformative descriptor does not flatten every affinity.
-            errors = np.array([row['standardized_square_sum'] for row in rows]); mass = np.exp(-.5 * (errors - errors.min())); mass /= mass.sum()
-            support[prediction['anatomy_sha256']] = {row['control_id']: float(weight) for row, weight in zip(rows, mass)}
-    status = 'scored' if len(support) == len(data['conditional_predictions']) else 'partial' if support else 'unscorable'
+            errors = np.array([row['standardized_square_sum'] for row in rows])
+            fits.append({'anatomy_sha256': prediction['anatomy_sha256'], 'best_standardized_square_sum': float(errors.min()),
+                         'status': 'fits' if errors.min() <= bound else 'no-alternative-fits'})
+            # Relative affinities are only meaningful when some alternative explains the recording.
+            if errors.min() <= bound:
+                mass = np.exp(-.5 * (errors - errors.min())); mass /= mass.sum()
+                support[prediction['anatomy_sha256']] = {row['control_id']: float(weight) for row, weight in zip(rows, mass)}
+        else: fits.append({'anatomy_sha256': prediction['anatomy_sha256'], 'best_standardized_square_sum': None, 'status': 'unscorable'})
+    status = ('scored' if len(support) == len(data['conditional_predictions']) else 'partial' if support else
+              'no-alternative-fits' if any(row['status'] == 'no-alternative-fits' for row in fits) else 'unscorable')
     return seal({'kind': 'scored-control-pcm', 'version': VERSION, 'forecast_sha256': frozen['sha256'],
                  'compatibility_sha256': data['compatibility_sha256'], 'model_id': data['model_id'],
                  'target_id': data['target_id'], 'attempt_id': metadata['attemptId'], 'artifact_id': metadata['artifactId'],
                  'observed_at': metadata['evidenceAt'], 'received_at': received, 'observation_hashes': sorted(set(hashes) | {frame_sha}),
                  'canonical': canonical, 'alternatives': scores, 'control_support': support, 'status': status,
-                 'reason': None if status == 'scored' else missing or 'Some frozen anatomy predictions are incomplete',
+                 'reason': None if status == 'scored' else missing or ('No frozen alternative fits within the declared bound for some anatomies'
+                           if any(row['status'] == 'no-alternative-fits' for row in fits) else 'Some frozen anatomy predictions are incomplete'),
+                 'absolute_fit': {'maximum_best_fit_square_sum': bound, 'by_anatomy': fits},
                  'residual_summary': {'by_anatomy': residuals, 'scope': 'Observed minus frozen weighted acoustic prediction; reported separately, never a correction or physical attribution'},
                  'actual_synthesis_calls': 0, 'actual_extractions': 1, 'model_updated': False, 'movement_measured': False})

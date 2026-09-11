@@ -16,14 +16,14 @@ const round=value=>typeof value==='number'&&Number.isFinite(value)?Math.round(va
 
 function forecastSummary(forecast,baseline,receipts){
  const artifact=forecast.artifact.artifact,support=artifact.execution_support,residual=artifact.empirical_residual_calibration,key=artifact.compatibility_sha256;
- const anatomies=[...new Map(artifact.alternatives.map(row=>[row.anatomy_sha256,row.hypothesis_id])).entries()];
+ const anatomies=[...new Map(artifact.alternatives.map(row=>[row.anatomy_sha256,row.hypothesis_id])).entries()],predictions=Object.fromEntries(artifact.conditional_predictions.map(row=>[row.anatomy_sha256,row]));
  return {forecastId:forecast.forecastId,status:forecast.status,current:forecast.status==='committed'&&forecast.baseline_model_id===baseline,
   committedAt:forecast.committed_at,forecastSha256:forecast.artifact.sha256,predictionStatus:artifact.status,supportStatus:support.status,
   anatomyControlTradeoff:support.anatomy_control_tradeoff,excludedAttempts:support.excluded.length,
   anatomies:anatomies.map(([sha,hypothesisId])=>{const row=support.by_anatomy[sha],calibration=residual.by_anatomy[sha];return {anatomySha256:sha,hypothesisId,
    // Attempts in this ledger now matching this forecast's compatibility key, including any scored after it was frozen.
    matchedAttempts:receipts.filter(r=>counted(r)&&r.result.artifact.compatibility_sha256===key&&sha in r.result.artifact.control_support).length,
-   forecastMatchedAttempts:row.matched_attempts,supportStatus:row.status,leadingControlIds:row.leading_control_ids,
+   forecastMatchedAttempts:row.matched_attempts,supportStatus:row.status,leadingControlIds:row.leading_control_ids,indistinguishableControlIds:predictions[sha]?.indistinguishable_control_ids||[],
    weights:Object.fromEntries(Object.entries(row.weights).map(([id,w])=>[id,round(w)])),
    residualCalibration:{status:calibration.status,count:calibration.count,features:Object.fromEntries(Object.entries(calibration.features).map(([name,f])=>[name,{unit:f.unit,mean:round(f.mean),sd:round(f.sd)}]))}};})};
 }
@@ -37,7 +37,7 @@ export function controlContextFromState(state){
   const own=receipts.filter(r=>r.binding_id===bindingId),count=(...statuses)=>own.filter(r=>statuses.includes(r.status)).length,latest=forecasts.filter(f=>f.binding_id===bindingId).at(-1);
   return {bindingId,deliveredCue:binding.cue.wording,cueSha256:binding.cue.wording_sha256,mode:binding.cue.mode,context:binding.context,
    controls:binding.controls.map(c=>({controlId:c.control_id,JA:c.JA,f0Hz:c.f0_hz})),gain:binding.gain,gainRole:'declared acquisition nuisance for the whole bank',declaredAt:binding.declared_at,
-   attempts:{scored:count('scored','partial'),unscorable:count('unscorable'),stopped:count('stopped'),failed:own.filter(r=>r.operation==='score_control_pcm'&&['failed','cancelled','submission_failed','rejected'].includes(r.status)).length},
+   attempts:{scored:count('scored','partial'),noAlternativeFits:count('no-alternative-fits'),unscorable:count('unscorable'),stopped:count('stopped'),failed:own.filter(r=>r.operation==='score_control_pcm'&&['failed','cancelled','submission_failed','rejected'].includes(r.status)).length},
    latestForecast:latest?forecastSummary(latest,baseline,receipts):null};
  });
  const result=truncated=>({...base,status:bindings.length?'available':'no_bindings',baselineModelId:baseline,bindings,truncated});

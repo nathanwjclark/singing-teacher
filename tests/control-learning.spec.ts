@@ -66,7 +66,7 @@ test('delivered cue is frozen, repeated verbatim, scored and learned after three
   await panel.getByRole('button',{name:'Record attempt as stopped'}).click();
   await settle('stop');
   await panel.getByRole('button',{name:'Refresh'}).click();
-  await expect(panel).toContainText('3 scored, 0 unscorable, 1 stopped, 0 failed');
+  await expect(panel).toContainText('3 scored, 0 where no alternative fits, 0 unscorable, 1 stopped, 0 failed');
   await expect(panel.getByRole('button',{name:'Score latest capture'})).toHaveCount(0);
   await page.setViewportSize({width:390,height:844});
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);

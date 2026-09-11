@@ -13,7 +13,7 @@ function forecast(key,{hypotheses=2,matched=0,status='committed',baseline='model
  const by=Object.fromEntries(Array.from({length:hypotheses},(_,i)=>[anatomy(i+1),{status:learned?'empirical':'uniform_insufficient_matches',matched_attempts:matched,weights,leading_control_ids:learned?['jaw-more-open']:ids,training_score_sha256:[]}]));
  const residual=Object.fromEntries(Object.keys(by).map(sha=>[sha,{status:learned?'empirical':'insufficient',count:matched,features:{pitchHz:{unit:'Hz',mean:learned?1.23456:null,sd:null}}}]));
  return {artifact:{sha256:'f'.repeat(64),artifact:{compatibility_sha256:key,status:'available',alternatives:Object.keys(by).flatMap((sha,i)=>ids.map(id=>({anatomy_sha256:sha,hypothesis_id:'h'+i,control_id:id}))),
-  execution_support:{status:learned?'empirical':'uniform_insufficient_matches',anatomy_control_tradeoff:false,excluded:[],by_anatomy:by},empirical_residual_calibration:{by_anatomy:residual}}},
+  conditional_predictions:Object.keys(by).map((sha,i)=>({anatomy_sha256:sha,indistinguishable_control_ids:i?[]:[['selected','jaw-more-open']]})),execution_support:{status:learned?'empirical':'uniform_insufficient_matches',anatomy_control_tradeoff:false,excluded:[],by_anatomy:by},empirical_residual_calibration:{by_anatomy:residual}}},
   status,committed_at:at,baseline_model_id:baseline,binding_id:binding};
 }
 const scored=(key,sha,status='scored')=>({operation:'score_control_pcm',binding_id:'cue-one',forecast_id:'t',status,result:{artifact:{compatibility_sha256:key,control_support:status==='unscorable'?{}:{[sha]:{selected:.1,'jaw-more-open':.9}}}}});
@@ -27,12 +27,12 @@ test('context counts matched attempts per anatomy, keeps unsuccessful attempts v
  const context=controlContextFromState(state);
  assert.equal(context.status,'available');assert.equal(context.modelUpdated,false);assert.equal(context.minimumMatchedAttempts,3);
  const [row]=context.bindings;assert.equal(row.deliveredCue,'Sing an easy ah.');assert.equal(row.gainRole,'declared acquisition nuisance for the whole bank');
- assert.deepEqual(row.attempts,{scored:5,unscorable:1,stopped:1,failed:1});
+ assert.deepEqual(row.attempts,{scored:5,noAlternativeFits:0,unscorable:1,stopped:1,failed:1});
  const [first,second]=row.latestForecast.anatomies;
  assert.equal(first.matchedAttempts,3);assert.equal(second.matchedAttempts,1);assert.equal(first.forecastMatchedAttempts,3);
  assert.deepEqual(first.weights,{selected:.2123,'jaw-more-open':.7877});assert.equal(first.supportStatus,'empirical');
  assert.deepEqual(first.residualCalibration,{status:'empirical',count:3,features:{pitchHz:{unit:'Hz',mean:1.2346,sd:null}}});
- assert.equal(row.latestForecast.current,true);
+ assert.equal(row.latestForecast.current,true);assert.deepEqual(first.indistinguishableControlIds,[['selected','jaw-more-open']]);assert.deepEqual(second.indistinguishableControlIds,[]);
  assert.equal(controlContextFromState({...state,snapshot:{model_id:'successor'}}).bindings[0].latestForecast.current,false);
 });
 test('context is bounded to 24 KB by dropping the oldest bindings and is unsupported without a model',()=>{

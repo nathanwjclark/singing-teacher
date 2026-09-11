@@ -14,7 +14,7 @@ function Binding({ binding, minimum }: { binding: ControlBinding; minimum: numbe
     <p className="control-cue">“{binding.deliveredCue}”</p>
     <p>Context: vowel {context.vowel}, {fixed(context.pitch_hz, 1)} Hz reference pitch, {context.level} level, posture {context.posture.replaceAll('-', ' ')}, {context.capture_context_id} ({context.source_kind}).
       Alternatives: {binding.controls.map(c => `${c.controlId} (JA ${fixed(c.JA, 1)}, ${fixed(c.f0Hz, 1)} Hz)`).join(', ')}. Declared gain {fixed(binding.gain, 2)} is a recording nuisance, not an alternative.</p>
-    <p>Attempts: {binding.attempts.scored} scored, {binding.attempts.unscorable} unscorable, {binding.attempts.stopped} stopped, {binding.attempts.failed} failed. Scored attempts count toward the weights only while the wording, context, alternatives and scoring code stay the same.</p>
+    <p>Attempts: {binding.attempts.scored} scored, {binding.attempts.noAlternativeFits} where no alternative fits, {binding.attempts.unscorable} unscorable, {binding.attempts.stopped} stopped, {binding.attempts.failed} failed. Scored attempts count toward the weights only while the wording, context, alternatives and scoring code stay the same.</p>
     {forecast ? <>
       <p>Latest prediction {forecast.forecastId}: {forecast.status}{forecast.current ? ', ready for a recording' : ''}. Prediction status: {forecast.predictionStatus}.</p>
       <div className="control-table"><table><thead><tr><th>Anatomy hypothesis</th><th>Matched attempts</th><th>Weights in latest prediction</th></tr></thead>
@@ -23,6 +23,7 @@ function Binding({ binding, minimum }: { binding: ControlBinding; minimum: numbe
           <td>{row.matchedAttempts} of {minimum} matched attempts{row.forecastMatchedAttempts !== row.matchedAttempts ? ` (${row.forecastMatchedAttempts} when this prediction was frozen)` : ''}</td>
           <td>{row.supportStatus === 'empirical' ? Object.entries(row.weights).map(([id, weight]) => `${id} ${fixed(weight)}`).join(' · ') : `Uniform until ${minimum} matched attempts`}</td>
         </tr>)}</tbody></table></div>
+      {anatomies.some(row => row.indistinguishableControlIds.length > 0) && <p>The simulator applies some alternatives identically, so no recording can separate them: {anatomies.flatMap(row => row.indistinguishableControlIds.map(group => `${row.hypothesisId}: ${group.join(' = ')}`)).join('; ')}.</p>}
       {forecast.anatomyControlTradeoff && <p>Different anatomy hypotheses favour different alternatives, so jaw, pitch and anatomy trade off here. The result is unresolved.</p>}
       <div className="control-residuals" aria-label="Microphone residual calibration">
         <h3>Microphone residual calibration (reported separately)</h3>
@@ -68,6 +69,7 @@ export function ControlLearningPanel() {
     <h2>Cue-execution learning</h2>
     <p>Freezes a prediction for the exact cue Astra delivered before you record, then scores the recording against every jaw-angle and pitch alternative for each anatomy hypothesis. After {minimum} matched attempts with the same wording and context, the next prediction is weighted toward the alternatives that matched earlier recordings.</p>
     <p>Weights compare simulated alternatives on standardized sound descriptors. They are not the probability that you moved your jaw or changed pitch. Nothing here measures movement or changes the anatomy model.</p>
+    <p>A constant offset from the microphone, room or a wrong anatomy hypothesis can make one alternative look closer than the others. An attempt counts only when its best alternative fits within a fixed bound; otherwise it is kept as “no alternative fits” and the offset appears only in the residual calibration.</p>
     <p role="status">{busy ? 'A cue-execution job is running.' : status?.workerAvailable === false ? 'The scientific worker is unavailable.' : status?.reason ?? 'Cue-execution learning is connected.'}</p>
     {error && <p role="alert">{error}</p>}
     <div className="control-actions">

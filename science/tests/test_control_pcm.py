@@ -10,7 +10,9 @@ import hashlib
 import numpy as np
 import pytest
 
-from singing_physics.control_pcm import (MIN_ATTEMPTS, SCALES, execution_support, forecast_control_pcm,
+from scipy.stats import chi2
+
+from singing_physics.control_pcm import (MIN_ATTEMPTS, SCALES, execution_support, forecast_control_pcm, indistinguishable,
                                          residual_calibration, score_control_pcm, seal)
 from singing_physics.engine import Engine
 from singing_physics.pcm_design import _hash, freeze_pcm_hypotheses
@@ -208,7 +210,7 @@ def test_missing_features_leave_the_attempt_unscorable_and_uncounted(learning):
     key = frozen['artifact']['compatibility_sha256']
     support = execution_support(learning['history'] + [silent], key, learning['anatomies'], ['closed', 'open', 'higher'])
     assert support['eligible_attempts'] == 3
-    assert support['excluded'] == [{'score_sha256': silent['sha256'], 'attempt_id': 'attempt-7', 'reason': 'no complete anatomy support: ' + receipt['reason']}]
+    assert support['excluded'] == [{'score_sha256': silent['sha256'], 'attempt_id': 'attempt-7', 'reason': 'unscorable: ' + receipt['reason']}]
     assert support['by_anatomy'] == frozen['artifact']['execution_support']['by_anatomy']
 
 
@@ -224,7 +226,7 @@ def test_budget_is_bounded_and_timeout_stops_remaining_alternatives(learning):
     assert stopped['actual_synthesis_calls'] < 32 and len(stopped['alternatives']) == 32
     halted = [row for row in stopped['alternatives'] if row['status'] == 'stopped']
     assert halted and all(row['features'] is None and 'timed out' in row['reason'] for row in halted)
-    assert stopped['conditional_predictions'][-1] == {'hypothesis_id': 'h1', 'anatomy_sha256': learning['anatomies'][1], 'status': 'incomplete', 'features': None}
+    assert stopped['conditional_predictions'][-1] == {'hypothesis_id': 'h1', 'anatomy_sha256': learning['anatomies'][1], 'status': 'incomplete', 'indistinguishable_control_ids': [], 'features': None}
 
 
 def test_job_service_runs_the_control_bank_in_its_isolated_worker(tmp_path, learning):
@@ -246,3 +248,31 @@ def test_job_service_runs_the_control_bank_in_its_isolated_worker(tmp_path, lear
                                  'metadata': metadata('service-target', 11)}}, idempotency_key='score')
         assert service.wait(scored, 60)['status'] == 'succeeded'
         assert service.result(scored)['artifact']['status'] == 'scored'
+
+
+def test_an_attempt_no_alternative_fits_is_kept_but_never_shifts_execution_weights(learning):
+    frozen = learning['forecasts'][-1]
+    bound = frozen['artifact']['maximum_best_fit_square_sum']
+    assert bound == pytest.approx(chi2.ppf(.99, len(SCALES)))
+    # 300 Hz lies five pitch scales above the highest alternative: a relative softmax would still
+    # hand the mass to 'higher', which would read an offset as an execution preference.
+    offset = score_control_pcm(frozen=frozen, pcm=frame(FIRST, {'JA': -3., 'f0_hz': 300.}, 8), metadata=metadata('target-3', 8))['artifact']
+    assert offset['status'] == 'no-alternative-fits' and offset['control_support'] == {}
+    assert all(row['status'] == 'no-alternative-fits' and row['best_standardized_square_sum'] > bound for row in offset['absolute_fit']['by_anatomy'])
+    receipt = seal(offset)
+    key, anatomies = frozen['artifact']['compatibility_sha256'], learning['anatomies']
+    support = execution_support(learning['history'] + [receipt], key, anatomies, ['closed', 'open', 'higher'])
+    assert support['by_anatomy'] == frozen['artifact']['execution_support']['by_anatomy'] and support['eligible_attempts'] == 3
+    assert support['excluded'][-1]['reason'].startswith('no-alternative-fits:')
+    # The offset stays visible where it belongs: in the separately reported residuals.
+    calibration = residual_calibration(learning['history'] + [receipt], key, anatomies, SCALES)
+    assert calibration['by_anatomy'][anatomies[0]]['count'] == 4
+    fitted = learning['history'][0]['artifact']['absolute_fit']['by_anatomy']
+    assert all(row['status'] == 'fits' and row['best_standardized_square_sum'] <= bound for row in fitted)
+
+
+def test_alternatives_the_simulator_applies_identically_are_reported_as_indistinguishable(learning):
+    assert all(p['indistinguishable_control_ids'] == [] for p in learning['forecasts'][-1]['artifact']['conditional_predictions'])
+    rows = [{'control_id': c, 'applied_controls_sha256': sha, 'controls': {'f0_hz': f0}} for c, sha, f0 in
+            [('a', 'x', 180.), ('b', 'x', 180.), ('c', 'x', 200.), ('d', 'y', 180.), ('e', None, 180.), ('f', None, 180.)]]
+    assert indistinguishable(rows) == [['a', 'b']]
