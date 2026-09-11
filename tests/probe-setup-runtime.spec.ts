@@ -14,6 +14,9 @@ async function withinPhoneWidth(page:Page,region:ReturnType<Page['getByRole']>){
  for(const element of [region,...await region.locator('input').all()]){const box=await element.boundingBox();if(box){expect(box.x).toBeGreaterThanOrEqual(0);expect(box.x+box.width).toBeLessThanOrEqual(391);}}
 }
 
+// Each of these follows a real import job (Python preparation plus both TypeScript importers,
+// about 3-4 s alone); the default 5 s is too tight on a loaded machine.
+const afterJob=expect.configure({timeout:30_000});
 test('browser freezes a probe setup per capture, analyzes after saving and keeps human recordings ineligible',async({page})=>{
  test.setTimeout(180_000);expect(dataRoot).toBeTruthy();
  const roots:string[]=[];const fixture=async(manifest={},pulled=false)=>{const root=await mkdtemp(join(tmpdir(),'probe-setup-e2e-'));roots.push(root);return {root,...await createProbeSetupFixture(root,{dataRoot,manifest,...(pulled?{acquisition:devicectlAcquisition}:{})})};};
@@ -30,7 +33,7 @@ test('browser freezes a probe setup per capture, analyzes after saving and keeps
   await page.goto('/');await page.getByRole('button',{name:'Experiments',exact:true}).click();
   const probe=page.getByRole('region',{name:'Native probe analysis and fitting'}),setup=page.getByRole('region',{name:'Probe calibration setup'});
   await probe.getByRole('button',{name:'Analyze latest probe'}).click();
-  await expect(probe).toContainText('Review available; fitting prerequisite not met');
+  await afterJob(probe).toContainText('Review available; fitting prerequisite not met');
   await expect(setup).toContainText('Each probe capture needs its own setup');await expect(setup).toContainText('Hashing is not measurement');
   await expect(setup).toContainText('Generated software evidence; not a human or device measurement');
   await setup.getByLabel('Calibration package JSON').setInputFiles(join(first.root,'calibration-package.json'));
@@ -48,7 +51,7 @@ test('browser freezes a probe setup per capture, analyzes after saving and keeps
   await expect(setup.getByRole('alert')).toContainText('SHA-256');
   await setup.getByLabel('Original calibration evidence files').setInputFiles(join(first.root,'calibration-evidence.txt'));
   await declare.check();await save.click();
-  await expect(setup).toContainText('Calibration setup saved');
+  await afterJob(setup).toContainText('Calibration setup saved');
   // Saving starts the analysis itself; nobody presses Analyze again.
   await expect(probe).toContainText('Eligible for scientific fitting');expect(imports).toHaveLength(2);
   await expect(probe.getByRole('button',{name:'Fit probe with voice model'})).toBeDisabled();
@@ -64,7 +67,7 @@ test('browser freezes a probe setup per capture, analyzes after saving and keeps
   // A second capture on the same rig: the old setup does not carry over, but its values are filled in.
   await fixture({captureId:'22345678-1234-1234-1234-123456789abc'});
   await probe.getByRole('button',{name:'Analyze latest probe'}).click();
-  await expect(probe).toContainText('belongs to a different capture; each probe capture needs its own setup');
+  await afterJob(probe).toContainText('belongs to a different capture; each probe capture needs its own setup');
   await expect(setup).toContainText(`The saved setup ${status.setup.setup.setupId} was made for an earlier capture`);
   // A package for another placement fills nothing in from the last setup.
   const otherRig=structuredClone(first.calibration);otherRig.calibration.placement_id='other-rig';await writeFile(join(first.root,'other-rig.json'),JSON.stringify(otherRig));
@@ -84,12 +87,12 @@ test('browser freezes a probe setup per capture, analyzes after saving and keeps
   await setup.getByRole('checkbox',{name:/controls from setup/}).check();
   await withinPhoneWidth(page,setup);await setup.screenshot({path:'test-results/probe-setup-prefilled-mobile.png'});await page.setViewportSize({width:1280,height:900});
   await save.click();
-  await expect(probe).toContainText('Eligible for scientific fitting');expect(imports).toHaveLength(4);
+  await afterJob(probe).toContainText('Eligible for scientific fitting');expect(imports).toHaveLength(4);
 
   // An iPhone-shaped capture relabelled as a fixture is a human recording: no package can make it eligible, so no form.
   await fixture({captureId:'32345678-1234-1234-1234-123456789abc',provenance:'software-fixture',route:{output:'Speaker'}},true);
   await probe.getByRole('button',{name:'Analyze latest probe'}).click();
-  await expect(setup).toContainText('Capture: 32345678-1234-1234-1234-123456789abc · human-recording. Its manifest says software-fixture, but its own fields or its USB pull receipt do not support that label');
+  await afterJob(setup).toContainText('Capture: 32345678-1234-1234-1234-123456789abc · human-recording. Its manifest says software-fixture, but its own fields or its USB pull receipt do not support that label');
   await expect(setup.getByRole('note')).toContainText('A calibration package is declared, not measured');
   await expect(probe).toContainText('Review available; fitting prerequisite not met');
   await expect(probe).toContainText('Before fitting: Human recordings cannot be fitted until calibration is derived from measurement recordings');
@@ -99,7 +102,7 @@ test('browser freezes a probe setup per capture, analyzes after saving and keeps
   // The generator's own manifest, marker included, pulled from an iPhone: the pull receipt, not the manifest, decides.
   await fixture({captureId:'42345678-1234-1234-1234-123456789abc'},true);
   await probe.getByRole('button',{name:'Analyze latest probe'}).click();
-  await expect(setup).toContainText('Capture: 42345678-1234-1234-1234-123456789abc · human-recording. Its manifest says software-fixture, but its own fields or its USB pull receipt do not support that label');
+  await afterJob(setup).toContainText('Capture: 42345678-1234-1234-1234-123456789abc · human-recording. Its manifest says software-fixture, but its own fields or its USB pull receipt do not support that label');
   await expect(setup.getByLabel('Calibration package JSON')).toHaveCount(0);
   await expect(probe).toContainText('Before fitting: Human recordings cannot be fitted until calibration is derived from measurement recordings');
   await setup.screenshot({path:'test-results/probe-setup-pulled-fixture-label.png'});
