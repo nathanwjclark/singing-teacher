@@ -1,4 +1,4 @@
-"""Optional conditional geometric-glottis source/tract experiments; no contact inference."""
+"""Finite prescribed and native mechanical source/tract experiments; no contact inference."""
 from copy import deepcopy
 from datetime import datetime, timezone
 import ctypes as ct
@@ -13,58 +13,126 @@ import xml.etree.ElementTree as ET
 
 import numpy as np
 
-from .engine import Engine, finite, BUILD, digest
+from .engine import Engine, finite, digest, speaker_source_selection
 from .pcm_inverse import resample_native_pcm
 
 ROOT=Path(__file__).resolve().parents[3]
-SOURCE_VERSION='vtl-geometric-pulse-skew-v1'
-BOUNDS={'PS':[-.3,.3],'F0':[65.,600.],'PR':[4000.,12000.]}
-FIXED={'FL':0.,'DP':0.,'AS':-40.}
+SOURCE_VERSION='vtl-finite-geometric-two-mass-v2'
+SOURCE_FAMILIES={'geometric':'Geometric glottis','two_mass':'Two-mass model'}
+SHARED_BOUNDS={'F0':[65.,600.],'PR':[4000.,12000.]}
+SHAPE_BOUNDS={'geometric':{'PS':[-.3,.3]},'two_mass':{'XB':[-.01,.06],'XT':[-.01,.06],'EAA':[0.,.05],'DF':[.6,1.6]}}
+FIXED_SOURCE={'geometric':{'PS':0.},'two_mass':{'XB':.01,'XT':.01,'EAA':0.,'DF':1.}}
+FIXED_NATIVE={'geometric':{'FL':0.,'DP':0.,'AS':-40.},'two_mass':{}}
 
 
 def _hash(value):
     return hashlib.sha256(json.dumps(value,sort_keys=True,separators=(',',':'),allow_nan=False).encode()).hexdigest()
 
 
+def adapter_dependencies():
+    return {name:digest(Path(__file__).with_name(name)) for name in ('engine.py','pcm_inverse.py')}
+
+
 def source_capability(engine):
-    info={row['name']:row for row in engine.source_info}
-    required={**{name:limits for name,limits in BOUNDS.items()},**{name:[value,value] for name,value in FIXED.items()}}
-    speaker=BUILD/'source/resources/JD3.speaker'
-    selected=[row.attrib.get('type') for row in ET.parse(speaker).getroot().iter('glottis_model') if row.attrib.get('selected')=='1']
-    family_valid=selected==['Geometric glottis'] and digest(speaker)==engine.provenance['speaker_sha256']
-    missing=[name for name,limits in required.items() if name not in info or info[name]['min']>limits[0] or info[name]['max']<limits[1]]
-    return {'status':'unsupported' if missing or not family_valid else 'available','reason':('unsupported_source_family' if not family_valid else 'unsupported_native_controls:'+','.join(missing)) if missing or not family_valid else None,
-        'source_model_version':SOURCE_VERSION,'source_adapter_sha256':digest(Path(__file__)),'source_model_family':'prescribed geometric glottis',
-        'native_controls':deepcopy(engine.source_info),'native_controls_sha256':_hash(engine.source_info),
-        'supported_control_bounds':deepcopy(BOUNDS),'source_hypothesis_parameter':'PS','fixed_controls':dict(FIXED),'native_provenance':deepcopy(engine.provenance),
-        'closure_contact_inference':False}
+    """Per-family native control audit; the certified speaker must select the geometric glottis."""
+    raw=engine.speaker_bytes
+    selection=speaker_source_selection(raw);certified=[name for name,selected in selection if selected]
+    reason=None
+    if hashlib.sha256(raw).hexdigest()!=engine.provenance['speaker_sha256'] or certified!=[SOURCE_FAMILIES['geometric']] or engine.certified_source_family!=certified[0]:
+        reason='unsupported_source_family: certified speaker must select Geometric glottis'
+    elif not set(SOURCE_FAMILIES.values())<={name for name,_ in selection}:
+        reason='unsupported_source_family: native speaker lacks a required glottis model'
+    families={}
+    if reason is None:
+        models={model.get('type'):model for model in ET.fromstring(raw).iter('glottis_model')}
+        for identity,native_name in SOURCE_FAMILIES.items():
+            with engine.source_model(native_name):
+                info={row['name']:row for row in engine.source_info}
+                bounds=SHARED_BOUNDS|SHAPE_BOUNDS[identity]
+                required=bounds|{name:[value,value] for name,value in FIXED_NATIVE[identity].items()}
+                missing=[name for name,limits in required.items() if name not in info or info[name]['min']>limits[0] or info[name]['max']<limits[1]]
+                families[identity]={'status':'unsupported' if missing else 'available','missing_native_controls':missing,'native_family':native_name,
+                    'source_hypothesis_parameters':list(SHAPE_BOUNDS[identity]),'supported_control_bounds':deepcopy(bounds),
+                    'fixed_native_controls':dict(FIXED_NATIVE[identity]),'fixed_source_reference':dict(FIXED_SOURCE[identity]),
+                    'native_controls':deepcopy(engine.source_info),'native_controls_sha256':_hash(engine.source_info),
+                    'native_provenance':deepcopy(engine.provenance),
+                    'fixed_speaker_static_parameters':[{'name':p.get('name'),'unit':p.get('unit'),'value':float(p.get('neutral'))}
+                        for p in models[native_name].findall('./static_params/param')]}
+        missing=[f'{identity}:{name}' for identity,row in families.items() for name in row['missing_native_controls']]
+        if missing:reason='unsupported_native_controls:'+','.join(missing)
+    return {'status':'unsupported' if reason else 'available','reason':reason,
+        'source_model_version':SOURCE_VERSION,'source_adapter_sha256':digest(Path(__file__)),
+        'source_adapter_dependencies':adapter_dependencies(),'certified_source_family':certified,
+        'source_families':families,'native_provenance':deepcopy(engine.provenance),
+        'closure_contact_inference':False,'tissue_parameters_identified':False,
+        'mechanical_scope':'Two coupled native masses, springs, damping and aerodynamic interaction; certified template tissue constants remain fixed'}
 
 
-def synthesize_phonation(engine, *, pose, JA, F0, PR, PS, duration_s=.25):
-    """Prescribed source controls, solver reset and 25ms pressure ramp per trial."""
-    capability=source_capability(engine)
-    if capability['status']!='available': raise ValueError(capability['reason'])
-    controls={name:finite(value,name) for name,value in {'F0':F0,'PR':PR,'PS':PS}.items()}
-    for name,value in controls.items():
-        if not BOUNDS[name][0]<=value<=BOUNDS[name][1]: raise ValueError('Source control outside declared bounds: '+name)
-    ja=finite(JA,'JA');duration=finite(duration_s,'duration_s')
-    if not -5<=ja<=-1 or not .1<=duration<=1: raise ValueError('Unsupported articulation or phonation duration')
-    params,articulation=engine.pose(pose,{'JA':ja})
-    values={row['name']:row['default'] for row in engine.source_info};values.update(FIXED);values.update(controls)
-    source=(ct.c_double*engine.glottis_count)(*(values[row['name']] for row in engine.source_info))
-    index={row['name']:i for i,row in enumerate(engine.source_info)}
-    count=round(duration*engine.sample_rate);ramp=round(.025*engine.sample_rate)
-    engine._check(engine.lib.vtlSynthesisReset(),'phonation synthesis reset')
-    source[index['PR']]=0;empty=(ct.c_double*1)()
-    engine._check(engine.lib.vtlSynthesisAddTract(0,empty,params,source),'phonation initialize')
-    source[index['PR']]=PR
-    attack=(ct.c_double*ramp)();sustain=(ct.c_double*(count-ramp))()
-    engine._check(engine.lib.vtlSynthesisAddTract(ramp,attack,params,source),'phonation attack')
-    engine._check(engine.lib.vtlSynthesisAddTract(count-ramp,sustain,params,source),'phonation sustain')
-    audio=np.concatenate([np.array(attack),np.array(sustain)])
-    if not np.isfinite(audio).all() or not np.any(audio): raise RuntimeError('Nonfinite or silent prescribed source output')
-    return audio,{'source_model_version':SOURCE_VERSION,'source_controls':values,'articulation':articulation,
-                  'source_values_are':'requested prescribed simulator controls, not measured physiology'}
+def synthesize_phonation(engine, *, pose, JA, F0, PR, PS=None, source_model='geometric',
+                         XB=None,XT=None,EAA=None,DF=None,duration_s=.25):
+    """Run the chosen native source and tract solver with a 25 ms pressure ramp.
+
+    Each family requires exactly its own shape controls: PS for the geometric
+    glottis; XB, XT, EAA and DF for the two-mass model.
+    """
+    if source_model not in SOURCE_FAMILIES:raise ValueError('Unsupported source model')
+    given={'PS':PS,'XB':XB,'XT':XT,'EAA':EAA,'DF':DF}
+    if any(given[name] is None for name in SHAPE_BOUNDS[source_model]) or any(value is not None for name,value in given.items() if name not in SHAPE_BOUNDS[source_model]):
+        raise ValueError('Declare exactly the '+source_model+' source shape controls: '+','.join(SHAPE_BOUNDS[source_model]))
+    declared=_controls({'source_model':source_model,'JA':JA,'F0':F0,'PR':PR,'gain':1.,**{name:given[name] for name in SHAPE_BOUNDS[source_model]}})
+    duration=finite(duration_s,'duration_s')
+    if not .1<=duration<=1:raise ValueError('Unsupported phonation duration')
+    with engine.source_model(SOURCE_FAMILIES[source_model]):
+        params,articulation=engine.pose(pose,{'JA':declared['JA']})
+        info={row['name']:row for row in engine.source_info}
+        values={name:row['default'] for name,row in info.items()}
+        controls={name:value for name,value in declared.items() if name not in ('JA','gain','source_model')}|FIXED_NATIVE[source_model]
+        for name,value in controls.items():
+            if name not in info or not info[name]['min']<=value<=info[name]['max']:
+                raise ValueError('Source control outside native bounds: '+name)
+        values.update(controls)
+        source=(ct.c_double*engine.glottis_count)(*(values[row['name']] for row in engine.source_info))
+        index={row['name']:i for i,row in enumerate(engine.source_info)}
+        count=round(duration*engine.sample_rate);ramp=round(.025*engine.sample_rate)
+        engine._check(engine.lib.vtlSynthesisReset(),'phonation synthesis reset')
+        source[index['PR']]=0;empty=(ct.c_double*1)()
+        engine._check(engine.lib.vtlSynthesisAddTract(0,empty,params,source),'phonation initialize')
+        source[index['PR']]=PR
+        attack=(ct.c_double*ramp)();sustain=(ct.c_double*(count-ramp))()
+        engine._check(engine.lib.vtlSynthesisAddTract(ramp,attack,params,source),'phonation attack')
+        engine._check(engine.lib.vtlSynthesisAddTract(count-ramp,sustain,params,source),'phonation sustain')
+        audio=np.concatenate([np.array(attack),np.array(sustain)])
+        if not np.isfinite(audio).all() or not np.any(audio):raise RuntimeError('Nonfinite or silent native source output')
+        state={'source_model_version':SOURCE_VERSION,'source_model':source_model,'source_controls':values,
+            'native_provenance':deepcopy(engine.provenance),'articulation':articulation,
+            'source_values_are':'requested native simulator controls, not measured physiology or vocal-fold contact'}
+    return audio,state
+
+
+def _synthesize_control(engine,pose,control):
+    return synthesize_phonation(engine,pose=pose,**{key:value for key,value in control.items() if key!='gain'})
+
+
+def _family(control):
+    return control.get('source_model','geometric')
+
+
+def _source_shape(control):
+    return {key:control[key] for key in SHAPE_BOUNDS[_family(control)]}|({'source_model':control['source_model']} if 'source_model' in control else {})
+
+
+def _fixed_source(control):
+    return {**control,**FIXED_SOURCE[_family(control)]}
+
+
+def _by_family(items,family_of):
+    """Stable grouping so a native family is selected once per group, not per call."""
+    return [(family,[item for item in items if family_of(item)==family]) for family in SOURCE_FAMILIES if any(family_of(item)==family for item in items)]
+
+
+def _f0(control,record):
+    """Requested native F0 control and the pitch the same extractor measured in the simulated frame."""
+    return {'requested_f0_hz':control['F0'],'simulated_f0_hz':record['descriptors']['pitchHz']['value'] if record else None}
 
 
 def _status(status,reason):
@@ -73,11 +141,16 @@ def _status(status,reason):
 
 
 def _controls(value):
-    if not isinstance(value,dict) or set(value)!={'JA','F0','PR','PS','gain'}:
-        raise ValueError('Declare JA/F0/PR/PS/gain for every trial')
-    result={name:finite(v,name) for name,v in value.items()}
-    for name,limits in {**BOUNDS,'JA':[-5.,-1.],'gain':[.001,100.]}.items():
-        if not limits[0]<=result[name]<=limits[1]: raise ValueError('Control outside supported bounds: '+name)
+    if not isinstance(value,dict):raise ValueError('Declare native source controls for every trial')
+    family=_family(value)
+    if not isinstance(family,str) or family not in SOURCE_FAMILIES:raise ValueError('Unsupported source model')
+    shape=SHAPE_BOUNDS[family]
+    keys={'JA','F0','PR','gain'}|set(shape)|({'source_model'} if 'source_model' in value else set())
+    if set(value)!=keys:raise ValueError('Declare exactly the selected family source controls for every trial')
+    result={name:finite(v,name) for name,v in value.items() if name!='source_model'}
+    for name,limits in {**shape,**SHARED_BOUNDS,'JA':[-5.,-1.],'gain':[.001,100.]}.items():
+        if not limits[0]<=result[name]<=limits[1]:raise ValueError('Control outside supported bounds: '+name)
+    if 'source_model' in value:result['source_model']=family
     return result
 
 
@@ -97,6 +170,7 @@ def _metadata(identity,rate,source_hash,source_kind):
 
 FEATURES={'pitchHz':('Hz',20.),'periodicity':('1',.1),'spectralFlatness':('1',.1),
           'harmonicSpectralSlopeDbOctave':('dB/octave',3.)}
+SECONDARY_SCORE='score_excluding_pitch: the primary mean over the same terms without pitchHz; reported beside the primary score, never used to select the primary ranking'
 
 
 def extractor_signature():
@@ -129,10 +203,17 @@ def _features(record):
     return result
 
 
-def _score(predicted,observed):
+def _scores(predicted,observed):
+    """Primary discrepancy over all features, and the same terms without pitchHz.
+
+    Requested F0 is a tension control for the two-mass model, not a pitch
+    target, so its pitch term mixes F0-control mapping into shape comparisons.
+    Both scores need the same four descriptors, so availability is identical.
+    """
     left,right=_features(predicted),_features(observed)
-    if left is None or right is None:return None
-    return sum(((left[name]-right[name])/scale)**2 for name,(_,scale) in FEATURES.items())/len(FEATURES)
+    if left is None or right is None:return None,None
+    terms={name:((left[name]-right[name])/scale)**2 for name,(_,scale) in FEATURES.items()}
+    return sum(terms.values())/len(terms),sum(value for name,value in terms.items() if name!='pitchHz')/(len(terms)-1)
 
 
 def fit_phonation(engine,document,*,candidates,max_synthesis_calls=96,enabled=False,timeout_s=60.,cancelled=None):
@@ -174,7 +255,9 @@ def fit_phonation(engine,document,*,candidates,max_synthesis_calls=96,enabled=Fa
         if not isinstance(candidate,dict) or set(candidate)!={'candidate_id','anatomy','trials'} or not isinstance(candidate['candidate_id'],str) or candidate['candidate_id'] in names or not isinstance(candidate['anatomy'],dict) or set(candidate['trials'])!=ids:
             raise ValueError('Invalid candidate identity or coverage')
         names.add(candidate['candidate_id'])
-        for value in candidate['trials'].values():_controls(value)
+        trial_controls=[_controls(value) for value in candidate['trials'].values()]
+        if len({_hash({**_source_shape(control),'source_model':_family(control)}) for control in trial_controls})!=1:
+            raise ValueError('A source hypothesis must retain one family and shape across calibration trials')
     required=3*len(choices)*len(observations)
     if required>max_synthesis_calls:raise ValueError('Equal three-family comparison exceeds synthesis budget')
     signature=extractor_signature();saved=engine.anatomy();calls=0
@@ -182,33 +265,42 @@ def fit_phonation(engine,document,*,candidates,max_synthesis_calls=96,enabled=Fa
     if any(_features(record) is None for record in observations):
         return {**_status('insufficient-quality','Required observed phonation descriptors unavailable'),
                 'observations':observations,'actual_synthesis_calls':0,'extractor_signature':signature}
+    order={candidate['candidate_id']:i for i,candidate in enumerate(choices)}
     try:
         for candidate in choices:engine.set_anatomy(candidate['anatomy'])
-        for family,output in result.items():
-            for candidate in choices:
-                engine.set_anatomy({} if family=='fixed_anatomy' else candidate['anatomy'])
-                predictions=[];scores=[];failures=[]
-                for trial,observed in zip(doc['trials'],observations):
-                    control=_controls(candidate['trials'][trial['id']])
-                    if family=='fixed_source':control['PS']=0.
-                    if expired():
-                        return {**_status('timed-out','Optional source fit cancelled or expired'),'actual_synthesis_calls':calls,'partial_comparisons':result}
-                    if calls>=max_synthesis_calls:raise RuntimeError('Hard phonation synthesis budget exhausted')
-                    calls+=1;output['actual_synthesis_calls']+=1
-                    try:
-                        audio,state=synthesize_phonation(engine,pose=trial['pose'],**{k:control[k] for k in ('JA','F0','PR','PS')})
-                        frame,resampling=_frame(audio,trial['sample_rate_hz']);frame=frame*control['gain']
-                        sha=hashlib.sha256(frame.astype('<f4').tobytes()).hexdigest()
-                        predicted=measure_phonation(frame,trial['sample_rate_hz'],_metadata(candidate['candidate_id']+':'+trial['id'],trial['sample_rate_hz'],sha,'engine-generated'))
-                        score=_score(predicted,observed)
-                        predictions.append({'trial_id':trial['id'],'record':predicted,'controls':control,'native_state':state,'resampling':resampling,'score':score})
-                        if score is None:failures.append({'trial_id':trial['id'],'reason':'required_predicted_descriptor_missing'})
-                        else:scores.append(score)
-                    except (ValueError,RuntimeError,subprocess.TimeoutExpired) as exc:
-                        failures.append({'trial_id':trial['id'],'reason':str(exc)})
-                output['candidates'].append({'candidate_id':candidate['candidate_id'],'anatomy':engine.anatomy(),
-                    'status':'scored' if not failures else 'unscorable','score':float(np.mean(scores)) if scores and not failures else None,
-                    'predictions':predictions,'failures':failures})
+        for source_family,group in _by_family(choices,lambda candidate:_family(next(iter(candidate['trials'].values())))):
+            if expired():  # checked before the native family reload, which a checkpoint cannot interrupt
+                return {**_status('timed-out','Optional source fit cancelled or expired'),'actual_synthesis_calls':calls,'partial_comparisons':result}
+            with engine.source_model(SOURCE_FAMILIES[source_family]):
+                for family,output in result.items():
+                    for candidate in group:
+                        engine.set_anatomy({} if family=='fixed_anatomy' else candidate['anatomy'])
+                        predictions=[];scores=[];pitchless=[];failures=[]
+                        for trial,observed in zip(doc['trials'],observations):
+                            control=_controls(candidate['trials'][trial['id']])
+                            if family=='fixed_source':control=_fixed_source(control)
+                            if expired():
+                                return {**_status('timed-out','Optional source fit cancelled or expired'),'actual_synthesis_calls':calls,'partial_comparisons':result}
+                            if calls>=max_synthesis_calls:raise RuntimeError('Hard phonation synthesis budget exhausted')
+                            calls+=1;output['actual_synthesis_calls']+=1
+                            try:
+                                audio,state=_synthesize_control(engine,trial['pose'],control)
+                                frame,resampling=_frame(audio,trial['sample_rate_hz']);frame=frame*control['gain']
+                                sha=hashlib.sha256(frame.astype('<f4').tobytes()).hexdigest()
+                                predicted=measure_phonation(frame,trial['sample_rate_hz'],_metadata(candidate['candidate_id']+':'+trial['id'],trial['sample_rate_hz'],sha,'engine-generated'))
+                                score,without_pitch=_scores(predicted,observed)
+                                predictions.append({'trial_id':trial['id'],'record':predicted,'controls':control,'native_state':state,'resampling':resampling,
+                                    'score':score,'score_excluding_pitch':without_pitch,**_f0(control,predicted)})
+                                if score is None:failures.append({'trial_id':trial['id'],'reason':'required_predicted_descriptor_missing'})
+                                else:scores.append(score);pitchless.append(without_pitch)
+                            except (ValueError,RuntimeError,subprocess.TimeoutExpired) as exc:
+                                failures.append({'trial_id':trial['id'],'reason':str(exc)})
+                        output['candidates'].append({'candidate_id':candidate['candidate_id'],'source_model':source_family,'anatomy':engine.anatomy(),
+                            'status':'scored' if not failures else 'unscorable','score':float(np.mean(scores)) if scores and not failures else None,
+                            'score_excluding_pitch':float(np.mean(pitchless)) if pitchless and not failures else None,
+                            'predictions':predictions,'failures':failures})
+        for output in result.values():
+            output['candidates'].sort(key=lambda row:order[row['candidate_id']])
             scored=[row for row in output['candidates'] if row['status']=='scored']
             output['best']=min(scored,key=lambda row:(row['score'],row['candidate_id'])) if scored else None
         if signature!=extractor_signature():raise RuntimeError('Extractor changed during optional fit')
@@ -218,13 +310,19 @@ def fit_phonation(engine,document,*,candidates,max_synthesis_calls=96,enabled=Fa
         'max_synthesis_calls':max_synthesis_calls,'observations':observations,'evidence_ids':sorted(ids),
         'evidence_frame_hashes':sorted(hashes),'document_sha256':_hash(doc),'candidate_sha256':_hash(choices),
         'extractor_signature':signature,'feature_scales':FEATURES,'identifiability':'not_established',
-        'fixed_source_definition':'PS=0; same finite anatomy, JA/F0/PR/gain nuisance support',
-        'fixed_anatomy_definition':'template anatomy; same finite PS and nuisance support',
-        'score_interpretation':'Mean standardized acoustic descriptor discrepancy, not posterior probability'}
+        'fixed_source_definition':{'rule':'Within-family native reference; same anatomy and nuisance support','references':deepcopy(FIXED_SOURCE)},
+        'fixed_anatomy_definition':'template anatomy; same finite native source family/shape and nuisance support',
+        'score_interpretation':'Mean standardized acoustic descriptor discrepancy, not posterior probability',
+        'secondary_score':SECONDARY_SCORE}
+
+
+def _score_policy(version):
+    return {'version':version,'features':deepcopy(FEATURES),'secondary_score':SECONDARY_SCORE,'source_model_version':SOURCE_VERSION,
+        'source_adapter_sha256':digest(Path(__file__)),'source_adapter_dependencies':adapter_dependencies()}
 
 
 def forecast_phonation(engine,fit_result,*,family,candidate_id,reference_trial_id,pose,controls,target_id):
-    """One prospective conditional prediction using the fitted source PS."""
+    """One prospective conditional prediction using the fitted native source shape."""
     fitted=deepcopy(fit_result)
     if fitted.get('status')!='available' or fitted.get('kind')!='phonation-source-tract-fit-1':raise ValueError('Available completed source fit required')
     if family not in ('joint','fixed_source','fixed_anatomy'):raise ValueError('Unsupported comparison family')
@@ -234,10 +332,10 @@ def forecast_phonation(engine,fit_result,*,family,candidate_id,reference_trial_i
     refs=[p for p in rows[0]['predictions'] if p['trial_id']==reference_trial_id]
     if len(refs)!=1 or not isinstance(controls,dict) or set(controls)!={'JA','F0','PR','gain'}:raise ValueError('Declare known heldout controls and fitted source reference')
     if not isinstance(target_id,str) or not target_id or target_id in fitted['evidence_ids']:raise ValueError('Fresh heldout target required')
-    control=_controls({**controls,'PS':refs[0]['controls']['PS']});saved=engine.anatomy()
+    control=_controls({**controls,**_source_shape(refs[0]['controls'])});saved=engine.anatomy()
     try:
         engine.set_anatomy(rows[0]['anatomy'])
-        audio,native=synthesize_phonation(engine,pose=pose,**{k:control[k] for k in ('JA','F0','PR','PS')})
+        audio,native=_synthesize_control(engine,pose,control)
         rate=refs[0]['record']['window']['sampleRateHz']
         frame,conversion=_frame(audio,rate);frame=frame*control['gain']
         sha=hashlib.sha256(frame.astype('<f4').tobytes()).hexdigest()
@@ -247,7 +345,7 @@ def forecast_phonation(engine,fit_result,*,family,candidate_id,reference_trial_i
         'target_id':target_id,'reference_trial_id':reference_trial_id,'pose':pose,'record':record,'controls':control,
         'native_state':native,'anatomy':rows[0]['anatomy'],'extractor_signature':fitted['extractor_signature'],
         'excluded_frame_hashes':fitted['evidence_frame_hashes'],'sealed_at':datetime.now(timezone.utc).isoformat(),
-        'scoring_policy':{'version':'phonation-score-1','features':deepcopy(FEATURES),'source_model_version':SOURCE_VERSION,'source_adapter_sha256':digest(Path(__file__))},
+        'scoring_policy':_score_policy('phonation-score-1'),**_f0(control,record),
         'actual_synthesis_calls':1,'status':'available' if _features(record) is not None else 'insufficient-quality',
         'scope':'Known executed control assumption; raw acoustic slope is not glottal tilt or contact'}
     return {'forecast':result,'sha256':_hash(result)}
@@ -257,9 +355,8 @@ def score_phonation_forecast(frozen,pcm,metadata):
     if not isinstance(frozen,dict) or set(frozen)!={'forecast','sha256'} or _hash(frozen['forecast'])!=frozen['sha256']:
         raise ValueError('Frozen phonation forecast hash mismatch')
     forecast=frozen['forecast']
-    policy={'version':'phonation-score-1','features':FEATURES,'source_model_version':SOURCE_VERSION,'source_adapter_sha256':digest(Path(__file__))}
-    if _hash(forecast.get('scoring_policy'))!=_hash(policy):
-        return {**_status('unsupported','Frozen source scoring policy unavailable or changed'),'score':None,'model_updated':False}
+    if _hash(forecast.get('scoring_policy'))!=_hash(_score_policy('phonation-score-1')):
+        return {**_status('unsupported','Frozen source scoring policy unavailable or changed'),'score':None,'score_excluding_pitch':None,'model_updated':False}
     if forecast.get('kind')!='frozen-phonation-forecast-1' or metadata.get('observationId')!=forecast['target_id']:raise ValueError('Wrong heldout target')
     observed_at=datetime.fromisoformat(metadata['evidenceAt'])
     if observed_at.tzinfo is None or not datetime.fromisoformat(forecast['sealed_at'])<observed_at<=datetime.now(timezone.utc):raise ValueError('Heldout observation must follow forecast')
@@ -268,20 +365,20 @@ def score_phonation_forecast(frozen,pcm,metadata):
     except OSError:
         compatible=False
     if not compatible:
-        return {**_status('unsupported','Frozen extractor unavailable or changed'),'model_updated':False,'score':None}
+        return {**_status('unsupported','Frozen extractor unavailable or changed'),'model_updated':False,'score':None,'score_excluding_pitch':None}
     window=forecast['record']['window']
     if metadata.get('windowStartSample')!=window['startSample'] or len(pcm)!=window['sampleCount']:
         raise ValueError('Source scoring frame differs from frozen native profile')
     observed=measure_phonation(pcm,window['sampleRateHz'],metadata)
     if observed['frameSha256'] in forecast['excluded_frame_hashes']:raise ValueError('Calibration frame reused as heldout')
-    score=_score(forecast['record'],observed)
+    score,without_pitch=_scores(forecast['record'],observed)
     return {**_status('available' if score is not None else 'insufficient-quality','Conditional heldout discrepancy'),
-        'score':score,'forecast_sha256':frozen['sha256'],'observation':observed,'model_updated':False}
+        'score':score,'score_excluding_pitch':without_pitch,'requested_f0_hz':forecast.get('requested_f0_hz'),'simulated_f0_hz':forecast.get('simulated_f0_hz'),
+        'forecast_sha256':frozen['sha256'],'observation':observed,'model_updated':False}
 
 
 def _bank_policy():
-    return {'version':'phonation-bank-score-1','features':deepcopy(FEATURES),
-        'source_model_version':SOURCE_VERSION,'source_adapter_sha256':digest(Path(__file__)),
+    return {**_score_policy('phonation-bank-score-1'),
         'ranking':'dense ranks over available discrepancies only; unavailable alternatives retained',
         'model_update':'none; conditional acoustic ranking is not a posterior or closure measurement'}
 
@@ -298,7 +395,7 @@ def forecast_phonation_bank(engine,fit_result,*,reference_trial_id,pose,controls
     if not 0<timeout_s<=120:raise ValueError('Bank deadline must be 0–120 seconds')
     if not isinstance(controls,dict) or set(controls)!={'JA','F0','PR','gain'}:
         raise ValueError('Bank requires shared declared JA/F0/PR/gain controls')
-    _controls({**controls,'PS':0.})
+    _controls({**controls,**FIXED_SOURCE['geometric']})
     if pose not in engine.poses:raise ValueError('Unsupported prospective vowel')
     if not isinstance(target_id,str) or not target_id.strip() or target_id in fitted['evidence_ids']:
         raise ValueError('Fresh source bank target required')
@@ -324,34 +421,52 @@ def forecast_phonation_bank(engine,fit_result,*,reference_trial_id,pose,controls
             ids.add(identity);rows.append((family,row))
     if not 1<=len(rows)<=48 or sum(row.get('status')=='scored' for _,row in rows)>max_synthesis_calls:
         raise ValueError('Complete source bank exceeds finite synthesis budget')
-    saved=engine.anatomy();deadline=time.monotonic()+timeout_s;calls=0;alternatives=[]
+    saved=engine.anatomy();deadline=time.monotonic()+timeout_s;calls=0;alternatives=[];pending=[]
+    for family,row in rows:
+        entry={'alternative_id':family+':'+row['candidate_id'],'family':family,'candidate_id':row['candidate_id'],
+            'source_model':row.get('source_model'),'calibration_score':row.get('score'),'calibration_score_excluding_pitch':row.get('score_excluding_pitch'),
+            'anatomy':deepcopy(row['anatomy']),'record':None,'controls':None,'requested_f0_hz':None,'simulated_f0_hz':None,'status':'unavailable','reason':None}
+        alternatives.append(entry)
+        if row.get('status')!='scored':entry['reason']='Calibration alternative was unscorable';continue
+        refs=[r for r in row.get('predictions',[]) if r['trial_id']==reference_trial_id]
+        if len(refs)!=1:entry['reason']='Fitted source reference unavailable';continue
+        control=_controls({**controls,**_source_shape(refs[0]['controls'])})
+        entry.update(controls=control,source_model=_family(control),requested_f0_hz=control['F0']);pending.append((entry,row,refs[0]['controls']['gain']))
+    fitted_gains={gain for *_,gain in pending}
+    if len(fitted_gains)>1:
+        raise ValueError('A frozen bank applies one declared gain; fitted alternatives use different reference gains, so this mixed-gain bank is rejected')
+    if fitted_gains and fitted_gains!={finite(controls['gain'],'gain')}:
+        # Gain only scales the prediction frame; a gain the fit never used moves predictions toward clipping or the analysis floor.
+        raise ValueError('Declared bank gain differs from the fitted reference gain')
+    def expired():return time.monotonic()>=deadline or cancelled is not None and cancelled.is_set()
     try:
-        for family,row in rows:
-            entry={'alternative_id':family+':'+row['candidate_id'],'family':family,'candidate_id':row['candidate_id'],
-                'calibration_score':row.get('score'),'anatomy':deepcopy(row['anatomy']),
-                'record':None,'controls':None,'status':'unavailable','reason':None}
-            alternatives.append(entry)
-            if row.get('status')!='scored':entry['reason']='Calibration alternative was unscorable';continue
-            refs=[r for r in row.get('predictions',[]) if r['trial_id']==reference_trial_id]
-            if len(refs)!=1:entry['reason']='Fitted source reference unavailable';continue
-            control=_controls({**controls,'PS':refs[0]['controls']['PS']});entry['controls']=control
-            if time.monotonic()>=deadline or cancelled is not None and cancelled.is_set():
-                entry.update(status='timed-out',reason='Bank deadline or cancellation reached');continue
-            engine.set_anatomy(row['anatomy'])
-            try:
-                calls+=1
-                audio,native=synthesize_phonation(engine,pose=pose,**{k:control[k] for k in ('JA','F0','PR','PS')})
-                frame,conversion=_frame(audio,rate);frame=frame*control['gain']
-                frame_hash=hashlib.sha256(frame.astype('<f4').tobytes()).hexdigest()
-                predicted=measure_phonation(frame,rate,_metadata('bank:'+target_id+':'+entry['alternative_id'],rate,frame_hash,'engine-generated'))
-                usable=_features(predicted) is not None
-                entry.update(record=predicted,native_state=native,resampling=conversion,
-                    status='available' if usable else 'insufficient-quality',reason=None if usable else 'Required predicted descriptor unavailable')
-            except (ValueError,RuntimeError,subprocess.TimeoutExpired) as exc:
-                entry.update(status='failed',reason=str(exc)[:500])
+        for source_family,group in _by_family(pending,lambda item:item[0]['source_model']):
+            if expired():  # skip the native family reload once the deadline has passed
+                for entry,*_ in group:entry.update(status='timed-out',reason='Bank deadline or cancellation reached')
+                continue
+            with engine.source_model(SOURCE_FAMILIES[source_family]):
+                for entry,row,_ in group:
+                    if expired():
+                        entry.update(status='timed-out',reason='Bank deadline or cancellation reached');continue
+                    engine.set_anatomy(row['anatomy'])
+                    try:
+                        calls+=1
+                        audio,native=_synthesize_control(engine,pose,entry['controls'])
+                        frame,conversion=_frame(audio,rate);frame=frame*entry['controls']['gain']
+                        frame_hash=hashlib.sha256(frame.astype('<f4').tobytes()).hexdigest()
+                        predicted=measure_phonation(frame,rate,_metadata('bank:'+target_id+':'+entry['alternative_id'],rate,frame_hash,'engine-generated'))
+                        usable=_features(predicted) is not None
+                        entry.update(record=predicted,native_state=native,resampling=conversion,**_f0(entry['controls'],predicted),
+                            status='available' if usable else 'insufficient-quality',reason=None if usable else 'Required predicted descriptor unavailable')
+                    except (ValueError,RuntimeError,subprocess.TimeoutExpired) as exc:
+                        entry.update(status='failed',reason=str(exc)[:500])
     finally:engine.set_anatomy(saved)
     if signature!=extractor_signature():raise RuntimeError('Extractor changed during source bank generation')
     available=sum(row['status']=='available' for row in alternatives)
+    # Families are synthesized one group at a time, so a deadline always cuts the later
+    # family; a mixed-family bank that lost rows to the deadline is not a fair comparison.
+    families={row['source_model'] for row,*_ in pending}
+    partial=len(families)>1 and any(row['status']=='timed-out' for row in alternatives)
     excluded=sorted({h for row in fitted['observations'] for h in row['sourceHashes']})
     result={'kind':'frozen-phonation-bank-1','fit_sha256':_hash(fitted),'target_id':target_id,
         'reference_trial_id':reference_trial_id,'pose':pose,'profile':profile,'shared_controls':deepcopy(controls),
@@ -360,7 +475,8 @@ def forecast_phonation_bank(engine,fit_result,*,reference_trial_id,pose,controls
         'excluded_frame_hashes':list(fitted['evidence_frame_hashes']),'excluded_artifact_hashes':excluded,
         'sealed_at':datetime.now(timezone.utc).isoformat(),'actual_synthesis_calls':calls,'max_synthesis_calls':max_synthesis_calls,
         'coverage':{'total':len(alternatives),'available':available,'unavailable':len(alternatives)-available,'complete':available==len(alternatives)},
-        'status':'available' if available else 'insufficient-quality',
+        'status':'timed-out' if partial else 'available' if available else 'insufficient-quality',
+        'reason':'Deadline or cancellation left source families unequally covered; a partially covered mixed-family bank is not committed' if partial else None,
         'scope':'Competing conditional source/tract predictions; shared control assumptions are not verified human execution, anatomical identification or vocal-fold contact'}
     return {'forecast':result,'sha256':_hash(result)}
 
@@ -394,14 +510,15 @@ def score_phonation_bank(frozen,pcm,metadata):
         if observed['frameSha256'] in bank['excluded_frame_hashes']:raise ValueError('Calibration frame reused as heldout bank evidence')
     alternatives=[]
     for row in rows:
-        score=None;unavailable=reason or row.get('reason')
+        score=without_pitch=None;unavailable=reason or row.get('reason')
         if reason is None and row['status']=='available' and row['record'] is not None:
-            score=_score(row['record'],observed)
+            score,without_pitch=_scores(row['record'],observed)
             if score is None:unavailable='Required observed or predicted descriptor unavailable'
         alternatives.append({key:row[key] for key in ('alternative_id','family','candidate_id','calibration_score')}|
-            {'score':score,'status':'scored' if score is not None else 'unavailable','reason':None if score is not None else unavailable or 'Frozen prediction unavailable',
-             'calibration_rank':None,'heldout_rank':None,'rank_change':None})
-    for field,rank in (('calibration_score','calibration_rank'),('score','heldout_rank')):
+            {key:row.get(key) for key in ('calibration_score_excluding_pitch','source_model','requested_f0_hz','simulated_f0_hz')}|
+            {'score':score,'score_excluding_pitch':without_pitch,'status':'scored' if score is not None else 'unavailable','reason':None if score is not None else unavailable or 'Frozen prediction unavailable',
+             'calibration_rank':None,'heldout_rank':None,'heldout_rank_excluding_pitch':None,'rank_change':None})
+    for field,rank in (('calibration_score','calibration_rank'),('score','heldout_rank'),('score_excluding_pitch','heldout_rank_excluding_pitch')):
         unique=sorted({r[field] for r in alternatives if r[field] is not None})
         for row in alternatives:
             if row[field] is not None:row[rank]=unique.index(row[field])+1

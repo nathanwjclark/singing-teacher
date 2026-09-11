@@ -58,14 +58,14 @@ http.createServer(async(req,res)=>{try{const url=new URL(req.url,'http://localho
 
 
 def generated_capture(parent, identity, *, anatomy=None, pose='a', f0=180., ps=.2,
-                      ja=-3., pressure=8000., gain=1.):
+                      ja=-3., pressure=8000., gain=1., source_shape=None):
     """Original artifact bytes and manifests, not fabricated acoustic descriptors."""
     directory = capture(parent)
     with Engine() as engine:
         if anatomy is not None:
             engine.set_anatomy(anatomy)
         audio, _ = synthesize_phonation(engine, pose=pose, JA=ja, F0=f0,
-            PR=pressure, PS=ps, duration_s=.6)
+            PR=pressure, duration_s=.6, **(source_shape or {'PS':ps}))
         samples, _ = resample_native_pcm(audio, 44100, 48000)
     raw = (samples * gain).astype('<f4').tobytes()
     (directory / 'audio.pcm.raw').write_bytes(raw)
@@ -266,7 +266,7 @@ def test_optional_source_fit_forecast_later_capture_score_and_restart(tmp_path):
         alternative = next(row for row in frozen['alternatives'] if row['family'] == 'joint' and row['status'] == 'available')
         controls = alternative['controls']
         later = generated_capture(later_root, '00000000-0000-4000-8000-000000000011',
-            anatomy=alternative['anatomy'], f0=controls['F0'], ps=controls['PS'],
+            anatomy=alternative['anatomy'], f0=controls['F0'], source_shape={k:v for k,v in controls.items() if k not in ('JA','F0','PR','gain')},
             ja=controls['JA'], pressure=controls['PR'], gain=controls['gain'])
         publish_capture(data, later)
         call('/api/source/score', False, expected=202)
@@ -297,7 +297,7 @@ def test_optional_source_fit_forecast_later_capture_score_and_restart(tmp_path):
         second_root = data / 'second-later'
         second_root.mkdir()
         later2 = generated_capture(second_root, '00000000-0000-4000-8000-000000000012',
-            anatomy=alternative['anatomy'], f0=controls['F0']+7, ps=controls['PS'],
+            anatomy=alternative['anatomy'], f0=controls['F0']+7, source_shape={k:v for k,v in controls.items() if k not in ('JA','F0','PR','gain')},
             ja=controls['JA'], pressure=controls['PR'], gain=controls['gain'])
         publish_capture(data, later2)
         restart()
@@ -359,3 +359,54 @@ def test_optional_source_fit_forecast_later_capture_score_and_restart(tmp_path):
             if value['status'] == 'committed']
         assert len(committed_targets) == 1 and committed_targets[0] != target
         assert recovered['snapshot'] == baseline
+
+
+def test_two_mass_app_mode_fit_bank_and_score_record_requested_and_simulated_f0(tmp_path, monkeypatch):
+    """PHONATION_SOURCE_MODEL=two_mass drives the same app routes and worker with native two-mass alternatives."""
+    monkeypatch.setenv('PHONATION_SOURCE_MODEL', 'two_mass')
+    shape = {'source_model': 'two_mass', 'XB': .01, 'XT': .01, 'EAA': 0., 'DF': 1.}
+    with app_runtime(tmp_path, BOOTSTRAP) as (data, call, restart):
+        publish_capture(data, generated_capture(data, '00000000-0000-4000-8000-000000000020', source_shape=shape, gain=2.))
+        assert call('/api/science/use-latest-capture', {
+            'purpose': 'calibration', 'pose': 'a', 'contains_external_excitation': False})['prepared']
+        call('/api/science/run', False, expected=202)
+        fitted = wait_for(call, '/api/science/status')['result']
+        session_path = '/api/science/sessions/' + fitted['sessionId'] + '/state'
+        baseline = call(session_path)['state']['snapshot']
+        call('/api/source/analyze', False, expected=202)
+        fit = wait_source(call, 'fit')
+        assert fit['source_model_selection'] == 'two_mass'
+        displacements = [.005, .01, .015] if len(baseline['hypotheses']) <= 2 else [.005, .015]
+        assert [row['XB'] for row in fit['source_shape_support']] == displacements
+        candidates = fit['joint']['candidates']
+        assert len(candidates) == len(baseline['hypotheses']) * len(displacements) and fit['actual_synthesis_calls'] == 3 * len(candidates)
+        for row in candidates:
+            assert row['source_model'] == 'two_mass'
+            prediction = row['predictions'][0]
+            assert prediction['controls']['EAA'] == 0. and prediction['controls']['DF'] == 1. and prediction['controls']['gain'] == 2.
+            assert prediction['requested_f0_hz'] == prediction['controls']['F0']
+            assert prediction['simulated_f0_hz'] == prediction['record']['descriptors']['pitchHz']['value']
+        call('/api/source/forecast', False, expected=202)
+        wait_source(call, 'forecast')
+        target, committed = next(iter(call(session_path)['state']['source_forecasts'].items()))
+        frozen = committed['artifact']['forecast']
+        assert len(frozen['alternatives']) == frozen['actual_synthesis_calls'] == 3 * len(candidates)
+        assert {row['source_model'] for row in frozen['alternatives']} == {'two_mass'}
+        alternative = next(row for row in frozen['alternatives'] if row['family'] == 'joint' and row['status'] == 'available')
+        assert alternative['requested_f0_hz'] == alternative['controls']['F0'] and alternative['simulated_f0_hz'] is not None
+        later_root = data / 'later'
+        later_root.mkdir()
+        controls = alternative['controls']
+        publish_capture(data, generated_capture(later_root, '00000000-0000-4000-8000-000000000021',
+            anatomy=alternative['anatomy'], f0=controls['F0'], ja=controls['JA'], pressure=controls['PR'], gain=controls['gain'],
+            source_shape={k: v for k, v in controls.items() if k not in ('JA', 'F0', 'PR', 'gain')}))
+        call('/api/source/score', False, expected=202)
+        result = wait_source(call, 'score')
+        recorded = call(session_path)['state']['source_forecasts'][target]
+        assert recorded['status'] == 'scored' and result['model_updated'] is False
+        rows = {row['alternative_id']: row for row in result['alternatives']}
+        assert rows[alternative['alternative_id']]['score'] is not None and result['ranking']
+        for row in result['alternatives']:
+            assert row['source_model'] == 'two_mass' and row['requested_f0_hz'] == controls['F0']
+            assert (row['score'] is None) == (row['score_excluding_pitch'] is None)
+        assert call(session_path)['state']['snapshot'] == baseline

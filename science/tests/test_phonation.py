@@ -50,7 +50,8 @@ def test_real_source_tract_fit_equal_calls_and_heldout(tmp_path):
 def test_disabled_quality_budget_native_failure_and_source_controls(monkeypatch):
     with Engine() as engine:
         assert fit_phonation(engine,None,candidates=None)['status']=='disabled'
-        assert source_capability(engine)['source_model_family']=='prescribed geometric glottis'
+        capability=source_capability(engine)
+        assert capability['certified_source_family']==['Geometric glottis'] and set(capability['source_families'])=={'geometric','two_mass'}
         doc,candidates=fixture(engine);saved=engine.anatomy()
         for budget in (8,True):
             with pytest.raises(ValueError):fit_phonation(engine,doc,candidates=candidates,max_synthesis_calls=budget,enabled=True)
@@ -124,5 +125,5 @@ def test_frozen_scoring_policy_cannot_change_with_live_feature_scales(monkeypatc
         changed=deepcopy(phonation.FEATURES);changed['harmonicSpectralSlopeDbOctave']=('dB/octave',30.)
         monkeypatch.setattr(phonation,'FEATURES',changed)
         result=score_phonation_forecast(frozen,[0.]*4096,_metadata('policy-target',44100,'c'*64,'engine-generated'))
-        assert result['status']=='unsupported' and result['score'] is None
+        assert result['status']=='unsupported' and result['score'] is None and result['score_excluding_pitch'] is None
         assert not result['model_updated'] and frozen==before

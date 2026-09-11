@@ -14,3 +14,12 @@ Verified on the actual local application and scientific worker, using generated 
 Separate contract-fixture browser tests cover unavailable alternatives and legacy single forecasts: `CI=1 npx playwright test --config playwright.source-bank.config.ts tests/source-bank-states.spec.ts tests/source-inference.spec.ts` — **5 passed in 12.1s**. These fixture checks are UI coverage, not native evidence.
 
 Earlier real browser attempts exposed excessive concurrent session replay work and permanent reuse of a terminal failed source intent. The passing runtime includes verified-read performance/coalescing fixes and fresh explicit retry identities while preserving pending intents. Human anatomical accuracy is not established by this generated-data verification.
+
+## Two-mass mode and F0 columns
+
+Verified on the actual local application (port 5205) and scientific worker (port 8805) with `PHONATION_SOURCE_MODEL=two_mass`, using generated native two-mass audio driven through `/api/science/use-latest-capture`, `/api/science/run` and `/api/source/analyze`, `/forecast`, `/score`. No response was mocked and no paid call was made.
+
+- Fit: 10 two-mass candidates (5 anatomies × `XB=XT` .005/.015 cm), 30 native calls. Bank: 30 alternatives, 30 calls; held-out score: 30 of 30 scored.
+- Command: `SOURCE_BANK_APP_URL=http://127.0.0.1:5205 CI=1 npx playwright test --config <playwright config with testMatch source-bank-runtime.spec.ts, baseURL http://127.0.0.1:5205 and no webServer> tests/source-bank-runtime.spec.ts` — **1 passed in 4.2 s**. Every frozen row shows requested → simulated F0 from the bank (179.1 Hz requested; 168.4-187.9 Hz simulated), every scored row shows its pitch-excluded discrepancy, the 390 px viewport stays in bounds and there are no page errors. Screenshots: `test-results/source-bank-runtime-frozen.png`, `test-results/source-bank-runtime-ranking.png`.
+
+This is software verification with generated audio. It does not establish human anatomy, tissue mechanics or vocal-fold contact.

@@ -5,12 +5,17 @@ for concurrency. Anatomical controls and kinematic/source controls stay distinct
 """
 from __future__ import annotations
 
+from contextlib import contextmanager
+from copy import deepcopy
 import ctypes as ct
 import hashlib
 import json
 import math
 from numbers import Real
+import os
 from pathlib import Path
+import re
+import shutil
 import sys
 import threading
 import tempfile
@@ -39,6 +44,8 @@ ANATOMY = [
 ]
 DOUBLE = ct.POINTER(ct.c_double)
 _ownership = threading.Lock()
+GLOTTIS_HEADER = re.compile(rb'<glottis_model type="([^"]+)" selected="([01])">')
+SPEAKER_COPY_PREFIX = "singing-source-family-"
 
 
 def digest(path: Path) -> str:
@@ -47,6 +54,45 @@ def digest(path: Path) -> str:
 
 def write_json(path: Path, value):
     path.write_text(json.dumps(value, indent=2, allow_nan=False) + "\n")
+
+
+def speaker_source_selection(raw):
+    """Glottis-model headers of a speaker file as (family, selected) pairs."""
+    headers = [(m.group(1).decode(), m.group(2) == b"1") for m in GLOTTIS_HEADER.finditer(raw)]
+    if len(headers) != raw.count(b"<glottis_model ") or sum(selected for _, selected in headers) != 1:
+        raise RuntimeError("Speaker glottis-model selection is not exactly one declared family")
+    return headers
+
+
+def select_speaker_source(raw, family):
+    """Certified speaker bytes with only the glottis-model selection digits changed."""
+    if family not in {name for name, _ in speaker_source_selection(raw)}:
+        raise ValueError("Unsupported native source family")
+    selected = bytearray(raw)
+    for match in GLOTTIS_HEADER.finditer(raw):
+        selected[match.start(2)] = ord("1" if match.group(1).decode() == family else "0")
+    return bytes(selected)
+
+
+def _process_exists(pid):
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def remove_stale_speaker_copies():
+    """Delete speaker copies whose creating process is gone (for example after SIGKILL).
+
+    Called while this process owns the Engine, so copies named with its own PID are stale too.
+    """
+    for path in Path(tempfile.gettempdir()).glob(SPEAKER_COPY_PREFIX + "*"):
+        owner = path.name[len(SPEAKER_COPY_PREFIX):].split("-", 1)[0]
+        if owner.isdigit() and (int(owner) == os.getpid() or not _process_exists(int(owner))):
+            shutil.rmtree(path, ignore_errors=True)
 
 
 def finite(value, label):
@@ -73,8 +119,9 @@ class Engine:
             if suffix is None:
                 raise RuntimeError("This build adapter currently supports macOS and Linux")
             library = BUILD / f"source/lib/Release/libVocalTractLabApi.{suffix}"
-            speaker = BUILD / "source/resources/JD3.speaker"
-            if digest(speaker) != self.provenance["speaker_sha256"]:
+            # Read the speaker once; every native load uses these verified bytes.
+            self.speaker_bytes = (BUILD / "source/resources/JD3.speaker").read_bytes()
+            if hashlib.sha256(self.speaker_bytes).hexdigest() != self.provenance["speaker_sha256"]:
                 raise RuntimeError("Reference speaker differs from the build manifest")
             if digest(ROOT / "patches/anatomy-tongue-bounds.patch") != self.provenance["patch_sha256"]:
                 raise RuntimeError("Native patch differs from the build manifest")
@@ -105,8 +152,12 @@ class Engine:
                 method = getattr(self.lib, name)
                 method.argtypes = signature
                 method.restype = ct.c_int
-            self._check(self.lib.vtlInitialize(str(speaker).encode()), "initialize")
+            remove_stale_speaker_copies()
+            self._initialize_speaker(self.speaker_bytes, "initialize")
             initialized = True
+            self._native_initialized = True
+            self.certified_source_family = next(name for name, selected in speaker_source_selection(self.speaker_bytes) if selected)
+            self.source_model_family = self.certified_source_family
             values = [ct.c_int() for _ in range(5)]
             internal_rate = ct.c_double()
             self._check(self.lib.vtlGetConstants(*(ct.byref(x) for x in values), ct.byref(internal_rate)), "constants")
@@ -116,7 +167,8 @@ class Engine:
             self._closed = False
             self.base_anatomy = self.anatomy()
             self.source_info = self._param_info("vtlGetGlottisParamInfo", self.glottis_count)
-            names = [x.attrib["name"] for x in ET.parse(speaker).findall("./vocal_tract_model/shapes/shape")]
+            self._certified_source_info = deepcopy(self.source_info)
+            names = [x.attrib["name"] for x in ET.fromstring(self.speaker_bytes).findall("./vocal_tract_model/shapes/shape")]
             self.poses = {}
             for name in names:
                 buf = (ct.c_double * self.tract_count)()
@@ -138,6 +190,13 @@ class Engine:
             _ownership.release()
             raise
 
+    def _initialize_speaker(self, raw, operation):
+        """Initialize native state from exactly these bytes via a private temporary copy."""
+        with tempfile.TemporaryDirectory(prefix=f"{SPEAKER_COPY_PREFIX}{os.getpid()}-") as directory:
+            path = Path(directory) / "speaker.speaker"
+            path.write_bytes(raw)
+            self._check(self.lib.vtlInitialize(str(path).encode()), operation)
+
     @staticmethod
     def _check(code, operation):
         if code != 0:
@@ -153,7 +212,9 @@ class Engine:
         if not self._closed:
             self._guard()
             try:
-                self._check(self.lib.vtlClose(), "close")
+                if self._native_initialized:
+                    self._check(self.lib.vtlClose(), "close")
+                    self._native_initialized = False
             finally:
                 self._closed = True
                 _ownership.release()
@@ -163,6 +224,65 @@ class Engine:
 
     def __exit__(self, *_):
         self.close()
+
+    def _load_source_family(self, family, anatomy):
+        """Reinitialize native state with one glottis model selected.
+
+        The certified family loads the start-up-verified certified bytes. Any
+        other family loads a copy whose only differing bytes are the selection digits.
+        """
+        certified = family == self.certified_source_family
+        selected = self.speaker_bytes if certified else select_speaker_source(self.speaker_bytes, family)
+        if self._native_initialized:
+            self._check(self.lib.vtlClose(), "close before source selection")
+            self._native_initialized = False
+        self._initialize_speaker(selected, "source model initialize")
+        self._native_initialized = True
+        values = [ct.c_int() for _ in range(5)]
+        internal_rate = ct.c_double()
+        self._check(self.lib.vtlGetConstants(*(ct.byref(x) for x in values), ct.byref(internal_rate)), "source constants")
+        rate, tubes, tract, count, step = [x.value for x in values]
+        if (rate, tubes, tract, step) != (self.sample_rate, self.tube_count, self.tract_count, self.step) or not 0 < count < 100:
+            raise RuntimeError("Source model changed native tract dimensions")
+        self.glottis_count = count
+        self.source_info = self._param_info("vtlGetGlottisParamInfo", count)
+        if certified and self.source_info != self._certified_source_info:
+            raise RuntimeError("Certified source model metadata differs after reload")
+        self.source_model_family = family
+        self.set_anatomy(anatomy)
+        selection = ("selected_source_family", "selected_source_speaker_sha256", "source_selection_policy")
+        self.provenance = {key: value for key, value in self.provenance.items() if key not in selection}
+        if not certified:
+            self.provenance.update(selected_source_family=family,
+                selected_source_speaker_sha256=hashlib.sha256(selected).hexdigest(),
+                source_selection_policy="certified-JD3-selection-digits-only-v2")
+
+    @contextmanager
+    def source_model(self, family):
+        """Use a native glottis model temporarily, restoring exact caller state.
+
+        Speaker masses, stiffnesses and all other static parameters remain the
+        certified template values. Their availability is not evidence that these
+        properties can be identified in a human from microphone recordings.
+        """
+        self._guard()
+        if family not in ("Geometric glottis", "Two-mass model"):
+            raise ValueError("Unsupported native source family")
+        previous = self.source_model_family
+        if family == previous:
+            yield self
+            return
+        saved, provenance = self.anatomy(), deepcopy(self.provenance)
+        try:
+            self._load_source_family(family, saved)
+            yield self
+        finally:
+            try:
+                self._load_source_family(previous, saved)
+                self.provenance = provenance
+            except BaseException:
+                self.close()
+                raise
 
     def anatomy(self):
         self._guard()
@@ -197,7 +317,7 @@ class Engine:
         names, descriptions, units = [ct.create_string_buffer(count * n) for n in (100, 500, 100)]
         arrays = [(ct.c_double * count)() for _ in range(3)]
         self._check(getattr(self.lib, function)(names, descriptions, units, *arrays), "parameter metadata")
-        texts = [b.value.decode().strip().split("\t") for b in (names, descriptions, units)]
+        texts = [b.value.decode().strip(" \r\n").split("\t") for b in (names, descriptions, units)]
         if any(len(t) != count for t in texts):
             raise RuntimeError("Native parameter metadata dimensions differ")
         return [{"name": texts[0][i], "description": texts[1][i], "unit": texts[2][i],

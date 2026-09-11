@@ -42,16 +42,25 @@ test('actual local native bank and held-out ranking render without disrupting ba
   expect(score.model_updated).toBe(false);
   expect(score.conditionalRanking.rankingId).toBeTruthy();
   await panel.getByText(`Frozen competing predictions (${forecast.alternatives.length})`, { exact: true }).click();
-  for (const row of forecast.alternatives) {
+  const hertz = (value: unknown) => typeof value === 'number' ? value.toFixed(1) : 'Unavailable';
+  const frozen = panel.getByRole('table').filter({ hasText: 'Prediction status' });
+  for (const [index, row] of forecast.alternatives.entries()) {
     await expect(panel).toContainText(`${row.family} / ${row.candidate_id}`);
     if (row.reason) await expect(panel).toContainText(row.reason);
+    if ('requested_f0_hz' in row) await expect(frozen.getByRole('row').nth(index + 1)).toContainText(`${hertz(row.requested_f0_hz)} → ${hertz(row.simulated_f0_hz)}`);
   }
+  await frozen.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: 'test-results/source-bank-runtime-frozen.png' });
   await expect(panel).toContainText('Conditional ranking of the frozen alternatives follows');
   await expect(panel).toContainText(score.conditionalRanking.rankingId);
-  for (const row of score.alternatives) {
+  const ranked = panel.getByRole('table').filter({ hasText: 'Held-out status' });
+  for (const [index, row] of score.alternatives.entries()) {
     if (typeof row.score === 'number') await expect(panel).toContainText(row.score.toFixed(3));
     if (row.reason) await expect(panel).toContainText(row.reason);
+    if (typeof row.score_excluding_pitch === 'number') await expect(ranked.getByRole('row').nth(index + 1)).toContainText(row.score_excluding_pitch.toFixed(3));
   }
+  await ranked.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: 'test-results/source-bank-runtime-ranking.png' });
   await expect(panel).toContainText('No model update was applied; the baseline is retained');
   if (!status.forecast.current) await expect(panel.getByRole('button', { name: 'Score later capture against source prediction' })).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Scientific model', exact: true })).toBeVisible();

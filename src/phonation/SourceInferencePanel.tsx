@@ -10,8 +10,11 @@ function text(value: unknown, fallback = 'Unavailable'): string {
   return typeof value === 'string' ? value : typeof value === 'number' && Number.isFinite(value) ? String(value) : fallback;
 }
 function number(value: unknown): string { return typeof value === 'number' && Number.isFinite(value) ? value.toFixed(3) : 'Unavailable'; }
+function hertz(value: unknown): string { return typeof value === 'number' && Number.isFinite(value) ? value.toFixed(1) : 'Unavailable'; }
+function f0(row: Record<string, unknown>): string { return `${hertz(row.requested_f0_hz)} → ${hertz(row.simulated_f0_hz)}`; }
+const F0_NOTE = 'Requested F0 is the native frequency control; simulated F0 is the pitch the same extractor measured in the simulated frame. The two-mass model can miss the requested pitch, so the discrepancy without the pitch term is shown beside the full discrepancy. Both need the same four descriptors, and the full discrepancy still sets every rank.';
 function parameters(value: unknown): string {
-  return Object.entries(object(value)).filter(([, entry]) => typeof entry === 'number' && Number.isFinite(entry)).map(([key, entry]) => `${key}: ${number(entry)}`).join(' · ') || 'Unavailable';
+  return Object.entries(object(value)).filter(([key, entry]) => typeof entry === 'number' && Number.isFinite(entry) || key === 'source_model' && typeof entry === 'string').map(([key, entry]) => `${key}: ${typeof entry === 'string' ? entry : number(entry)}`).join(' · ') || 'Unavailable';
 }
 
 export function SourceInferencePanel() {
@@ -67,13 +70,15 @@ export function SourceInferencePanel() {
       <dl><div><dt>Source + tract discrepancy</dt><dd>{number(object(joint.best).score)}</dd></div>
         <div><dt>Fixed-source comparison</dt><dd>{number(object(object(fit.fixed_source).best).score)}</dd></div>
         <div><dt>Fixed-anatomy comparison</dt><dd>{number(object(object(fit.fixed_anatomy).best).score)}</dd></div></dl>
-      <p>Actual synthesis calls: {text(fit.actual_synthesis_calls)}. Source model: {text(fit.source_model_version)}.</p>
+      <p>Actual synthesis calls: {text(fit.actual_synthesis_calls)}. Source family: {text(fit.source_model_selection)}. Source policy: {text(fit.source_model_version)}.</p>
       {typeof fit.source_assumptions === 'string' && <p>{fit.source_assumptions}</p>}
       {alternatives.length > 0 && <details><summary>Competing source and tract hypotheses ({alternatives.length})</summary>
-        <div className="source-inference-table"><table><thead><tr><th>Hypothesis</th><th>Status / discrepancy</th><th>Source and articulation controls</th><th>Tract parameters</th></tr></thead>
-          <tbody>{alternatives.map((candidate, index) => <tr key={text(candidate.candidate_id, String(index))}><td>{text(candidate.candidate_id)}</td><td>{text(candidate.status)} · {number(candidate.score)}</td>
-            <td>{(Array.isArray(candidate.predictions) ? candidate.predictions : []).map((prediction, i) => <p key={i}>{parameters(object(prediction).controls)}</p>)}</td><td>{parameters(candidate.anatomy)}</td></tr>)}</tbody></table></div>
-        <p>PS, F0, PR, JA and gain are simulator controls, not measurements of vocal-fold contact or instructions to reproduce internal pressures.</p></details>}
+        <div className="source-inference-table"><table><thead><tr><th>Hypothesis</th><th>Source family</th><th>Status / discrepancy</th><th>Without pitch term</th><th>Requested → simulated F0 (Hz)</th><th>Source and articulation controls</th><th>Tract parameters</th></tr></thead>
+          <tbody>{alternatives.map((candidate, index) => { const predictions = Array.isArray(candidate.predictions) ? candidate.predictions.map(object) : [];
+            return <tr key={text(candidate.candidate_id, String(index))}><td>{text(candidate.candidate_id)}</td><td>{text(candidate.source_model)}</td><td>{text(candidate.status)} · {number(candidate.score)}</td><td>{number(candidate.score_excluding_pitch)}</td>
+            <td>{predictions.map((prediction, i) => <p key={i}>{f0(prediction)}</p>)}</td><td>{predictions.map((prediction, i) => <p key={i}>{parameters(prediction.controls)}</p>)}</td><td>{parameters(candidate.anatomy)}</td></tr>; })}</tbody></table></div>
+        <p>{F0_NOTE}</p>
+        <p>PS (geometric pulse skew), XB/XT (two-mass rest displacement in cm), EAA (extra arytenoid area in cm²), DF (damping factor), F0 (native frequency control), PR, JA and gain are simulator controls, not measurements of vocal-fold contact or instructions to reproduce internal pressures. The app's two-mass alternatives vary XB=XT only; EAA and DF stay fixed.</p></details>}
       {typeof fit.identifiability === 'string' && <p>{fit.identifiability}</p>}
     </>}
     <div className="source-inference-actions"><button disabled={!ready || alternatives.length === 0} onClick={() => void run('forecast')}>Freeze optional prediction</button></div>
@@ -86,12 +91,12 @@ export function SourceInferencePanel() {
       <button disabled={!ready || !confirmed} onClick={() => void run('score')}>Score later capture against source prediction</button>
     </div>}
     {bank.length > 0 && <details><summary>Frozen competing predictions ({bank.length})</summary><p>Each row was committed before the later recording. Unavailable predictions remain visible and are not zero discrepancies.</p>
-      <div className="source-inference-table"><table><thead><tr><th>Family / candidate</th><th>Prediction status</th><th>Calibration discrepancy</th><th>Declared controls</th><th>Tract hypothesis</th></tr></thead><tbody>{bank.map((row,i)=><tr key={text(row.alternative_id,String(i))}><td>{text(row.family)} / {text(row.candidate_id)}</td><td>{text(row.status)} · {text(row.reason,'')}</td><td>{number(row.calibration_score)}</td><td>{parameters(row.controls)}</td><td>{parameters(row.anatomy)}</td></tr>)}</tbody></table></div>
+      <div className="source-inference-table"><table><thead><tr><th>Family / candidate · source family</th><th>Prediction status</th><th>Calibration discrepancy</th><th>Requested → simulated F0 (Hz)</th><th>Declared controls</th><th>Tract hypothesis</th></tr></thead><tbody>{bank.map((row,i)=><tr key={text(row.alternative_id,String(i))}><td>{text(row.family)} / {text(row.candidate_id)} · {text(row.source_model)}</td><td>{text(row.status)} · {text(row.reason,'')}</td><td>{number(row.calibration_score)}</td><td>{f0(row)}</td><td>{parameters(row.controls)}</td><td>{parameters(row.anatomy)}</td></tr>)}</tbody></table></div>
       <p>Fit identity: {text(forecast.fit_sha256)}. Bank coverage: {parameters(forecast.coverage)}.</p></details>}
     {!hasForecast && typeof forecast.target_id === 'string' && <p>This saved forecast is historical or unavailable for a new recording. Freeze a current supported prediction before continuing.</p>}
     {status?.score && <p>Scoring: {status.score.status}. {status.score.reason}</p>}
-    {Object.keys(scored).length > 0 && <div><p>Scientific result: {text(scored.status)}. {text(scored.reason, '')} {ranked.length ? 'Conditional ranking of the frozen alternatives follows.' : `Discrepancy: ${number(scored.score)}.`}</p>
-      {ranked.length > 0 && <div className="source-inference-table"><table><thead><tr><th>Family / candidate</th><th>Held-out status</th><th>Discrepancy</th><th>Calibration rank</th><th>Held-out rank</th><th>Rank change</th></tr></thead><tbody>{ranked.map((row,i)=><tr key={text(row.alternative_id,String(i))}><td>{text(row.family)} / {text(row.candidate_id)}</td><td>{text(row.status)} · {text(row.reason,'')}</td><td>{number(row.score)}</td><td>{text(row.calibration_rank)}</td><td>{text(row.heldout_rank)}</td><td>{text(row.rank_change)}</td></tr>)}</tbody></table><p>Ranks are conditional on the retained alternatives and declared recording assumptions. They do not identify vocal-fold closure or establish a unique anatomy.</p></div>}
+    {Object.keys(scored).length > 0 && <div><p>Scientific result: {text(scored.status)}. {text(scored.reason, '')} {ranked.length ? 'Conditional ranking of the frozen alternatives follows.' : `Discrepancy: ${number(scored.score)}; without pitch term: ${number(scored.score_excluding_pitch)}; requested → simulated F0: ${f0(scored)} Hz.`}</p>
+      {ranked.length > 0 && <div className="source-inference-table"><table><thead><tr><th>Family / candidate · source family</th><th>Held-out status</th><th>Discrepancy</th><th>Without pitch term</th><th>Requested → simulated F0 (Hz)</th><th>Calibration rank</th><th>Held-out rank</th><th>Rank change</th></tr></thead><tbody>{ranked.map((row,i)=><tr key={text(row.alternative_id,String(i))}><td>{text(row.family)} / {text(row.candidate_id)} · {text(row.source_model)}</td><td>{text(row.status)} · {text(row.reason,'')}</td><td>{number(row.score)}</td><td>{number(row.score_excluding_pitch)}</td><td>{f0(row)}</td><td>{text(row.calibration_rank)}</td><td>{text(row.heldout_rank)}</td><td>{text(row.rank_change)}</td></tr>)}</tbody></table><p>{F0_NOTE}</p><p>Ranks are conditional on the retained alternatives and declared recording assumptions. They do not identify vocal-fold closure or establish a unique anatomy.</p></div>}
       <p>{scored.model_updated === true ? 'The optional model was updated.' : 'No model update was applied; the baseline is retained.'}</p></div>}
     {Boolean(scored.conditionalRanking) && <p>Conditional ranking: {text(object(scored.conditionalRanking).rankingId)} · version {text(object(scored.conditionalRanking).version)} · parent {text(object(scored.conditionalRanking).parentRankingId,'None')}. Bank: {text(object(scored.conditionalRanking).bankSha256)}.</p>}
     {status?.sessionId && <details><summary>Optional experiment lineage</summary><p>Session: {status.sessionId}<br/>Run: {status.runId}<br/>Prediction: {text(forecast.target_id)}<br/>Forecast hash: {text(status.forecast?.result?.sha256)}</p></details>}
