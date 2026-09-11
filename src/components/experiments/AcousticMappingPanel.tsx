@@ -75,7 +75,7 @@ function ConnectedProbe() {
     {state?.import && <><p>Probe import: <strong>{state.import.eligible ? 'Eligible for scientific fitting' : 'Review available; fitting prerequisite not met'}</strong>.</p>
       {state.import.reasons.length > 0 && <ul>{state.import.reasons.map((reason, i) => <li key={i}>{reason}</li>)}</ul>}</>}
     {state?.fitBlockedReason && <p>Before fitting: {state.fitBlockedReason}</p>}
-    <ProbeSetupPanel status={state?.setup} busy={busy} onSaved={() => setRefresh(value => value + 1)}/>
+    <ProbeSetupPanel status={state?.setup} busy={busy} onSaved={() => void run('import')}/>
     {report && <><ResponseChart current={report}/><p>Evidence source: {report.provenance}. {report.responseUsable.reason}</p></>}
     {fit && <div className="probe-fit-result"><h4>Joint fit result</h4>
       <p>Processing: {fit.status}. Probe contribution: <strong>{fit.includedInFit ? 'Included in this fit' : 'Not included'}</strong>. Model adoption: {fit.adoptionStatus}.</p>
