@@ -18,3 +18,12 @@ test('rejects cross-recording, duplicate, out-of-range and wrong-image predictio
  assert.throws(()=>benchmark(review,p,'wrong'));
  for(const samples of [[{index:0},{index:0}],[{index:5}],[{index:0,tip:{x:2,y:0}}],[{index:0,imageSha256:'wrong'}]])assert.throws(()=>benchmark(review,{...p,samples},'abc'));
 });
+
+test('recorded boxes can be evaluated independently without becoming tips or surface masks',()=>{
+ const r=benchmark({...review,samples:review.samples.map((s,i)=>({...s,regionPrediction:i===1?[.1,.1,.9,.9]:null}))},undefined,'abc');
+ assert.equal(r.region.available,true);assert.equal(r.region.meanBoxIoUIncludingMisses,.5);assert.equal(r.region.detected,1);assert.equal(r.surface.available,false);assert.equal(r.tip.detected,0);
+});
+test('invalid region boxes are rejected and missing box capability is unavailable',()=>{
+ assert.equal(benchmark(review,undefined,'abc').region.meanBoxIoUIncludingMisses,null);
+ assert.throws(()=>benchmark({...review,samples:[{...review.samples[0],regionPrediction:[.9,.1,.2,.8]}]},undefined,'abc'));
+});

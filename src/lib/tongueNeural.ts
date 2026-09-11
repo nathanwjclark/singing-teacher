@@ -32,7 +32,7 @@ export async function loadTongueNetwork(signal?:AbortSignal){
 }
 
 export function neuralTipObservation(tip:NeuralTip,face:Landmark[],width:number,height:number,timestamp:number):TongueObservation|undefined{
- if(!face[308]||!face[14]||tip.visibility<.55||tip.peak<.2||![tip.x,tip.y,tip.depth].every(Number.isFinite))return;
+ if(!face[78]||!face[308]||!face[14]||tip.visibility<.55||tip.peak<.2||![tip.x,tip.y,tip.depth,tip.visibility,tip.peak].every(Number.isFinite))return;
  const [left,right]=[face[78],face[308]].sort((a,b)=>a.x-b.x);const dx=(right.x-left.x)*width,dy=(right.y-left.y)*height,span=Math.max(1,Math.hypot(dx,dy)),ux=dx/span,uy=dy/span;
  const tx=(tip.x-(left.x+right.x)/2)*width,ty=(tip.y-(left.y+right.y)/2)*height;
  const x=(tx*ux+ty*uy)/span,y=(tx*uy-ty*ux)/span,z=tip.depth;
@@ -60,11 +60,11 @@ export function createNeuralTongueTracker(){
      observation=neuralTipObservation(prediction,face,width,height,timestamp);
      diagnostic={state:observation?'tracking':'lost',reason:observation?'Neural tip detected · depth is a learned estimate':'Neural model cannot identify a visible tip',score:prediction.visibility,margin:prediction.peak};
     }
-    if(observation&&reference){observation.lateral-=reference.x;observation.elevation=(observation.elevation??0)-reference.y;observation.extension=(observation.extension??0)-reference.z;}
+    if(observation?.trackingMode==='tip'&&reference){observation.lateral-=reference.x;observation.elevation=(observation.elevation??0)-reference.y;observation.extension=(observation.extension??0)-reference.z;}
     last=observation;
    }).catch(e=>{if(!closed&&epoch===generation){last=undefined;failures++;diagnostic={state:'lost',reason:`Neural inference failed: ${String(e)}`};if(failures>=3){void network?.close();network=undefined;diagnostic.reason='Tongue inference paused after repeated failures · restart camera to retry';}}}).finally(()=>{busy=false;if(closed)void network?.close();});
   }
   return last&&timestamp-(last.observedAt??0)<(network?.kind==='region'?800:300)?last:undefined;
  };
- return Object.assign(track,{diagnostics:()=>({...diagnostic}),resetMotionReference(){reference=last?{x:last.lateral,y:last.elevation??0,z:last.extension??0}:undefined;last=undefined;generation++;},close(){closed=true;generation++;abort.abort();if(!busy)void network?.close();}});
+ return Object.assign(track,{diagnostics:()=>({...diagnostic}),resetMotionReference(){reference=last?.trackingMode==='tip'?{x:last.lateral,y:last.elevation??0,z:last.extension??0}:undefined;last=undefined;generation++;},close(){closed=true;generation++;abort.abort();if(!busy)void network?.close();}});
 }
