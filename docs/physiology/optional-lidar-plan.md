@@ -1,5 +1,11 @@
 # Optional rear LiDAR — workstream A
 
+> Implementation status: this plan is realized in merged `main` as the optional
+> conditional LiDAR fusion path. The ticket descriptions below remain the design
+> and acceptance rationale; see [LiDAR status](../implementation/LIDAR-STATUS.md)
+> and the [Wave 3 handoff](../coordination/WAVE3-HANDOFF.md) for delivered
+> software and remaining physical validation.
+
 Approved September 10, 2026. All tickets below start as planned. Rear LiDAR is an optional measured-depth input and comparison experiment, not a replacement for the existing TrueDepth path or a release gate. Workstream A owns the entire feature, including native capture, contracts, UI, scientific integration and independent verification. B has no new implementation, review, acquisition or acceptance assignment. This feature-specific exception supersedes the general B acquisition ownership only for this extension; it does not transfer unrelated work or interrupt active file writers.
 
 ## Goal and scope

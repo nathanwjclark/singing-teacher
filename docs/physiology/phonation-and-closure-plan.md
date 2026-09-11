@@ -1,5 +1,11 @@
 # Phonation and vocal-fold closure inference
 
+> Status: canonical measurement, opt-in live/saved phonation analysis and the
+> conditional source-bank forecast/score path are connected on `main`. The
+> two-mass source mechanics, inverse-filtering, goal-aware coaching and paired
+> EGG/imaging validation portions remain planned or Wave 3 work. Audio evidence
+> must not be presented as vocal-fold closure/contact.
+
 Approved scope addition: phonation belongs in both physiological inference and live coaching. This addendum extends the revision 8 research harness. All tasks below are planned, not implemented or validated by this document. Workstream A owns the entire feature, including extraction, app wiring, coaching UI and verification. This is a feature-specific exception to the usual A/B responsibility split: B has no assigned implementation, review, acquisition or acceptance task for phonation. It introduces no timing commitment and does not interrupt another writer's active file edits.
 
 Phonation is an optional enhancement, not a release gate or prerequisite for existing capture, fitting, Astra decisions, coaching, scoring or replay. Incomplete implementation or unavailable evidence must not block the core app. The requirements below define graceful degradation and supersede any implication that PHON-01–05 must finish before the existing harness can ship.
