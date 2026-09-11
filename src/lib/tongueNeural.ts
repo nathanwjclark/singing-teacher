@@ -2,7 +2,7 @@ import * as ort from 'onnxruntime-web/wasm';
 import wasmUrl from 'onnxruntime-web/ort-wasm-simd-threaded.wasm?url';
 import type {Landmark, TongueDiagnostic, TongueObservation, TongueTipObservation} from '../types';
 import {sha256} from '../contracts';
-import {resultCurrent} from './tongueTracking';
+import {observationInFrame, resultCurrent, type Crop} from './tongueTracking';
 
 ort.env.wasm.numThreads=1;
 ort.env.wasm.wasmPaths={wasm:wasmUrl};
@@ -51,7 +51,8 @@ export function createNeuralTongueTracker(){
  const abort=new AbortController();
  void loadTongueNetwork(abort.signal).then(n=>{if(closed){void n.close();return;}network=n;diagnostic={state:'selected',capability:n.kind,reason:n.kind==='region'?'TongueSAM baseline ready · visible region only':'Neural model ready · show the tongue tip'};}).catch(e=>{if(!closed)diagnostic={state:'lost',reason:e instanceof Error?e.message:'Tongue network unavailable'};});
  let reference:{x:number;y:number;z:number}|undefined;
- const track=(pixels:Uint8ClampedArray,width:number,height:number,face:Landmark[],timestamp:number)=>{
+ /** crop: where these pixels sit in the frame. A result is mapped with the crop of the frame it was computed from, not a later one. */
+ const track=(pixels:Uint8ClampedArray,width:number,height:number,face:Landmark[],timestamp:number,crop:Crop={x:0,y:0,width:1,height:1})=>{
   if(!face.length){if(current||arrived||busy)generation++;current=arrived=undefined;return;}
   if(arrived){current={...arrived,arrivedAt:timestamp};arrived=undefined;}
   if(network&&!busy&&!closed){busy=true;const epoch=generation,capability=network.kind;
@@ -60,12 +61,12 @@ export function createNeuralTongueTracker(){
     failures=0;
     let observation:TongueObservation|undefined;
     if('box' in prediction){
-     if(prediction.box)observation={trackingMode:'region',box:prediction.box,observedAt:timestamp,confidence:prediction.score};
+     if(prediction.box)observation=observationInFrame({trackingMode:'region',box:prediction.box,observedAt:timestamp,confidence:prediction.score},crop);
      diagnostic={state:observation?'tracking':'lost',capability,reason:observation?'TongueSAM visible-region box · tip and depth unavailable':'TongueSAM cannot identify a visible tongue region',score:prediction.score};
     }else{
      const tip=neuralTipObservation(prediction,face,width,height,timestamp);
      if(tip&&reference){tip.lateral-=reference.x;tip.elevation=(tip.elevation??0)-reference.y;tip.extension=(tip.extension??0)-reference.z;}
-     observation=tip;
+     observation=tip&&observationInFrame(tip,crop);
      diagnostic={state:tip?'tracking':'lost',capability,reason:tip?'Neural tip detected · depth is a learned estimate':'Neural model cannot identify a visible tip',score:prediction.visibility,margin:prediction.peak};
     }
     arrived={observation,observedAt:timestamp};

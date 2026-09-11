@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {benchmark,overlap} from './tongue-benchmark.mjs';
+import {selectTongueRegion} from '../src/lib/tongueRegion.ts';
+import {observationInFrame} from '../src/lib/tongueTracking.ts';
+import {reviewPrediction} from '../src/lib/tongueReview.ts';
 const square=[{x:.1,y:.1},{x:.9,y:.1},{x:.9,y:.9},{x:.1,y:.9}];
 const review={schema:'tongue-tip-review/v1',cropPixels:{width:480,height:384},samples:[
  {image:'data:image/png;base64,YQ==',label:{x:.5,y:.5},surface:square},
@@ -33,4 +36,13 @@ test('recorded frames without a current region result are unobserved, not misses
  const predicted=benchmark(review,{schema:'tongue-predictions/v1',reviewSha256:'abc',modelId:'test',samples:[{index:1,region:[.1,.1,.9,.9]}]},'abc');
  assert.equal(predicted.region.meanBoxIoUIncludingMisses,.5);assert.equal(predicted.region.reviewedFramesWithoutObservation,0);assert.equal(predicted.region.visibleSurfaceReferences,2);
  assert.equal(benchmark(review,undefined,'abc').region.reviewedFramesWithoutObservation,null);
+});
+test('an edge box survives detector → frame → review → benchmark without leaving [0,1]',()=>{
+ // Reported repro: a box past the crop bottom made benchmark() throw "Invalid recorded region at 0".
+ const local=selectTongueRegion([.3,.4,.8,1.07,.95],.7).box,crop={x:.31,y:.47,width:.37,height:.3};
+ const tongue=observationInFrame({trackingMode:'region',box:local,observedAt:1,confidence:.95},crop);
+ const r=reviewPrediction({tongue},crop);
+ assert.ok(r.regionPrediction.every(v=>v>=0&&v<=1));
+ const report=benchmark({schema:'tongue-tip-review/v1',cropPixels:{width:480,height:384},samples:[{image:'data:image/png;base64,YQ==',label:null,surface:[{x:.3,y:.4},{x:.8,y:.4},{x:.8,y:1},{x:.3,y:1}],...r}]},undefined,'x');
+ assert.ok(Math.abs(report.region.meanBoxIoUIncludingMisses-1)<1e-9);
 });

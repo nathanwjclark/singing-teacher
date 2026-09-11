@@ -23,3 +23,10 @@ test('a tip abstention never becomes a region miss, and a tip never becomes a re
  const tip=reviewPrediction({tongue:{trackingMode:'tip',x:.4,y:.6,lateral:0,lift:0,visibleFraction:0,observedAt:5}} as TrackingFrame,crop);
  assert.deepEqual(tip,{prediction:{x:.4,y:.6},predictionObservedAt:5});
 });
+test('a held result from an earlier crop is clipped to the saved crop, or not recorded when outside it',()=>{
+ const tongue={trackingMode:'region',box:[.1,.1,.5,.5],observedAt:3,confidence:.9} as const;
+ assert.deepEqual(reviewPrediction({tongue} as TrackingFrame,{x:.3,y:.3,width:.5,height:.5}),{regionPrediction:[0,0,.4,.4],predictionObservedAt:3});
+ assert.deepEqual(reviewPrediction({tongue} as TrackingFrame,{x:.6,y:.6,width:.4,height:.4}),{predictionObservedAt:3});
+ const tip={trackingMode:'tip',x:.9,y:.9,lateral:0,lift:0,visibleFraction:0,observedAt:4} as const;
+ assert.deepEqual(reviewPrediction({tongue:tip} as TrackingFrame,{x:0,y:0,width:.5,height:.5}),{predictionObservedAt:4});
+});
