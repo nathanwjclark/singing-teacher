@@ -19,10 +19,17 @@ def ensure_fields(state):
     state.setdefault('control_receipts', [])
 
 
-def history(state):
-    rows = []
+def _content(binding): return {key: binding[key] for key in ('cue', 'context', 'controls', 'gain')}
+
+
+def history(state, binding):
+    """Score receipts this ledger collected for bindings with the same content.
+
+    Other bindings can never match the compatibility key, so omitting them keeps the
+    worker request bounded; the ledger itself rejects reused evidence across bindings."""
+    rows, content = [], _content(binding)
     for receipt in state['control_receipts']:
-        if receipt['operation'] == 'score_control_pcm' and receipt['result'] is not None:
+        if receipt['operation'] == 'score_control_pcm' and receipt['result'] is not None and _content(state['control_bindings'][receipt['binding_id']]) == content:
             if _hash(receipt['result']) != receipt['result_sha256']: raise ValueError('Control score receipt integrity mismatch')
             rows.append(deepcopy(receipt['result']))
     return rows
@@ -73,7 +80,7 @@ def prepare(state, action, command):
         if not isinstance(params, dict) or set(params) - FORECAST_PARAMETERS: raise ValueError('Invalid control forecast parameters')
         snapshot = Artifact(_encode(state['snapshot']))
         return 'forecast_control_pcm', {**deepcopy(params), 'snapshot_json': snapshot.content.decode(), 'expected_digest': snapshot.sha256,
-            **{key: deepcopy(binding[key]) for key in ('cue', 'context', 'controls', 'gain')}, 'target_id': target, 'history': history(state)}, {
+            **deepcopy(_content(binding)), 'target_id': target, 'history': history(state, binding)}, {
             'binding_id': command['binding_id'], 'forecast_id': target, 'baseline_model_id': baseline, 'snapshot_sha256': snapshot.sha256}
     if action != 'score_control': raise ValueError('Unknown control action')
     forecast = state['control_forecasts'].get(command['forecast_id'])
@@ -91,38 +98,52 @@ def prepare(state, action, command):
         'observation_hashes': list(metadata['sourceHashes'])}
 
 
+def _forecast_bound(state, binding, artifact):
+    declared = state['control_bindings'][binding['binding_id']]
+    expected = [_hash(h['anatomy']) + ':' + c['control_id'] for h in state['snapshot']['hypotheses'] for c in declared['controls']]
+    return (artifact.get('kind') == 'frozen-control-pcm' and artifact.get('target_id') == binding['forecast_id']
+            and artifact.get('snapshot_sha256') == binding['snapshot_sha256'] and artifact.get('model_updated') is False
+            and all(artifact.get(key) == declared[key] for key in ('cue', 'context', 'controls', 'gain')) and [row.get('alternative_id') for row in artifact.get('alternatives', [])] == expected)
+
+
+def _score_bound(binding, artifact, frozen):
+    return (artifact.get('kind') == 'scored-control-pcm' and artifact.get('forecast_sha256') == frozen['sha256']
+            and artifact.get('model_updated') is False and set(binding['observation_hashes']) <= set(artifact.get('observation_hashes', []))
+            and [row.get('alternative_id') for row in artifact.get('alternatives', [])] == [row['alternative_id'] for row in frozen['artifact']['alternatives']])
+
+
 def collect(state, pending, job_status, result):
-    """Publish only results bound to the declared binding and every committed alternative."""
+    """Publish only results bound to the declared binding and every committed alternative.
+
+    A malformed or unbound result is kept as a rejected receipt rather than raised, so a
+    faulty worker reply cannot leave the session with a pending job it can never collect."""
     ensure_fields(state)
     binding, operation = pending['control_binding'], pending['request']['operation']
-    if binding['baseline_model_id'] != state['snapshot']['model_id']: raise ValueError('Stale control worker baseline')
-    sealed = result if job_status == 'succeeded' and isinstance(result, dict) else None
-    if sealed is not None and (set(sealed) != {'artifact', 'sha256'} or _hash(sealed['artifact']) != sealed['sha256']):
-        raise ValueError('Control worker result integrity mismatch')
-    artifact = sealed['artifact'] if sealed else None
     receipt = {'operation': operation, 'job_id': pending['job_id'], 'received_at': _now(), **binding, 'result': None,
-               'status': job_status, 'reason': None if artifact else 'Control worker ' + job_status}
+               'status': job_status if job_status != 'succeeded' else 'rejected', 'reason': 'Control worker ' + job_status}
+    sealed = result if job_status == 'succeeded' and isinstance(result, dict) and set(result) == {'artifact', 'sha256'} else None
+    artifact = sealed['artifact'] if sealed and isinstance(sealed['artifact'], dict) and _hash(sealed['artifact']) == sealed['sha256'] else None
+    if job_status == 'succeeded' and artifact is None: receipt['reason'] = 'Control worker returned no intact sealed artifact'
     if operation == 'forecast_control_pcm':
-        if artifact:
-            declared = state['control_bindings'][binding['binding_id']]
-            expected = [_hash(h['anatomy']) + ':' + c['control_id'] for h in state['snapshot']['hypotheses'] for c in declared['controls']]
-            if (artifact.get('kind') != 'frozen-control-pcm' or artifact.get('target_id') != binding['forecast_id']
-                    or artifact.get('snapshot_sha256') != binding['snapshot_sha256'] or artifact.get('model_updated') is not False
-                    or any(artifact.get(key) != declared[key] for key in ('cue', 'context', 'controls', 'gain'))
-                    or [row.get('alternative_id') for row in artifact.get('alternatives', [])] != expected):
-                raise ValueError('Control forecast must retain every alternative of the declared binding')
+        if artifact and _forecast_bound(state, binding, artifact):
+            # One committed control forecast at a time, so the cue shown to the learner is
+            # the one the next recording is scored against.
+            for identity, other in state['control_forecasts'].items():
+                if other['status'] == 'committed':
+                    other['status'] = 'superseded'
+                    state['control_receipts'].append({'operation': 'supersede_control_forecast', 'status': 'superseded', 'forecast_id': identity,
+                        'binding_id': other['binding_id'], 'baseline_model_id': other['baseline_model_id'], 'result': None, 'received_at': _now(),
+                        'reason': 'A newer control forecast was committed before this one was recorded'})
             state['control_forecasts'][binding['forecast_id']] = {'artifact': deepcopy(sealed), 'status': 'committed', 'committed_at': _now(),
                 'baseline_model_id': binding['baseline_model_id'], 'binding_id': binding['binding_id']}
-            receipt.update(status=artifact['status'], forecast_sha256=sealed['sha256'])
+            receipt.update(status=artifact['status'], reason=None, forecast_sha256=sealed['sha256'])
+        elif artifact: receipt['reason'] = 'Control forecast did not retain every alternative of the declared binding'
     else:
         forecast = state['control_forecasts'][binding['forecast_id']]
-        if artifact:
-            frozen = forecast['artifact']
-            if (artifact.get('kind') != 'scored-control-pcm' or artifact.get('forecast_sha256') != frozen['sha256']
-                    or artifact.get('model_updated') is not False or not set(binding['observation_hashes']) <= set(artifact.get('observation_hashes', []))
-                    or [row.get('alternative_id') for row in artifact.get('alternatives', [])] != [row['alternative_id'] for row in frozen['artifact']['alternatives']]):
-                raise ValueError('Control score must retain every committed alternative and its forecast binding')
+        if artifact and _score_bound(binding, artifact, forecast['artifact']):
             forecast.update(status='unscorable' if artifact['status'] == 'unscorable' else 'scored', score_sha256=sealed['sha256'])
             receipt.update(status=artifact['status'], reason=artifact['reason'], result=deepcopy(sealed), result_sha256=_hash(sealed))
-        else: forecast['status'] = 'failed'
+        else:
+            if artifact: receipt['reason'] = 'Control score did not retain every committed alternative and its forecast binding'
+            forecast['status'] = 'failed'
     state['control_receipts'].append(receipt)

@@ -74,11 +74,20 @@ def test_ledger_history_changes_the_fourth_forecast_and_survives_pruning(tmp_pat
         with pytest.raises(ValueError, match='Unsupported session command fields'):
             send(controller, 'forecast_control', binding_id='delivered-cue', target_id='forged', parameters={}, history=forged)
 
+        # Another wording never matches, so its forecast request carries none of this history.
+        send(controller, 'declare_control_binding', binding_id='other-cue', binding={**BINDING, 'cue': cue('Sing a bright, easy ah.')})
+        send(controller, 'forecast_control', binding_id='other-cue', target_id='other-target', parameters={})
+        assert controller.execute({'action': 'state'})['state']['pending']['request']['parameters']['history'] == []
+        state = finish(controller, service)
+        assert state['control_forecasts']['target-3']['status'] == 'superseded'
+        assert by_anatomy(state['control_forecasts']['other-target'])[first]['matched_attempts'] == 0
+        assert state['control_receipts'][-2]['operation'] == 'supersede_control_forecast'
+
         # A successor model with pruned support keeps each surviving anatomy's history.
         state = register(controller, [FIRST], 'pruned-successor')
-        assert state['control_forecasts']['target-3']['status'] == 'stale'
+        assert state['control_forecasts']['other-target']['status'] == 'stale'
         with pytest.raises(ValueError, match='current committed forecast'):
-            attempt(controller, service, 'target-3', 3)
+            attempt(controller, service, 'other-target', 3)
         pruned = forecast(controller, service, 'target-pruned')
         assert by_anatomy(pruned) == {first: by_anatomy(learned)[first]}
         assert pruned['baseline_model_id'] == 'pruned-successor'
@@ -108,7 +117,9 @@ def test_bindings_are_immutable_and_unsuccessful_attempts_stay_uncounted(tmp_pat
         with pytest.raises(ValueError, match='current committed forecast'):
             attempt(controller, service, 'stopped-target', 0)
 
+        forecast(controller, service, 'superseded-target')
         forecast(controller, service, 'failed-target')
+        assert controller.execute({'action': 'state'})['state']['control_forecasts']['superseded-target']['status'] == 'superseded'
         attempt(controller, service, 'failed-target', 1, sourceKind='human-observation')
         state = finish(controller, service, status='failed')
         assert state['control_forecasts']['failed-target']['status'] == 'failed'
