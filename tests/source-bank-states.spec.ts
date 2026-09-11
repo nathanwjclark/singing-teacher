@@ -17,6 +17,7 @@ test('unavailable bank predictions and held-out ranks stay explicit (UI contract
   const [frozen, ranking] = [panel.getByRole('table').first(), panel.getByRole('table').last()];
   await expect(frozen.getByRole('row').nth(1)).toContainText('190.0 → Unavailable');
   await expect(frozen.getByRole('row').nth(2)).toContainText('190.0 → 201.3');
+  await expect(frozen.getByRole('row').nth(2)).toContainText('joint / two · two_mass');
   await expect(ranking.getByRole('row').nth(1)).toContainText('Unavailable');
   await expect(ranking.getByRole('row').nth(2)).toContainText('0.420');
   await expect(ranking.getByRole('row').nth(2)).toContainText('0.170');
