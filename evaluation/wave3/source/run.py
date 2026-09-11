@@ -67,7 +67,11 @@ def nearest(p, generator):
 
 
 def observe(engine, anatomy, shape, pose, controls, identity):
-    """One generator frame through the same framing and gain path as predictions."""
+    """One generator frame through the same framing and gain path as predictions.
+
+    The fitted pipeline binds a calibration trial to its observation by identity,
+    so calibration frames use the trial id itself as the observation id.
+    """
     engine.set_anatomy(anatomy)
     audio, native = synthesize_phonation(engine, pose=pose, JA=controls['JA'], F0=controls['F0'], PR=controls['PR'], **shape)
     pcm, _ = _frame(audio, 48000)
@@ -174,7 +178,7 @@ def run(output):
             trials, observed_f0 = [], {}
             for t in p['calibration_trials']:
                 pcm, metadata, _ = observe(engine, generator['anatomy'], generator['shape'], t['pose'],
-                    {'JA': t['JA'], 'F0': t['requested_f0_hz'], 'PR': t['PR'], 'gain': t['gain']}, generator['id']+'-'+t['id'])
+                    {'JA': t['JA'], 'F0': t['requested_f0_hz'], 'PR': t['PR'], 'gain': t['gain']}, t['id'])
                 calls += 1
                 observed = measure_phonation(pcm, 48000, metadata)
                 observed_f0[t['id']] = observed['descriptors']['pitchHz']['value']
