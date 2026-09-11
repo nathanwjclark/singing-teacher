@@ -1,0 +1,65 @@
+{
+  "version": "wave3-source-family-1",
+  "question": "At equal native synthesis budgets, does the native two-mass source family predict held-out vowels, pitch and pressure better or worse than the prescribed geometric glottis, for off-grid synthetic generators from both families?",
+  "evidence_source": "synthetic",
+  "pipeline": "Production singing_physics.phonation: fit_phonation (calibration), forecast_phonation_bank (frozen held-out banks), score_phonation_bank (one extraction per held-out frame, no synthesis). Generators use synthesize_phonation.",
+  "frozen_before_run": "This file, run.py and test_protocol.py are committed before run.py is executed. No generator shape or generator anatomy was synthesized before that commit.",
+  "pilot_disclosure": "Before freezing, only grid and app shapes were synthesized: two-mass (XB=XT, EAA, DF) = (.005,0,1), (.01,0,1), (.015,0,1), (.015,.005,1), (.01,0,1.3) and geometric PS -0.2/0/0.2, at 65-600 Hz on vowel a (all five vowels for the app shapes), on the template anatomy and single-parameter changes (hard_palate_length 4.8; lip_width 0.7-1.5); plus geometric PS 0 at 190 Hz for pharynx_length 5.0/6.5, larynx_length 2.5/3.5, lip_width 0.8/1.3 and hard_palate_length 4.8 across a, e, o, u. Those pilots chose the tract options (pharynx and larynx length change e/o harmonic slope; hard_palate_length barely does) and showed that two-mass simulated pitch differs from requested F0 by up to about 20%. No generator shape or generator anatomy below was synthesized before the protocol commit.",
+  "sample_rate_hz": 48000,
+  "tract_options": [
+    {"pharynx_length": 5.5, "larynx_length": 2.7},
+    {"pharynx_length": 6.9, "larynx_length": 3.5}
+  ],
+  "families": {
+    "geometric": [{"PS": -0.2}, {"PS": 0.0}, {"PS": 0.2}],
+    "two_mass": [
+      {"source_model": "two_mass", "XB": 0.005, "XT": 0.005, "EAA": 0.0, "DF": 1.0},
+      {"source_model": "two_mass", "XB": 0.015, "XT": 0.015, "EAA": 0.005, "DF": 1.0},
+      {"source_model": "two_mass", "XB": 0.01, "XT": 0.01, "EAA": 0.0, "DF": 1.3}
+    ]
+  },
+  "candidate_ids": "t{tract index}-{family}-{shape index}; 2 tracts x 3 shapes x 2 families = 12 candidates, 6 per family",
+  "calibration_trials": [
+    {"id": "cal-a", "pose": "a", "requested_f0_hz": 150.0, "JA": -3.0, "PR": 8000.0, "gain": 2.0},
+    {"id": "cal-u", "pose": "u", "requested_f0_hz": 220.0, "JA": -3.0, "PR": 8000.0, "gain": 2.0}
+  ],
+  "candidate_f0_rule": "A candidate's F0 control for a calibration trial is the pitch the canonical extractor measures in that trial's generator frame, as the app does. JA, PR and gain are the declared trial values. A generator frame without a measured pitch makes that generator unevaluable; it is reported, not replaced.",
+  "heldout_trials": [
+    {"pose": "e", "F0": 190.0, "JA": -3.0, "PR": 8500.0, "gain": 2.0},
+    {"pose": "o", "F0": 190.0, "JA": -3.0, "PR": 8500.0, "gain": 2.0}
+  ],
+  "heldout_rule": "Each held-out bank shares the declared controls (F0 190 Hz requested for every alternative and for the generator), uses reference trial cal-a, and freezes all 36 alternatives before the generator's held-out frame is synthesized.",
+  "generators": [
+    {"id": "geometric-1", "family": "geometric", "shape": {"PS": -0.07}, "anatomy_fraction": 0.3, "anatomy": {"pharynx_length": 5.92, "larynx_length": 2.94}, "nearest_grid": "t0-geometric-1"},
+    {"id": "geometric-2", "family": "geometric", "shape": {"PS": 0.13}, "anatomy_fraction": 0.7, "anatomy": {"pharynx_length": 6.48, "larynx_length": 3.26}, "nearest_grid": "t1-geometric-2"},
+    {"id": "two-mass-1", "family": "two_mass", "shape": {"source_model": "two_mass", "XB": 0.0065, "XT": 0.0065, "EAA": 0.0, "DF": 1.1}, "anatomy_fraction": 0.3, "anatomy": {"pharynx_length": 5.92, "larynx_length": 2.94}, "nearest_grid": "t0-two_mass-0"},
+    {"id": "two-mass-2", "family": "two_mass", "shape": {"source_model": "two_mass", "XB": 0.0135, "XT": 0.0135, "EAA": 0.004, "DF": 1.05}, "anatomy_fraction": 0.7, "anatomy": {"pharynx_length": 6.48, "larynx_length": 3.26}, "nearest_grid": "t1-two_mass-1"}
+  ],
+  "nearest_grid_rule": "Scoring-only. Tract: the option nearer in anatomy_fraction. Shape: smallest Euclidean distance within the generator's family after dividing each control by its grid range (PS 0.4; XB 0.01; EAA 0.005; DF 0.3).",
+  "budgets": {
+    "fit_max_synthesis_calls": 72,
+    "bank_max_synthesis_calls": 36,
+    "per_family_fit_calls": 36,
+    "per_family_bank_alternatives": 18,
+    "generator_calls_per_generator": 4,
+    "hard_total_native_calls": 592,
+    "fit_timeout_s": 120.0,
+    "bank_timeout_s": 120.0
+  },
+  "scores": {
+    "primary": "score: production mean standardized discrepancy over pitchHz, periodicity, spectralFlatness, harmonicSpectralSlopeDbOctave",
+    "pitch_excluded": "score_excluding_pitch: the same terms without pitchHz. In the pitch-excluded analysis both selection and held-out comparison use it."
+  },
+  "selection": "For each generator and family, the selected candidate is the family's joint candidate with the lowest calibration score (ties by candidate_id). A family with no scorable calibration candidate has no selection.",
+  "metrics": [
+    "paired held-out discrepancy: for each (generator, held-out vowel) case, the held-out discrepancy of each family's selected candidate against the same frame, and their difference (two_mass minus geometric)",
+    "win: a family wins a case when its selected candidate is scorable and either the other family's is not, or its discrepancy is lower by more than the tie margin",
+    "unscorable rate: per family, the fraction of its 6 joint alternatives per case, and the fraction of its selected candidates, that are unscorable at held-out; an unscorable selected candidate is a failure, never a skipped case",
+    "true-family rank: position in the held-out joint ranking of the best-ranked alternative from the generator's family (1 is best); null when no alternative of that family is scorable",
+    "nearest-grid rank: position of the declared nearest grid candidate in the held-out joint ranking; null when unscorable",
+    "F0 mismatch: per family, simulated minus requested F0 over every calibration prediction and bank alternative with a measured pitch"
+  ],
+  "tie_margin": 0.05,
+  "decision_rule": "Over the 8 (generator, held-out vowel) cases: positive (two-mass predicts held-out better) if two-mass wins at least 6 cases under both the primary and the pitch-excluded score and has no more failures than geometric; negative if geometric wins at least 6 cases under both scores and has no more failures than two-mass; otherwise inconclusive. An unevaluable generator contributes its cases as failures for both families.",
+  "interpretation": "Conditional finite-support comparison on synthetic native audio from both families. Generators favour their own family by construction, so a family must also win cases generated by the other family to reach the decision threshold. No anatomical uniqueness, calibrated probability, tissue recovery, vocal-fold contact or human singing claim."
+}
