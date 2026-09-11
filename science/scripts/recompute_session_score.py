@@ -41,6 +41,31 @@ def projection(result):
             'retained_hypothesis_ids': [r['hypothesis_id'] for r in result['updated_snapshot']['hypotheses']]}
 
 
+def evidence(value, limit):
+    """Load a file or an already captured JSON object without changing its numbers."""
+    if isinstance(value, dict):
+        raw = _encode(value)
+        if len(raw) > limit:
+            raise ValueError('Evidence exceeds size limit')
+        return value, raw
+    path = Path(value)
+    if path.stat().st_size > limit:
+        raise ValueError('Evidence exceeds size limit')
+    return load(path), path.read_bytes()
+
+
+def verify_replay(replay, session_id, expected_ledger):
+    previous = '0'*64
+    for version, row in enumerate(replay['events'], 1):
+        event = dict(row); expected = event.pop('sha256')
+        if digest(event) != expected or event['previous_sha256'] != previous or event['session_id'] != session_id or event['state']['version'] != version:
+            raise ValueError('Original replay event hash-chain mismatch')
+        previous = expected
+    if not replay['events'] or digest(replay['events'][-1]['state']) != digest(replay['state']) or previous != replay['ledger_sha256'] or previous != expected_ledger:
+        raise ValueError('Original replay does not bind the exported ledger')
+    return previous
+
+
 def recompute(export_path, job_id, frame_path, *, original_replay=None, node_binary=None):
     report = {'schema_version': 'session-score-recomputation/1', 'job_id': job_id,
               'status': 'invalid_evidence', 'numerical_agreement': None,
@@ -55,28 +80,16 @@ def recompute(export_path, job_id, frame_path, *, original_replay=None, node_bin
                   'No model or session state is updated. Numerical agreement is not anatomical accuracy.']}
     fresh = None
     try:
-        path = Path(export_path)
-        if path.stat().st_size > 24*1024*1024:
-            raise ValueError('Export exceeds 24 MiB limit')
-        document = load(path)
-        report['export_sha256'] = hashlib.sha256(path.read_bytes()).hexdigest()
+        document, document_raw = evidence(export_path, 64*1024*1024)
+        report['export_sha256'] = hashlib.sha256(document_raw).hexdigest()
         if document['schemaVersion'] != 'singing-session-export/1':
             raise ValueError('Unsupported export schema')
-        if original_replay is None or not Path(original_replay).is_file():
+        if original_replay is None or not isinstance(original_replay, dict) and not Path(original_replay).is_file():
             report.update(status='missing_artifacts', reason='Retain and supply the unredacted original controller replay; JS export serialization cannot preserve Python canonical hashes.')
             return report, None
-        if Path(original_replay).stat().st_size > 24*1024*1024:
-            raise ValueError('Original replay exceeds 24 MiB limit')
-        replay = load(original_replay)
-        previous = '0'*64
-        for version, row in enumerate(replay['events'], 1):
-            event = dict(row); expected = event.pop('sha256')
-            if digest(event) != expected or event['previous_sha256'] != previous or event['session_id'] != document['sessionId'] or event['state']['version'] != version:
-                raise ValueError('Original replay event hash-chain mismatch')
-            previous = expected
-        if not replay['events'] or digest(replay['events'][-1]['state']) != digest(replay['state']) or previous != replay['ledger_sha256'] or previous != document['workerLedgerSha256']:
-            raise ValueError('Original replay does not bind the exported ledger')
-        report['original_replay_sha256'] = hashlib.sha256(Path(original_replay).read_bytes()).hexdigest()
+        replay, replay_raw = evidence(original_replay, 64*1024*1024)
+        verify_replay(replay, document['sessionId'], document['workerLedgerSha256'])
+        report['original_replay_sha256'] = hashlib.sha256(replay_raw).hexdigest()
         state = replay['state']
         if state['session_id'] != document['sessionId']:
             raise ValueError('Export session identity mismatch')
@@ -126,12 +139,12 @@ def recompute(export_path, job_id, frame_path, *, original_replay=None, node_bin
         if receipt['hash_scope'] != 'little-endian-float32-frame-bytes':
             raise ValueError('Unsupported original frame hash scope')
         report['frame_sha256'] = receipt['frame_sha256']
-        if frame_path is None or not Path(frame_path).is_file():
+        if frame_path is None or not isinstance(frame_path, bytes) and not Path(frame_path).is_file():
             report.update(status='missing_media', reason='Supply the separately retained original little-endian float32 scoring frame.')
             return report, None
-        if Path(frame_path).stat().st_size != profile['frame_size']*4:
+        raw = frame_path if isinstance(frame_path, bytes) else Path(frame_path).read_bytes()
+        if len(raw) != profile['frame_size']*4:
             raise ValueError('Original frame byte length does not match frozen profile')
-        raw = Path(frame_path).read_bytes()
         if hashlib.sha256(raw).hexdigest() != receipt['frame_sha256']:
             raise ValueError('Original frame SHA-256 mismatch')
         pcm = np.frombuffer(raw, dtype='<f4')
@@ -150,6 +163,15 @@ def recompute(export_path, job_id, frame_path, *, original_replay=None, node_bin
         if _extractor(node_binary, profile) != design.data['extractor']:
             report.update(status='version_mismatch', reason='Canonical extractor/contracts differ from frozen design.')
             return report, None
+        pinned_policy = design.data.get('scoring_policy')
+        if pinned_policy is not None:
+            from singing_physics import pcm_design
+            scorer_policy = getattr(pcm_design, 'scoring_policy', None)
+            if scorer_policy is None or pinned_policy != scorer_policy():
+                report.update(status='version_mismatch', reason='Frozen PCM scoring policy differs from the available implementation.')
+                return report, None
+            report['policy_verification'] = 'verified'
+            report['scoring_policy'] = pinned_policy
         report['current_source_sha256'] = {str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest()
             for p in (ROOT/'science/src/singing_physics'/name for name in
                       ('pcm_design.py', 'pcm_inverse.py', 'prediction.py', 'engine.py'))}
@@ -159,7 +181,7 @@ def recompute(export_path, job_id, frame_path, *, original_replay=None, node_bin
         report['original_scientific_result'] = projection(original)
         report['recomputed_scientific_result'] = projection(fresh)
         report['numerical_agreement'] = projection(original) == projection(fresh)
-        report.update(status='version_unverified', reason='Historical scoring-code pin is absent; numerical comparison uses the recorded thresholds and current implementation.')
+        report.update(status='verified' if pinned_policy is not None else 'version_unverified', reason='Frozen scoring policy and numerical comparison verified.' if pinned_policy is not None else 'Historical scoring-code pin is absent; numerical comparison uses the recorded thresholds and current implementation.')
     except (KeyError, TypeError, ValueError, OSError, RuntimeError, subprocess.TimeoutExpired) as exc:
         report.update(status='invalid_evidence', reason=str(exc))
     return report, fresh
@@ -181,7 +203,7 @@ def main():
             with path.open('xb') as handle:
                 path.chmod(0o600); handle.write(_encode(data))
     print(json.dumps({'status': report['status'], 'numerical_agreement': report['numerical_agreement'], 'output': str(output)}))
-    return 0 if report['status'] == 'version_unverified' and report['numerical_agreement'] else 2
+    return 0 if report['status'] in ('verified', 'version_unverified') and report['numerical_agreement'] else 2
 
 
 if __name__ == '__main__':
