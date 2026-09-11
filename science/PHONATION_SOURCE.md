@@ -8,8 +8,11 @@ recordings through fit, forecast, later score and Astra context; see `SOURCE_RUN
 Measurement-only phonation coaching can run independently.
 
 The pinned JD3 speaker XML selects **Geometric glottis**. The module verifies its
-hash against Engine provenance and checks native parameter bounds, rather than
-inferring a physical source family from sound. Supported controls are F0 65–600 Hz,
+hash against Engine provenance, checks that it selects the geometric glottis and
+checks native parameter bounds, rather than inferring a physical source family
+from sound. Candidates may instead declare `source_model: two_mass` with native
+two-mass controls; that family, its selection and restoration are described in
+[MECHANICAL_SOURCE.md](MECHANICAL_SOURCE.md). This page describes the geometric family. Supported controls are F0 65–600 Hz,
 PR 4000–12000 dPa and pulse skewness PS −0.3–0.3. The experiment's source-shape axis
 is PS. Flutter FL=0, double pulsing DP=0 and aspiration AS=−40 dB are declared fixed
 values; all remaining parameters use recorded native defaults. Every synthesis
@@ -23,7 +26,9 @@ enabled=False, timeout_s=60, cancelled=None)` consumes a document with
 `id`, `pose`, `pcm`, `sample_rate_hz`, `metadata`. PCM is one unmodified canonical
 frame at 44100/48000/96000 Hz. Metadata uses PHON-01's shared schema. Candidate
 objects contain `candidate_id`, anatomy overrides, and `trials` keyed by trial ID,
-with explicit JA/F0/PR/PS/gain. Up to eight candidates are evaluated.
+with explicit JA/F0/PR/gain and the family's shape controls (PS for the geometric
+glottis). Up to 16 candidates are evaluated. Every prediction records requested
+and simulated F0 and a discrepancy without the pitch term beside the primary one.
 
 The same Node/TypeScript PHON-01 extractor measures observed and generated frames.
 Its source/configuration and imported contract files are hashed. All four features
