@@ -17,6 +17,7 @@ import scipy
 from scipy.signal import resample_poly
 
 from .engine import Engine, finite
+from .pcm_spectral import COARSE_OBJECTIVE, SPECTRAL_OBJECTIVE, objective_policy, extract_spectral, validate_observation, discrepancy
 
 ROOT = Path(__file__).resolve().parents[3]
 BRIDGE = ROOT/'science/scripts/extract_pcm.ts'
@@ -102,7 +103,7 @@ def _features(record):
     return features
 
 
-def fit_pcm(engine: Engine, document, *, candidates, max_synthesis_calls=128, node_binary=None):
+def fit_pcm(engine: Engine, document, *, candidates, max_synthesis_calls=128, node_binary=None, objective=COARSE_OBJECTIVE):
     """Rank finite hypotheses and a fixed-anatomy baseline at equal actual compute.
 
     Each candidate supplies global anatomy overrides plus per-trial JA, f0_hz and
@@ -110,6 +111,7 @@ def fit_pcm(engine: Engine, document, *, candidates, max_synthesis_calls=128, no
     before independently extracting/scoring held-out evidence.
     """
     document, candidates = deepcopy(document), deepcopy(candidates)
+    scoring_policy = objective_policy(objective)
     if not isinstance(document, dict) or set(document) != {'schema_version', 'kind', 'trials'} or document.get('schema_version') != '0.1.0' or document.get('kind') != 'canonical_pcm_observations':
         raise ValueError('Unsupported PCM observation document')
     trials = document['trials']
@@ -124,7 +126,7 @@ def fit_pcm(engine: Engine, document, *, candidates, max_synthesis_calls=128, no
         raise ValueError('Predeclared candidates exceed equal-model synthesis budget')
     ids, evidence_ids, targets = [], [], {}
     for trial in trials:
-        if not isinstance(trial, dict) or set(trial) != {'id', 'pose', 'measurement', 'sample_rate_hz', 'frame_start_sample', 'frame_size', 'duration_s'}:
+        if not isinstance(trial, dict) or set(trial)-{'spectral_observation'} != {'id', 'pose', 'measurement', 'sample_rate_hz', 'frame_start_sample', 'frame_size', 'duration_s'}:
             raise ValueError('Invalid PCM trial fields')
         if not isinstance(trial['id'], str) or not trial['id'].strip() or trial['pose'] not in engine.poses:
             raise ValueError('Invalid trial ID or pose')
@@ -161,6 +163,9 @@ def fit_pcm(engine: Engine, document, *, candidates, max_synthesis_calls=128, no
             raise ValueError('Duplicate source audio interval')
         intervals.update(interval_keys)
         targets[trial['id']] = _features(record)
+        validate_observation(trial)
+        if objective == SPECTRAL_OBJECTIVE and 'spectral_observation' not in trial:
+            raise ValueError('Spectral objective requires exact-frame spectral observations; reimport original PCM')
         if sum(m['value'] is not None for m in targets[trial['id']].values()) < 3:
             raise ValueError('Insufficient observed canonical descriptors')
     candidate_ids = []
@@ -191,6 +196,7 @@ def fit_pcm(engine: Engine, document, *, candidates, max_synthesis_calls=128, no
             for candidate in candidates:
                 engine.set_anatomy(candidate['anatomy'] if model == 'joint' else {})
                 residuals, predictions, missing = [], [], []
+                spectral_scores = []
                 for trial in trials:
                     if calls >= max_synthesis_calls:
                         raise RuntimeError('Hard native synthesis budget exhausted')
@@ -212,6 +218,18 @@ def fit_pcm(engine: Engine, document, *, candidates, max_synthesis_calls=128, no
                         predictions.append({'trial_id': trial['id'], 'canonical': canonical, 'controls': control, 'resampling': resampling})
                         continue
                     predicted = _features(canonical['measurement'])
+                    spectral = None
+                    components = None
+                    if objective == SPECTRAL_OBJECTIVE:
+                        try:
+                            spectral = extract_spectral(frame, trial['sample_rate_hz'],
+                                source_artifact_hashes=canonical['measurement']['provenance']['sourceHashes'], source_artifact_id='native-pcm', frame_start_sample=start)
+                            components = discrepancy(spectral, trial['spectral_observation'],
+                                predicted_features={k:v['value'] for k,v in predicted.items()},
+                                observed_features={k:v['value'] for k,v in targets[trial['id']].items()})
+                            spectral_scores.append(components['mean_square'])
+                        except ValueError as exc:
+                            missing.append({'trial_id':trial['id'],'reason':str(exc)})
                     for name, target in targets[trial['id']].items():
                         if target['value'] is None:
                             continue
@@ -222,10 +240,10 @@ def fit_pcm(engine: Engine, document, *, candidates, max_synthesis_calls=128, no
                         scale = max(FEATURES[name][1], target['uncertainty'] or 0.)
                         residuals.append((value-target['value'])/scale)
                     predictions.append({'trial_id': trial['id'], 'canonical': canonical,
-                        'controls': control, 'resampling': resampling, 'applied_articulation': engine.pose(trial['pose'], {'JA': control['JA']})[1]})
+                        'controls': control, 'resampling': resampling, 'spectral_observation':spectral, 'objective_components':components, 'applied_articulation': engine.pose(trial['pose'], {'JA': control['JA']})[1]})
                 rows.append({'candidate_id': candidate['candidate_id'], 'anatomy': engine.anatomy(),
                     'status': 'missing_predicted_features' if missing else 'scored',
-                    'weighted_mean_square_discrepancy': None if missing else float(np.mean(np.square(residuals))),
+                    'weighted_mean_square_discrepancy': None if missing else float(np.mean(spectral_scores) if objective == SPECTRAL_OBJECTIVE else np.mean(np.square(residuals))),
                     'missing_features': missing, 'predictions': predictions})
     finally:
         engine.set_anatomy(saved)
@@ -238,8 +256,9 @@ def fit_pcm(engine: Engine, document, *, candidates, max_synthesis_calls=128, no
         'evidence_ids': evidence_ids, 'actual_synthesis_calls': calls, 'max_synthesis_calls': max_synthesis_calls,
         'canonical_extractor': extractor, 'native_provenance': dict(engine.provenance),
         'feature_scales': {k: {'unit': unit, 'scale': scale} for k, (unit, scale) in FEATURES.items()},
-        'objective_interpretation': 'weighted coarse-descriptor discrepancy, not calibrated likelihood',
+        'objective':objective, 'scoring_policy':scoring_policy,
+        'objective_interpretation': 'bounded spectral shape/level/pitch/periodicity discrepancy, not calibrated likelihood' if objective == SPECTRAL_OBJECTIVE else 'weighted coarse-descriptor discrepancy, not calibrated likelihood',
         'identifiability': 'not_established', 'human_interpretation': 'conditional_physiological_hypotheses_only',
         'unsupported': ['unknown_room_filter', 'unknown_microphone_response', 'physiology_identification', 'calibrated_posterior'],
         'source_artifact_bytes_verified': False,
-        'source_assumptions': 'native geometric glottis; explicit F0 and JA; stationary vowel; scalar gain only'}
+        'source_assumptions': 'native geometric glottis; explicit F0 and JA; stationary vowel; bounded empirical gain/tilt nuisance' if objective == SPECTRAL_OBJECTIVE else 'native geometric glottis; explicit F0 and JA; stationary vowel; scalar gain only'}
