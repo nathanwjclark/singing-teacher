@@ -209,3 +209,28 @@ test('exports only session-bound visual results with freshly verified original m
  assert.equal(output.data.summary.visualResultCount,0);
  assert.ok(output.data.missing.some(r=>r.source==='visual-runs/visual-one/summary.json'));
 });
+
+test('exports the latest score recomputation only while its report matches the receipt',async t=>{
+  const {root,put}=await fixture(t);
+  const attempt='replay-11111111-1111-4111-8111-111111111111',dir=`replay-verifications/${attempt}`;
+  const report={schemaVersion:'session-recomputation/1',attemptId:attempt,runId:'run-one',sessionId:'session-one',workerLedgerSha256:'c'.repeat(64),modelUpdated:false,rawMediaIncluded:false,
+    counts:{total:3,matched:1,failed:1,unavailable:0,unsupported:1,skipped:0,policyVerified:1,legacyVersionUnverified:0},operations:[]};
+  const bytes=JSON.stringify(report),receipt={status:'completed',attemptId:attempt,runId:'run-one',sessionId:'session-one',workerLedgerSha256:'c'.repeat(64),
+    reportSha256:createHash('sha256').update(bytes).digest('hex'),reportByteLength:Buffer.byteLength(bytes)};
+  await put(dir+'/report.json',report);await put(dir+'/receipt.json',receipt);await put('session-recompute-current.json',receipt);
+  const exported=async()=>{let output;await request(createSessionExportRoutes({dataRoot:root,env,json:(_r,status,data)=>{output={status,data};},fetchImpl:async()=>Response.json(replay())}));assert.equal(output.status,200);return output.data;};
+  let data=await exported(),artifact=data.artifacts.find(a=>a.source===dir+'/report.json');
+  assert.deepEqual(artifact.data.counts,report.counts);
+  assert.deepEqual(artifact.binding,{sessionId:'session-one',role:'read-only-score-recomputation',modelUpdated:false,current:false});
+  assert.ok(!data.missing.some(row=>row.source==='replay-verifications'));
+  // A report edited after its receipt was written is excluded and reported missing.
+  await put(dir+'/report.json',{...report,counts:{...report.counts,matched:2,failed:0}});
+  data=await exported();
+  assert.ok(!data.artifacts.some(a=>a.source.startsWith('replay-verifications/')));
+  assert.ok(data.missing.some(row=>row.source==='replay-verifications'));
+  // A receipt for another session is not this session's check and not missing evidence.
+  await put('session-recompute-current.json',{...receipt,sessionId:'session-two'});
+  data=await exported();
+  assert.ok(!data.artifacts.some(a=>a.source.startsWith('replay-verifications/')));
+  assert.ok(!data.missing.some(row=>row.source==='replay-verifications'));
+});

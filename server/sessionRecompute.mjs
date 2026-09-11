@@ -5,7 +5,6 @@ import {spawn} from 'node:child_process';
 
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
 const safeId=value=>typeof value==='string'&&/^[A-Za-z0-9_-]{1,160}$/.test(value);
-const attemptId=value=>typeof value==='string'&&/^replay-[a-f0-9-]{36}$/.test(value);
 const read=async(path,limit=8*1024*1024)=>{if((await stat(path)).size>limit)throw Error('Verification artifact exceeds size limit');return JSON.parse(await readFile(path,'utf8'));};
 const save=async(path,value)=>{const temp=path+'.'+randomUUID();await writeFile(temp,JSON.stringify(value),{mode:0o600});await rename(temp,path);};
 // science/scripts/app_recompute.py ends itself (SIGALRM) at the same deadline, so a
@@ -14,6 +13,12 @@ const DEADLINE_MS=300000;
 // Single flight across restarts: a verifier started by an earlier server process is
 // still running while its recorded pid exists inside the attempt deadline.
 const alive=value=>{if(!Number.isInteger(value.pid)||value.pid<=0||!(Date.now()<Date.parse(value.startedAt)+DEADLINE_MS))return false;try{process.kill(value.pid,0);return true;}catch{return false;}};
+export const recomputeAttempt=value=>typeof value==='string'&&/^replay-[a-f0-9-]{36}$/.test(value);
+// A report counts only when its bytes match the receipt and it names the receipt's run, session and ledger.
+export function boundReport(receipt,{sha256,byteLength,report}){
+ if(sha256!==receipt.reportSha256||byteLength!==receipt.reportByteLength||report.schemaVersion!=='session-recomputation/1'||report.attemptId!==receipt.attemptId||report.sessionId!==receipt.sessionId||report.runId!==receipt.runId||report.workerLedgerSha256!==receipt.workerLedgerSha256||report.modelUpdated!==false||report.rawMediaIncluded!==false)throw Error('Verification report integrity mismatch');
+ return report;
+}
 
 export function createSessionRecomputeRoutes({repo,dataRoot,json,env=process.env,spawnImpl=spawn}){
  let running=null;
@@ -26,13 +31,12 @@ export function createSessionRecomputeRoutes({repo,dataRoot,json,env=process.env
   return {runId:current.runId,sessionId:summary.sessionId};
  }
  async function receipt(attempt){
-  if(!attemptId(attempt))throw Error('Invalid verification attempt');
+  if(!recomputeAttempt(attempt))throw Error('Invalid verification attempt');
   const dir=resolve(dataRoot,'replay-verifications',attempt),value=await read(resolve(dir,'receipt.json'));
+  if(value.attemptId!==attempt)throw Error('Verification report integrity mismatch');
   const bytes=await readFile(resolve(dir,'report.json'));
-  if(bytes.length>8*1024*1024||hash(bytes)!==value.reportSha256||bytes.length!==value.reportByteLength)throw Error('Verification report integrity mismatch');
-  const report=JSON.parse(bytes);
-  if(report.schemaVersion!=='session-recomputation/1'||report.attemptId!==attempt||report.sessionId!==value.sessionId||report.runId!==value.runId||report.workerLedgerSha256!==value.workerLedgerSha256||report.modelUpdated!==false||report.rawMediaIncluded!==false)throw Error('Verification report identity mismatch');
-  return {...value,report};
+  if(bytes.length>8*1024*1024)throw Error('Verification report integrity mismatch');
+  return {...value,report:boundReport(value,{sha256:hash(bytes),byteLength:bytes.length,report:JSON.parse(bytes)})};
  }
  async function finish(attempt,code){
   const dir=resolve(dataRoot,'replay-verifications',attempt),request=await read(resolve(dir,'request.json'));
@@ -73,7 +77,7 @@ export function createSessionRecomputeRoutes({repo,dataRoot,json,env=process.env
    running='reserved';reserved=true;
    const chunks=[];let length=0;for await(const chunk of req){length+=chunk.length;if(length>1024)throw Error('Verification request too large');chunks.push(chunk);}
    const body=JSON.parse(Buffer.concat(chunks).toString());
-   if(Object.keys(body).sort().join(',')!=='maxOperations,requestId'||!attemptId(body.requestId)||!Number.isInteger(body.maxOperations)||body.maxOperations<1||body.maxOperations>16)throw Error('Select one to sixteen operations and a fresh request identity');
+   if(Object.keys(body).sort().join(',')!=='maxOperations,requestId'||!recomputeAttempt(body.requestId)||!Number.isInteger(body.maxOperations)||body.maxOperations<1||body.maxOperations>16)throw Error('Select one to sixteen operations and a fresh request identity');
    let current=null;try{current=await settle(await read(index));}catch(error){if(error.code!=='ENOENT')throw error;}
    if(current?.status==='running')throw Error('A bounded numerical verification is already running.');
    const c=await context(),attempt=body.requestId,dir=resolve(dataRoot,'replay-verifications',attempt),request={...c,maxOperations:body.maxOperations};
