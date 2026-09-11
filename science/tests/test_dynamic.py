@@ -169,9 +169,14 @@ def test_tongue_region_box_is_rejected_as_a_landmark_and_tip_landmarks_are_copie
                    {**tip, "box": [.3, .4, .7, .8]}, {"trackingMode": "mask"}):
         with pytest.raises(ValueError, match="region box is not a landmark"):
             observed_landmarks({"landmarks": {"tongue": region}})
-    for malformed in ({key: value for key, value in tip.items() if key != "trackingMode"}, {**tip, "x": 1.5},
+    legacy = {key: value for key, value in tip.items() if key != "trackingMode"}
+    for malformed in ({**tip, "x": 1.5}, {**legacy, "x": 1.5},
                       {**tip, "lateral": None}, {**tip, "lift": True}, {**tip, "extension": float("nan")},
-                      {**tip, "surface": []}, [tip], "tip"):
+                      {**tip, "surface": []}, {**tip, "outline": [{"x": .5, "y": .5}]}, {**legacy, "outline": [{"x": 2, "y": 0}]},
+                      {**tip, "tip": {"x": .5}}, {**tip, "tip": {"x": .5, "y": .5, "depth": 1}},
+                      {**tip, "tip": {"x": .5, "y": float("inf")}}, {**tip, "tip3D": {"x": 0, "y": 0, "z": 0}},
+                      {**tip, "tip3D": {"x": 0, "y": 0, "z": float("nan"), "depthSource": "learned"}},
+                      {**tip, "tip3D": {"x": 0, "y": 0, "z": 0, "depthSource": "guess"}}, [tip], "tip"):
         with pytest.raises(ValueError, match="tongue landmark must be a tip observation"):
             observed_landmarks({"landmarks": {"tongue": malformed}})
     with pytest.raises(ValueError, match="must be a dictionary"):
@@ -181,3 +186,18 @@ def test_tongue_region_box_is_rejected_as_a_landmark_and_tip_landmarks_are_copie
         doc["attempts"][0]["frames"][0]["landmarks"]["tongue"] = {"trackingMode": "region", "box": [.3, .4, .7, .8]}
         with pytest.raises(ValueError, match="region box is not a landmark"):
             fit_dynamic(engine, doc, budget_per_model=10, starts=1)
+
+
+def test_stored_capture_with_a_legacy_tongue_tip_still_replays():
+    """Captures stored before tip observations carried trackingMode, including the earlier tracker's
+    outline, must keep replaying unchanged."""
+    legacy = {"x": .52, "y": .61, "lateral": .1, "lift": .4, "visibleFraction": .3, "extension": .2,
+              "elevation": .1, "observedAt": 1000.5, "confidence": .8, "tip": {"x": .52, "y": .61},
+              "tip3D": {"x": .1, "y": .1, "z": .2, "depthSource": "learned"},
+              "outline": [{"x": .5, "y": .6}, {"x": .55, "y": .6}, {"x": .52, "y": .65}]}
+    assert observed_landmarks({"landmarks": {"tongue": legacy}}) == {"tongue": legacy}
+    with Engine() as engine:
+        doc = dynamic_document(engine)
+        doc["attempts"][0]["frames"][0]["landmarks"]["tongue"] = deepcopy(legacy)
+        result = fit_dynamic(engine, doc, budget_per_model=10, starts=1)
+        assert result["attempts"][0]["frames"][0]["observed_landmarks"]["tongue"] == legacy
