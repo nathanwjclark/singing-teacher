@@ -222,13 +222,14 @@ Measured on the real app loop (`science/tests/test_app_control_loop.py`: baselin
 search, Astra decisions, four control forecasts, three scores; 33 events) and on
 `science/scripts/measure_control_ledger.py --anatomies 4 --rounds 6` (38 events).
 Timings come from one interleaved run of both formats on one development Mac:
-"append" re-appends every recorded state in order with `_append`, which verifies
-the whole ledger first; "read" is one verified `read_ledger` of the final ledger.
+"write" re-appends every recorded state in order the way a command does (one
+verified read of the whole ledger, then `_append`); "read" is one verified
+`read_ledger` of the final ledger.
 
-| Ledger | Stored v1 → format 2 | Replay response v1 → format 2 | Append, mean (max) | Verified read |
+| Ledger | Stored v1 → format 2 | Replay response v1 → format 2 | Write, mean (max) | Verified read |
 |---|---|---|---|---|
-| App loop | 23.95 MB → 0.92 MB | 24.96 MB → 1.98 MB | 95 (209) ms → 63 (89) ms | 165 ms → 21 ms |
-| Measurement, 6 rounds | 6.73 MB → 0.94 MB | 7.00 MB → 1.23 MB | 22 (52) ms → 19 (39) ms | 43 ms → 12 ms |
+| App loop | 23.95 MB → 0.92 MB | 24.96 MB → 1.98 MB | 165 (438) ms → 64 (91) ms | 163 ms → 20 ms |
+| Measurement, 6 rounds | 6.73 MB → 0.94 MB | 7.00 MB → 1.23 MB | 38 (95) ms → 18 (38) ms | 42 ms → 13 ms |
 
 In the app loop each further Astra round (decision, forecast, score) adds about
 0.29 MB to the replay; with v1 events each round added 6-7 MB, more every round.
