@@ -2,7 +2,7 @@
 
 **Repository:** `nathanwjclark/singing-teacher`  
 **Code baseline:** `main` at `304ee87` (PR #21)  
-**Current documentation tip:** `main` at `425a1d1` (PR #23)  
+**Current repository:** `main`, including this editable handoff and its shareable PDF  
 **Handoff date:** 2026-09-10  
 **Purpose:** give the next agent enough context to continue the prototype, finish the remaining first- and second-wave connections, and begin the third wave of scientific model improvement without confusing software execution with anatomical validation.
 
