@@ -86,6 +86,8 @@ def test_masks_timing_lineage_and_heldout_exclusion():
         base=probes['trials'][0]
         for changes,reason in [({'channel':'nasal'},'unsupported_channel'),
                 ({'source':{**base['source'],'kind':'human-recording'}},'requires_measured'),
+                ({'source':{**base['source'],'kind':'human-recording'},'calibration':{**base['calibration'],'kind':'measured'}},'declared_not_measured'),
+                ({'source':{**base['source'],'native_capture_fields':['route']}},'native_capture_fields'),
                 ({'nuisance_prior':{**base['nuisance_prior'],'source_hashes':pcm['trials'][0]['measurement']['provenance']['sourceHashes']}},'conditioning_source'),
                 ({'split':'held_out','frequency_hz':'not read'},'non_calibration'),
                 ({'timing':{'phase_verified':False,'uncertainty_s':None}},'finite'),
@@ -95,6 +97,8 @@ def test_masks_timing_lineage_and_heldout_exclusion():
             result=fit_probe_pcm(engine,pcm,bad,candidates=candidates,max_native_calls=4,node_binary=NODE)
             assert not result['probe_records'][0]['included_in_fit']
             assert reason.lower() in result['probe_records'][0]['reason'].lower()
+        reference=deepcopy(probes); reference['trials'][0]['source']['kind']='physical-reference'; reference['trials'][0]['calibration']['kind']='measured'
+        assert fit_probe_pcm(engine,pcm,reference,candidates=candidates,max_native_calls=12,node_binary=NODE)['probe_records'][0]['included_in_fit']
         masked=deepcopy(probes); r=masked['trials'][0]
         r.update(comparison='magnitude',timing={'phase_verified':False,'uncertainty_s':None})
         r['valid_mask'][1]=False; r['response_real'][1]=None; r['response_imag'][1]=None

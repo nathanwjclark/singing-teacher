@@ -7,6 +7,7 @@ from pathlib import Path
 import re
 import subprocess
 from science.scripts.import_session_bundle import _archive, _phase, _json, import_session_bundle
+from science.scripts.probe_setup import resolve_setup
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -50,18 +51,33 @@ def prepare(data_root, output):
             raise ValueError('Probe capture identity differs from archive filename')
         capture = output/'capture'; capture.mkdir(mode=0o700)
         for filename, data in files.items(): write(capture/filename, data)
-    configuration = root/'probe-science-config.json'
-    if configuration.exists():
+    setup_error = None
+    try:
+        configuration, _, setup = resolve_setup(root)
+    except (ValueError, OSError):
+        configuration, setup = None, None
+        setup_error = 'Saved calibration setup could not be verified. Save the setup again with its original evidence.'
+    # A setup binds one capture manifest; retain an uncalibrated review of any other
+    # capture so its own setup can be completed in-app instead of failing import.
+    if setup and setup['manifestSha256'] != hashlib.sha256((capture/'manifest.json').read_bytes()).hexdigest():
+        configuration = None
+        setup_error = f"The saved calibration setup {setup['setupId']} belongs to a different capture; each probe capture needs its own setup."
+    if configuration and configuration.exists():
         subprocess.run(['node', '--experimental-strip-types', str(ROOT/'science/scripts/import_probe_science.ts'),
                         str(capture), str(output/'science'), str(configuration)], check=True, stdout=subprocess.DEVNULL)
         bridge = _json((output/'science/probe-science-receipt.json').read_bytes())
         result = {'eligible': bridge['eligible_for_fit'], 'reasons': bridge.get('reasons', []),
                   'measurementPath': 'science/b-import/probe-measurement.json'}
+        if setup:
+            result.update(setupId=setup['setupId'], setupConfigurationSha256=setup['configurationSha256'],
+                          setupProfileSha256=setup['profileSha256'])
     else:
         subprocess.run(['node', '--experimental-strip-types', str(ROOT/'scripts/import-acoustic-probe.ts'),
                         str(capture), str(output/'review')], check=True, stdout=subprocess.DEVNULL)
         result = {'eligible': False, 'reasons': ['Measured route calibration, placement and processing evidence are required before joint fitting.'],
                   'measurementPath': 'review/probe-measurement.json'}
+        if setup_error:
+            result['reasons'].append(setup_error)
     result.update(importId=output.name, archiveSha256=receipt['sha256'], includedInFit=False,
                   captureDirectory=str(capture.relative_to(output)))
     write(output/'summary.json', result)

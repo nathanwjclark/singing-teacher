@@ -43,6 +43,12 @@ filters are not supported. Calibration or priors cannot cite their own received
 response as a source. Calibration, prior, and timing source hashes cannot cite any
 fitted PCM or received probe response. Physical-reference and human-recording
 responses require measured calibration; fixture calibration remains synthetic.
+Human-recording records are excluded even with `measured` calibration
+(`human_recording_calibration_declared_not_measured`): no step derives
+calibration from measurement recordings yet, so the label is a declaration.
+A record whose `source.native_capture_fields` (written by the importer) is
+non-empty is excluded as a human recording. This function cannot verify source
+provenance; it trusts the caller's document.
 Evidence IDs/hashes are conservatively exclusive across
 received probe records and singing PCM; repeated drive calibration is allowed.
 Held-out received identity/hashes are excluded from calibration and conditioning,

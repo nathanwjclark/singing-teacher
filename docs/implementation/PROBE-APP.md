@@ -1,7 +1,7 @@
 # App external probe handoff
 
 `createProbeRoutes({repo,dataRoot,json})` in `server/probe.mjs` exposes the import,
-fit and status routes behind the application's existing request checks. Register
+fit, calibration setup and status routes behind the application's existing request checks. Register
 the factory in the local server before its API fallback.
 
 `POST /api/probe/import` takes `{requestId}` and verifies the latest USB probe or
@@ -9,12 +9,99 @@ linked-session archive. Original ZIPs remain private. Without the independently
 measured calibration configuration it still executes the exact B response importer
 and returns a retained review with a useful ineligibility reason.
 
-The private `probe-science-config.json` follows `science/PROBE_IMPORT.md`; its
-relative evidence paths resolve beside that configuration. A separate
-`probe-fit-profile.json` declares exactly `JA`, `gain`, `direct_gain`,
-`coupling_gain`, and `delay_s`. These are explicit experimental controls, not
-estimated automatically from the response. Do not insert fixture calibration for
-human input. The scientific operator checks controls against its declared prior.
+## Calibration setup in the app
+
+After **Pull iPhone → Analyze latest probe**, use the **Calibration setup** section
+below the probe status. Upload the calibration package and every original evidence
+file named by that package. Check or enter the metric source/microphone/mouth
+positions, coordinate frame, placement identity, held-quiet pose, trial identity
+and the five declared model controls. Review the provenance, exact frequency grid
+and declared nuisance bounds, then select **Verify and save calibration setup**.
+A successful save starts the probe analysis again with the new setup. Once a
+voice model is available, select **Fit probe with voice model**. No per-user
+server configuration edit is needed.
+
+Each capture needs its own setup: a setup binds one capture's manifest hash,
+held-quiet pose, placement and route. The panel says so before any input, reports
+when the saved setup was made for an earlier capture, and fills gaps from the
+last saved setup only when the package declares the same placement id (package
+values take precedence). Filled-in coordinates, coordinate frame and controls
+are marked "from setup <id>", and each filled-in group needs its own confirmation
+before saving. With a different placement id nothing is filled in, so one rig's
+positions are never saved under another rig's placement. The package and evidence
+files are uploaded again for each setup.
+
+**Human recordings are never made eligible by a setup.** A package's calibration
+arrays, `calibration.kind`, `processing.kind` and the typed placement are
+declarations; the app has no step that derives calibration from measurement
+recordings (for example a reference-microphone sweep), and hashing evidence files
+is not measurement. The importer gate in `science/scripts/import_probe_science.ts`
+keeps every `human-recording` capture ineligible with the reason "Calibration is
+declared, not measured; no measured-calibration evidence was derived". Saving a
+setup for such a capture returns that reason, the legacy private configuration
+gets the same result, and the fitter also rejects probe records marked as
+human recordings (it sees only the document it is given). For a human capture the panel explains this and does not offer the form.
+Software-fixture and physical-reference captures keep the calibrated path below.
+
+The source kind comes from the manifest's own fields, not only its `provenance`
+label. A manifest with any field only the iPhone recorder writes is treated as a
+human recording even if it says `software-fixture` or `physical-reference`, and a
+`software-fixture` label counts only with the fixture generator's marker. The
+panel shows when a label was overridden. Provenance is still self-declared: the
+manifest and pull receipt are unsigned, so an edited manifest without those fields
+is not caught. The recommended fix is for the USB pull to record the source device
+and archive hash in its own receipt, or for the iPhone to sign the manifest, with
+the importer checking that. See [the import specification](../../science/PROBE_IMPORT.md).
+
+The calibration package is measurement-workflow output, not a new estimate made
+by the app. It is JSON with `schema_version: "0.1.0"` and
+`kind: "probe_calibration_package"`. It contains `comparison`, `selected_indices`,
+`calibration`, `nuisance_prior`, `processing`, `bands`, `conditions` and `evidence`
+with the exact schemas in [the canonical import specification](../../science/PROBE_IMPORT.md).
+An existing `probe_science_import_configuration` JSON can also be uploaded as a
+package; its placement/pose fields prefill the form, and the app binds the saved
+configuration to the selected original capture. Calibration arrays must be given
+at exactly the selected response frequencies; the app cannot check that they were
+measured. The app never substitutes unit
+calibration, infers response from a level check, or fits calibration against its
+own target recording. Evidence files use unique basenames and must match the
+package's exact SHA-256 and byte count. Limits: 2 MB package, 32 evidence files,
+16 MB total evidence. Physical-reference input requires measured calibration and
+characterized route evidence; a software fixture stays explicitly synthetic.
+
+`POST /api/probe/setup` receives `{requestId,importId,manifestSha256,packageBase64,
+evidence:[{name,base64}],placement,profile,trialId,pose}`. The route validates
+bounded controls (including the package's nuisance prior), metric distances and
+capture identity, then invokes the actual canonical importer against retained
+original PCM. Missing/corrupt evidence, unsupported calibration and mismatched
+frequency/route bindings leave the current setup unchanged. Successful requests
+return 200 with a receipt; they do not submit a fit. Evidence verification proves
+file integrity and the caller's declared binding, **not physical calibration
+accuracy or authenticity**.
+
+Each attempt is built in a private staging folder `probe-setups/.staging-<uuid>/`
+with the original package, original evidence, generated `configuration.json`,
+`profile.json` and canonical verification outputs. A failed attempt removes its
+staging folder, so it leaves no evidence copy behind. Staging folders and pending
+pointer files older than ten minutes (verification is capped at 60 s) are crash
+leftovers and are removed before the next save; newer ones may belong to another
+server process and are left alone. A `probe-setups/<requestId>/` folder without a
+saved receipt is refused with a clear error rather than overwritten. Only after a
+successful verification is the folder renamed to `probe-setups/<requestId>/` and
+`probe-setup-current.json` published by atomic rename,
+whose SHA-256 binds `summary.json`. The receipt binds configuration, profile
+and capture manifest hashes; a receipt missing any of them is not used. An import freezes that setup ID and both hashes; subsequent fit/retry uses
+that exact setup, even after a different setup becomes active. Before submitting
+a fit, the runner re-reads and verifies original supplemental evidence. A new
+capture with a different manifest remains reviewable and needs a new explicit
+calibration binding. Damaged setup files permit review and replacement in-app;
+they never silently enable fitting.
+
+Existing private `probe-science-config.json` and `probe-fit-profile.json` remain
+compatible when there is no saved app setup. The latter declares exactly `JA`,
+`gain`, `direct_gain`, `coupling_gain`, and `delay_s`. These are explicit controls,
+not automatically estimated physiology. Imported legacy configurations retain
+their legacy resolution; an unrelated later app setup cannot replace them.
 
 `POST /api/probe/fit` takes `{requestId,importId,expectedModelId}`. It re-verifies
 the original capture and calibration, uses the current session's retained anatomy
@@ -24,9 +111,10 @@ does not relabel the immutable B measurement's `includedInFit` field. The separa
 fit result reports actual modality contribution and adoption. Subsequent voice
 predictions must be regenerated for an adopted model before recording an outcome.
 
-Both POST routes start bounded background processes and return 202. GET
+Import and fit POST routes start bounded background processes and return 202. GET
 `/api/probe/status` returns `busy`, `import`, `measurement`, `fit`, `error`,
-`currentModelId`, `canFit`, and `fitBlockedReason`; browser refresh reads the same
+`currentModelId`, `canFit`, `fitBlockedReason` and `setup` (capture identity and
+saved setup receipt); browser refresh reads the same
 private artifacts. Transport request IDs suppress immediate duplicate submission.
 The worker's session commands additionally use durable idempotent command IDs.
 After server restart, the next app status poll resumes an unfinished fit using its
@@ -40,17 +128,40 @@ a fresh attempt. A transient worker outage leaves the Retry action available;
 it does not require a backend command. Interrupted raw imports restart from the
 retained archive. Session history and original artifacts remain intact.
 
+The setup route accepts request bodies up to 26 MB (the other probe routes 4 KB)
+and reads them as Buffer chunks with a running length. A max-size body is read
+and parsed in tens of milliseconds; the earlier string re-measurement took over
+six seconds on the event loop. A larger body is refused with 413 as soon as it
+passes the limit, without reading the rest.
+
 Verification: `PYTHONPATH=.:science/src python -m pytest
-science/tests/test_app_probe.py -q` passed six tests: real B importer from original
+science/tests/test_app_probe.py -q` runs ten tests: real B importer from original
 synthetic PCM, preserved archive hashes and missing-calibration rejection; tamper
-rejection; original probe re-import through the actual native joint runner and
-durable session adoption, including process death immediately after submission
-and after collection, and cancellation followed by an app-style fresh retry.
-Repeated completed runs preserve the session version and single adoption.
-The successful fit performs 12 operator calls and retains a
-large negative model discrepancy, explicitly not successful anatomical recovery.
-`node --test server/probe.test.mjs` passed two tests covering local-only,
-interrupted imports, invalid IDs, automatic fit restart and reuse of the original
-model binding when the browser has already observed an updated model.
-Hardware calibration, human acoustic validity and the browser
-flow are distinct verification tasks.
+rejection; a malformed setup pointer, a saved receipt without its capture hash and a setup for another
+capture, both kept as reviews with explicit reasons; and original probe re-import
+through the actual native joint runner with durable session adoption, including
+process death immediately after submission and after collection, and cancellation
+followed by an app-style fresh retry. The app-setup case freezes its setups with
+the server's real `saveProbeSetup` (through node), imports through `prepare`,
+activates a later setup with different controls, and confirms the fit uses the
+earlier import's configuration and jaw control. Repeated completed runs preserve
+the session version and single adoption. The successful fit performs 12 operator
+calls and retains a large negative model discrepancy, explicitly not successful
+anatomical recovery. `node --experimental-strip-types --test server/probe.test.mjs`
+covers local-only access, interrupted imports, invalid IDs, automatic fit restart,
+the original model binding and the body-size limits and timing.
+`node --experimental-strip-types --test server/probeSetup.test.mjs` runs the real
+HTTP route, subprocess importer and generated original PCM: missing, corrupt,
+unsafe and reserved evidence rejection, prior/grid rejection, no folders after
+failed attempts, atomic publication and hash-bound calibrated reimport; a human
+recording refused through setup and through a private configuration; and a
+physical-reference capture that still saves and imports eligible.
+`npx playwright test tests/probe-setup-runtime.spec.ts tests/probe-app.spec.ts`
+uses the default config (real build and server, isolated data). It uploads real
+calibration files, checks the automatic analysis after saving, a second capture
+with prefilled values, a human capture without the form, reload and phone-width
+bounds, saves screenshots under `test-results/`, and fails on unexpected console
+errors. No paid model API is called. Evidence source for all of these checks:
+synthetic (generated fixtures); the scientific outcome for human acoustic
+validity is untested, and real hardware calibration remains separate
+acquisition and validation work.

@@ -1,11 +1,13 @@
-import { test } from 'node:test'
+import { test, type TestContext } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtemp, mkdir, writeFile, readFile, stat } from 'node:fs/promises'
+import { mkdtemp, mkdir, writeFile, readFile, stat, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { createHash } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
 import { importSingingSession } from './import_singing_session.ts'
+
+function owned<T extends { root: string }>(t: TestContext, value: T) { t.after(() => rm(value.root, { recursive: true, force: true })); return value }
 
 async function fixture(amplitude = .1) {
   const root = await mkdtemp(join(tmpdir(), 'ordinary-singing-')), capture = join(root, 'original')
@@ -27,8 +29,8 @@ async function fixture(amplitude = .1) {
   await save(); return { root, capture, config, configPath, manifest, save }
 }
 
-test('original PCM reaches actual fit and session ingestion payload without fixture factories', async () => {
-  const f = await fixture(), out = join(f.root, 'imported'), result = await importSingingSession(f.capture, out, f.configPath)
+test('original PCM reaches actual fit and session ingestion payload without fixture factories', async t => {
+  const f = owned(t, await fixture()), out = join(f.root, 'imported'), result = await importSingingSession(f.capture, out, f.configPath)
   assert.equal(result.receipt.eligible_for_fit, true)
   assert.equal(result.session_command!.action, 'ingest_calibration')
   assert.equal(result.session_command!.command_id, 'import-calibration-1')
@@ -57,21 +59,21 @@ with tempfile.TemporaryDirectory() as root:
   await assert.rejects(importSingingSession(f.capture, out, f.configPath), /EEXIST/)
 })
 
-test('duplicate and overlapping source windows reject; clipping and unavailable starts retained', async () => {
-  const f = await fixture()
+test('duplicate and overlapping source windows reject; clipping and unavailable starts retained', async t => {
+  const f = owned(t, await fixture())
   f.config.selections.push({ ...f.config.selections[0], trial_id: 'alias' }); f.config.max_synthesis_calls = 8
   f.config.candidates.forEach((c: any) => { c.trials.alias = c.trials.sing }); await f.save()
   await assert.rejects(importSingingSession(f.capture, join(f.root, 'duplicate'), f.configPath), /overlapping/)
-  const clipped = await fixture(1)
+  const clipped = owned(t, await fixture(1))
   const result = await importSingingSession(clipped.capture, join(clipped.root, 'clipped'), clipped.configPath)
   assert.equal(result.fit_params, null); assert.ok(result.receipt.selections[0].reasons.includes('clipping'))
-  const missing = await fixture(); missing.config.selections[0].frame_start_sample = 1; await missing.save()
+  const missing = owned(t, await fixture()); missing.config.selections[0].frame_start_sample = 1; await missing.save()
   const absent = await importSingingSession(missing.capture, join(missing.root, 'missing'), missing.configPath)
   assert.equal(absent.fit_params, null); assert.match(absent.receipt.selections[0].reasons.join(), /canonical window/)
 })
 
-test('source-bound configuration, probe exclusion and corrupt original bytes', async () => {
-  const f = await fixture(); f.config.source_manifest_sha256 = 'a'.repeat(64); await writeFile(f.configPath, JSON.stringify(f.config))
+test('source-bound configuration, probe exclusion and corrupt original bytes', async t => {
+  const f = owned(t, await fixture()); f.config.source_manifest_sha256 = 'a'.repeat(64); await writeFile(f.configPath, JSON.stringify(f.config))
   await assert.rejects(importSingingSession(f.capture, join(f.root, 'binding'), f.configPath), /bind original/)
   f.manifest.containsProbe = true; await f.save()
   await assert.rejects(importSingingSession(f.capture, join(f.root, 'probe'), f.configPath), /probe/)
@@ -80,8 +82,8 @@ test('source-bound configuration, probe exclusion and corrupt original bytes', a
   await assert.rejects(importSingingSession(f.capture, join(f.root, 'corrupt'), f.configPath), /hash/)
 })
 
-test('session command identity and native fitter budget are validated', async () => {
-  const f = await fixture(); f.config.max_synthesis_calls = 641; await f.save()
+test('session command identity and native fitter budget are validated', async t => {
+  const f = owned(t, await fixture()); f.config.max_synthesis_calls = 641; await f.save()
   await assert.rejects(importSingingSession(f.capture, join(f.root, 'budget'), f.configPath), /budget/)
   f.config.max_synthesis_calls = 4; delete f.config.command_id; await f.save()
   await assert.rejects(importSingingSession(f.capture, join(f.root, 'command'), f.configPath), /command_id/)
