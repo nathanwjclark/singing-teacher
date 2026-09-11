@@ -68,7 +68,9 @@ test('completion during awaited model lookup does not return idle with an old em
   await writeFile(join(root,'lidar-fit-current.json'),JSON.stringify({fitId:'fit',running:true}));
   modelServer=http.createServer(async(_req,res)=>{
    await writeFile(join(root,'complete-now'),'1');
-   for(let attempt=0;attempt<200;attempt++){
+   // Wait as long as the fixture's own 5 s trigger deadline: a cold interpreter
+   // (as on a fresh CI runner) can take over a second just to start.
+   for(let attempt=0;attempt<1000;attempt++){
     if(!JSON.parse(await readFile(join(root,'lidar-fit-current.json'),'utf8')).running)break;
     await new Promise(resolve=>setTimeout(resolve,5));
    }
