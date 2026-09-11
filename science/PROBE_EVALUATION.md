@@ -2,7 +2,7 @@
 
 `probe_evaluation.evaluate_probe(forecast: Artifact, *, expected_digest,
 document, receipt, configuration_json, original_artifacts,
-supplemental_artifacts, capture_started_at) -> Artifact` evaluates an existing
+supplemental_artifacts, capture_started_at, pull_artifacts=None) -> Artifact` evaluates an existing
 `predict_probe` artifact without fitting or modifying any model.
 
 Supply the immutable forecast bytes and digest, exact document/receipt/config
@@ -11,6 +11,17 @@ names to base64 original media and calibration evidence bytes. The evaluator
 reruns that same canonical B DSP/importer in a temporary directory. Every
 claimed document and receipt field must equal the independently regenerated
 result. No editable receipt alone authorizes scoring. Node must be on PATH.
+
+An app import was made from a USB pull, and its receipt records the SHA-256 of
+the pull receipt the importer read (`receipt_sha256`). Such an import must be
+submitted with `pull_artifacts`, a map of `usb-receipt.json` and `original.zip`
+to base64 bytes. The evaluator replays the importer with that receipt, as the
+app's fit does, so the regenerated `attestation`, `acquisition` and
+`receipt_sha256` must equal the claimed ones; without the pull artifacts it is
+refused. A submission with no pull receipt (for example a worker-token job built
+from a command-line import) is judged by the manifest-only source rule in
+`PROBE_IMPORT.md`. Either way this operation only scores: it never fits, adopts
+or updates a model.
 
 The target trial ID must equal the frozen target evidence ID. Received evidence
 must not overlap fitting/calibration lineage; pose, grid, calibration,
@@ -46,4 +57,6 @@ science/tests/test_probe_evaluation.py science/tests/test_service.py -q`.
 The regression persists a genuine native anatomy forecast, generates a later
 known FIR raw response, replays the B importer, and reports the expected large
 mismatch. It also exercises actual service execution, stale digest, byte and
-receipt corruption, chronology and target/model binding.
+receipt corruption, chronology and target/model binding, and an app-style import
+with a repository-fixture pull receipt scored through both the function and the
+service job, refused without its pull artifacts or with an edited receipt.

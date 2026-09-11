@@ -290,7 +290,7 @@ class JobService:
             'fit_phonation': {'document','candidates','max_synthesis_calls','enabled','timeout_s'},
             'forecast_phonation': {'fit_result','family','candidate_id','reference_trial_id','pose','controls','target_id','enabled'},
             'score_phonation': {'frozen','pcm','metadata','enabled'},
-            'evaluate_probe': {'forecast_json', 'expected_digest', 'document', 'receipt', 'configuration_json', 'original_artifacts', 'supplemental_artifacts', 'capture_started_at'},
+            'evaluate_probe': {'forecast_json', 'expected_digest', 'document', 'receipt', 'configuration_json', 'original_artifacts', 'supplemental_artifacts', 'capture_started_at', 'pull_artifacts'},
             'predict_probe': {'snapshot_json', 'expected_digest', 'prediction_id', 'target_evidence_id', 'generated_at', 'pose', 'frequency_hz', 'placement', 'calibration', 'calibration_evidence_ids', 'calibration_frozen_at', 'articulation', 'channel', 'comparison', 'timing', 'termination', 'termination_resistance_pa_s_m3', 'attenuation_np_per_m', 'max_operator_calls'},
             'fit_probe_pcm': {'observations', 'probe_observations', 'candidates', 'max_native_calls', 'pcm_weight', 'probe_weight'},
             'search_pcm': {'observations', 'anatomy_bounds', 'nuisance_profiles', 'max_synthesis_calls', 'rounds', 'seed', 'objective'},
