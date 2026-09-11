@@ -1,5 +1,5 @@
 import {CaptureProcessingOverlay} from './components/science/CaptureProcessingOverlay';
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react'
 import { Activity, Camera, CircleHelp, MicVocal, Play, Square } from 'lucide-react'
 import CameraPanel from './components/CameraPanel'
 import AnatomyPanel from './components/AnatomyPanel'
@@ -16,32 +16,49 @@ import type { RecordingController } from './components/recording/RecordingContro
 import type { FinishedRecording } from './lib/recording'
 import type { AudioMeasurement, ObservationBundle, CandidateAnatomy, ContractRecord } from './contracts'
 import { measureRecording } from './lib/recordingMeasurements'
-import ExperimentDashboard from './components/experiments/ExperimentDashboard'
-import { ExperimentRunner } from './components/experiments/ExperimentRunner'
+// The lazy Experiments panels import their own styles too; importing them here as well keeps each
+// stylesheet at its original place in the one app stylesheet (vite.config.ts), before App.css.
+import './components/experiments/ExperimentDashboard.css'
 import { AnatomyModes } from './components/anatomy/AnatomyModes'
-import { ReproducibilityPanel } from './components/experiments/ReproducibilityPanel'
-import { AcousticMappingPanel } from './components/experiments/AcousticMappingPanel'
-import { DepthProtocolPanel } from './components/experiments/DepthProtocolPanel'
+import './components/experiments/AcousticMappingPanel.css'
 import { readExperimentLedger, subscribeExperimentLedger } from './experiment/ledger'
 import { evaluatePrediction } from './evaluation'
 import type { PredictionCommit } from './contracts'
-import { MotionCapturePanel } from './components/motion/MotionCapturePanel'
-import CoachLearningPanel from './components/coach/CoachLearningPanel'
-import LearningMemoryPanel from './components/coach/LearningMemoryPanel'
-import PhonationPanel from './phonation/PhonationPanel'
-import { SourceInferencePanel } from './phonation/SourceInferencePanel'
-import { ControlLearningPanel } from './experiment/control/ControlLearningPanel'
-import { LidarFusionPanel } from './components/lidar/LidarFusionPanel'
-import { VisualLikelihoodPanel } from './components/visual-likelihood/VisualLikelihoodPanel'
-import TeachingPanel from './teaching/TeachingPanel'
-import SessionReplayPanel from './components/science/SessionReplayPanel'
-import { ScientificModelPanel } from './components/science/ScientificModelPanel'
-import { AstraCoachPanel } from './components/science/AstraCoachPanel'
+import './components/motion/MotionCapturePanel.css'
+import './components/coach/CoachLearningPanel.css'
+import './components/coach/LearningMemoryPanel.css'
+import './phonation/PhonationPanel.css'
+import './phonation/SourceInferencePanel.css'
+import './experiment/control/ControlLearningPanel.css'
+import './components/lidar/LidarFusionPanel.css'
+import './components/visual-likelihood/VisualLikelihoodPanel.css'
+import './teaching/TeachingPanel.css'
+import './components/science/SessionReplayPanel.css'
+import './components/science/AstraCoachPanel.css'
 import { ScientificSideView } from './components/science/ScientificGeometry'
 import { NativePullButton } from './components/phone/NativePullButton'
 import {ModelAdjustmentControls} from './components/science/ModelAdjustmentControls'
 import {setModelAdjustments} from './components/science/modelAdjustments'
 import './App.css'
+
+// Panels shown only under Experiments load after the studio. They still mount at start-up (hidden), as before.
+const ExperimentDashboard=lazy(()=>import('./components/experiments/ExperimentDashboard'))
+const ExperimentRunner=lazy(()=>import('./components/experiments/ExperimentRunner').then(m=>({default:m.ExperimentRunner})))
+const ReproducibilityPanel=lazy(()=>import('./components/experiments/ReproducibilityPanel').then(m=>({default:m.ReproducibilityPanel})))
+const AcousticMappingPanel=lazy(()=>import('./components/experiments/AcousticMappingPanel').then(m=>({default:m.AcousticMappingPanel})))
+const DepthProtocolPanel=lazy(()=>import('./components/experiments/DepthProtocolPanel').then(m=>({default:m.DepthProtocolPanel})))
+const MotionCapturePanel=lazy(()=>import('./components/motion/MotionCapturePanel').then(m=>({default:m.MotionCapturePanel})))
+const CoachLearningPanel=lazy(()=>import('./components/coach/CoachLearningPanel'))
+const LearningMemoryPanel=lazy(()=>import('./components/coach/LearningMemoryPanel'))
+const PhonationPanel=lazy(()=>import('./phonation/PhonationPanel'))
+const SourceInferencePanel=lazy(()=>import('./phonation/SourceInferencePanel').then(m=>({default:m.SourceInferencePanel})))
+const ControlLearningPanel=lazy(()=>import('./experiment/control/ControlLearningPanel').then(m=>({default:m.ControlLearningPanel})))
+const LidarFusionPanel=lazy(()=>import('./components/lidar/LidarFusionPanel').then(m=>({default:m.LidarFusionPanel})))
+const VisualLikelihoodPanel=lazy(()=>import('./components/visual-likelihood/VisualLikelihoodPanel').then(m=>({default:m.VisualLikelihoodPanel})))
+const TeachingPanel=lazy(()=>import('./teaching/TeachingPanel'))
+const SessionReplayPanel=lazy(()=>import('./components/science/SessionReplayPanel'))
+const ScientificModelPanel=lazy(()=>import('./components/science/ScientificModelPanel').then(m=>({default:m.ScientificModelPanel})))
+const AstraCoachPanel=lazy(()=>import('./components/science/AstraCoachPanel').then(m=>({default:m.AstraCoachPanel})))
 
 const demoFrame: TrackingFrame = {
   face: Array.from({ length: 478 }, () => ({ x: .5, y: .5 })),
@@ -199,6 +216,7 @@ export default function StudioApp() {
       <main className="research-workspace" style={tab==='experiments'||learningRecall?undefined:{display:'none'}}>
         <h2>Experiments and evidence</h2><p>{recordingNotice}</p>
         {learningRecall&&<p role="status">Coaching cues are hidden during this unprompted learning phase. Return to the prompted phase to show them again.</p>}
+        <Suspense fallback={null}>
         <div data-learning-assistance style={learningRecall?{display:'none'}:undefined}>
         <ScientificModelPanel onPreview={()=>{setScientificPreview(true);setTab('studio')}}/>
         <AstraCoachPanel/>
@@ -229,6 +247,7 @@ export default function StudioApp() {
         <DepthProtocolPanel observation={latestTrial?.observation??observations[0]} commit={latestTrial?.commit??undefined} captureStartedAt={latestTrial?.captureStartedAt??undefined}/>
         </ExperimentDashboard>
         </div>
+        </Suspense>
       </main>
       <PhonePairing open={pairOpen} onClose={()=>setPairOpen(false)} onMicrophoneStream={setPhoneMicrophone}/>
     </div>
