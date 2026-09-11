@@ -156,11 +156,21 @@ def join(digest, nodes):
     return json.loads(_text(['h', digest], nodes))
 
 
-def state_field(event, nodes, key):
-    """One top-level field of a verified event's state without joining the whole state."""
-    if 'state' in event: return event['state'].get(key)
-    tag, value = nodes[event['state_root']]
-    return json.loads(_text(['v', value.get(key)] if tag == 'v' else value.get(key, ['v', None]), nodes))
+def state_fields(events, nodes, key):
+    """One top-level field of each verified event's state (None when absent), without joining whole states.
+
+    A stored value shared by several versions is expanded once; every failure is a ledger integrity failure."""
+    texts, values = {}, []
+    try:
+        for event in events:
+            if 'state' in event: values.append(event['state'].get(key)); continue
+            tag, value = nodes[event['state_root']]
+            entry = ['v', value.get(key)] if tag == 'v' else value.get(key, ['v', None])
+            if entry[0] == 'h' and entry[1] not in texts: texts[entry[1]] = _text(entry, nodes)
+            values.append(json.loads(texts[entry[1]] if entry[0] == 'h' else _text(entry, nodes)))
+    except INTEGRITY_ERRORS as exc:
+        raise RuntimeError('Session ledger integrity failure') from exc
+    return values
 
 
 def _verify(session_id, rows, load_nodes):
@@ -195,8 +205,8 @@ def _verify(session_id, rows, load_nodes):
             if reachable != set(nodes): raise ValueError('unreachable node')
             # Sizes before any expansion: a root may not expand past what the writer could have stored.
             if max(_sizes(nodes).values()) > MAX_STATE_BYTES: raise ValueError('state size')
-            for event in upgraded:
-                if state_field(event, nodes, 'version') != event['version'] or state_field(event, nodes, 'session_id') != session_id: raise ValueError('root')
+            versions, identities = state_fields(upgraded, nodes, 'version'), state_fields(upgraded, nodes, 'session_id')
+            if versions != [event['version'] for event in upgraded] or any(identity != session_id for identity in identities): raise ValueError('root')
             state = join(upgraded[-1]['state_root'], nodes)
         elif events: state = events[-1]['state']
     except INTEGRITY_ERRORS as exc:

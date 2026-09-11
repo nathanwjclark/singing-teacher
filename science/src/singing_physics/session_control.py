@@ -8,7 +8,7 @@ from copy import deepcopy
 
 from .control_pcm import bank_binding
 from .prediction import Artifact, _encode
-from .session import state_field
+from .session import state_fields
 from .session_source import _hash, _identity, _metadata, _now, _time
 
 FORECAST_PARAMETERS = {'profile', 'feature_scales', 'max_synthesis_calls', 'timeout_s'}
@@ -54,8 +54,7 @@ def verify_ledger(state, events, nodes):
     pending; results against the sealed artifact in control_forecasts or control_receipts.
     A reply the session rejected is kept only by the worker, so its digest is not checkable here."""
     requests = {}
-    for event in events:
-        pending = state_field(event, nodes, 'pending')
+    for pending in state_fields(events, nodes, 'pending'):
         if pending and pending.get('control_binding'): requests.setdefault(pending['key'], pending['request']['parameters'])
     receipts = {row['job_id']: row for row in state.get('control_receipts', []) if row.get('job_id')}
     for job in state.get('jobs', []):

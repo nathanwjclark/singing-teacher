@@ -117,3 +117,39 @@ def test_ledger_corruption_fails_closed_on_every_read_path(tmp_path,kind):
                     connection.close()
             finally:server.shutdown()
     finally:service.close()
+
+
+def test_control_pending_check_fails_closed_and_expands_each_stored_value_once(tmp_path,monkeypatch):
+    """verify_ledger reads every event's pending job; a pending value no reader can parse is a 409, never a 500."""
+    import singing_physics.session as session
+    service=JobService(tmp_path/'jobs');controller=SessionController(tmp_path/'sessions',service,'pending-test')
+    bodies={};deep=session._put(bodies,'["v",1]')
+    for _ in range(12000):deep=session._put(bodies,'["d",{"k":["h","%s"]}]'%deep)  # Deeper than JSON parsing allows.
+    shared=session._put(bodies,canonical(['v',{'key':'k','control_binding':{},'request':{'parameters':{'x':'y'*1100}}}]))
+    base={'snapshot':['v',None],'jobs':['v',[]],'session_id':['v','pending-test'],'control_receipts':['v',[{'job_id':None}]]}
+    roots=[session._put(bodies,canonical(['d',{**base,'version':['v',v],'pending':['h',shared] if v<4 else ['h',deep] if v==5 else ['v',None]}])) for v in range(1,7)]
+    previous='0'*64
+    with controller._db() as db:
+        db.executemany('INSERT INTO nodes VALUES(?,?,?)',[('pending-test',key,body) for key,body in bodies.items()])
+        for version,root in enumerate(roots,1):
+            body=canonical({'format':2,'session_id':'pending-test','version':version,'previous_sha256':previous,'action':'fixture','received_at':'2026-01-01T00:00:00+00:00','details':{},'state_root':root})
+            previous=hashlib.sha256(body.encode()).hexdigest();db.execute('INSERT INTO events VALUES(?,?,?,?)',('pending-test',version,body,previous))
+    try:
+        with pytest.raises(RuntimeError,match='Session ledger integrity failure') as failure:controller.execute({'action':'replay'})
+        assert isinstance(failure.value.__cause__,RecursionError)
+        with ScientificHTTPServer(tmp_path,TOKEN,port=0) as server:
+            threading.Thread(target=server.serve_forever,daemon=True).start()
+            try:
+                connection=http.client.HTTPConnection('127.0.0.1',server.server_port,timeout=30)
+                connection.request('GET','/sessions/pending-test/replay',headers={'Authorization':'Bearer '+TOKEN})
+                assert connection.getresponse().status==409
+            finally:server.shutdown()
+        # Without the unreadable version, the three versions sharing one pending node expand it once.
+        with controller._db() as db:
+            db.execute('DELETE FROM events WHERE version>=5')
+            db.execute('DELETE FROM nodes WHERE digest NOT IN (?,?,?,?,?)',(shared,*roots[:4]))
+        calls=[];real=session._text
+        monkeypatch.setattr(session,'_text',lambda entry,nodes:calls.append(entry) or real(entry,nodes))
+        assert len(controller.execute({'action':'replay'})['events'])==4
+        assert [entry for entry in calls if entry==['h',shared]]==[['h',shared]]
+    finally:service.close()
