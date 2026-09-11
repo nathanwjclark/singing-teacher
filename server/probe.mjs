@@ -50,7 +50,7 @@ export function createProbeRoutes({repo,dataRoot,json,runProcess=execute}) {
     const fit=state.fitId?await read(join(dataRoot,'probe-fits',state.fitId,'summary.json')):null;
     const measurement=imported?await read(join(dataRoot,'probe-imports',state.importId,imported.measurementPath)):null;
     const currentModelId=await model().catch(()=>null);
-    const setup=await probeSetupStatus(dataRoot,state.importId).catch(()=>({setup:null,capture:null,legacyConfiguration:false,error:'Saved probe setup could not be verified. Reopen setup and verify the original evidence again.'}));
+    const setup=await probeSetupStatus(dataRoot,state.importId).catch(()=>({setup:null,capture:null,legacyConfiguration:false,error:'The analyzed probe capture could not be read. Analyze the latest probe again.'}));
     const profile=imported?.setupId?true:await access(join(dataRoot,'probe-fit-profile.json')).then(()=>true).catch(()=>false);
     const resumable=state.fitId&&!fit&&await read(join(dataRoot,'probe-fits',state.fitId,'intent.json'));
     const fitBlockedReason=setup.capture?.provenance==='human-recording'?'Human recordings cannot be fitted until calibration is derived from measurement recordings; a declared calibration package is not enough.':!imported?.eligible?'Complete calibration setup and analyze the probe with verified calibration first.':!currentModelId?'A current scientific model and worker are required.':!profile&&!resumable?'Declare the probe placement and controls in Calibration setup.':null;
@@ -59,7 +59,7 @@ export function createProbeRoutes({repo,dataRoot,json,runProcess=execute}) {
    if(req.method!=='POST'||url.pathname.endsWith('/status')){json(res,405,{error:'Method not allowed'});return true;}
    const configuring=url.pathname.endsWith('/setup');
    const chunks=[],limit=configuring?26*1024*1024:4096;let length=0;
-   for await(const chunk of req){length+=chunk.length;if(length>limit)throw Error('Request too large');chunks.push(chunk);}
+   for await(const chunk of req){length+=chunk.length;if(length>limit)throw Object.assign(Error('Request too large'),{status:413});chunks.push(chunk);}
    const raw=Buffer.concat(chunks,length).toString('utf8');
    if(configuring){
     if(busy){json(res,409,{error:'A probe operation is already running'});return true;}
@@ -91,7 +91,7 @@ export function createProbeRoutes({repo,dataRoot,json,runProcess=execute}) {
   }catch(error){
    // A SyntaxError here comes from a saved probe file, never from the request body.
    if(error instanceof SyntaxError){json(res,500,{error:'A saved probe file could not be read. Import the probe again; original artifacts were retained.'});return true;}
-   json(res,400,{error:error.message});return true;
+   json(res,error.status??400,{error:error.message});return true;
   }
  };
 }

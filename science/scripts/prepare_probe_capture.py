@@ -56,7 +56,7 @@ def prepare(data_root, output):
         configuration, _, setup = resolve_setup(root)
     except (ValueError, OSError):
         configuration, setup = None, None
-        setup_error = 'Saved calibration setup could not be verified; upload its original evidence again in Calibration setup.'
+        setup_error = 'Saved calibration setup could not be verified. Save the setup again with its original evidence.'
     # A setup binds one capture manifest; retain an uncalibrated review of any other
     # capture so its own setup can be completed in-app instead of failing import.
     if setup and setup['manifestSha256'] != hashlib.sha256((capture/'manifest.json').read_bytes()).hexdigest():

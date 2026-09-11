@@ -27,7 +27,7 @@ export interface ProbePlacement { placement_id: string; coordinate_frame: string
 export interface ProbeProfile { JA: number; gain: number; direct_gain: number; coupling_gain: number; delay_s: number }
 export interface ProbeSetupStatus {
   setup: ProbeSetupReceipt | null;
-  capture: { importId: string; captureId: string; manifestSha256: string; provenance: string; pose: string | null; placementId: string | null; routeSignature: string | null } | null;
+  capture: { importId: string; captureId: string; manifestSha256: string; provenance: string; declaredProvenance: string; pose: string | null; placementId: string | null; routeSignature: string | null } | null;
   legacyConfiguration: boolean;
   error?: string;
 }

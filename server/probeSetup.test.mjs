@@ -2,7 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import {once} from 'node:events';
-import {mkdtemp,readFile,writeFile,rm,readdir} from 'node:fs/promises';
+import {mkdtemp,readFile,writeFile,rm,readdir,mkdir,utimes} from 'node:fs/promises';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {createProbeRoutes} from './probe.mjs';
@@ -52,6 +52,16 @@ test('actual route verifies original calibration, atomically saves setup and rei
  // Failed attempts, including one that failed during verification, leave no setup folder or evidence copy.
  assert.deepEqual(await setups(),[]);
  await assert.rejects(readFile(join(fixture.dataRoot,'probe-setup-current.json')),error=>error.code==='ENOENT');
+ // Crash leftovers older than any verification are swept; a recent staging folder may be another process's save.
+ const setupsRoot=join(fixture.dataRoot,'probe-setups'),old=new Date(Date.now()-3600e3);
+ for(const name of ['.staging-stale','.staging-recent'])await mkdir(join(setupsRoot,name),{recursive:true});
+ await writeFile(join(fixture.dataRoot,'probe-setup-stale.pending'),'{}');
+ await utimes(join(setupsRoot,'.staging-stale'),old,old);await utimes(join(fixture.dataRoot,'probe-setup-stale.pending'),old,old);
+ await mkdir(join(setupsRoot,'leftover'));
+ const leftover=await call('setup',{...request,requestId:'leftover'});assert.equal(leftover.status,400);assert.match(leftover.body.error,/exists without a saved receipt/);
+ await rm(join(setupsRoot,'leftover'),{recursive:true});
+ assert.deepEqual((await readdir(setupsRoot)).sort(),['.staging-recent']);await assert.rejects(readFile(join(fixture.dataRoot,'probe-setup-stale.pending')),{code:'ENOENT'});
+ await rm(join(setupsRoot,'.staging-recent'),{recursive:true});
  const saved=await call('setup',request);assert.equal(saved.status,200);assert.equal(saved.body.setup.eligible,true);assert.equal(saved.body.setup.includedInFit,false);assert.equal(saved.body.setup.calibrationAuthenticityVerified,false);
  assert.equal((await call('setup',request)).status,200);
  status=(await call('status')).body;assert.equal(status.setup.setup.setupId,'setup-one');assert.equal(status.import.eligible,false);assert.equal(status.canFit,false);
@@ -89,4 +99,14 @@ test('a reference-object capture still freezes a declared-measured setup and imp
  assert.equal(saved.status,200);assert.equal(saved.body.setup.provenance,'physical-reference');assert.equal(saved.body.setup.calibrationAuthenticityVerified,false);
  assert.equal((await call('import',{requestId:'import-reference-calibrated'})).status,202);
  status=await poll(call);assert.equal(status.import.eligible,true);assert.equal(status.import.setupId,'declared-measured');
+});
+
+test('an iPhone-shaped capture relabelled as a software fixture is reported and refused as a human recording',async t=>{
+ const {fixture,call,setups}=await serve(t,{manifest:{provenance:'software-fixture',route:{output:'Speaker'},calibration:{placementId:'fixture-placement',deviceResponseCalibrated:false}}});
+ assert.equal((await call('import',{requestId:'import-relabelled'})).status,202);
+ const status=await poll(call);
+ assert.equal(status.setup.capture.provenance,'human-recording');assert.equal(status.setup.capture.declaredProvenance,'software-fixture');assert.equal(status.measurement.provenance,'human-recording');
+ const refused=await call('setup',{...fixture.request,importId:status.import.importId});
+ assert.equal(refused.status,400);assert.match(refused.body.error,/declared, not measured.*Manifest says software-fixture but carries iPhone recorder fields \(route, calibration.deviceResponseCalibrated\)/);
+ assert.deepEqual(await setups(),[]);
 });

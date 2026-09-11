@@ -41,4 +41,3 @@ dist-ssr
 
 # Python bytecode from tests that import scripts/*.py
 __pycache__/
-.local-probe-setup-qa/
