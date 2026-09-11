@@ -13,8 +13,8 @@ const canvas=document.createElement('canvas');canvas.width=canvas.height=448;con
 const video=document.createElement('video');video.muted=true;video.srcObject=canvas.captureStream(30);
 const frame={current:{face:[],pose:[],timestamp:0,metrics:{mouthOpen:1,headTilt:0,shoulderTilt:0,brightness:1,motion:0},tongueSearch:{x:0,y:0,width:1,height:1}}};
 const anatomy=createAnatomyMotion(),motion={current:anatomy.state};
-let tracker,raf=0;const face=Array.from({length:309},()=>({x:.5,y:.5}));
-const tick=now=>{frame.current.timestamp=now;const pixels=context.getImageData(0,0,448,448).data;frame.current.tongue=tracker(pixels,448,448,face,now);frame.current.tongueDiagnostic=tracker.diagnostics();frame.current.tongueStatus=frame.current.tongueDiagnostic.reason;anatomy.update({...frame.current},false,now);raf=requestAnimationFrame(tick);};
+window.crop={x:0,y:0,width:1,height:1};let tracker,raf=0;const face=Array.from({length:309},()=>({x:.5,y:.5}));
+const tick=now=>{frame.current.timestamp=now;const pixels=context.getImageData(0,0,448,448).data;frame.current.tongue=tracker(pixels,448,448,face,now,window.crop);frame.current.tongueDiagnostic=tracker.diagnostics();frame.current.tongueStatus=frame.current.tongueDiagnostic.reason;anatomy.update({...frame.current},false,now);raf=requestAnimationFrame(tick);};
 window.setup=async()=>{const image=new Image();image.src='/public-example';await image.decode();context.drawImage(image,0,0,448,448);await video.play();
  createRoot(document.getElementById('root')).render(React.createElement(TongueLab,{video:{current:video},frame,close:()=>{document.getElementById('root').textContent='Closed';}}));
  createRoot(document.getElementById('side')).render(React.createElement(SideAnatomyPanel,{motion}));
@@ -23,6 +23,8 @@ window.setup=async()=>{const image=new Image();image.src='/public-example';await
 window.check=()=>({diagnostic:tracker.diagnostics(),tongue:frame.current.tongue,motion:createAnatomyMotion().update(frame.current,false,performance.now()).tongue,shared:{...anatomy.state.tongue}});
 // Sample every frame: a region shown continuously must never drop between results.
 window.continuity=milliseconds=>new Promise(resolve=>{const start=performance.now(),seen=new Map();let frames=0,missing=0;const sample=now=>{frames++;const t=frame.current.tongue;if(!t)missing++;else if(!seen.has(t.observedAt))seen.set(t.observedAt,now-t.observedAt);if(now-start<milliseconds)requestAnimationFrame(sample);else resolve({frames,missing,results:seen.size,lags:[...seen.values()]});};requestAnimationFrame(sample);});
+// Move the mouth crop while a result computed on the old crop is still held: that result must keep the old crop's mapping.
+window.moveCrop=(crop,milliseconds)=>new Promise(resolve=>{const movedAt=performance.now(),seen=new Map();window.crop=crop;const sample=now=>{const t=frame.current.tongue;if(t?.box)seen.set(t.observedAt,{before:t.observedAt<movedAt,box:t.box});if(now-movedAt<milliseconds)requestAnimationFrame(sample);else resolve([...seen.values()]);};requestAnimationFrame(sample);});
 window.restart=()=>{tracker.close();tracker=createNeuralTongueTracker();};
 window.calibrate=()=>{tracker.resetMotionReference();window.calibratedAt=performance.now();};
 window.hold=()=>cancelAnimationFrame(raf);
@@ -33,13 +35,15 @@ window.grayInference=async()=>{const network=await loadTongueNetwork();try{const
 await window.setup();
 </script></body></html>`;
 
-type Harness={check():{diagnostic:{reason:string;capability?:string;abstained?:boolean};tongue?:Record<string,unknown>&{trackingMode?:string};motion:{visible:boolean;extension:number};shared:{visible:boolean;lift:number;extension:number}};continuity(ms:number):Promise<{frames:number;missing:number;results:number;lags:number[]}>;calibrate():void;calibratedAt:number;restart():void;hold():void;resume():void;showGray():void;stop():void;grayInference():Promise<{kind:string;result:{box:unknown};milliseconds:number}>};
+type Harness={check():{diagnostic:{reason:string;capability?:string;abstained?:boolean};tongue?:Record<string,unknown>&{trackingMode?:string};motion:{visible:boolean;extension:number};shared:{visible:boolean;lift:number;extension:number}};continuity(ms:number):Promise<{frames:number;missing:number;results:number;lags:number[]}>;calibrate():void;calibratedAt:number;crop:{x:number;y:number;width:number;height:number};moveCrop(crop:{x:number;y:number;width:number;height:number},ms:number):Promise<{before:boolean;box:number[]}[]>;restart():void;hold():void;resume():void;showGray():void;stop():void;grayInference():Promise<{kind:string;result:{box:unknown};milliseconds:number}>};
 // The window handle is passed as the function's argument, so harness calls stay typed.
 const harness=(page:Page)=>async<T>(fn:(w:Harness)=>T|Promise<T>):Promise<T>=>{const w=await page.evaluateHandle(()=>window);try{return await w.evaluate(fn as never) as T;}finally{await w.dispose();}};
 
 test('real public detector: continuous region, independent review export, real-server fallback and labels',async({page,baseURL})=>{
  test.setTimeout(180000);
- const example=process.env.TONGUE_PUBLIC_FIXTURE?await readFile(process.env.TONGUE_PUBLIC_FIXTURE):Buffer.from(await(await fetch(source)).arrayBuffer());
+ const download=async()=>{try{const response=await fetch(source);if(!response.ok)throw Error(`HTTP ${response.status}`);return Buffer.from(await response.arrayBuffer());}
+  catch(error){throw Error(`Could not download the pinned public tongue example (${error instanceof Error?error.message:error}) from ${source}. Offline, set TONGUE_PUBLIC_FIXTURE to a local copy of that file (SHA-256 ${exampleSha}).`);}};
+ const example=process.env.TONGUE_PUBLIC_FIXTURE?await readFile(process.env.TONGUE_PUBLIC_FIXTURE):await download();
  expect(createHash('sha256').update(example).digest('hex')).toBe(exampleSha);
  // /api goes to the real app server: its answer for an absent personal model is the fallback trigger under test.
  const vite=await createServer({root:process.cwd(),logLevel:'warn',optimizeDeps:{include:['react','react-dom/client','three']},server:{host:'127.0.0.1',port:0,proxy:{'/api':{target:baseURL,changeOrigin:true}}},plugins:[{name:'tongue-runtime-entry',configureServer(server){
@@ -64,6 +68,15 @@ test('real public detector: continuous region, independent review export, real-s
   const continuity=await run(w=>w.continuity(4000));
   expect(continuity.missing).toBe(0);expect(continuity.results).toBeGreaterThanOrEqual(3);
   console.log('Region continuity:',{frames:continuity.frames,results:continuity.results,lagMilliseconds:continuity.lags.map(Math.round)});
+  const full=(await run(w=>w.check())).tongue!.box as number[],half={x:.5,y:.25,width:.5,height:.5};
+  const moved=await run(w=>w.moveCrop({x:.5,y:.25,width:.5,height:.5},2500));
+  const held=moved.filter(r=>r.before),fresh=moved.filter(r=>!r.before);
+  expect(held.length).toBeGreaterThanOrEqual(1);expect(fresh.length).toBeGreaterThanOrEqual(1);
+  for(const r of held)r.box.forEach((v,i)=>expect(v).toBeCloseTo(full[i],6));
+  const mapped=[half.x+full[0]*half.width,half.y+full[1]*half.height,half.x+full[2]*half.width,half.y+full[3]*half.height];
+  for(const r of fresh)r.box.forEach((v,i)=>expect(v).toBeCloseTo(mapped[i],6));
+  await run(w=>{w.crop={x:0,y:0,width:1,height:1};w.calibrate();});
+  await expect.poll(()=>run(w=>{const t=w.check().tongue;return !!t&&(t.observedAt as number)>w.calibratedAt;}),{timeout:10000}).toBe(true);
 
   const observed=await run(w=>w.check());
   expect(Object.keys(observed.tongue!).sort()).toEqual(['box','confidence','observedAt','trackingMode']);

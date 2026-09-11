@@ -11,10 +11,10 @@ test('review retains a region box and acquisition time without inventing a tip o
 });
 test('only a current region abstention is a miss; stale, pending, loading and unavailable results record nothing',()=>{
  const region={state:'lost',capability:'region'} as const;
- assert.deepEqual(reviewPrediction({tongueDiagnostic:{...region,reason:'TongueSAM cannot identify a visible tongue region',abstained:true}} as TrackingFrame,crop),{regionPrediction:null});
+ assert.deepEqual(reviewPrediction({tongueDiagnostic:{...region,reason:'No visible tongue region found',abstained:true}} as TrackingFrame,crop),{regionPrediction:null});
  // An expired or not-yet-arrived result keeps the last display text but is not an abstention.
- assert.deepEqual(reviewPrediction({tongueDiagnostic:{...region,state:'tracking',reason:'TongueSAM visible-region box · tip and depth unavailable',abstained:false}} as TrackingFrame,crop),{});
- assert.deepEqual(reviewPrediction({tongueDiagnostic:{state:'selected',capability:'region',reason:'TongueSAM baseline ready · visible region only',abstained:false}} as TrackingFrame,crop),{});
+ assert.deepEqual(reviewPrediction({tongueDiagnostic:{...region,state:'tracking',reason:'Visible tongue region found · no tip or depth',abstained:false}} as TrackingFrame,crop),{});
+ assert.deepEqual(reviewPrediction({tongueDiagnostic:{state:'selected',capability:'region',reason:'Tongue region detector ready · no tip or depth',abstained:false}} as TrackingFrame,crop),{});
  assert.deepEqual(reviewPrediction({tongueDiagnostic:{state:'lost',reason:'Tongue baseline is unavailable',abstained:false}} as TrackingFrame,crop),{});
  assert.deepEqual(reviewPrediction({} as TrackingFrame,crop),{});
 });
