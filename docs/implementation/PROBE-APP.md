@@ -41,7 +41,7 @@ declared, not measured; no measured-calibration evidence was derived". Saving a
 setup for such a capture returns that reason, the legacy private configuration
 gets the same result, and the fitter also rejects probe records marked as
 human recordings (it sees only the document it is given). For a human capture the panel explains this and does not offer the form.
-Software-fixture and physical-reference captures keep the calibrated path below.
+Software-fixture captures keep the calibrated path below; a physical-reference capture reaches it only through a command-line import without a receipt.
 
 The source kind comes from the manifest's own fields, not only its `provenance`
 label. A manifest with any field only the iPhone recorder writes is treated as a
@@ -172,8 +172,11 @@ the original model binding and the body-size limits and timing.
 HTTP route, subprocess importer and generated original PCM: missing, corrupt,
 unsafe and reserved evidence rejection, prior/grid rejection, no folders after
 failed attempts, atomic publication and hash-bound calibrated reimport; a human
-recording refused through setup and through a private configuration; and a
-physical-reference capture that still saves and imports eligible.
+recording refused through setup and through a private configuration; a pulled
+capture labelled physical-reference refused as a human recording with the reason
+"Manifest says physical-reference but its pull receipt shows it was copied from an
+iPhone by devicectl"; stripped-fixture and contradicted-receipt captures refused;
+and importer file errors shown without a private path.
 `npx playwright test tests/probe-setup-runtime.spec.ts tests/probe-app.spec.ts`
 uses the default config (real build and server, isolated data). It uploads real
 calibration files, checks the automatic analysis after saving, a second capture
