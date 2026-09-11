@@ -1,7 +1,7 @@
 # Canonical waveform-conditioned finite-candidate fitting
 
 `singing_physics.pcm_inverse.fit_pcm(engine, document, *, candidates,
-max_synthesis_calls=128, node_binary=None)` ranks explicit candidate hypotheses
+max_synthesis_calls=128, node_binary=None, objective='canonical-coarse-v1')` ranks explicit candidate hypotheses
 using **real synthesized PCM** passed through B's unchanged
 `extractAudioMeasurement` in `src/lib/audio.ts`. It does not compare a tract
 transfer function to microphone data. The Node bridge also invokes B's contract
@@ -11,7 +11,10 @@ argument is for trusted local callers, not remote job parameters.
 The observation document has `schema_version: "0.1.0"`,
 `kind: "canonical_pcm_observations"`, and a `trials` array. Each trial requires
 `id`, `pose`, `measurement` (the actual KIT AudioMeasurement object),
-`sample_rate_hz`, `frame_start_sample`, `frame_size`, and `duration_s`.
+`sample_rate_hz`, `frame_start_sample`, `frame_size`, and `duration_s`. A trial
+may also carry `spectral_observation` together with `frame_sha256`, the SHA-256
+of the exact float32 frame; the spectral objective requires them (see
+`docs/physiology/WAVE3_SPECTRAL_OBJECTIVE.md`).
 For example, a 0.25-second source may use rate 44100, frame start 4410 and
 frame size 4096, corresponding to the window starting at 100 ms.
 
@@ -35,13 +38,17 @@ bounded [-5,-1] search profile; F0 is Hz; gain is a dimensionless positive **dig
 amplitude multiplier**, not measured vocal effort, tissue mechanics or dB SPL.
 Candidates share anatomical parameters across all calibration trials, while F0,
 JA and gain are per-trial nuisance/dynamic choices. No anatomy is derived from
-pitch alone. The fixed-anatomy comparison repeats the identical candidate control
-list and exactly the same number of actual native synthesis calls. A strict
-preflight cap rejects grids that cannot finish both models within budget. All
+pitch alone. Gain multiplies the frame after synthesis, so candidates that differ
+only by gain share one native waveform per anatomy, pose, JA, F0 and duration;
+their predictions and scores are unchanged. The fixed-anatomy comparison repeats
+the identical candidate control list and reuses exactly where the joint model does,
+so both models make the same number of actual native synthesis calls.
+`planned_synthesis_calls(document, candidates)` gives that per-model count, and a
+strict preflight cap rejects grids that cannot finish both models within budget. All
 candidate scores/missing outcomes remain available; missing candidate descriptors
 or clipping cannot improve a score by dropping dimensions.
 
-The five descriptors are dBFS, spectral centroid, flatness, pitch and periodicity.
+With the default objective the five descriptors are dBFS, spectral centroid, flatness, pitch and periodicity.
 Fixed discrepancy scales are 3 dB, 250 Hz, 0.1, 20 Hz and 0.1 respectively; larger
 reported measurement uncertainty replaces the corresponding scale. These are
 engineering scales, **not a calibrated likelihood**. The selected candidate is a
@@ -50,8 +57,15 @@ or a posterior. Unknown room filters, microphone response and source mechanics
 remain unsupported. Human canonical measurements are accepted only under these
 explicit conditional assumptions.
 
+The spectral objective `multires-log-spectrum-v1` replaces this pooled residual
+with the bounded shape/level/pitch/periodicity discrepancy described in
+`docs/physiology/WAVE3_SPECTRAL_OBJECTIVE.md`. Per-trial scoring is
+`score_prediction` and `candidate_discrepancy`; independent evaluations call the
+same functions.
+
 Result keys include `joint` and `fixed_anatomy_baseline`, each with all candidates,
-nullable `best`, and actual call counts; canonical extractor/contract source-code
+nullable `best`, actual native call counts and `evaluated_predictions`;
+`objective`, `objective_policy` and `synthesis_reuse`; canonical extractor/contract source-code
 hashes and versions; native provenance; input/grid hashes; feature scales;
 missing outcomes; and limitations. Observed source hashes are structurally checked,
 not verified against original audio bytes by this measurement-only API

@@ -19,7 +19,10 @@ The freeze records caller time and an actual server seal timestamp.
 `design_pcm(snapshot, *, expected_digest, design_id, target_observation_id,
 generated_at, experiments, feature_scales, minimum_separation=1,
 retention_margin=1, maximum_discrepancy=2, max_synthesis_calls=64,
-node_binary=None, profile=None)` returns a sealed `frozen_pcm_experiment_design` artifact.
+node_binary=None, profile=None, objective='canonical-coarse-v1')` returns a sealed `frozen_pcm_experiment_design` artifact.
+With `objective='multires-log-spectrum-v1'`, pair separation and later scores use
+the spectral discrepancy (`docs/physiology/WAVE3_SPECTRAL_OBJECTIVE.md`), and pitch
+and periodicity scales must be declared.
 
 Each experiment declares exactly `experiment_id`, native `pose`, `JA`, `f0_hz` and
 positive scalar `gain`. Bounds are JA −5 to −1 degrees, F0 65–1000 Hz and gain
@@ -92,7 +95,13 @@ independence. Earlier snapshots and designs remain unchanged and retain eliminat
 alternatives for audit. No irreversible scientific certainty is claimed.
 
 Native provenance includes geometry basis/library identity. Extractor and contract
-source hashes must remain unchanged across design and update. Canonical prediction
+source hashes must remain unchanged across design and update. Each design records
+`objective`, `objective_policy` and `scorer_implementation_pin` (hashes of the Python
+scoring modules and the extractor bridge script, plus NumPy/SciPy versions, computed
+once when the process imports them). Selection and update reject a design whose pin
+differs from the running code. Designs sealed before pins existed are still accepted
+for the coarse objective and the update reports `scorer_pin_status:
+legacy_version_unverified`; otherwise it reports `verified`. Canonical prediction
 features, hypotheses and score/status bindings are checked on update. Digests protect
 content identity and internal consistency; they are not cryptographic authentication
 of externally supplied assertions.
