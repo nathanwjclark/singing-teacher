@@ -84,7 +84,8 @@ export function createAstraRoutes({dataRoot,json,provider,fetchImpl=fetch,callBu
         prompt.visual=visualContextFromState(state);
         prompt.motionAudio=await readMotionContext({dataRoot,sessionId:context.sessionId,modelId:state.snapshot.model_id});
         prompt.controlLearning=controlContextFromState(state);
-        const cueBindings=state.control_bindings||{},cueBindingIds=Object.keys(cueBindings);
+        // Only bindings Astra can see in its bounded context may be chosen.
+        const cueBindings=state.control_bindings||{},cueBindingIds=prompt.controlLearning.bindings.map(binding=>binding.bindingId);
         if(cueBindingIds.length)prompt.controlLearning.scope='To repeat a delivered cue exactly, set cueBindingId to its bindingId; the app then delivers that frozen wording verbatim in place of your cue text. Choose only a binding whose context vowel matches the selected experiment. Use null to write a new cue; new wording starts a new binding with zero matched attempts. At least three matched attempts are needed before execution weights leave uniform.';
         const dir=resolve(dataRoot,'astra-decisions',context.sessionId);await mkdir(dir,{recursive:true,mode:0o700});path=resolve(dir,input.requestId+'.json');receipt={requestId:input.requestId,sessionId:context.sessionId,runId:context.runId,modelId:state.snapshot.model_id,status:'running',goal:input.goal||'',createdAt:new Date().toISOString(),input:prompt,sessionVersion:state.version};await save(path,receipt);
         const teachingEnabled=process.env.VISUAL_TEACHING_ENABLED==='1';
@@ -96,7 +97,7 @@ export function createAstraRoutes({dataRoot,json,provider,fetchImpl=fetch,callBu
         if(!decision||Object.keys(decision).sort().join(',')!==[...schema.required,...(teachingEnabled?['demonstrationId','cueId']:[]),...(cueBindingIds.length?['cueBindingId']:[])].sort().join(',')||!['record','rest'].includes(decision.action)||!['cue','explanation'].every(k=>typeof decision[k]==='string'&&decision[k].trim().length>0&&decision[k].length<=2000)|| (decision.action==='rest'?decision.experimentId!==null:!options.some(r=>r.experiment.experiment_id===decision.experimentId)))throw failure('Astra returned an unsupported decision',502);
         if(teachingEnabled){const demonstration=teachingCatalog.demonstrations.find(d=>d.id===decision.demonstrationId);if((decision.demonstrationId!==null&&!demonstration)||decision.cueId!==null||(decision.action==='rest'&&(decision.demonstrationId!==null||decision.cueId!==null)))throw failure('Astra returned an unsupported teaching selection',502);}
         let providerCue;
-        if(cueBindingIds.length&&decision.cueBindingId!==null){const binding=Object.hasOwn(cueBindings,decision.cueBindingId)?cueBindings[decision.cueBindingId]:null,selected=options.find(r=>r.experiment.experiment_id===decision.experimentId);
+        if(cueBindingIds.length&&decision.cueBindingId!==null){const binding=cueBindingIds.includes(decision.cueBindingId)?cueBindings[decision.cueBindingId]:null,selected=options.find(r=>r.experiment.experiment_id===decision.experimentId);
           if(decision.action==='rest'||!binding||binding.context.vowel!==selected.experiment.pose)throw failure('Astra returned an unsupported cue binding',502);
           // The frozen wording is delivered verbatim; the provider's own text is kept for audit.
           if(decision.cue!==binding.cue.wording){providerCue=decision.cue;decision={...decision,cue:binding.cue.wording};}}

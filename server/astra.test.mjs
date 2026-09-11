@@ -127,3 +127,12 @@ test('cue bindings for another vowel, unknown bindings, rest bindings and missin
  }
  const plain=await setup(t);await plain.request({requestId:'plain'});assert.equal(plain.commands.at(-1).action,'select_experiment');
 });
+test('the cue binding choice covers only bindings present in the bounded Astra context',async t=>{
+ const s=await withBindings(t,{action:'record',experimentId:'a',cue:'ah',explanation:'Repeat a binding dropped from context.',cueBindingId:'cue-0'});
+ const long='Sing an easy ah. '+'x'.repeat(400);
+ s.state.control_bindings=Object.fromEntries(Array.from({length:80},(_,i)=>['cue-'+i,{...cueBinding('a',long+i),declared_at:new Date(Date.UTC(2026,8,11,0,0,i)).toISOString()}]));
+ const result=await s.request({requestId:'dropped'});assert.equal(result.status,502);
+ const {schema,input}=s.seen(),visible=input.controlLearning.bindings.map(b=>b.bindingId);
+ assert.equal(input.controlLearning.truncated,true);assert.ok(!visible.includes('cue-0'));assert.ok(visible.includes('cue-79'));
+ assert.deepEqual(schema.properties.cueBindingId.enum,[null,...visible]);
+});
