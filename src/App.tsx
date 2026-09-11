@@ -26,7 +26,7 @@ import { readExperimentLedger, subscribeExperimentLedger } from './experiment/le
 import { evaluatePrediction } from './evaluation'
 import type { PredictionCommit } from './contracts'
 import './components/motion/MotionCapturePanel.css'
-import './components/coach/CoachLearningPanel.css'
+import CoachLearningPanel from './components/coach/CoachLearningPanel'
 import './components/coach/LearningMemoryPanel.css'
 import './phonation/PhonationPanel.css'
 import './phonation/SourceInferencePanel.css'
@@ -44,8 +44,9 @@ import {setModelAdjustments} from './components/science/modelAdjustments'
 import './App.css'
 
 // Panels shown only under Experiments load after the studio. They still mount at start-up (hidden), as before,
-// each as soon as its own chunk arrives. ScientificModelPanel is not among them: it runs the fit that the
-// studio's Pull iPhone flow requests by window event, so it must be listening from the first render.
+// once their chunk arrives. Panels the studio depends on from its first render are imported statically instead:
+// - ScientificModelPanel runs the fit that the studio's Pull iPhone flow requests by window event.
+// - CoachLearningPanel hides the studio and its cues before the first paint during cue-free learning stages.
 // A panel whose chunk fails to load, or that throws while rendering, shows a message in its own place and the
 // studio and other panels keep working. React logs the caught error to the console.
 class PanelBoundary extends Component<{children:ReactNode},{failed:boolean}>{
@@ -60,7 +61,6 @@ const ReproducibilityPanel=panel(lazy(()=>import('./components/experiments/Repro
 const AcousticMappingPanel=panel(lazy(()=>import('./components/experiments/AcousticMappingPanel').then(m=>({default:m.AcousticMappingPanel}))))
 const DepthProtocolPanel=panel(lazy(()=>import('./components/experiments/DepthProtocolPanel').then(m=>({default:m.DepthProtocolPanel}))))
 const MotionCapturePanel=panel(lazy(()=>import('./components/motion/MotionCapturePanel').then(m=>({default:m.MotionCapturePanel}))))
-const CoachLearningPanel=panel(lazy(()=>import('./components/coach/CoachLearningPanel')))
 const LearningMemoryPanel=panel(lazy(()=>import('./components/coach/LearningMemoryPanel')))
 const PhonationPanel=panel(lazy(()=>import('./phonation/PhonationPanel')))
 const SourceInferencePanel=panel(lazy(()=>import('./phonation/SourceInferencePanel').then(m=>({default:m.SourceInferencePanel}))))
