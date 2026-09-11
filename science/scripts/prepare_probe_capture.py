@@ -78,7 +78,9 @@ def prepare(data_root, output):
                   'measurementPath': 'review/probe-measurement.json'}
         if setup_error:
             result['reasons'].append(setup_error)
+    # The fit's re-import must use this same receipt; its hash lets the fit refuse a lost or edited one.
     result.update(importId=output.name, archiveSha256=receipt['sha256'], includedInFit=False,
+                  receiptSha256=hashlib.sha256((output/'usb-receipt.json').read_bytes()).hexdigest(),
                   captureDirectory=str(capture.relative_to(output)))
     write(output/'summary.json', result)
     return result

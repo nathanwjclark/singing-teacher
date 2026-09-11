@@ -126,11 +126,8 @@ def test_original_probe_runs_joint_session_adoption(tmp_path, monkeypatch,crash_
         (root/'probe-fit-profile.json').write_text(json.dumps({'JA':-3.,'gain':1.,'direct_gain':1.,'coupling_gain':1.,'delay_s':0.}))
         imported.mkdir(parents=True)
         # Importer verifies original capture bytes again inside runner, not review JSON.
+        # A direct import: no pull receipt, so the fit re-imports without one.
         shutil.copytree(fixture['capture'],imported/'capture')
-        with zipfile.ZipFile(imported/'original.zip','w') as z:
-            for source in (imported/'capture').iterdir():z.write(source,source.name)
-        raw=(imported/'original.zip').read_bytes()
-        (imported/'usb-receipt.json').write_text(json.dumps({'name':'probe-known-filter-fixture.zip','bytes':len(raw),'sha256':hashlib.sha256(raw).hexdigest(),'acquisition':FIXTURE_ACQUISITION}))
         (imported/'summary.json').write_text(json.dumps({'eligible':True,'captureDirectory':'capture'}))
     voice=root/'science-runs'/'voice';voice.mkdir(parents=True)
     (root/'science-current.json').write_text(json.dumps({'status':'succeeded','runId':'voice'}))
@@ -174,6 +171,8 @@ def test_original_probe_runs_joint_session_adoption(tmp_path, monkeypatch,crash_
         assert result['modelId']!=parent['model_id']
         assert result['score']['probe_discrepancy']>100
         assert (root/'probe-fits/fit/session-ledger.json').exists()
+        reimport=json.loads(next((root/'probe-fits/fit').glob('verification-*/import/probe-science-receipt.json')).read_text())
+        assert reimport['attestation']==('repository-fixture-receipt' if app_setup else 'none')
         if app_setup:
             intent=json.loads((root/'probe-fits/fit/intent.json').read_text())
             assert intent['setupId']=='original-setup' and intent['configurationSha256']==original['configurationSha256']
@@ -184,3 +183,25 @@ def test_original_probe_runs_joint_session_adoption(tmp_path, monkeypatch,crash_
         assert run_probe_fit.run(root,'imported',parent['model_id'],root/'probe-fits'/'fit')==result
         assert controller.execute({'action':'state'})['state']['version']==version
         assert len([j for j in state['jobs'] if j['request']['operation']=='fit_probe_pcm'])==1
+
+
+@pytest.mark.parametrize('change',['missing','edited'])
+def test_fit_refuses_a_pulled_import_whose_receipt_was_lost_or_edited(tmp_path,change):
+    from science.scripts import run_probe_fit
+    descriptor=tmp_path/'fixture.json'
+    subprocess.run(['node','--experimental-strip-types','--input-type=module','-e',
+        "import {setupFixture} from './science/scripts/import_probe_science.test.ts'; import {writeFile} from 'node:fs/promises'; await writeFile(process.argv[1],JSON.stringify(await setupFixture()));",str(descriptor)],
+        cwd=ROOT,check=True,capture_output=True)
+    fixture=json.loads(descriptor.read_text())
+    try:
+        root,_=archive_fixture(tmp_path)
+        prepare(root,root/'probe-imports'/'review')
+        save_setup(root,'review','setup',fixture['config'],Path(fixture['root'])/'calibration-evidence.txt',-3.)
+        assert prepare(root,root/'probe-imports'/'imported')['eligible']
+        receipt=root/'probe-imports'/'imported'/'usb-receipt.json'
+        if change=='missing':receipt.unlink()
+        else:receipt.write_text(json.dumps({**json.loads(receipt.read_text()),'acquisition':None}))
+        with pytest.raises(ValueError,match='USB pull receipt recorded when this probe was analyzed is missing or changed'):
+            run_probe_fit.run(root,'imported','any-model',root/'probe-fits'/'fit')
+    finally:
+        shutil.rmtree(fixture['root'])

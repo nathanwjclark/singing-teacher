@@ -102,6 +102,14 @@ def _run(root, import_id, expected_model_id, output):
     imported = root/'probe-imports'/import_id
     summary = json.loads((imported/'summary.json').read_text())
     if not summary['eligible']: raise ValueError('Probe calibration/import is not eligible for fitting')
+    # An import analyzed from a USB pull is re-imported with that same pull receipt, so losing or editing the receipt
+    # cannot downgrade it to the no-receipt rule. An import made without a receipt is re-imported without one.
+    receipt=imported/'usb-receipt.json'
+    if 'archiveSha256' in summary:
+        try:pulled=hashlib.sha256(receipt.read_bytes()).hexdigest()
+        except FileNotFoundError:pulled=None
+        if pulled is None or pulled!=summary.get('receiptSha256'):
+            raise ValueError('The USB pull receipt recorded when this probe was analyzed is missing or changed; analyze the latest probe again before fitting')
     current = json.loads((root/'science-current.json').read_text())
     if current.get('status') != 'succeeded': raise ValueError('Complete a voice model fit first')
     run_dir = root/'science-runs'/current['runId']
@@ -120,7 +128,7 @@ def _run(root, import_id, expected_model_id, output):
     verified=Path(tempfile.mkdtemp(prefix='verification-',dir=output))/'import'
     subprocess.run(['node','--experimental-strip-types',str(ROOT/'science/scripts/import_probe_science.ts'),
                     str(imported/summary['captureDirectory']),str(verified),
-                    str(configuration),str(imported/'usb-receipt.json')], check=True, stdout=subprocess.DEVNULL)
+                    str(configuration),*([str(receipt)] if 'archiveSha256' in summary else [])], check=True, stdout=subprocess.DEVNULL)
     document = json.loads((verified/'probe-science-document.json').read_text())
     if document is None: raise ValueError('Probe evidence is no longer eligible')
     fit = json.loads((run_dir/'fit.json').read_text())
