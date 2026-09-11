@@ -91,6 +91,8 @@ def test_repeated_delivered_cue_changes_the_fourth_forecast(tmp_path):
             # A retry of the same attempt returns the stored receipt instead of scoring twice.
             assert call('/api/control/score', False)['result']['jobId'] == scored['jobId']
             if round == 0:
+                # The decision's prediction is used; freezing again needs a new Astra decision.
+                assert 'already used' in call('/api/control/forecast', False, expected=409)['error']
                 # Export while the ledger replay is within the exporter's 24 MiB bound; every event
                 # stores the full session state, so a long session exceeds it (see CONTROL_PCM.md).
                 exported = call('/api/session-export')
