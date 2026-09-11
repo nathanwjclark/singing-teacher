@@ -15,7 +15,7 @@ def test_matched_source_alternatives_fit_finite_budget(count):
     assert len(candidates)==count*len(support)<=16
     for hypothesis in hypotheses:
         assert [{'PS':row['trials']['source-trial']['PS']} for row in candidates if row['anatomy']==hypothesis['anatomy']]==support
-    assert 3*len(candidates)<=48
+    assert 3*len(candidates)<=48 and {row['trials']['source-trial']['gain'] for row in candidates}=={4.}
     if count==5:assert 3*len(candidates)==30
 
 
