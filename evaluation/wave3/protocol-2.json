@@ -1,0 +1,62 @@
+{
+  "version": "wave3-independent-2",
+  "supersedes": "wave3-independent-1 (protocol.json). Its results in results/first-*.json stay unchanged; nothing in revision 1 is re-scored.",
+  "revision_reasons": [
+    "Revision 1 fixed per-vowel gains by hand; the held-out e gain of 32 clipped two of four candidate predictions, leaving them unscorable for both objectives. Revision 2 sets each vowel's gain by a declared rule from the frozen prediction bank only.",
+    "Revision 1 counted candidates as tied only within 1e-12, which is no real margin. Revision 2 declares a tie margin.",
+    "Native e/i levels differ by tens of dB between neighbouring anatomies, so held-out error can be mostly level. Revision 2 measures level jumps in the prediction bank before any target exists and reports level separately.",
+    "Revision 1 reimplemented coarse scoring. Revision 2 scores both objectives through the production fit_pcm per-trial scorer.",
+    "Revision 1 tested ambiguity only with exact duplicates and used one held-out vowel. Revision 2 adds a near-duplicate case and three held-out vowels.",
+    "The generating and outside anatomies, source skew and noise seed are new, so no revision-1 target observation is reused. No candidate, objective setting or threshold was chosen from revision-1 held-out scores."
+  ],
+  "evidence_source": "synthetic",
+  "native_source_model": "Geometric glottis",
+  "sample_rate_hz": 44100,
+  "duration_s": 0.25,
+  "frame_start_sample": 4410,
+  "frame_size": 4096,
+  "calibration_poses": ["a", "i"],
+  "heldout_poses": ["e", "o", "u"],
+  "nominal_controls": {"JA": -3.0, "F0": 180.0, "PR": 8000.0},
+  "mismatched_controls": {"JA": -4.2, "F0": 215.0, "PR": 8000.0},
+  "candidate_anatomies": [
+    {"hard_palate_length": 4.2, "lip_width": 0.8},
+    {"hard_palate_length": 4.5, "lip_width": 1.2}
+  ],
+  "candidate_source_skews": [-0.15, 0.15],
+  "near_duplicate": {"of": "anatomy-0-source-0", "anatomy_offset": {"hard_palate_length": 0.02}},
+  "generating_anatomy": {"hard_palate_length": 4.29, "lip_width": 0.92},
+  "generating_anatomy_rule": "30% of the way from candidate anatomy 0 to candidate anatomy 1; absent from the grid",
+  "generating_source_skew": -0.05,
+  "outside_anatomy": {"hard_palate_length": 4.65, "lip_width": 1.4},
+  "outside_anatomy_rule": "Beyond candidate anatomy 1 by half the grid span in each dimension",
+  "gain_rule": {
+    "basis": "Frozen candidate prediction bank only, before any truth or target frame is synthesized",
+    "per_pose": true,
+    "peak_target_dbfs": -12.0,
+    "definition": "gain(pose) = 10^(peak_target_dbfs/20) / max absolute sample over every candidate's native frame for that pose; the same gain is applied to that pose's predictions and truth frames"
+  },
+  "level_jump_check": {
+    "threshold_db": 20.0,
+    "definition": "For each pose, RMS level in dB of each candidate's native frame from the frozen bank; flag the pose when the two anatomies at the same source skew differ by more than the threshold. Flagged held-out poses are reported with level differences next to their scores."
+  },
+  "tie_margin_standardized_rms": 0.1,
+  "tie_rule": "A candidate is in the retained set when sqrt(its mean-square discrepancy) is within the margin of the lowest sqrt(mean-square) for that case, objective and stage. Unscorable candidates are never retained.",
+  "cases": ["clean", "gain", "tilt", "noise", "wrong-fixed-control", "outside-support", "all-missing", "degeneracy", "near-degeneracy"],
+  "stress": {"gain_factor": 0.5, "lowpass_cutoff_hz": 1350.0, "noise_snr_db": 10.0, "noise_seed": 20260911},
+  "hard_synthesis_limit": 40,
+  "synthesis_plan": "5 bank members (4 grid candidates and the near duplicate) x 5 vowels = 25; truth for nominal, wrong-fixed-control and outside-support x 5 vowels = 15",
+  "scoring": "singing_physics.pcm_inverse.score_prediction and candidate_discrepancy, the per-trial scorer inside fit_pcm, for both objectives. Calibration pools both calibration vowels; held-out vowels are scored one at a time.",
+  "comparison": "Both objectives score the same frozen prediction PCM and the same observation frames. Neither objective receives any additional synthesis.",
+  "selection": "Rankings use calibration vowels a and i only and are written before any held-out truth frame is synthesized. Every failed, missing and tied candidate is retained.",
+  "primary_metrics": [
+    "hit: for each evaluable (case, held-out vowel) pair, the calibration retained set contains a member of the held-out retained set (scoring only)",
+    "regret: lowest held-out sqrt(mean-square) among calibration-retained candidates minus the held-out lowest, within one objective",
+    "coverage: scorable candidates per stage, and every failure reason",
+    "ambiguity: retained-set sizes, and whether the near duplicate is separated beyond the margin",
+    "nearest-grid hit (scoring-only truth): whether the calibration retained set contains the grid candidate nearest the generating anatomy and source"
+  ],
+  "evaluable_cases": ["clean", "gain", "tilt", "noise", "wrong-fixed-control", "outside-support"],
+  "decision_rule": "Over the 18 evaluable (case, held-out vowel) pairs: positive for the spectral objective if its hit count exceeds coarse by at least 3 with no more unscorable pairs than coarse; negative if coarse exceeds spectral by at least 3; otherwise inconclusive. The numerical scales of the two objectives differ, so raw discrepancy values are not compared across objectives.",
+  "interpretation": "Conditional finite-support stress test on synthetic native audio. No anatomical uniqueness, calibrated probability, tissue recovery or human efficacy inference."
+}

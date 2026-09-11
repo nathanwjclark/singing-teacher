@@ -103,6 +103,14 @@ def _features(record):
     return features
 
 
+def observation_target(record):
+    """Canonical descriptors of one observed frame; at least three must be present."""
+    target = _features(record)
+    if sum(m['value'] is not None for m in target.values()) < 3:
+        raise ValueError('Insufficient observed canonical descriptors')
+    return target
+
+
 def _synthesis_key(candidate, trial):
     control = candidate['trials'][trial['id']]
     return _hash([candidate['anatomy'], trial['pose'], float(control['JA']), float(control['f0_hz']), float(trial['duration_s'])])
@@ -121,7 +129,7 @@ def planned_synthesis_calls(document, candidates):
 def score_prediction(frame, trial, target, *, objective, measurement_id, node_binary=None):
     """Extract one predicted frame and score it against one validated calibration trial.
 
-    `target` is `_features(trial['measurement'])`. Clipped predictions stay missing.
+    `target` is `observation_target(trial['measurement'])`. Clipped predictions stay missing.
     fit_pcm and independent evaluations use this so both score with the same code.
     """
     start = trial['frame_start_sample']
@@ -223,12 +231,10 @@ def fit_pcm(engine: Engine, document, *, candidates, max_synthesis_calls=128, no
         if intervals.intersection(interval_keys):
             raise ValueError('Duplicate source audio interval')
         intervals.update(interval_keys)
-        targets[trial['id']] = _features(record)
         validate_observation(trial)
         if objective == SPECTRAL_OBJECTIVE and 'spectral_observation' not in trial:
             raise ValueError('Spectral objective requires exact-frame spectral observations; reimport original PCM')
-        if sum(m['value'] is not None for m in targets[trial['id']].values()) < 3:
-            raise ValueError('Insufficient observed canonical descriptors')
+        targets[trial['id']] = observation_target(record)
     candidate_ids = []
     for candidate in candidates:
         if not isinstance(candidate, dict) or set(candidate) != {'candidate_id', 'anatomy', 'trials'}:
