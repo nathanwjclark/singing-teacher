@@ -39,6 +39,8 @@ export interface MotionAnalysisStatus {
  resultCurrent:boolean;currentModelId:string|null;analysisPolicy:string;
  result?:MotionAudioResult|null;availability:{available:boolean;reason:string|null};
 }
+/** A stored result from another analysis version has a different shape; it is reported, not rendered. */
+export const earlierAnalysisVersion=(status:MotionAnalysisStatus)=>!!status.result&&status.result.analysisPolicy!==status.analysisPolicy;
 export const readMotionAnalysis=(captureId:string,signal?:AbortSignal):Promise<MotionAnalysisStatus>=>request('analysis?captureId='+encodeURIComponent(captureId),{signal});
 export const analyzeMotionAudio=(captureId:string,pose:MotionVowel,requestId:string):Promise<MotionAnalysisStatus>=>request('analyze',{
  method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({requestId,captureId,pose,containsExternalExcitation:false})

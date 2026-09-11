@@ -1,5 +1,5 @@
 import {test,expect} from '@playwright/test';
-import {readFile} from 'node:fs/promises';
+import {readFile,writeFile} from 'node:fs/promises';
 import {join} from 'node:path';
 
 // Real app and scientific worker (tests/motion-timeline.config.ts). The baseline is
@@ -81,5 +81,15 @@ test('motion audio timeline shows the time course, gaps with reasons and ambiguo
  await timeline.getByRole('img').screenshot({path:'test-results/motion-timeline/timeline-lambda-0.png'});
  await page.setViewportSize({width:390,height:844});
  await timeline.scrollIntoViewIfNeeded();await page.screenshot({path:'test-results/motion-timeline/timeline-narrow.png'});
+
+ // A result stored by an earlier analysis version (fields renamed or missing) is named, not rendered.
+ const status=await (await request.get('/api/motion/analysis?captureId='+captureId)).json();
+ const stored=join(process.env.MOTION_E2E_DATA!,'app','motion-analyses',captureId,status.analysisId,'summary.json');
+ const earlier=JSON.parse(await readFile(stored,'utf8'));earlier.analysisPolicy='motion-forward-bank-3';
+ for(const row of earlier.temporalAnalysis.sensitivity)delete row.constantComparison.tolerance;
+ await writeFile(stored,JSON.stringify(earlier));
+ await page.setViewportSize({width:1280,height:720});await page.reload();await page.getByRole('button',{name:'Experiments',exact:true}).click();
+ await expect(group).toContainText(`This saved result comes from an earlier analysis version (motion-forward-bank-3); the current version is ${status.analysisPolicy}.`);
+ await expect(group.getByText('Conditional temporal comparison',{exact:true})).toHaveCount(0);
  expect(errors).toEqual([]);
 });

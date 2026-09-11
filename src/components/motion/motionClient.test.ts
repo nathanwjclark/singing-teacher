@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {importMotionCapture,readMotionStatus,motionAssetUrl,readMotionAnalysis,analyzeMotionAudio,rankMotionCandidates,motionAnalysisRequestIdentity} from './motionClient.ts';
+import {importMotionCapture,readMotionStatus,motionAssetUrl,readMotionAnalysis,analyzeMotionAudio,rankMotionCandidates,motionAnalysisRequestIdentity,earlierAnalysisVersion} from './motionClient.ts';
 test('motion uploads preserve original JSON and companion bytes',async()=>{
  const original=globalThis.fetch,raw='{ "original": true }\n';
  globalThis.fetch=async(input,init)=>{
@@ -52,4 +52,13 @@ test('analysis identity keeps uncertain retries stable and renews after a baseli
  assert.notEqual(changed.id,first.id);
  assert.notEqual(motionAnalysisRequestIdentity(changed,'capture','i','model-B','policy-1').id,changed.id);
  assert.notEqual(motionAnalysisRequestIdentity(changed,'capture','a','model-B','policy-2').id,changed.id);
+});
+
+test('a stored result from another analysis version is reported instead of rendered',()=>{
+ const status=(resultPolicy:string|undefined)=>({status:'succeeded',resultCurrent:true,currentModelId:'m',analysisPolicy:'motion-forward-bank-4',availability:{available:true,reason:null},
+  result:{analysisPolicy:resultPolicy}}) as unknown as Parameters<typeof earlierAnalysisVersion>[0];
+ assert.equal(earlierAnalysisVersion(status('motion-forward-bank-4')),false);
+ assert.equal(earlierAnalysisVersion(status('motion-forward-bank-3')),true);
+ assert.equal(earlierAnalysisVersion(status(undefined)),true);
+ assert.equal(earlierAnalysisVersion({...status('x'),result:null}),false);
 });

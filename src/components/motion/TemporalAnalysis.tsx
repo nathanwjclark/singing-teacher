@@ -31,6 +31,7 @@ export function TemporalAnalysis({result}:{result?:TemporalResult}){
 
 function ConstantNote({comparison,lambda,perWindow}:{comparison?:ConstantComparison|null;lambda:number;perWindow?:number}){
  if(!comparison)return <p>No single JA/gain control was scored in every usable window, so no constant path is compared.</p>;
+ if(typeof comparison.tolerance!=='number')return null;
  const constant=`JA ${comparison.JA}°, digital gain ${comparison.gain}`,tolerance=`${comparison.tolerance.toPrecision(3)} (${perWindow} per window)`;
  return comparison.admissible
   ?<p>At λ {lambda} the improvement over the best constant control ({constant}) is within the tolerance {tolerance} at this setting. Measurement noise and pitch-bank switches can also produce improvement.</p>
