@@ -35,3 +35,6 @@ dist-ssr
 .env
 .env.*
 !.env.example
+
+# Throwaway data for the browser-check server
+.local-e2e-data/

@@ -1,2 +1,17 @@
 import { defineConfig } from '@playwright/test';
-export default defineConfig({ testDir: './tests', use: { baseURL: 'http://127.0.0.1:5173', browserName: 'chromium', channel: 'chrome' }, webServer: { command: 'npm run dev -- --host 127.0.0.1', url: 'http://127.0.0.1:5173', reuseExistingServer: !process.env.CI } });
+
+// Browser checks run against the real local app server (built bundle plus its
+// /api routes) on a dedicated port with throwaway data. They never reuse a
+// running developer app, its private captures or a provider credential.
+const port = 5190;
+export default defineConfig({
+  testDir: './tests',
+  use: { baseURL: `http://127.0.0.1:${port}`, browserName: 'chromium', channel: 'chrome' },
+  webServer: {
+    command: 'rm -rf .local-e2e-data && npm run build && node server/local.mjs',
+    url: `http://127.0.0.1:${port}`,
+    env: { PORT: String(port), LOCAL_DATA_DIR: '.local-e2e-data', OPENAI_ENV_FILE: '/dev/null', OPENAI_API_KEY: '' },
+    reuseExistingServer: false,
+    timeout: 180_000,
+  },
+});
