@@ -7,7 +7,7 @@ import {join} from 'node:path';
 // generated native vowel audio with a silent gap, a pitch rise across two bank anchors and one octave jump.
 // Synthetic evidence only: the timeline shows software behaviour, not human anatomy.
 test('motion audio timeline shows the time course, gaps with reasons and ambiguous alternatives',async({page,request})=>{
- const fixture=process.env.MOTION_E2E_FIXTURE;
+ const fixture=process.env.MOTION_E2E_DATA&&join(process.env.MOTION_E2E_DATA,'fixture');
  test.skip(!fixture,'Run with -c tests/motion-timeline.config.ts');
  const errors:string[]=[];
  // Known unrelated app behaviour: learning memory answers 409 until a recorded outcome exists (no outcome is recorded here).
