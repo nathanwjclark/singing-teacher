@@ -36,8 +36,8 @@ def capture(tmp_path):
     (directory/'manifest.json').write_text(json.dumps(manifest));return directory
 
 
-@pytest.mark.parametrize('remote',[False,True])
-def test_native_capture_freezes_authoritative_session_and_verified_export(tmp_path,monkeypatch,remote):
+@pytest.mark.parametrize('remote,objective',[(False,'canonical-coarse-v1'),(True,'canonical-coarse-v1'),(False,'multires-log-spectrum-v1')])
+def test_native_capture_freezes_authoritative_session_and_verified_export(tmp_path,monkeypatch,remote,objective):
     source=capture(tmp_path);output=tmp_path/'run'
     monkeypatch.delenv('SCIENCE_URL',raising=False);monkeypatch.delenv('SCIENCE_TOKEN',raising=False)
     server=None;thread=None
@@ -48,8 +48,19 @@ def test_native_capture_freezes_authoritative_session_and_verified_export(tmp_pa
         monkeypatch.setenv('SCIENCE_URL',f'http://127.0.0.1:{server.server_port}')
         monkeypatch.setenv('SCIENCE_TOKEN','t'*48)
     try:
-        summary=live.run(source,output,development_fixture=True)
+        summary=live.run(source,output,development_fixture=True,objective=objective)
         assert summary['source']=='development-fixture' and not summary['anatomyValidated']
+        assert summary['objective']==summary['forecast']['objective']==objective
+        assert summary['objectivePolicy']==summary['forecast']['objective_policy']
+        assert summary['forecast']['scorer_implementation_pin']['version']=='pcm-scorer-pin-1'
+        protocol=json.loads((output/'protocol.json').read_text())
+        observations=json.loads((output/'observations.json').read_text())['trials']
+        spectral=objective=='multires-log-spectrum-v1'
+        assert ('spectral_nuisance' in protocol)==spectral
+        assert all(('spectral_observation' in t)==('frame_sha256' in t)==spectral for t in observations)
+        if spectral:
+            assert all(t['spectral_observation']['frame_sha256']==t['frame_sha256'] not in t['measurement']['provenance']['sourceHashes'] for t in observations)
+            assert json.loads((output/'fit.json').read_text())['source_artifact_bytes_verified'] is False
         assert len(summary['jobs'])==4 and summary['nativeCalls']==77
         assert summary['modelId']==summary['forecast']['model_id']
         assert summary['forecast']['profile']=={'sample_rate_hz':48000,'frame_start_sample':4800,'frame_size':4096,'duration_s':.25}

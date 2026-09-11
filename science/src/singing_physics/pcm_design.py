@@ -9,7 +9,7 @@ import re
 import numpy as np
 
 from .engine import ANATOMY, Engine, finite
-from .pcm_inverse import FEATURES, _bridge, _features, extract_pcm, resample_native_pcm
+from .pcm_inverse import BRIDGE, FEATURES, ROOT, _bridge, _features, extract_pcm, resample_native_pcm
 from .pcm_spectral import COARSE_OBJECTIVE, SPECTRAL_OBJECTIVE, objective_policy, extract_spectral, validate_spectral, discrepancy
 from .prediction import Artifact, _encode, _identity, _timestamp
 
@@ -17,10 +17,27 @@ PROFILE = {'sample_rate_hz': 44100, 'frame_start_sample': 4410, 'frame_size': 40
 SCHEMA = 'internal-pcm-design-0.1'
 
 
-def scoring_policy():
-    return {'version':'pcm-scoring-policy-1', 'implementation_sha256': {name:hashlib.sha256(Path(__file__).with_name(name).read_bytes()).hexdigest()
-        for name in ('pcm_design.py','pcm_inverse.py','pcm_spectral.py','prediction.py','engine.py')},
-        'numpy_version':np.__version__, 'scipy_version':scipy.__version__}
+# Every source file whose code can change a sealed prediction or its later score.
+# The TypeScript extractor and contracts are pinned separately by the extractor
+# subprocess itself (extractorSha256/contractsSha256) and checked on update.
+_PINNED_SOURCES = [Path(__file__).with_name(name) for name in ('pcm_design.py', 'pcm_inverse.py', 'pcm_spectral.py', 'prediction.py', 'engine.py')]+[BRIDGE]
+# Computed once at import so the pin names the code this process executes. Editing
+# these files on disk does not change a running worker; restart it to upgrade. The
+# restarted worker pins different hashes and rejects designs sealed by older code.
+SCORER_PIN = {'version': 'pcm-scorer-pin-1',
+    'implementation_sha256': {path.relative_to(ROOT).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest() for path in _PINNED_SOURCES},
+    'numpy_version': np.__version__, 'scipy_version': scipy.__version__}
+
+
+def _require_pin(frozen):
+    """Return 'verified' or 'legacy_version_unverified'; reject a changed or missing required pin."""
+    if 'scorer_implementation_pin' not in frozen:
+        if frozen.get('objective', COARSE_OBJECTIVE) != COARSE_OBJECTIVE:
+            raise ValueError('Unsupported spectral scoring policy: missing frozen scorer pin')
+        return 'legacy_version_unverified'
+    if frozen['scorer_implementation_pin'] != SCORER_PIN:
+        raise ValueError('Unsupported PCM scoring policy: freeze a new design with the current runtime')
+    return 'verified'
 
 
 def _distance(left, right, scales, objective):
@@ -250,7 +267,7 @@ def design_pcm(snapshot, *, expected_digest, design_id, target_observation_id, g
         'evidence_ids': data['evidence_ids'], 'evidence_hashes': data['evidence_hashes'],
         'provenance': data['provenance'], 'extractor': extractor, 'generated_at': generated_at, 'sealed_at': _now(),
         'target_observation_id': target_observation_id, 'profile': profile, 'feature_scales': feature_scales,
-        'objective':objective, 'objective_policy':objective_signature, 'scoring_policy':scoring_policy(),
+        'objective':objective, 'objective_policy':objective_signature, 'scorer_implementation_pin':SCORER_PIN,
         'minimum_separation': minimum_separation, 'retention_margin': retention_margin,
         'maximum_discrepancy': maximum_discrepancy, 'rankings': rankings,
         'selected_experiment_id': chosen, 'actual_synthesis_calls': calls,
@@ -263,8 +280,7 @@ def select_pcm_experiment(design, snapshot, *, expected_design_digest, expected_
     """Commit a declared choice among complete forecasts without changing scores."""
     frozen = _read(design, expected_design_digest, 'frozen_pcm_experiment_design')
     data = _snapshot(snapshot, expected_snapshot_digest)
-    if 'scoring_policy' in frozen and frozen['scoring_policy'] != scoring_policy():
-        raise ValueError('Unsupported PCM scoring policy: freeze a new design with the current runtime')
+    _require_pin(frozen)
     if frozen.get('hypothesis_snapshot_sha256') != snapshot.sha256 or any(frozen.get(k) != data[k] for k in ('model_id','provenance','evidence_ids','evidence_hashes')):
         raise ValueError('Selection requires matching current forecast and snapshot')
     for value, label in ((design_id,'design_id'),(target_observation_id,'target_observation_id'),(experiment_id,'experiment_id')):
@@ -299,8 +315,7 @@ def update_pcm(design, snapshot, *, expected_design_digest, expected_snapshot_di
         if not isinstance(frozen.get('source_design_sha256'),str) or re.fullmatch('[a-f0-9]{64}',frozen['source_design_sha256']) is None or not isinstance(frozen.get('selection_reason'),str) or not frozen['selection_reason'].strip():
             raise ValueError('Invalid explicit selection lineage')
     data = _snapshot(snapshot, expected_snapshot_digest)
-    if 'scoring_policy' in frozen and frozen['scoring_policy'] != scoring_policy():
-        raise ValueError('Unsupported PCM scoring policy: freeze a new design with the current runtime')
+    pin_status = _require_pin(frozen)
     if frozen.get('hypothesis_snapshot_sha256') != snapshot.sha256 or any(frozen.get(key) != data[key] for key in ('model_id', 'provenance', 'evidence_ids', 'evidence_hashes')):
         raise ValueError('Design/hypothesis model or evidence binding mismatch')
     if not _timestamp(frozen['sealed_at']) < _timestamp(observed_at) <= _timestamp(received_at):
@@ -310,10 +325,9 @@ def update_pcm(design, snapshot, *, expected_design_digest, expected_snapshot_di
         raise ValueError('Observation identity is not disjoint prospective target')
     objective = frozen.get('objective', COARSE_OBJECTIVE)
     objective_signature = objective_policy(objective)
-    if objective == SPECTRAL_OBJECTIVE and 'scoring_policy' not in frozen:
-        raise ValueError('Unsupported spectral scoring policy: missing frozen scorer pin')
-    if objective == SPECTRAL_OBJECTIVE and frozen.get('objective_policy') != objective_signature:
-        raise ValueError('Unsupported spectral objective policy')
+    # Legacy coarse designs predate objective policies; every newer design must match.
+    if frozen.get('objective_policy', objective_signature if objective == COARSE_OBJECTIVE else None) != objective_signature:
+        raise ValueError('Unsupported PCM objective policy')
     profile = _profile(frozen.get('profile'))
     if any(type(x) is not int for x in (sample_rate_hz, frame_start_sample, frame_size)) or (sample_rate_hz, frame_start_sample, frame_size) != tuple(profile[k] for k in ('sample_rate_hz', 'frame_start_sample', 'frame_size')):
         raise ValueError('Unsupported or mismatched canonical PCM frame profile')
@@ -408,7 +422,7 @@ def update_pcm(design, snapshot, *, expected_design_digest, expected_snapshot_di
     return Artifact(_encode({'schema_version': SCHEMA, 'kind': 'conditional_pcm_support_update',
         'design_sha256': design.sha256, 'parent_snapshot_sha256': snapshot.sha256,
         'status': status, 'scores': scores, 'missing_reason': reason,
-        'objective':objective,'score_policy_status':'verified' if 'scoring_policy' in frozen else 'legacy_version_unverified',
+        'objective':objective,'scorer_pin_status':pin_status,
         'observation_receipt': receipt, 'observation_receipt_sha256': _hash(receipt),
         'updated_snapshot': updated, 'updated_snapshot_sha256': _hash(updated),
         'limitations': ['Conditional on declared executed JA/F0/gain and finite retained geometry space',

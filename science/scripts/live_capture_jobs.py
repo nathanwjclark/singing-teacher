@@ -17,7 +17,7 @@ from urllib.parse import urlsplit
 from urllib.request import Request, build_opener, ProxyHandler, HTTPRedirectHandler
 
 from singing_physics.engine import digest, write_json
-from singing_physics.pcm_inverse import FEATURES
+from singing_physics.pcm_inverse import FEATURES, extract_pcm
 from singing_physics.pcm_spectral import COARSE_OBJECTIVE, SPECTRAL_OBJECTIVE, objective_policy, extract_spectral, validate_observation
 from singing_physics.service import JobService, canonical
 from singing_physics.session import SessionController
@@ -110,7 +110,11 @@ def wait(backend,job_id):
 
 
 def spectral_trials(data, output, trials):
-    """Derive spectral summaries from the importer's verified exact segment bytes."""
+    """Derive spectral observations from the importer's hash-verified original segment bytes.
+
+    The canonical measurement is re-extracted from the same frame and must match, so
+    the dedicated frame_sha256 binds both descriptions to the exact float32 bytes.
+    """
     result = deepcopy(trials)
     for trial in result:
         measurement = trial['measurement']
@@ -126,21 +130,23 @@ def spectral_trials(data, output, trials):
             if info.st_size != artifact['byteLength'] or not 0 < info.st_size <= 64*1024*1024:
                 raise ValueError('Original PCM segment size changed')
             raw = stream.read()
-        if hashlib.sha256(raw).hexdigest() != artifact['sha256'] or artifact['sha256'] not in measurement['provenance']['sourceHashes']:
+        if hashlib.sha256(raw).hexdigest() != artifact['sha256'] or measurement['provenance']['sourceHashes'] != [artifact['sha256']]:
             raise ValueError('Original PCM segment digest changed')
         start,size = trial['frame_start_sample'],trial['frame_size']
         values = np.frombuffer(raw,dtype='<f4')
         if len(values) != segment['sample_count'] or segment['sample_rate_hz'] != trial['sample_rate_hz'] or start+size > len(values):
             raise ValueError('Original PCM frame profile changed')
         frame = values[start:start+size]
-        frame_hash = hashlib.sha256(frame.tobytes()).hexdigest()
-        # Preserve the original segment digest while binding both measurements to
-        # the exact independently hashed frame. Imported source records stay intact.
-        measurement['provenance']['sourceHashes'] = list(dict.fromkeys(measurement['provenance']['sourceHashes']+[frame_hash]))
+        recomputed = extract_pcm(frame,trial['sample_rate_hz'],measurement_id=measurement['id'],observation_id=measurement['observationId'],
+            artifact_id=measurement['artifactId'],start_ms=start/trial['sample_rate_hz']*1000)
+        if recomputed['measurement']['measurements'] != measurement['measurements'] or recomputed['measurement']['window'] != measurement['window']:
+            raise ValueError('Canonical measurement differs from the verified original frame')
+        trial['frame_sha256'] = recomputed['pcmFloat32Sha256']
         trial['spectral_observation'] = extract_spectral(frame,trial['sample_rate_hz'],
             source_artifact_hashes=measurement['provenance']['sourceHashes'],source_artifact_id=measurement['artifactId'],frame_start_sample=start)
         validate_observation(trial)
     return result
+
 
 def pipeline(data, output, backend, session_id, *, objective=COARSE_OBJECTIVE):
     """Run already imported canonical evidence through the authoritative session."""
@@ -149,9 +155,10 @@ def pipeline(data, output, backend, session_id, *, objective=COARSE_OBJECTIVE):
         'pose_assumption':'Prompted comfortable ah treated as a; phonetics not independently verified',
         'anatomy_bounds':{'hard_palate_length':[3.8,5.1],'lip_width':[.5,1.5]},'gains':[1.,4.,16.],'JA':-3.,
         'search_budget':60,'search_rounds':1,'seed':7,'objective':objective,
-        'spectral_nuisance':'Per-resolution shape normalization; separate bounded ±24 dB gain and ±6 dB/octave empirical tilt; no calibrated room response',
         'forecast_conditions':'Library a/e/i at JA=-3, F0=180Hz, gain=4; simulator conditions, not observed execution',
         'claim':'Conditional research hypotheses. No identified anatomy, microphone/room calibration, muscle tension or tissue mechanics.'}
+    if objective == SPECTRAL_OBJECTIVE:
+        protocol['spectral_nuisance']='Per-resolution shape normalization; separate bounded ±24 dB gain and ±6 dB/octave empirical tilt; no calibrated room response'
     write_json(output/'protocol.json',protocol)
     eligible=[]
     for trial in data['fit_trial_options']:
@@ -236,7 +243,7 @@ def pipeline(data, output, backend, session_id, *, objective=COARSE_OBJECTIVE):
         'nativeCalls':fit['actual_synthesis_calls']+forecast['actual_synthesis_calls']+2,
         'nativeCallsScope':'Actual PCM synthesis calls only; export also performs spectrum, tube geometry, mesh and SVG operations',
         'candidateId':best['candidate_id'],'anatomy':best['anatomy'],'referenceAnatomy':reference,
-        'objective':protocol['objective'],'objectivePolicy':fit['scoring_policy'],
+        'objective':protocol['objective'],'objectivePolicy':fit['objective_policy'],
         'fitDiscrepancy':best['weighted_mean_square_discrepancy'],
         'baselineDiscrepancy':baseline['weighted_mean_square_discrepancy'] if baseline else None,
         'forecast':forecast,'files':files,'anatomyValidated':False,'liveTongueSource':'camera tracking, not scientific-model inference',
