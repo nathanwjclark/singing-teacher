@@ -21,7 +21,7 @@ This is a small falsification/stress suite, not a representative benchmark or a 
 
 ## First independent execution
 
-Protocol commit `761f8ef`; harness `b442c1e`; production spectral module `8c68f60` (carried to `claude/wave3-spectral` as `d13adb6`, `dafdd08` and `03ab767`). The unmodified first run used 21 native calls with zero synthesis failures. Canonical extraction ran 86 times, including rejected inputs; spectral extraction ran 30 times. The same forecast PCM was reused by both objectives. Three protocol integrity checks passed. Results and hash receipts are committed in `evaluation/wave3/results/`; the command is in its provenance record.
+Protocol commit `761f8ef`; harness `b442c1e`; production spectral module `8c68f60` (carried to `claude/wave3-spectral` as `d13adb6`, `ba38700` and `03ab767`). The unmodified first run used 21 native calls with zero synthesis failures. Canonical extraction ran 86 times, including rejected inputs; spectral extraction ran 30 times. The same forecast PCM was reused by both objectives. Three protocol integrity checks passed. Results and hash receipts are committed in `evaluation/wave3/results/`; the command is in its provenance record.
 
 Scientific outcome: **mixed and inconclusive**, not an anatomical recovery claim. No weights, candidate parameters, gains or stress settings were changed after seeing these results.
 

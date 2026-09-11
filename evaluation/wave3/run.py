@@ -2,7 +2,7 @@
 
 PYTHONPATH=science/src science/.venv/bin/python evaluation/wave3/run.py --output /tmp/wave3-run-2
 
-Revision 1 (protocol.json) was executed by this file as of commit dafdd08; its
+Revision 1 (protocol.json) ran with the harness from b442c1e (identical at ba38700); its
 results in results/first-*.json are kept unchanged and are not re-scored here.
 """
 from __future__ import annotations
