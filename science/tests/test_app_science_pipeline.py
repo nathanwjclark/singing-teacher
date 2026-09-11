@@ -9,12 +9,11 @@ import subprocess
 import sys
 import threading
 import time
+import urllib.error
 import urllib.request
 import zipfile
 
 from singing_physics.http_service import ScientificHTTPServer
-from singing_physics.engine import Engine
-from singing_physics.pcm_inverse import resample_native_pcm
 from test_live_capture_jobs import capture
 
 
@@ -77,41 +76,33 @@ def test_app_run_publishes_shared_session_and_verified_model(tmp_path):
                 geometry=call('/api/science/asset?run='+started['runId']+'&name=geometry.json')
                 assert geometry
                 assert not (data/'science-runs'/started['runId']/'jobs').exists()
-                # A later native capture reaches the actual update through the app,
-                # without hand-building a session export, command ID or digest.
-                design=result['forecast'];selected=design['selected_experiment_id']
-                assert selected is not None
-                experiment=next(row['experiment'] for row in design['rankings'] if row['experiment']['experiment_id']==selected)
+                # The default protocol forecasts library a/e/i for its fixed finite
+                # search support. With no experiment separating that support the
+                # design is frozen as unsupported: there is no recording decision,
+                # and a later capture cannot be scored or change the model. The
+                # scored update through the app is covered with an explicitly
+                # selected experiment in test_app_astra_loop.py.
+                design=result['forecast']
+                assert design['selected_experiment_id'] is None
+                assert session['designs'][result['designId']]['status']=='unsupported'
+                assert all(row['status']!='separated_at_assumed_threshold' for row in design['rankings'])
+                current=call('/api/science/status')['result']
+                assert current['recordingAllowed'] is False
                 later_root=data/'later';later_root.mkdir();later=capture(later_root)
-                with Engine() as engine:
-                    engine.set_anatomy(result['anatomy'])
-                    audio=engine.synthesize(experiment['pose'],{'JA':experiment['JA']},f0_hz=experiment['f0_hz'],duration_s=.6)
-                    pcm,_=resample_native_pcm(audio*experiment['gain'],44100,48000)
-                raw=pcm.astype('<f4').tobytes();(later/'audio.pcm.raw').write_bytes(raw)
                 manifest=json.loads((later/'manifest.json').read_text())
                 manifest['capture_id']='00000000-0000-4000-8000-000000000002'
                 manifest['created_at']=datetime.now(timezone.utc).isoformat()
-                manifest['audio']['samples'][0]['artifact'].update(bytes=len(raw),sha256=hashlib.sha256(raw).hexdigest())
                 (later/'manifest.json').write_text(json.dumps(manifest))
                 publish_capture(later)
-                prepared=call('/api/science/use-latest-capture',True,{
-                    'purpose':'outcome','pose':experiment['pose'],'contains_external_excitation':False})
-                assert prepared['prepared']
-                outcome=call('/api/science/outcome',True)
-                assert outcome['status']=='running'
-                deadline=time.monotonic()+60
-                while time.monotonic()<deadline:
-                    scored=call('/api/science/outcome')
-                    if scored['status']!='running':break
-                    time.sleep(.1)
-                assert scored['status']=='succeeded',scored
-                updated=call('/api/science/sessions/'+result['sessionId']+'/state')['state']
-                assert updated['snapshot']['model_id']!=result['modelId']
-                assert design['target_observation_id'] in updated['snapshot']['evidence_ids']
-                assert scored['result']['modelId']==updated['snapshot']['model_id']
-                retry=call('/api/science/outcome',True)
-                assert retry['outcomeId']==outcome['outcomeId'] and retry['status']=='succeeded'
-                assert call('/api/science/sessions/'+result['sessionId']+'/state')['state']['version']==updated['version']
+                refusals=[]
+                for path,body in (('/api/science/use-latest-capture',{'purpose':'outcome','pose':'a','contains_external_excitation':False}),('/api/science/outcome',None)):
+                    try:
+                        call(path,True,body);raise AssertionError(path+' accepted a capture without a recording decision')
+                    except urllib.error.HTTPError as error:
+                        refusals.append((error.code,json.load(error)['error']))
+                assert refusals==[(409,current['recordingMessage']),(409,'No later voice capture configured')]
+                assert call('/api/science/outcome')['status']=='not-run'
+                assert call('/api/science/sessions/'+result['sessionId']+'/state')['state']==session
             finally:
                 app.terminate()
                 try: app.wait(timeout=5)
