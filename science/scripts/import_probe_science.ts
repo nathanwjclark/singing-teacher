@@ -1,28 +1,15 @@
 #!/usr/bin/env -S node --experimental-strip-types
 /** Original native probe bundle -> private, explicitly conditioned A fit input. */
-import { constants } from 'node:fs'
-import { open, realpath, mkdir, writeFile, chmod, readdir } from 'node:fs/promises'
+import { realpath, mkdir, writeFile, chmod, readdir } from 'node:fs/promises'
 import { resolve, dirname, basename } from 'node:path'
 import { createHash } from 'node:crypto'
 import { pathToFileURL } from 'node:url'
-import { importAcousticProbe, pullAcquisition } from '../../scripts/import-acoustic-probe.ts'
-import { probeSource } from '../../src/contracts/probes.ts'
+import { importAcousticProbe, pullAcquisition, readFrom, receiptSource } from '../../scripts/import-acoustic-probe.ts'
 
 const hash = (b: Uint8Array) => createHash('sha256').update(b).digest('hex')
 const finite = (x: unknown): x is number => typeof x === 'number' && Number.isFinite(x)
 const id = (x: unknown) => typeof x === 'string' && !!x.trim()
 const sha = (x: unknown) => typeof x === 'string' && /^[a-f0-9]{64}$/.test(x)
-async function read(root: string, name: string, limit = 128 * 1024 * 1024) {
-  if (typeof name !== 'string' || name !== basename(name) || !/^[\w][\w.-]*$/.test(name)) throw Error('Unsafe evidence path')
-  const file = await open(resolve(root, name), constants.O_RDONLY | constants.O_NOFOLLOW)
-  try {
-    const st = await file.stat()
-    if (!st.isFile() || st.size > limit) throw Error('Invalid evidence file type/size')
-    const bytes = await file.readFile()
-    if (bytes.length !== st.size) throw Error('Evidence changed during read')
-    return bytes
-  } finally { await file.close() }
-}
 function requireValue(ok: unknown, message: string): asserts ok { if (!ok) throw Error(message) }
 /** No step yet derives calibration arrays from measurement recordings (e.g. a reference-microphone sweep), so a
  * package's calibration, processing and placement are declarations. Hashing its evidence files is not measurement. */
@@ -32,7 +19,7 @@ export const DECLARED_CALIBRATION_REASON = 'Calibration is declared, not measure
  * source is classified from the manifest alone (attestation `none`), as for a direct command-line import. */
 export async function importProbeScience(captureDirectory: string, outputDirectory: string, configPath: string, receiptPath?: string) {
   const root = await realpath(captureDirectory), configRoot = await realpath(dirname(resolve(configPath)))
-  const configBytes = await read(configRoot, basename(configPath), 2 * 1024 * 1024)
+  const configBytes = await readFrom(configRoot, basename(configPath), 2 * 1024 * 1024)
   const config = JSON.parse(configBytes.toString())
   requireValue(config.schema_version === '0.1.0' && config.kind === 'probe_science_import_configuration', 'Unsupported bridge configuration')
   requireValue(id(config.trial_id) && id(config.pose) && config.pose_state === 'held-quiet', 'Explicit held-quiet pose and trial identity required')
@@ -42,7 +29,7 @@ export async function importProbeScience(captureDirectory: string, outputDirecto
   const evidence = []
   for (const item of config.evidence) {
     requireValue(sha(item.sha256) && Number.isSafeInteger(item.byteCount) && item.byteCount > 0, 'Invalid supplemental evidence descriptor')
-    const bytes = await read(configRoot, item.path, 16 * 1024 * 1024)
+    const bytes = await readFrom(configRoot, item.path, 16 * 1024 * 1024)
     requireValue(bytes.length === item.byteCount && hash(bytes) === item.sha256, 'Supplemental evidence hash/byte mismatch')
     evidence.push({ path: item.path, sha256: item.sha256, byteCount: item.byteCount })
   }
@@ -61,20 +48,19 @@ export async function importProbeScience(captureDirectory: string, outputDirecto
   requireValue(id(config.nuisance_prior.prior_id) && config.nuisance_prior.bounds && Object.keys(config.nuisance_prior.bounds).length === 4 && Object.entries(limits).every(([k, bounds]) => { const v = config.nuisance_prior.bounds[k]; return Array.isArray(v) && v.length === 2 && v.every(finite) && v[0] >= bounds[0] && v[1] <= bounds[1] && v[0] <= v[1] }), 'Declare bounded scalar nuisance priors')
   const c = config.conditions
   requireValue(c && ['rigid', 'pressure-release', 'resistive'].includes(c.termination) && finite(c.attenuation_np_per_m) && c.attenuation_np_per_m >= 0 && c.attenuation_np_per_m <= 20 && (c.termination === 'resistive' ? finite(c.termination_resistance_pa_s_m3) && c.termination_resistance_pa_s_m3 >= 0 && c.termination_resistance_pa_s_m3 <= 1e12 : c.termination_resistance_pa_s_m3 === null), 'Declare supported tube termination/loss')
-  const originalManifest = await read(root, 'manifest.json'), native = JSON.parse(originalManifest.toString())
+  const originalManifest = await readFrom(root, 'manifest.json'), native = JSON.parse(originalManifest.toString())
   const originals = [{ path: 'manifest.json', sha256: hash(originalManifest), byteCount: originalManifest.length }, native.drive, native.received]
   if (native.calibration?.levelCheckArtifact) originals.push(native.calibration.levelCheckArtifact)
   async function verifyOriginals() {
     for (const original of originals) {
-      const bytes = await read(root, original.path)
+      const bytes = await readFrom(root, original.path)
       requireValue(bytes.length === original.byteCount && hash(bytes) === original.sha256, 'Original capture changed or hash/byte mismatch')
     }
   }
   await verifyOriginals()
   const acquisition = receiptPath === undefined ? undefined : await pullAcquisition(receiptPath)
   // The gate uses the source kind the manifest's own fields and pull receipt support, never the bare provenance label.
-  const source = probeSource(native, acquisition), human = source.kind === 'human-recording', fixture = source.kind === 'software-fixture'
-  requireValue(source.attestation !== 'contradicted-fixture-receipt', 'Repository-fixture pull receipt contradicts the capture manifest: only a marked software fixture without iPhone recorder fields may carry one')
+  const source = receiptSource(native, acquisition), human = source.kind === 'human-recording', fixture = source.kind === 'software-fixture'
   requireValue(human || fixture || cal.kind === 'measured', 'Physical reference capture requires measured instrument calibration evidence')
   requireValue(!cal.source_hashes.includes(native.received.sha256) && !config.nuisance_prior.source_hashes.includes(native.received.sha256), 'Target response cannot calibrate itself')
   const out = resolve(outputDirectory)
@@ -86,7 +72,7 @@ export async function importProbeScience(captureDirectory: string, outputDirecto
   for (const file of await readdir(bOut)) await chmod(resolve(bOut, file), 0o600)
   await verifyOriginals()
   requireValue(measurement.sourceHashes.manifest === hash(originalManifest) && measurement.sourceHashes.drive === native.drive.sha256 && measurement.sourceHashes.received === native.received.sha256 && measurement.provenance === source.kind, 'B source binding mismatch')
-  const artifact = measurement.artifacts.response, responseBytes = await read(bOut, artifact.path)
+  const artifact = measurement.artifacts.response, responseBytes = await readFrom(bOut, artifact.path)
   requireValue(responseBytes.length === artifact.byteCount && hash(responseBytes) === artifact.sha256, 'Derived response hash/byte mismatch')
   const full = JSON.parse(responseBytes.toString())
   requireValue(full.units === 'recorded-PCM-per-digital-drive' && full.sourceHashes.drive === native.drive.sha256 && full.sourceHashes.received === native.received.sha256, 'Full response source/units mismatch')

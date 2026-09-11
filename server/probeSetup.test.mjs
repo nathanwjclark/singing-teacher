@@ -130,11 +130,11 @@ test('a pulled capture stripped to look like a fixture stays a human recording a
  assert.deepEqual(await setups(),[]);
 });
 
-test('a repository-fixture receipt on a human-labelled capture refuses the calibrated import',async t=>{
- const {fixture,call,setups}=await serve(t,{manifest:{provenance:'human-recording'}});
+test('a repository-fixture receipt on a human-labelled capture refuses the import with the importer\'s reason',async t=>{
+ const {call,setups}=await serve(t,{manifest:{provenance:'human-recording'}});
  assert.equal((await call('import',{requestId:'import-contradicted'})).status,202);
- const status=await poll(call);assert.equal(status.setup.capture.provenance,'human-recording');
- const refused=await call('setup',{...fixture.request,importId:status.import.importId});
- assert.equal(refused.status,400);assert.match(refused.body.error,/verification failed: Repository-fixture pull receipt contradicts the capture manifest/);
+ const status=await poll(call);
+ assert.equal(status.import,null);assert.equal(status.setup.capture,null);
+ assert.equal(status.error,'ValueError: Repository-fixture pull receipt contradicts the capture manifest: only a marked software fixture without iPhone recorder fields may carry one');
  assert.deepEqual(await setups(),[]);
 });

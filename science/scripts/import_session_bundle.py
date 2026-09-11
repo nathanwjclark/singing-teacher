@@ -153,6 +153,10 @@ def import_session_bundle(source, destination, *, max_bytes=LIMIT):
         raise ValueError("Phase capture/session identity mismatch")
     if not isinstance(video.get("capture_id"), str) or not video["capture_id"] or not isinstance(sound.get("captureId"), str) or not sound["captureId"]:
         raise ValueError("Phase capture IDs required")
+    # The app's import (prepare_probe_capture.py) keeps the pull receipt beside original.zip; the sound importer checks
+    # the archive against it and classifies with it. A standalone archive has no receipt, so none is suggested.
+    receipt = source.parent/"usb-receipt.json"
+    pulled = [str(receipt.resolve())] if source.name == "original.zip" and receipt.is_file() else []
     report = {"schemaVersion": "session-unpack-1.0.0", "sessionId": session_id,
         "sourceSha256": hashlib.sha256(raw).hexdigest(), "sessionManifestSha256": hashlib.sha256(outer["session.json"]).hexdigest(),
         "phaseOrder": session["phaseOrder"], "simultaneous": False, "sameAnatomicalPoseVerified": False,
@@ -165,7 +169,7 @@ def import_session_bundle(source, destination, *, max_bytes=LIMIT):
         "nextCommands": {
             "videoDepth": {"argvPrefix": ["node", "--experimental-strip-types", "scripts/import-native-capture.ts", str(destination.resolve()/"video-depth")],
                 "requiredUserArguments": ["--participant", "--session", "--output"]},
-            "sound": {"argv": ["node", "--experimental-strip-types", "scripts/import-acoustic-probe.ts", str(destination.resolve()/"sound"), str(destination.resolve()/"sound-analysis")]}},
+            "sound": {"argv": ["node", "--experimental-strip-types", "scripts/import-acoustic-probe.ts", str(destination.resolve()/"sound"), str(destination.resolve()/"sound-analysis"), *pulled]}},
         "limitations": ["Only transport identity/hashes verified; individual importers validate modality contents.",
             "Phase order is a producer declaration, not a calibrated cross-device clock comparison.",
             "Partial stops remain captured evidence, not usable-response or calibration acceptance.",

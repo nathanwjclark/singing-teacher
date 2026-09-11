@@ -2,7 +2,7 @@
 
 `node --experimental-strip-types scripts/import-acoustic-probe.ts CAPTURE_DIRECTORY PRIVATE_OUTPUT_DIRECTORY [USB_RECEIPT_JSON]`
 
-With the optional app `usb-receipt.json`, the importer first checks the `original.zip` beside it against the receipt's SHA-256 and byte count, then classifies `provenance` with the receipt's acquisition record (see the provenance table in [the import specification](../../science/PROBE_IMPORT.md)). Without it, `provenance` follows the manifest alone.
+With the optional app `usb-receipt.json`, the importer first checks the `original.zip` beside it against the receipt's SHA-256 and byte count, then classifies `provenance` with the receipt's acquisition record and refuses a `repository-fixture` receipt the manifest contradicts (see the provenance table in [the import specification](../../science/PROBE_IMPORT.md)). Without it, `provenance` follows the manifest alone.
 
 Input is an unpacked native `probe-native-1.0.0` directory. Original microphone and exact complete drive timeline remain untouched. The importer checks SHA-256, byte count, Float32 little-endian mono dimensions, finite samples, sample rate/band, calibration evidence artifact bytes, equal-length nonoverlapping repeated windows, and bounds. Unsafe paths/symlinks and corrupt files reject ingestion. Valid hashed stopped attempts with incomplete windows, and unknown native sample alignment, remain captured with no response estimate. Unexplained incomplete windows in a completed attempt reject ingestion. Reimport of identical manifest/media yields the same measurement identity; calibration changes change identity. Hashes establish consistency, not physical authenticity.
 

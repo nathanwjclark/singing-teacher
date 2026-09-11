@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtemp,writeFile,readFile,rm } from 'node:fs/promises'
+import { mkdtemp,writeFile,readFile,rm,stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { execFile } from 'node:child_process'
@@ -45,4 +45,10 @@ test('the command line classifies with a pull receipt when given one and keeps t
  const kit=JSON.parse(await readFile(join(root,'pulled','probe-kit-observation.json'),'utf8'));assert.equal(kit.records[0].provenance.kind,'human-observation')
  await writeFile(join(root,'original.zip'),Buffer.concat([archive,Buffer.from('!')]))
  await assert.rejects(run(join(root,'changed'),join(root,'usb-receipt.json')),/does not match its pull receipt/)
+ // A repository-fixture receipt counts only on the generator's own manifest; on anything else the review import is refused.
+ await writeFile(join(root,'original.zip'),archive);await writeFile(join(root,'usb-receipt.json'),JSON.stringify({...receipt,acquisition:{transport:'repository-fixture',generator:'scripts/import-acoustic-probe.test.ts'}}))
+ await run(join(root,'fixture'),join(root,'usb-receipt.json'));assert.equal((await measured('fixture')).provenance,'software-fixture')
+ const manifest=JSON.parse(await readFile(join(root,'capture','manifest.json'),'utf8'));await writeFile(join(root,'capture','manifest.json'),JSON.stringify({...manifest,provenance:'human-recording'}))
+ await assert.rejects(run(join(root,'contradicted'),join(root,'usb-receipt.json')),/Repository-fixture pull receipt contradicts the capture manifest/)
+ await assert.rejects(stat(join(root,'contradicted')),{code:'ENOENT'})
 })

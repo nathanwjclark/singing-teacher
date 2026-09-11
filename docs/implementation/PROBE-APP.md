@@ -60,7 +60,8 @@ always writes `human-recording`, so another label on a pulled archive was edited
 or injected. A reference-object capture can therefore reach the calibrated path
 only through a direct command-line import; keeping that is an owner decision. Only receipts written by
 the repository's test fixtures (`transport: "repository-fixture"`) let a marked
-fixture through, and such a receipt on any other manifest refuses the import.
+fixture through, and such a receipt on any other manifest refuses the import, both
+the first analysis and the calibrated one, with the importer's reason as the error.
 
 This does not make provenance authenticated. Nothing is signed yet
 (`signature.status` is `not-provided`), so it does not stop someone with shell

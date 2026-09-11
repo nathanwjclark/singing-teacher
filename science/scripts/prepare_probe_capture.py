@@ -24,6 +24,15 @@ def write(path, value):
         os.unlink(pending)
 
 
+def run_importer(script, *args):
+    """Run a Node importer. Its refusal reaches the app as a ValueError carrying the importer's own message."""
+    done = subprocess.run(['node', '--experimental-strip-types', str(ROOT/script), *map(str, args)],
+                          stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+    if done.returncode:
+        raise ValueError(next((line[len('Error: '):] for line in reversed(done.stderr.splitlines()) if line.startswith('Error: ')),
+                              'The probe importer stopped without a reason; original artifacts were retained.'))
+
+
 def prepare(data_root, output):
     root, output = Path(data_root), Path(output)
     receipt = _json((root/'native-pull-latest.json').read_bytes())
@@ -63,8 +72,7 @@ def prepare(data_root, output):
         configuration = None
         setup_error = f"The saved calibration setup {setup['setupId']} belongs to a different capture; each probe capture needs its own setup."
     if configuration and configuration.exists():
-        subprocess.run(['node', '--experimental-strip-types', str(ROOT/'science/scripts/import_probe_science.ts'),
-                        str(capture), str(output/'science'), str(configuration), str(output/'usb-receipt.json')], check=True, stdout=subprocess.DEVNULL)
+        run_importer('science/scripts/import_probe_science.ts', capture, output/'science', configuration, output/'usb-receipt.json')
         bridge = _json((output/'science/probe-science-receipt.json').read_bytes())
         result = {'eligible': bridge['eligible_for_fit'], 'reasons': bridge.get('reasons', []),
                   'measurementPath': 'science/b-import/probe-measurement.json'}
@@ -72,8 +80,7 @@ def prepare(data_root, output):
             result.update(setupId=setup['setupId'], setupConfigurationSha256=setup['configurationSha256'],
                           setupProfileSha256=setup['profileSha256'])
     else:
-        subprocess.run(['node', '--experimental-strip-types', str(ROOT/'scripts/import-acoustic-probe.ts'),
-                        str(capture), str(output/'review'), str(output/'usb-receipt.json')], check=True, stdout=subprocess.DEVNULL)
+        run_importer('scripts/import-acoustic-probe.ts', capture, output/'review', output/'usb-receipt.json')
         result = {'eligible': False, 'reasons': ['Measured route calibration, placement and processing evidence are required before joint fitting.'],
                   'measurementPath': 'review/probe-measurement.json'}
         if setup_error:
