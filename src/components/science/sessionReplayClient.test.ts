@@ -16,3 +16,17 @@ test('missing session and malformed export are errors rather than empty success'
   await assert.rejects(readSessionReplay(),/Invalid session export/);
  }finally{globalThis.fetch=original}
 });
+
+import {readSessionRecomputation,startSessionRecomputation} from './sessionReplayClient.ts';
+test('verification client preserves unverified/skipped coverage and sends only bounded request identity',async()=>{
+ const original=globalThis.fetch;
+ try{
+  globalThis.fetch=async(input,init)=>{assert.equal(input,'/api/session-recompute/run');assert.deepEqual(JSON.parse(String(init?.body)),{requestId:'replay-request',maxOperations:3});return Response.json({status:'running',attemptId:'replay-request'})};
+  assert.equal((await startSessionRecomputation('replay-request',3)).status,'running');
+  const report={schemaVersion:'session-recomputation/1',attemptId:'a',sessionId:'s',modelUpdated:false,rawMediaIncluded:false,counts:{compared:1},operations:[{status:'version_unverified',numericalAgreement:true},{status:'skipped',numericalAgreement:null}]};
+  globalThis.fetch=async()=>Response.json({status:'completed',attemptId:'a',sessionId:'s',report});
+  assert.deepEqual((await readSessionRecomputation()).report,report);
+  globalThis.fetch=async()=>Response.json({status:'completed',attemptId:'different',sessionId:'s',report});
+  await assert.rejects(readSessionRecomputation(),/Invalid numerical verification report/);
+ }finally{globalThis.fetch=original}
+});

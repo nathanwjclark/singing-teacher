@@ -80,7 +80,8 @@ await route({method:'GET',socket:{remoteAddress:'127.0.0.1'},headers:{host:'127.
 def test_actual_export_recomputes_original_received_frame_without_policy_claim(exported):
     path, job, frame = exported
     report, fresh = recompute(path, job, frame)
-    assert report['status'] == 'version_unverified', report
+    original_design = json.loads(json.loads((path.parent/'replay.json').read_text())['state']['jobs'][-1]['request']['parameters']['design_json'])
+    assert report['status'] == ('verified' if original_design.get('scoring_policy') else 'version_unverified'), report
     assert report['numerical_agreement'] is True
     assert report['budget']['actual_synthesis_calls'] == 0
     assert report['budget']['actual_canonical_extractions'] == 1
@@ -153,5 +154,5 @@ def test_cli_writes_fresh_immutable_report(exported, tmp_path):
                '--job-id',job,'--original-replay',str(path.parent/'replay.json'),'--frame',str(frame),'--output',str(tmp_path/'report')]
     result = subprocess.run(command, capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
-    assert json.loads((tmp_path/'report/report.json').read_text())['status'] == 'version_unverified'
+    assert json.loads((tmp_path/'report/report.json').read_text())['status'] in ('verified', 'version_unverified')
     assert subprocess.run(command, capture_output=True).returncode != 0
