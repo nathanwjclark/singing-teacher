@@ -222,15 +222,26 @@ test('exports the latest score recomputation only while its report matches the r
   let data=await exported(),artifact=data.artifacts.find(a=>a.source===dir+'/report.json');
   assert.deepEqual(artifact.data.counts,report.counts);
   assert.deepEqual(artifact.binding,{sessionId:'session-one',role:'read-only-score-recomputation',modelUpdated:false,current:false});
-  assert.ok(!data.missing.some(row=>row.source==='replay-verifications'));
+  assert.ok(!data.missing.some(row=>row.source.startsWith('replay-verifications')));
   // A report edited after its receipt was written is excluded and reported missing.
   await put(dir+'/report.json',{...report,counts:{...report.counts,matched:2,failed:0}});
   data=await exported();
   assert.ok(!data.artifacts.some(a=>a.source.startsWith('replay-verifications/')));
-  assert.ok(data.missing.some(row=>row.source==='replay-verifications'));
-  // A receipt for another session is not this session's check and not missing evidence.
-  await put('session-recompute-current.json',{...receipt,sessionId:'session-two'});
+  assert.match(data.missing.find(row=>row.source===dir).reason,/invalid, unbound/);
+  // A completed index whose report file is gone is recorded as missing, not skipped.
+  await put(dir+'/report.json',report);await rm(join(root,dir,'report.json'));
   data=await exported();
   assert.ok(!data.artifacts.some(a=>a.source.startsWith('replay-verifications/')));
-  assert.ok(!data.missing.some(row=>row.source==='replay-verifications'));
+  assert.deepEqual(data.missing.find(row=>row.source===dir),{source:dir,reason:'Completed score recomputation receipt or report is missing'});
+  // Reports may reach the verifier's 8 MiB cap, above the 2 MiB limit for other receipts.
+  const large={...report,operations:[{jobId:'x',padding:'p'.repeat(3*1024*1024)}]},largeBytes=JSON.stringify(large);
+  const largeReceipt={...receipt,reportSha256:createHash('sha256').update(largeBytes).digest('hex'),reportByteLength:Buffer.byteLength(largeBytes)};
+  await put(dir+'/report.json',large);await put(dir+'/receipt.json',largeReceipt);await put('session-recompute-current.json',largeReceipt);
+  data=await exported();
+  assert.equal(data.artifacts.find(a=>a.source===dir+'/report.json').byteLength,largeReceipt.reportByteLength);
+  // A receipt for another session is not this session's check and not missing evidence.
+  await put('session-recompute-current.json',{...largeReceipt,sessionId:'session-two'});
+  data=await exported();
+  assert.ok(!data.artifacts.some(a=>a.source.startsWith('replay-verifications/')));
+  assert.ok(!data.missing.some(row=>row.source.startsWith('replay-verifications')));
 });

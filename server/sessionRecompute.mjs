@@ -6,7 +6,9 @@ import {promisify} from 'node:util';
 
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
 const safeId=value=>typeof value==='string'&&/^[A-Za-z0-9_-]{1,160}$/.test(value);
-const read=async(path,limit=8*1024*1024)=>{if((await stat(path)).size>limit)throw Error('Verification artifact exceeds size limit');return JSON.parse(await readFile(path,'utf8'));};
+// app_recompute.py refuses to write a larger report.
+export const REPORT_BYTES=8*1024*1024;
+const read=async(path,limit=REPORT_BYTES)=>{if((await stat(path)).size>limit)throw Error('Verification artifact exceeds size limit');return JSON.parse(await readFile(path,'utf8'));};
 const save=async(path,value)=>{const temp=path+'.'+randomUUID();await writeFile(temp,JSON.stringify(value),{mode:0o600});await rename(temp,path);};
 // science/scripts/app_recompute.py ends itself (SIGALRM) 290 seconds after it starts,
 // so a verifier left by an earlier server process is gone before this window closes.
@@ -43,13 +45,13 @@ export function createSessionRecomputeRoutes({repo,dataRoot,json,env=process.env
   const dir=resolve(dataRoot,'replay-verifications',attempt),value=await read(resolve(dir,'receipt.json'));
   if(value.attemptId!==attempt)throw Error('Verification report integrity mismatch');
   const bytes=await readFile(resolve(dir,'report.json'));
-  if(bytes.length>8*1024*1024)throw Error('Verification report integrity mismatch');
+  if(bytes.length>REPORT_BYTES)throw Error('Verification report integrity mismatch');
   return {...value,report:boundReport(value,{sha256:hash(bytes),byteLength:bytes.length,report:JSON.parse(bytes)})};
  }
  async function finish(attempt,code){
   const dir=resolve(dataRoot,'replay-verifications',attempt),request=await read(resolve(dir,'request.json'));
   if(code===0){
-   const bytes=await readFile(resolve(dir,'report.json'));if(bytes.length>8*1024*1024)throw Error('Verification report exceeds limit');
+   const bytes=await readFile(resolve(dir,'report.json'));if(bytes.length>REPORT_BYTES)throw Error('Verification report exceeds limit');
    const report=JSON.parse(bytes);
    if(report.schemaVersion!=='session-recomputation/1'||report.attemptId!==attempt||report.runId!==request.runId||report.sessionId!==request.sessionId||report.modelUpdated!==false||report.rawMediaIncluded!==false||!/^[a-f0-9]{64}$/.test(report.workerLedgerSha256||''))throw Error('Verification report identity mismatch');
    const value={status:'completed',attemptId:attempt,runId:request.runId,sessionId:request.sessionId,workerLedgerSha256:report.workerLedgerSha256,reportSha256:hash(bytes),reportByteLength:bytes.length};

@@ -1,5 +1,5 @@
 import {verifiedVisualForecasts} from './visualContext.mjs';
-import {boundReport, recomputeAttempt} from './sessionRecompute.mjs';
+import {REPORT_BYTES, boundReport, recomputeAttempt} from './sessionRecompute.mjs';
 import {open, readdir, realpath} from 'node:fs/promises';
 import {resolve, sep} from 'node:path';
 import {createHash} from 'node:crypto';
@@ -46,13 +46,13 @@ export function createSessionExportRoutes({dataRoot, json, fetchImpl = fetch, en
     try {
       const root = await realpath(dataRoot);
       let totalBytes = 0;
-      async function read(source) {
+      async function read(source, limit = MAX_FILE_BYTES) {
         const path = await realpath(resolve(root, source));
         if (path !== root && !path.startsWith(root + sep)) throw Error('Artifact leaves private data root');
         const handle = await open(path, 'r');
         try {
           const stat = await handle.stat();
-          if (!stat.isFile() || stat.size > MAX_FILE_BYTES || totalBytes + stat.size > MAX_BYTES) throw Error('Artifact exceeds export size limit');
+          if (!stat.isFile() || stat.size > limit || totalBytes + stat.size > MAX_BYTES) throw Error('Artifact exceeds export size limit');
           const buffer = Buffer.alloc(stat.size + 1);
           const {bytesRead} = await handle.read(buffer, 0, buffer.length, 0);
           if (bytesRead !== stat.size) throw Error('Artifact changed during export');
@@ -224,19 +224,25 @@ export function createSessionExportRoutes({dataRoot, json, fetchImpl = fetch, en
         } catch { missing.push({source,reason:'Visual receipt or original video does not match authoritative session; excluded'}); }
       }
       // The latest read-only score recomputation for this run and session, when its
-      // report still matches the receipt hash. Never running one is not missing evidence.
-      try {
-        const {data: receipt} = await read('session-recompute-current.json');
-        if (receipt.status === 'completed' && receipt.runId === runId && receipt.sessionId === sessionId) {
-          const source = `replay-verifications/${receipt.attemptId}`;
-          if (!recomputeAttempt(receipt.attemptId) || !isDeepStrictEqual((await read(source + '/receipt.json')).data, receipt)) throw Error('Verification index differs from its receipt');
-          const artifact = await read(source + '/report.json');
-          boundReport(receipt, {sha256: artifact.sha256, byteLength: artifact.byteLength, report: artifact.data});
+      // report still matches the receipt hash. Never running one (no index) is not
+      // missing evidence; an index that names a completed attempt whose files are
+      // absent, changed or oversized is.
+      let recomputation = null;
+      try { recomputation = (await read('session-recompute-current.json')).data; }
+      catch (error) { if (error.code !== 'ENOENT') missing.push({source: 'session-recompute-current.json', reason: 'Score recomputation index is unreadable; excluded'}); }
+      if (recomputation?.status === 'completed' && recomputation.runId === runId && recomputation.sessionId === sessionId) {
+        const source = recomputeAttempt(recomputation.attemptId) ? `replay-verifications/${recomputation.attemptId}` : 'replay-verifications';
+        try {
+          if (source === 'replay-verifications' || !isDeepStrictEqual((await read(source + '/receipt.json')).data, recomputation)) throw Error('Verification index differs from its receipt');
+          const artifact = await read(source + '/report.json', REPORT_BYTES);
+          boundReport(recomputation, {sha256: artifact.sha256, byteLength: artifact.byteLength, report: artifact.data});
           if (artifacts.length >= MAX_FILES) missing.push({source: source + '/report.json', reason: 'Artifact count limit reached'});
           else artifacts.push({...artifact, binding: {sessionId, role: 'read-only-score-recomputation', modelUpdated: false,
             current: workerLedgerSha256 ? artifact.data.workerLedgerSha256 === workerLedgerSha256 : null}});
+        } catch (error) {
+          missing.push({source, reason: error.code === 'ENOENT' ? 'Completed score recomputation receipt or report is missing' : 'Latest score recomputation report is invalid, unbound to its receipt or exceeds the export size; excluded'});
         }
-      } catch (error) { if (error.code !== 'ENOENT') missing.push({source: 'replay-verifications', reason: 'Latest score recomputation report is invalid, unbound to its receipt or exceeds the export size; excluded'}); }
+      }
       const summary = {
         modelId: state?.snapshot?.model_id || null,
         sessionVersion: state?.version ?? null,
