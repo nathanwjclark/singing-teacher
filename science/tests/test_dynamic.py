@@ -163,10 +163,17 @@ def test_tongue_region_box_is_rejected_as_a_landmark_and_tip_landmarks_are_copie
     copied = observed_landmarks(frame)
     assert copied == {"tongue": tip} and copied["tongue"] is not tip
     assert observed_landmarks({}) == {}
+    assert observed_landmarks({"landmarks": {"tongue": None}}) == {"tongue": None}
     for region in ({"trackingMode": "region", "box": [.3, .4, .7, .8], "confidence": .9, "observedAt": 1.},
-                   {"tracking_mode": "region", "box": [.3, .4, .7, .8]}):
+                   {"tracking_mode": "region", "box": [.3, .4, .7, .8]}, {"box": [.3, .4, .7, .8]},
+                   {**tip, "box": [.3, .4, .7, .8]}, {"trackingMode": "mask"}):
         with pytest.raises(ValueError, match="region box is not a landmark"):
             observed_landmarks({"landmarks": {"tongue": region}})
+    for malformed in ({key: value for key, value in tip.items() if key != "trackingMode"}, {**tip, "x": 1.5},
+                      {**tip, "lateral": None}, {**tip, "lift": True}, {**tip, "extension": float("nan")},
+                      {**tip, "surface": []}, [tip], "tip"):
+        with pytest.raises(ValueError, match="tongue landmark must be a tip observation"):
+            observed_landmarks({"landmarks": {"tongue": malformed}})
     with pytest.raises(ValueError, match="must be a dictionary"):
         observed_landmarks({"landmarks": [tip]})
     with Engine() as engine:

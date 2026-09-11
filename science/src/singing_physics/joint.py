@@ -32,15 +32,34 @@ def _bounds(values, allowed, label):
     return result
 
 
+def _finite_number(value):
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+
+
+def _browser_tongue_tip(value):
+    """The browser's tongue landmark: a tip observation with a normalized position and finite pose values."""
+    fields = {"trackingMode", "x", "y", "lateral", "lift", "visibleFraction", "observedAt", "confidence",
+              "extension", "elevation", "curl", "tip", "tip3D"}
+    return (isinstance(value, dict) and value.get("trackingMode") == "tip" and set(value) <= fields
+            and all(_finite_number(value.get(k)) and 0 <= value[k] <= 1 for k in ("x", "y"))
+            and all(_finite_number(value.get(k)) for k in ("lateral", "lift", "visibleFraction"))
+            and all(k not in value or _finite_number(value[k])
+                    for k in ("observedAt", "confidence", "extension", "elevation", "curl")))
+
+
 def observed_landmarks(frame):
-    """Copy a frame's landmarks for the record. A visible-tongue region box has no landmark
-    position, pose or depth; it is rejected rather than stored as a tongue landmark."""
+    """Copy a frame's landmarks for the record. A visible-tongue region box has no landmark position, pose
+    or depth: any entry carrying a box or a non-tip tracking mode is rejected, and the browser's "tongue"
+    entry must be a well-formed tip observation."""
     landmarks = frame.get("landmarks", {})
     if not isinstance(landmarks, dict):
         raise ValueError("Frame landmarks must be a dictionary")
-    if any(isinstance(value, dict) and "region" in (value.get("trackingMode"), value.get("tracking_mode"))
-           for value in landmarks.values()):
-        raise ValueError("A tongue region box is not a landmark")
+    for name, value in landmarks.items():
+        if isinstance(value, dict) and ("box" in value or any(
+                key in value and value[key] != "tip" for key in ("trackingMode", "tracking_mode"))):
+            raise ValueError("A tongue region box is not a landmark")
+        if name == "tongue" and value is not None and not _browser_tongue_tip(value):
+            raise ValueError("The tongue landmark must be a tip observation")
     return deepcopy(landmarks)
 
 
