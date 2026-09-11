@@ -318,3 +318,12 @@ def test_a_read_that_dispatches_an_intent_never_fails_on_size(tmp_path, monkeypa
         state = controller.execute({'action': 'state'})['state']
         assert (state['version'], state['pending'], state['jobs'][-1]['status']) == (2, None, 'submission_failed')
         assert len(canonical(state)) > 50_000 and controller.execute({'action': 'replay'})['state'] == state
+
+
+@pytest.mark.parametrize('nodes', [{}, {'0'*64: ['v', 1]}], ids=['empty', 'stray-node'])
+def test_a_v1_replay_carrying_nodes_is_rejected(tmp_path, nodes):
+    root = recorded(tmp_path)
+    replay = read_ledger(root/'sessions', GOLDEN['session_id'])
+    assert 'nodes' not in replay and verify_replay(replay, GOLDEN['session_id'], replay['ledger_sha256'])
+    with pytest.raises(ValueError, match='hash-chain mismatch'):
+        verify_replay({**replay, 'nodes': nodes}, GOLDEN['session_id'], replay['ledger_sha256'])

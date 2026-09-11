@@ -63,7 +63,9 @@ def verify_replay(replay, session_id, expected_ledger):
     try:
         rows = [(version, canonical({k: v for k, v in row.items() if k != 'sha256'}), row['sha256']) for version, row in enumerate(replay['events'], 1)]
         nodes = {key: canonical(node) for key, node in replay.get('nodes', {}).items()}
-        state, previous, _, _ = _verify(session_id, rows, nodes.items)
+        state, previous, _, verified = _verify(session_id, rows, nodes.items)
+        # Nodes belong only to a replay with format 2 events; stray ones would still count in its hash.
+        if 'nodes' in replay and not verified: raise ValueError('Replay nodes without a format 2 event')
     except (RuntimeError, AttributeError, KeyError, TypeError, ValueError) as exc:
         raise ValueError('Original replay event hash-chain mismatch') from exc
     if not replay['events'] or digest(state) != digest(replay['state']) or previous != replay['ledger_sha256'] or previous != expected_ledger:
