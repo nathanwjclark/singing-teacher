@@ -80,17 +80,25 @@ jobs:
         run: npm test
       - name: Science tests
         run: npm run test:science -- -n auto
-      # Checks that need the scientific worker run with their own configs.
       - name: Browser checks
-        run: |
-          npx playwright test
-          npx playwright test -c tests/spectral-objective.config.ts
-          npx playwright test -c tests/session-recompute.config.ts
-          npx playwright test -c tests/motion-timeline.config.ts
-          npx playwright test -c tests/motion-audio.config.ts
-          npx playwright test -c tests/visual-likelihood.config.ts
-          npx playwright test -c tests/lidar-runtime.config.ts
-          npx playwright test -c tests/source-bank-runtime.config.ts
+        run: npx playwright test
+      # Checks that need the scientific worker run with their own configs, one step each
+      # so every config reports its own result and time. Each run clears test-results/
+      # and a failed step skips the later ones, so the upload below holds the failed run.
+      - name: 'Browser check: spectral objective'
+        run: npx playwright test -c tests/spectral-objective.config.ts
+      - name: 'Browser check: session recompute'
+        run: npx playwright test -c tests/session-recompute.config.ts
+      - name: 'Browser check: motion timeline'
+        run: npx playwright test -c tests/motion-timeline.config.ts
+      - name: 'Browser check: motion audio'
+        run: npx playwright test -c tests/motion-audio.config.ts
+      - name: 'Browser check: visual likelihood'
+        run: npx playwright test -c tests/visual-likelihood.config.ts
+      - name: 'Browser check: LiDAR'
+        run: npx playwright test -c tests/lidar-runtime.config.ts
+      - name: 'Browser check: source bank'
+        run: npx playwright test -c tests/source-bank-runtime.config.ts
       - if: failure()
         uses: actions/upload-artifact@v7
         with:
