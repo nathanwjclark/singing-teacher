@@ -8,13 +8,14 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "test": "node --experimental-strip-types --test src/lib/coaching.test.ts",
+    "test": "node --experimental-strip-types --test --test-timeout=120000 \"src/**/*.test.ts\" \"src/**/*.test.mjs\" \"server/**/*.test.mjs\" \"scripts/**/*.test.ts\"",
     "test:e2e": "playwright test",
     "local": "node server/local.mjs",
     "science:local": "node scripts/start-science-local.mjs",
     "https:prepare": "node scripts/prepare-local-https.mjs",
     "local:private": "node scripts/start-local-https.mjs",
-    "science:private": "PRIVATE_HTTPS=1 node scripts/start-science-local.mjs"
+    "science:private": "PRIVATE_HTTPS=1 node scripts/start-science-local.mjs",
+    "test:science": "PYTHONPATH=.:science/src science/.venv/bin/python -m pytest science/tests -q"
   },
   "dependencies": {
     "@mediapipe/tasks-vision": "^1.0.1",

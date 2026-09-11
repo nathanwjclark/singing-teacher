@@ -38,3 +38,4 @@ dist-ssr
 
 # Throwaway data for the browser-check server
 .local-e2e-data/
+__pycache__/
