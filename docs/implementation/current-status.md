@@ -103,7 +103,11 @@ not enter the physical fitting objective.
 Current integration evidence: source/replay/learning browser suite 20 passed;
 actual native source lifecycle and source-to-Astra route checks passed; motion
 persistence adds two real-server browser tests with exact original downloads
-and rejection/fallback coverage. Build/typecheck and lint passed.
+and rejection/fallback coverage. The final native teaching/browser flow passed
+with geometry, explicit A/B synthesis, recorded outcome, historical and
+educational views, reduced motion, mobile layout and complete app mounting.
+Build/typecheck and lint passed. The evidence is generated/software evidence;
+no human anatomical or learning claim follows from it.
 
 The optional motion-audio path additionally passed actual encoded-media app
 runtime checks (voiced, silent, no-audio, missing decoder, restart reuse and
@@ -133,6 +137,23 @@ legacy scoring-policy provenance; it does not fabricate missing media.
 The connected conditional visual workflow and independently gated illustrated
 teaching integration are described in [visual experiments](VISUAL-EXPERIMENTS.md).
 Two real native/browser visual flows passed with synthetic evidence, including
-visible and missing targets after reload. Illustrated teaching browser acceptance
-is still pending at this checkpoint. Calibrated motion and human anatomical
-accuracy are not implied by either implementation.
+visible and missing targets after reload. Illustrated teaching acceptance also
+passed with synthetic/native evidence, including explicit model audio and a
+recorded numerical outcome. Calibrated motion and human anatomical accuracy are
+not implied by either implementation.
+
+## Third-wave scientific work
+
+The merged prototype is ready for the next model-improvement phase. The
+authoritative workstream map and unmerged branch checkpoints are in the [Wave 3
+handoff](../coordination/WAVE3-HANDOFF.md). Active work includes a versioned
+multi-resolution spectral objective, cue-conditioned execution support, a native
+two-mass source family, time-resolved audio trajectory inference, a coupled
+oral/nasal external-drive operator, app-managed probe calibration, read-only
+recomputation, melodic transfer and independent equal-budget evaluation.
+
+The first independent spectral stress run is mixed/inconclusive: gain
+perturbation robustness improved, but unseen-vowel generalization was poor and
+noise/out-of-support cases could worsen. This result is preserved as a research
+boundary; Wave 3 work must not advertise universal improvement without a new
+held-out evaluation.

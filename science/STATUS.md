@@ -1,5 +1,13 @@
 # Current Lead A integration status
 
+> This file contains historical Lead A checkpoints and command evidence. The
+> current merged state is `main` at `304ee87`; PRs #19–21 added the final
+> LiDAR/source recovery, visual likelihood, illustrated teaching and partial
+> receipt protections. Use the [Wave 3 engineering handoff](../docs/coordination/WAVE3-HANDOFF.md)
+> for the authoritative current inventory, unmerged research branches and next
+> scientific-model work. Statements below that say a later integration is
+> separate are historical checkpoints, not current absence claims.
+
 ## App-operated outcomes
 
 Ordinary native voice fitting and outcome scoring now run from the app controls,

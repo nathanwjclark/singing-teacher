@@ -1,5 +1,12 @@
 # Head-compensated visible tongue surface review
 
+> Historical diagnostic boundary. The optional public TongueSAM region baseline
+> and separate visible-region exports are now in Wave 3 review branches, not in
+> merged `main`. This document still describes the older private dynamic-surface
+> diagnostic. Neither path establishes hidden tongue shape or internal muscle
+> activation; use the [Wave 3 handoff](../coordination/WAVE3-HANDOFF.md) for the
+> current branch and integration status.
+
 `review-dynamic-tongue.py` processes a private native capture into a self-contained interactive camera/surface/motion viewer and a per-frame JSON analysis. It uses existing native ZIP integrity checks and lens-corrected camera projection. Dependencies: NumPy, SciPy, Pillow and OpenCV (`opencv-python-headless`).
 
 ```sh
@@ -23,7 +30,14 @@ The displayed motion is the center of a visible tracked patch, not anatomical ti
 
 ## Scope and validation
 
-The live app stays disconnected. A successful diagnostic on one recording does not satisfy generalized tongue segmentation, physical metric calibration, independent timing error, or native anatomical surface correspondence needed by the scientific model. Head transforms are estimates with holdout residuals, not external tracking ground truth or calibrated uncertainty.
+The older dynamic-surface diagnostic stays disconnected from the scientific model.
+The newer region detector has a separate browser baseline and exports visible
+region boxes, but it is not yet merged or a substitute for calibrated 3D
+correspondence. A successful diagnostic on one recording does not satisfy
+generalized tongue segmentation, physical metric calibration, independent timing
+error, or native anatomical surface correspondence. Head transforms are estimates
+with holdout residuals, not external tracking ground truth or calibrated
+uncertainty.
 
 Light checks cover known rigid rotation/translation with outliers, insufficient-anchor rejection, browser playback/frame controls, blank failed frames, and absence of external viewer requests. Manually inspect both exposed- and closed-mouth frames. Private images and derived geometry stay outside public Git.
 

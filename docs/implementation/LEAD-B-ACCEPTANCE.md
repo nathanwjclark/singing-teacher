@@ -1,5 +1,11 @@
 # Lead B acceptance ledger
 
+> Historical acceptance ledger retained for contract and gate provenance. The
+> merged prototype now includes the later source-bank, LiDAR, visual, teaching
+> and probe connections. Use [current status](current-status.md) and the [Wave 3
+> handoff](../coordination/WAVE3-HANDOFF.md) for the current state; the external
+> device, human-data and scientific-validity gates below remain relevant.
+
 This ledger distinguishes executable checks from physical-device and learner evidence. A passing build does not close a human-data gate. Nicole's scientific queue is integrated from PR #3, commit `615fde362960c0452a233e80c1f75d2b4d7a03de`; it includes PR #1 revision 6 and PR #2. Scientific numerical implementations remain Lead A's reviewed work.
 
 ## Runnable handoff

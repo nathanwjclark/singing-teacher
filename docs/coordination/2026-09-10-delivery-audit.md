@@ -1,8 +1,11 @@
 # Lead A delivery and recovery audit — September 10, 2026
 
-This is a checkpoint, not a claim that every branch is merged or that the
-scientific hypotheses have been validated. It records repository state and
-completed agent verification after the usage interruption. The earlier
+This is a historical checkpoint, not the current task board. It records
+repository state and completed agent verification after the usage interruption.
+PR #21 subsequently merged the final native teaching/browser acceptance and
+partial-receipt guard. The current merged state, Wave 3 branch inventory and
+next actions are maintained in the [engineering and scientific handoff](WAVE3-HANDOFF.md).
+The scientific hypotheses remain unvalidated. The earlier
 [recovery ledger](lead-a-recovery.md) remains historical: its statements assigning
 all future runtime/UI work to B no longer describe the expanded A-owned scope.
 

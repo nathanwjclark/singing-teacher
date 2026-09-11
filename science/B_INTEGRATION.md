@@ -62,7 +62,14 @@ New provenance includes `geometry_basis: vtl-anatomy-params-reconstructed-v1`;
 older snapshots lacking it are incompatible and must be regenerated. KIT forecasts
 bind that basis and the native library provenance, not just 13 numerical values.
 
-## Remaining external acceptance
+## Current software status and remaining external acceptance
+
+The source-bank, phonation, motion/audio, rear-LiDAR, conditional-visual and
+illustrated-teaching paths described in the later implementation documents are
+now connected on `main`. This older cross-lead handoff remains the contract
+reference for canonical audio/provenance; its statements that a future producer
+or runtime connection is missing are historical. For the current merged state
+and Wave 3 branches, use [the engineering and scientific handoff](../docs/coordination/WAVE3-HANDOFF.md).
 
 The current native capture format preserves data needed to begin geometric
 calibration, but it does not supply measured lens/pixel mapping validation, depth

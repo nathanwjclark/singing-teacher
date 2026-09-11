@@ -73,11 +73,37 @@ Use **Pull iPhone** after saving an ordinary voice capture in the native iPhone 
 
 Fitted/reference geometry is hash-verified before display. Outcome updates retain model lineage and may change candidate support without reconstructing the displayed geometry. The original calibration surface remains labeled historical when the active model advances. Failed and unsupported results remain visible rather than being presented as successful recovery.
 
+## Experimental research capabilities
+
+These capabilities are opt-in and preserve the ordinary recording and fitting
+flow when unavailable:
+
+- **Phonation/source bank:** canonical pitch/periodicity/spectral measurements,
+  bounded source/tract alternatives, prospective later scoring and Astra context.
+  Enable with `PHONATION_MEASUREMENT_ENABLED=1` and
+  `PHONATION_SOURCE_ENABLED=1`. This is conditional source acoustics, not
+  vocal-fold closure detection.
+- **Rear LiDAR fusion:** original depth/RGB/calibration import, explicit outer-lip
+  annotation, conditional hypothesis ranking, adopted native preview and
+  restart-safe receipts. Enable `LIDAR_PREVIEW_ENABLED=1` and
+  `LIDAR_FUSION_ENABLED=1`. It does not recover internal cavities.
+- **Visual likelihood and illustrated teaching:** fixed-camera original-frame
+  comparisons and reviewed general/model/recorded teaching modes. Enable the
+  `VISUAL_*` flags described above. Generated/native acceptance evidence is
+  documented separately from physical and human validation.
+- **Acoustic probe:** verified external-response import and optional oral probe
+  fitting with explicit calibration gates. A probe recording is not ordinary
+  singing audio, and real calibration is required before physical claims.
+
+For the exact merged commit, experimental branch checkpoints, known dirty
+worktrees, Wave 3 scientific results and the next agent's task order, read the
+[engineering and scientific handoff](docs/coordination/WAVE3-HANDOFF.md).
+
 ## Visible tongue tracking
 
 The current optional tongue path uses a private neural model with visible-tip, visibility and depth outputs, loaded locally through ONNX Runtime Web with verified model bytes. It supersedes the selected-patch and color trackers. Missing private weights or weak/hidden detections remain unavailable; the repository does not include participant training data. Front and side views use the same estimated pose. Tongue Lab retains inspection and manual comparison tools. See [neural tongue tracking](docs/implementation/NEURAL-TONGUE.md) for model setup, coordinate assumptions and evaluation limits.
 
-Visible tongue estimates do not reveal hidden tongue shape, internal muscle activation, or precise anatomy. Optional phonation acoustics likewise do not diagnose vocal-fold closure. Source-model integration is currently in progress; see [optional phonation status](docs/implementation/PHONATION-STATUS.md) and the [current status](docs/implementation/current-status.md) before enabling research features.
+Visible tongue estimates do not reveal hidden tongue shape, internal muscle activation, or precise anatomy. Optional phonation acoustics and the connected source-bank path likewise do not diagnose vocal-fold closure. The source path is an opt-in conditional research capability with explicit fallback and lineage; see [optional phonation status](docs/implementation/PHONATION-STATUS.md) and the [current status](docs/implementation/current-status.md) before enabling research features.
 
 ## Optional visual experiments
 
@@ -87,5 +113,18 @@ The Experiments page supports original-frame conditional visual forecasts with
 `VISUAL_TEACHING_AUDIO_ENABLED=1` for its independently gated modes. Set desired
 flags at app startup; learners use app controls without per-attempt backend
 commands. Defaults remain optional/off. See [setup, app actions and current
-verification limits](docs/implementation/VISUAL-EXPERIMENTS.md); teaching browser
-acceptance is still pending.
+verification limits](docs/implementation/VISUAL-EXPERIMENTS.md); native/browser
+teaching acceptance passed on generated evidence, while physical and human
+validation remain open.
+
+## Project handoff and Wave 3
+
+The merged prototype is complete as a connected research harness, while the
+scientific moonshot remains deliberately experimental. The authoritative state,
+branch checkpoints, evidence boundaries, Wave 3 workstreams and exact continuation
+commands are in the [engineering and scientific handoff](docs/coordination/WAVE3-HANDOFF.md).
+Wave 3 currently includes richer spectral fitting, cue-to-execution learning,
+time-resolved audio articulation, native source mechanics, coupled oral/nasal
+probe physics, reproducible scoring, phrase transfer and controlled modality
+evaluation. Experimental branches are not merged until their independent
+checks and scientific limitations are recorded.

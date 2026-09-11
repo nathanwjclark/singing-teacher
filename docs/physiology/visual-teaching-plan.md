@@ -1,5 +1,12 @@
 # Physiology-based illustrated coaching — workstream A
 
+> Implementation status: the initial educational and supported model-driven
+> teaching feature is merged and passed native/browser acceptance on generated
+> evidence. This plan remains the scientific/content contract; physical anatomy
+> accuracy, learner efficacy and unsupported personalized cartilage/nasal modes
+> remain open. See [visual experiments](../implementation/VISUAL-EXPERIMENTS.md)
+> and the [Wave 3 handoff](../coordination/WAVE3-HANDOFF.md).
+
 Approved scope addition, September 10, 2026. All VIS-TEACH tickets begin as planned. A owns the complete feature: scientific explanations, illustrations/animation, model adapters, coaching UI, audio comparison, accessibility, tests, independent review and integration. B has no new implementation, content-review or acceptance assignment. This feature-specific exception extends the existing embodied-learning plan without transferring unrelated modules or disrupting active file writers.
 
 ## Learner experience

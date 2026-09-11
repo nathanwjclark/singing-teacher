@@ -1,5 +1,12 @@
 # Lead B implementation queue
 
+> Historical queue retained for contract provenance. The original prototype
+> tickets below are integrated or superseded; their old “planned” wording does
+> not describe the current repository. For the authoritative merged state and
+> active third-wave work, use [current status](current-status.md) and the
+> [Wave 3 handoff](../coordination/WAVE3-HANDOFF.md). No row in this historical
+> board is a claim of physical-device or scientific accuracy acceptance.
+
 Snapshot started from `30eaf6d78a4bc6c2c343c87f11043e9a44eee864`. Lead B is the integration owner and updates this board as agents are dispatched and reviewed. “Queued” means assigned scope, not completed work. Each ticket gets a separate worktree and one owner for each changed file. No ticket below claims scientific or device acceptance.
 
 Status vocabulary: queued → in progress → review → integrated; blocked records its missing input. Record contract versions and actual integration commits at handoff. Lead A reviews scientific meaning and numerical claims.
