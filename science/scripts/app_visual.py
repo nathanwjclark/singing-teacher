@@ -83,7 +83,7 @@ def frame_image(data_root,capture_id,frame_index):
         return result
     binary=os.environ.get('SINGING_FFMPEG','ffmpeg')
     raw=process([binary,'-v','error','-noautorotate','-i',str(root/'motion-captures'/capture_id/'media'),'-map','0:v:0',
-        '-vf',f'select=eq(n\\,{frame_index})','-vsync','0','-frames:v','1','-f','image2pipe','-vcodec','png','pipe:1'])
+        '-vf',f'select=eq(n\\,{frame_index})','-fps_mode','passthrough','-frames:v','1','-f','image2pipe','-vcodec','png','pipe:1'])
     if len(raw)>32*1024*1024 or not raw.startswith(b'\x89PNG\r\n\x1a\n'):raise ValueError('Decoded PNG unavailable or excessive')
     width=int.from_bytes(raw[16:20],'big');height=int.from_bytes(raw[20:24],'big')
     if [width,height]!=[row['width'],row['height']]:raise ValueError('Decoded pixels differ from indexed original dimensions')
