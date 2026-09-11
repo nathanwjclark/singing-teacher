@@ -37,11 +37,25 @@ def write(path, value):
     path.write_text(json.dumps(value, sort_keys=True, indent=2, allow_nan=False)+'\n')
 
 
-def worktree():
+def changed_paths(porcelain):
+    """Parse `git status --porcelain -z`; renames and copies keep both paths, names stay unquoted."""
+    fields, rows, index = porcelain.split('\0'), [], 0
+    while index < len(fields) and fields[index]:
+        status, path = fields[index][:2], fields[index][3:]
+        row = {'status': status, 'path': path}
+        if 'R' in status or 'C' in status:
+            index += 1
+            row['original_path'] = fields[index]
+        rows.append(row)
+        index += 1
+    return rows
+
+
+def worktree(root=ROOT):
     """The commit this run executes and whether the checkout differs from it."""
     try:
-        run = lambda *args: subprocess.run(['git', '-C', str(ROOT), *args], capture_output=True, text=True, check=True, timeout=30).stdout
-        changed = [line[3:] for line in run('status', '--porcelain', '--untracked-files=all').splitlines()]
+        run = lambda *args: subprocess.run(['git', '-C', str(root), *args], capture_output=True, text=True, check=True, timeout=30).stdout
+        changed = changed_paths(run('status', '--porcelain', '-z', '--untracked-files=all'))
         return {'commit': run('rev-parse', 'HEAD').strip(), 'dirty': bool(changed), 'changed_paths': changed}
     except (OSError, subprocess.SubprocessError) as exc:
         return {'commit': None, 'dirty': None, 'reason': 'git state unavailable: '+str(exc)}

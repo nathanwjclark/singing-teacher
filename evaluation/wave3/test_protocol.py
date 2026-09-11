@@ -2,6 +2,7 @@
 import importlib.util
 import json
 from pathlib import Path
+import subprocess
 
 import numpy as np
 import pytest
@@ -88,3 +89,17 @@ def test_future_runs_record_commit_dirty_state_and_scorer_pin():
     assert len(state['commit']) == 40 and isinstance(state['dirty'], bool)
     assert state['dirty'] == bool(state['changed_paths'])
     assert 'science/src/singing_physics/pcm_inverse.py' in m.SCORER_PIN['implementation_sha256']
+
+
+def test_worktree_records_renames_and_paths_with_spaces(tmp_path):
+    git = lambda *args: subprocess.run(['git', '-C', str(tmp_path), *args], check=True, capture_output=True)
+    git('init', '-q'); git('config', 'user.email', 'test@example.com'); git('config', 'user.name', 'Test User')
+    (tmp_path/'old name.txt').write_text('x'); (tmp_path/'kept.txt').write_text('y')
+    git('add', '.'); git('commit', '-qm', 'fixture')
+    assert m.worktree(tmp_path)['dirty'] is False
+    git('mv', 'old name.txt', 'new name.txt'); (tmp_path/'kept.txt').write_text('changed'); (tmp_path/'fresh "q".txt').write_text('z')
+    state = m.worktree(tmp_path)
+    assert state['dirty'] is True
+    assert {'status': 'R ', 'path': 'new name.txt', 'original_path': 'old name.txt'} in state['changed_paths']
+    assert {'status': ' M', 'path': 'kept.txt'} in state['changed_paths']
+    assert {'status': '??', 'path': 'fresh "q".txt'} in state['changed_paths']
