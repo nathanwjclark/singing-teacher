@@ -5,6 +5,8 @@ for concurrency. Anatomical controls and kinematic/source controls stay distinct
 """
 from __future__ import annotations
 
+from contextlib import contextmanager
+from copy import deepcopy
 import ctypes as ct
 import hashlib
 import json
@@ -107,6 +109,8 @@ class Engine:
                 method.restype = ct.c_int
             self._check(self.lib.vtlInitialize(str(speaker).encode()), "initialize")
             initialized = True
+            self._native_initialized = True
+            self.source_model_family = "Geometric glottis"
             values = [ct.c_int() for _ in range(5)]
             internal_rate = ct.c_double()
             self._check(self.lib.vtlGetConstants(*(ct.byref(x) for x in values), ct.byref(internal_rate)), "constants")
@@ -153,7 +157,9 @@ class Engine:
         if not self._closed:
             self._guard()
             try:
-                self._check(self.lib.vtlClose(), "close")
+                if self._native_initialized:
+                    self._check(self.lib.vtlClose(), "close")
+                    self._native_initialized = False
             finally:
                 self._closed = True
                 _ownership.release()
@@ -163,6 +169,67 @@ class Engine:
 
     def __exit__(self, *_):
         self.close()
+
+    def _load_source_family(self, family, anatomy):
+        """Select a native model by changing only certified speaker selection bits."""
+        speaker = BUILD / "source/resources/JD3.speaker"
+        if digest(speaker) != self.provenance["speaker_sha256"]:
+            raise RuntimeError("Reference speaker changed before source selection")
+        tree = ET.parse(speaker)
+        models = tree.getroot().findall("./glottis_models/glottis_model")
+        if family not in {row.get("type") for row in models}:
+            raise ValueError("Unsupported native source family")
+        for row in models:
+            row.set("selected", "1" if row.get("type") == family else "0")
+        raw = ET.tostring(tree.getroot(), encoding="utf-8", xml_declaration=True)
+        with tempfile.TemporaryDirectory(prefix="singing-source-family-") as directory:
+            path = Path(directory) / "selected.speaker"
+            path.write_bytes(raw)
+            if self._native_initialized:
+                self._check(self.lib.vtlClose(), "close before source selection")
+                self._native_initialized = False
+            self._check(self.lib.vtlInitialize(str(path).encode()), "source model initialize")
+            self._native_initialized = True
+        values = [ct.c_int() for _ in range(5)]
+        internal_rate = ct.c_double()
+        self._check(self.lib.vtlGetConstants(*(ct.byref(x) for x in values), ct.byref(internal_rate)), "source constants")
+        rate, tubes, tract, count, step = [x.value for x in values]
+        if (rate, tubes, tract, step) != (self.sample_rate, self.tube_count, self.tract_count, self.step) or not 0 < count < 100:
+            raise RuntimeError("Source model changed native tract dimensions")
+        self.glottis_count = count
+        self.source_info = self._param_info("vtlGetGlottisParamInfo", count)
+        self.source_model_family = family
+        self.set_anatomy(anatomy)
+        self.provenance = {**self.provenance, "selected_source_family": family,
+            "selected_source_speaker_sha256": hashlib.sha256(raw).hexdigest(),
+            "source_selection_policy": "certified-JD3-selection-only-v1"}
+
+    @contextmanager
+    def source_model(self, family):
+        """Use a native glottis model temporarily, restoring exact caller state.
+
+        Speaker masses, stiffnesses and all other static parameters remain the
+        certified template values. Their availability is not evidence that these
+        properties can be identified in a human from microphone recordings.
+        """
+        self._guard()
+        if family not in ("Geometric glottis", "Two-mass model"):
+            raise ValueError("Unsupported native source family")
+        previous = self.source_model_family
+        if family == previous:
+            yield self
+            return
+        saved, provenance = self.anatomy(), deepcopy(self.provenance)
+        try:
+            self._load_source_family(family, saved)
+            yield self
+        finally:
+            try:
+                self._load_source_family(previous, saved)
+                self.provenance = provenance
+            except BaseException:
+                self.close()
+                raise
 
     def anatomy(self):
         self._guard()
@@ -197,7 +264,7 @@ class Engine:
         names, descriptions, units = [ct.create_string_buffer(count * n) for n in (100, 500, 100)]
         arrays = [(ct.c_double * count)() for _ in range(3)]
         self._check(getattr(self.lib, function)(names, descriptions, units, *arrays), "parameter metadata")
-        texts = [b.value.decode().strip().split("\t") for b in (names, descriptions, units)]
+        texts = [b.value.decode().strip(" \r\n").split("\t") for b in (names, descriptions, units)]
         if any(len(t) != count for t in texts):
             raise RuntimeError("Native parameter metadata dimensions differ")
         return [{"name": texts[0][i], "description": texts[1][i], "unit": texts[2][i],

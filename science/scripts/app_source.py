@@ -26,8 +26,15 @@ def save(path,value):
     temporary=path.with_suffix('.tmp');temporary.write_text(json.dumps(value,allow_nan=False));temporary.chmod(0o600);temporary.replace(path)
 
 
-def source_candidates(hypotheses,trial_id,pitch):
+def source_candidates(hypotheses,trial_id,pitch,source_model="two_mass"):
+    if source_model not in ("two_mass","geometric"):raise ValueError("Unsupported app source model")
     if not 1<=len(hypotheses)<=8:raise ValueError('Optional source candidate budget cannot cover current anatomy support')
+    if source_model=='two_mass':
+        support=[{'source_model':'two_mass','XB':.005,'XT':.005,'EAA':0.,'DF':1.},
+                 {'source_model':'two_mass','XB':.015,'XT':.015,'EAA':.005,'DF':1.}]
+        return ([{'candidate_id':f'mechanical-{i}-{j}','anatomy':h['anatomy'],
+            'trials':{trial_id:{'JA':-3.,'F0':pitch,'PR':8000.,'gain':4.,**shape}}}
+            for i,h in enumerate(hypotheses) for j,shape in enumerate(support)],support)
     skews=[-.2,0.,.2] if len(hypotheses)<=2 else [-.2,.2]
     candidates=[{'candidate_id':f'source-{i}-{j}','anatomy':h['anatomy'],
         'trials':{trial_id:{'JA':-3.,'F0':pitch,'PR':8000.,'PS':ps,'gain':4.}}}
@@ -101,9 +108,10 @@ def run(root,phase,output):
         trial,record=frame(imported,session_id,evidence_at=manifest.get('created_at'));pitch=record['descriptors']['pitchHz']['value']
         if pitch is None or not 65<=pitch<=600:raise ValueError('Observed pitch outside supported conditional source range')
         hypotheses=state['snapshot']['hypotheses']
-        candidates,skews=source_candidates(hypotheses,trial['id'],pitch)
+        source_model=os.environ.get('PHONATION_SOURCE_MODEL','two_mass')
+        candidates,support=source_candidates(hypotheses,trial['id'],pitch,source_model)
         command={'action':'fit_source','parameters':{'document':{'schema_version':'phonation-fit-1','trials':[trial]},'candidates':candidates,'max_synthesis_calls':3*len(candidates),'timeout_s':90.}}
-        binding={'source_import_sha256':summary['sourceImportSha256'],'source_skew_support':skews,'source_assumptions':'Measured acoustic pitch; prescribed JA=-3, PR=8000 and gain=4. Every retained anatomy has the same PS alternatives; these are simulator hypotheses, not observed execution or closure.'}
+        binding={'source_import_sha256':summary['sourceImportSha256'],'source_model_selection':source_model,'source_shape_support':support,'source_assumptions':'Observed acoustic pitch initializes the native F0 control; mechanical output pitch can differ. Prescribed JA=-3, PR=8000 and gain=4. Every retained anatomy has the same finite native source alternatives; template tissue constants stay fixed. These are simulator hypotheses, not measured execution, tissue parameters or vocal-fold contact.'}
     elif phase=='forecast':
         model=state.get('source_model')
         if not model or model['baseline_model_id']!=baseline:raise ValueError('Fit a source model for the current anatomy first')
