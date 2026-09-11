@@ -1,9 +1,8 @@
 """Verified capture import -> durable session search/design -> native geometry export."""
 import argparse
 import base64
-from copy import deepcopy
-import numpy as np
 from contextlib import contextmanager
+from copy import deepcopy
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -15,6 +14,8 @@ import subprocess
 import time
 from urllib.parse import urlsplit
 from urllib.request import Request, build_opener, ProxyHandler, HTTPRedirectHandler
+
+import numpy as np
 
 from singing_physics.engine import digest, write_json
 from singing_physics.pcm_inverse import FEATURES, extract_pcm
@@ -106,7 +107,6 @@ def wait(backend,job_id):
         if state['status'] in ('succeeded','failed','cancelled'): return state
         time.sleep(.1)
     raise TimeoutError('Scientific job did not finish within 185 seconds')
-
 
 
 def spectral_trials(data, output, trials):
