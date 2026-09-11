@@ -13,6 +13,7 @@ import json
 import math
 from numbers import Real
 from pathlib import Path
+import re
 import sys
 import threading
 import tempfile
@@ -41,6 +42,7 @@ ANATOMY = [
 ]
 DOUBLE = ct.POINTER(ct.c_double)
 _ownership = threading.Lock()
+GLOTTIS_HEADER = re.compile(rb'<glottis_model type="([^"]+)" selected="([01])">')
 
 
 def digest(path: Path) -> str:
@@ -49,6 +51,24 @@ def digest(path: Path) -> str:
 
 def write_json(path: Path, value):
     path.write_text(json.dumps(value, indent=2, allow_nan=False) + "\n")
+
+
+def speaker_source_selection(raw):
+    """Glottis-model headers of a speaker file as (family, selected) pairs."""
+    headers = [(m.group(1).decode(), m.group(2) == b"1") for m in GLOTTIS_HEADER.finditer(raw)]
+    if len(headers) != raw.count(b"<glottis_model ") or sum(selected for _, selected in headers) != 1:
+        raise RuntimeError("Speaker glottis-model selection is not exactly one declared family")
+    return headers
+
+
+def select_speaker_source(raw, family):
+    """Certified speaker bytes with only the glottis-model selection digits changed."""
+    if family not in {name for name, _ in speaker_source_selection(raw)}:
+        raise ValueError("Unsupported native source family")
+    selected = bytearray(raw)
+    for match in GLOTTIS_HEADER.finditer(raw):
+        selected[match.start(2)] = ord("1" if match.group(1).decode() == family else "0")
+    return bytes(selected)
 
 
 def finite(value, label):
@@ -110,7 +130,8 @@ class Engine:
             self._check(self.lib.vtlInitialize(str(speaker).encode()), "initialize")
             initialized = True
             self._native_initialized = True
-            self.source_model_family = "Geometric glottis"
+            self.certified_source_family = next(name for name, selected in speaker_source_selection(speaker.read_bytes()) if selected)
+            self.source_model_family = self.certified_source_family
             values = [ct.c_int() for _ in range(5)]
             internal_rate = ct.c_double()
             self._check(self.lib.vtlGetConstants(*(ct.byref(x) for x in values), ct.byref(internal_rate)), "constants")
@@ -120,6 +141,7 @@ class Engine:
             self._closed = False
             self.base_anatomy = self.anatomy()
             self.source_info = self._param_info("vtlGetGlottisParamInfo", self.glottis_count)
+            self._certified_source_info = deepcopy(self.source_info)
             names = [x.attrib["name"] for x in ET.parse(speaker).findall("./vocal_tract_model/shapes/shape")]
             self.poses = {}
             for name in names:
@@ -171,25 +193,28 @@ class Engine:
         self.close()
 
     def _load_source_family(self, family, anatomy):
-        """Select a native model by changing only certified speaker selection bits."""
+        """Reinitialize native state with one glottis model selected.
+
+        The certified family loads the certified speaker file itself. Any other
+        family loads a copy whose only differing bytes are the selection digits.
+        """
         speaker = BUILD / "source/resources/JD3.speaker"
-        if digest(speaker) != self.provenance["speaker_sha256"]:
+        raw = speaker.read_bytes()
+        if hashlib.sha256(raw).hexdigest() != self.provenance["speaker_sha256"]:
             raise RuntimeError("Reference speaker changed before source selection")
-        tree = ET.parse(speaker)
-        models = tree.getroot().findall("./glottis_models/glottis_model")
-        if family not in {row.get("type") for row in models}:
-            raise ValueError("Unsupported native source family")
-        for row in models:
-            row.set("selected", "1" if row.get("type") == family else "0")
-        raw = ET.tostring(tree.getroot(), encoding="utf-8", xml_declaration=True)
-        with tempfile.TemporaryDirectory(prefix="singing-source-family-") as directory:
-            path = Path(directory) / "selected.speaker"
-            path.write_bytes(raw)
-            if self._native_initialized:
-                self._check(self.lib.vtlClose(), "close before source selection")
-                self._native_initialized = False
-            self._check(self.lib.vtlInitialize(str(path).encode()), "source model initialize")
-            self._native_initialized = True
+        certified = family == self.certified_source_family
+        selected = raw if certified else select_speaker_source(raw, family)
+        if self._native_initialized:
+            self._check(self.lib.vtlClose(), "close before source selection")
+            self._native_initialized = False
+        if certified:
+            self._check(self.lib.vtlInitialize(str(speaker).encode()), "source model initialize")
+        else:
+            with tempfile.TemporaryDirectory(prefix="singing-source-family-") as directory:
+                path = Path(directory) / "selected.speaker"
+                path.write_bytes(selected)
+                self._check(self.lib.vtlInitialize(str(path).encode()), "source model initialize")
+        self._native_initialized = True
         values = [ct.c_int() for _ in range(5)]
         internal_rate = ct.c_double()
         self._check(self.lib.vtlGetConstants(*(ct.byref(x) for x in values), ct.byref(internal_rate)), "source constants")
@@ -198,11 +223,16 @@ class Engine:
             raise RuntimeError("Source model changed native tract dimensions")
         self.glottis_count = count
         self.source_info = self._param_info("vtlGetGlottisParamInfo", count)
+        if certified and self.source_info != self._certified_source_info:
+            raise RuntimeError("Certified source model metadata differs after reload")
         self.source_model_family = family
         self.set_anatomy(anatomy)
-        self.provenance = {**self.provenance, "selected_source_family": family,
-            "selected_source_speaker_sha256": hashlib.sha256(raw).hexdigest(),
-            "source_selection_policy": "certified-JD3-selection-only-v1"}
+        selection = ("selected_source_family", "selected_source_speaker_sha256", "source_selection_policy")
+        self.provenance = {key: value for key, value in self.provenance.items() if key not in selection}
+        if not certified:
+            self.provenance.update(selected_source_family=family,
+                selected_source_speaker_sha256=hashlib.sha256(selected).hexdigest(),
+                source_selection_policy="certified-JD3-selection-digits-only-v2")
 
     @contextmanager
     def source_model(self, family):
