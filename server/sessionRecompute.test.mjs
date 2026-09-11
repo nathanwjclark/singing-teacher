@@ -15,7 +15,8 @@ async function fixture(t){
  await writeFile(join(root,'science-current.json'),JSON.stringify({status:'succeeded',runId:'run-synthetic'}));
  await writeFile(join(root,'science-runs/run-synthetic/summary.json'),JSON.stringify({sessionId:'synthetic-session'}));
  const replies=new Map(),children=[];
- const options={repo:process.cwd(),dataRoot:root,json:(response,code,body)=>replies.set(response,{code,body}),spawnImpl:()=>{const child=new EventEmitter();child.kill=()=>{};children.push(child);return child;}};
+ const env={...process.env,SCIENCE_URL:'http://127.0.0.1:8766',SCIENCE_TOKEN:'fictional-worker-token',OPENAI_API_KEY:'fictional-provider-key'};
+ const options={repo:process.cwd(),dataRoot:root,env,json:(response,code,body)=>replies.set(response,{code,body}),spawnImpl:(_command,_args,spawned)=>{const child=new EventEmitter();child.kill=()=>{};child.spawned=spawned;children.push(child);return child;}};
  return {root,replies,children,options,route:createSessionRecomputeRoutes(options)};
 }
 const first='replay-11111111-1111-4111-8111-111111111111';
@@ -30,6 +31,10 @@ test('bounded route reserves before body, persists hash-bound reports and reuses
  const pending=route(slow,'first',run);
  await route(request({requestId:second,maxOperations:1}),'busy',run);assert.equal(replies.get('busy').code,409);
  release();await pending;assert.equal(replies.get('first').code,202);assert.equal(children.length,1);
+ // The verifier gets the worker address and token, never the provider key.
+ const spawned=children[0].spawned.env;
+ assert.equal(spawned.SCIENCE_URL,'http://127.0.0.1:8766');assert.equal(spawned.SCIENCE_TOKEN,'fictional-worker-token');assert.equal(spawned.PATH,process.env.PATH);
+ assert.equal(spawned.OPENAI_API_KEY,undefined);assert.deepEqual(Object.keys(spawned).filter(key=>!['PATH','HOME','TMPDIR','SCIENCE_URL','SCIENCE_TOKEN','PYTHONPATH'].includes(key)),[]);
  await route(request(null,'GET'),'running',status);assert.equal(replies.get('running').body.status,'running');
  const dir=join(root,'replay-verifications',first),report={schemaVersion:'session-recomputation/1',attemptId:first,sessionId:'synthetic-session',runId:'run-synthetic',workerLedgerSha256:'a'.repeat(64),modelUpdated:false,rawMediaIncluded:false,operations:[],counts:{compared:0}};
  await writeFile(join(dir,'report.json'),JSON.stringify(report));children[0].emit('close',0);
@@ -106,4 +111,17 @@ test('the local app server mounts the recompute routes',{timeout:30_000},async t
  const invalid=await fetch(base+'/run',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({requestId:'bad',maxOperations:1})});
  assert.equal(invalid.status,409);assert.match((await invalid.json()).error,/one to sixteen/);
  assert.equal((await fetch(base+'/unknown')).status,405);
+});
+
+test('a live process that reused the recorded pid is not taken for the verifier',async t=>{
+ const {root,replies,route}=await fixture(t);
+ const dir=join(root,'replay-verifications',first);await mkdir(dir,{recursive:true});
+ await writeFile(join(dir,'request.json'),JSON.stringify({runId:'run-synthetic',sessionId:'synthetic-session',maxOperations:2}));
+ const started=execFileSync('ps',['-o','lstart=','-p',String(process.pid)]).toString().trim();
+ const record=processStartedAt=>writeFile(join(root,'session-recompute-current.json'),JSON.stringify({status:'running',attemptId:first,runId:'run-synthetic',sessionId:'synthetic-session',pid:process.pid,startedAt:new Date().toISOString(),processStartedAt}));
+ // This test process exists; with its real start time it is the recorded process.
+ await record(started);await route(request(null,'GET'),'same',status);assert.equal(replies.get('same').body.status,'running');
+ // The same pid with another start time is a different process: the attempt is over.
+ await record('Thu Jan  1 00:00:00 1970');await route(request(null,'GET'),'reused',status);
+ assert.equal(replies.get('reused').body.status,'failed');assert.equal(replies.get('reused').body.attemptId,first);
 });

@@ -1,18 +1,26 @@
 import {readFile,writeFile,mkdir,rename,stat} from 'node:fs/promises';
 import {resolve} from 'node:path';
 import {createHash,randomUUID} from 'node:crypto';
-import {spawn} from 'node:child_process';
+import {spawn,execFile} from 'node:child_process';
+import {promisify} from 'node:util';
 
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
 const safeId=value=>typeof value==='string'&&/^[A-Za-z0-9_-]{1,160}$/.test(value);
 const read=async(path,limit=8*1024*1024)=>{if((await stat(path)).size>limit)throw Error('Verification artifact exceeds size limit');return JSON.parse(await readFile(path,'utf8'));};
 const save=async(path,value)=>{const temp=path+'.'+randomUUID();await writeFile(temp,JSON.stringify(value),{mode:0o600});await rename(temp,path);};
-// science/scripts/app_recompute.py ends itself (SIGALRM) at the same deadline, so a
-// verifier left by an earlier server process is never trusted, or killed, after it.
+// science/scripts/app_recompute.py ends itself (SIGALRM) 290 seconds after it starts,
+// so a verifier left by an earlier server process is gone before this window closes.
 const DEADLINE_MS=300000;
+const execFileAsync=promisify(execFile);
+// The kernel's start time for a pid; a reused pid has a different one.
+const processStart=async pid=>{try{return (await execFileAsync('ps',['-o','lstart=','-p',String(pid)])).stdout.trim()||null;}catch{return null;}};
 // Single flight across restarts: a verifier started by an earlier server process is
-// still running while its recorded pid exists inside the attempt deadline.
-const alive=value=>{if(!Number.isInteger(value.pid)||value.pid<=0||!(Date.now()<Date.parse(value.startedAt)+DEADLINE_MS))return false;try{process.kill(value.pid,0);return true;}catch{return false;}};
+// still running while a process with its pid and recorded start time exists inside
+// the attempt deadline.
+const alive=async value=>Number.isInteger(value.pid)&&value.pid>0&&typeof value.processStartedAt==='string'&&Date.now()<Date.parse(value.startedAt)+DEADLINE_MS&&await processStart(value.pid)===value.processStartedAt;
+// The verifier needs the worker address and token, and Node on PATH for the extractor;
+// nothing else from this server's environment (no provider keys) is passed on.
+const verifierEnv=(env,repo)=>Object.fromEntries(Object.entries({PATH:env.PATH,HOME:env.HOME,TMPDIR:env.TMPDIR,SCIENCE_URL:env.SCIENCE_URL,SCIENCE_TOKEN:env.SCIENCE_TOKEN,PYTHONPATH:repo+':'+resolve(repo,'science/src')}).filter(([,value])=>value!==undefined));
 export const recomputeAttempt=value=>typeof value==='string'&&/^replay-[a-f0-9-]{36}$/.test(value);
 // A report counts only when its bytes match the receipt and it names the receipt's run, session and ledger.
 export function boundReport(receipt,{sha256,byteLength,report}){
@@ -61,7 +69,7 @@ export function createSessionRecomputeRoutes({repo,dataRoot,json,env=process.env
  // Record the outcome of an attempt whose verifier is gone: this process did not
  // start it (server restart) and its pid no longer runs.
  async function settle(value){
-  if(value.status!=='running'||running===value.attemptId||alive(value))return value;
+  if(value.status!=='running'||running===value.attemptId||await alive(value))return value;
   try{await finish(value.attemptId,0);}catch{await finish(value.attemptId,1);}
   return read(index);
  }
@@ -91,13 +99,14 @@ export function createSessionRecomputeRoutes({repo,dataRoot,json,env=process.env
    await save(resolve(dir,'request.json'),request);running=attempt;
    // Detached: the verifier leads its own process group, so the deadline stops its
    // extractor subprocesses too. It is not killed when this server exits.
-   const child=spawnImpl(env.SINGING_PYTHON||resolve(repo,'science/.venv/bin/python'),[resolve(repo,'science/scripts/app_recompute.py'),'--data-root',dataRoot,'--output',dir,'--max-operations',String(body.maxOperations)],{cwd:repo,env:{...env,PYTHONPATH:repo+':'+resolve(repo,'science/src')},stdio:['ignore','ignore','ignore'],detached:true});
+   const child=spawnImpl(env.SINGING_PYTHON||resolve(repo,'science/.venv/bin/python'),[resolve(repo,'science/scripts/app_recompute.py'),'--data-root',dataRoot,'--output',dir,'--max-operations',String(body.maxOperations)],{cwd:repo,env:verifierEnv(env,repo),stdio:['ignore','ignore','ignore'],detached:true});
    launched=true;
-   const value={status:'running',attemptId:attempt,...c,pid:child.pid,startedAt:new Date().toISOString()},saved=save(index,value);
+   // Listen before any await so a verifier that exits at once is still recorded.
+   const exited=new Promise(resolveExit=>{child.once('error',()=>resolveExit(1));child.once('close',resolveExit);});
+   const startedAt=new Date().toISOString(),processStartedAt=Number.isInteger(child.pid)?await processStart(child.pid):null;
+   const value={status:'running',attemptId:attempt,...c,pid:child.pid,startedAt,processStartedAt},saved=save(index,value);
    const timer=setTimeout(()=>{try{process.kill(-child.pid,'SIGTERM');}catch{child.kill('SIGTERM');}},DEADLINE_MS);
-   let ended=false;
-   const end=async code=>{if(ended)return;ended=true;clearTimeout(timer);await saved.catch(()=>{});try{await finish(attempt,code);}catch{await save(index,{...value,status:'failed',reason:'Verification output unavailable or failed integrity validation.'}).catch(()=>{});}finally{if(running===attempt)running=null;}};
-   child.once('error',()=>end(1));child.once('close',end);
+   void exited.then(async code=>{clearTimeout(timer);await saved.catch(()=>{});try{await finish(attempt,code);}catch{await save(index,{...value,status:'failed',reason:'Verification output unavailable or failed integrity validation.'}).catch(()=>{});}finally{if(running===attempt)running=null;}});
    await saved;json(res,202,value);return true;
   }catch(error){json(res,409,{error:error.message||'Numerical verification unavailable'});return true;}finally{if(reserved&&!launched)running=null;}
  };
