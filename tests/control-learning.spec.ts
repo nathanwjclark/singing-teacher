@@ -1,15 +1,16 @@
 import {test,expect} from '@playwright/test';
-import {spawn,execFileSync} from 'node:child_process';
+import {spawn} from 'node:child_process';
 import {mkdtemp,rm,writeFile,access} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join,resolve} from 'node:path';
 import {createInterface} from 'node:readline';
 
-// Real built app, real app routes and real scientific worker over a seeded session
-// (generated native captures, seeded software Astra decisions; no provider call).
+// Real built app (the default config's web server builds dist/), real app routes and a real
+// scientific worker over a seeded session: generated native captures and seeded software
+// Astra decisions, so no provider is called. The fixture serves its own app on a free port.
 test('delivered cue is frozen, repeated verbatim, scored and learned after three matched attempts',async({page,request})=>{
+ test.setTimeout(300_000);
  const repo=process.cwd(),temporary=await mkdtemp(join(tmpdir(),'control-browser-')),data=join(temporary,'data');
- execFileSync('npm',['run','build'],{cwd:repo,stdio:'ignore'});
  const child=spawn(process.env.SINGING_PYTHON||join(repo,'science/.venv/bin/python'),[resolve('science/tests/control_browser_fixture.py'),data],{cwd:repo,env:{...process.env,PYTHONPATH:[repo,join(repo,'science/src'),join(repo,'science/tests')].join(':')},stdio:['ignore','pipe','pipe']});
  let stderr='';child.stderr.on('data',value=>{stderr=(stderr+value).slice(-4000);});const lines=createInterface({input:child.stdout})[Symbol.asyncIterator]();
  // Pre-existing polling noise outside this feature: learning memory answers

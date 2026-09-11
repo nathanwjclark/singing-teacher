@@ -83,7 +83,7 @@ receipt = score_control_pcm(frozen=frozen, pcm=frame, metadata=metadata)
 - `science/tests/test_app_control.py`: the app's binding derivation, verbatim reuse of a repeated binding, and refusals for pitch range, budget, rest and non-recording decisions.
 - `science/tests/test_app_control_loop.py`: real app routes, Astra route with a test-only provider and the HTTP worker through four delivered-cue rounds, plus a bound export.
 - `server/controlLearning.test.mjs`, `server/astra.test.mjs`, `server/sessionExport.test.mjs`, `src/experiment/control/controlClient.test.ts`.
-- `npx playwright test -c tests/control-learning.config.ts` runs the built app over a seeded session and saves screenshots under `test-results/`.
+- `npx playwright test tests/control-learning.spec.ts` (default config, which builds the app) runs the built app, real routes and a real worker over a seeded session and saves screenshots under `test-results/`.
 
 Measured on generated frames from the first anatomy at the `open` alternative (`test_control_pcm.py` fixture): forecasts 0–2 hold `1/3` for each alternative; after three matched attempts the first anatomy's weights are closed 0.247, open 0.451, higher 0.302 and its predicted centroid moves from 667.5 Hz to 693.2 Hz. A successor model with only that anatomy reproduces the same weights.
 

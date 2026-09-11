@@ -1,6 +1,6 @@
 """Browser fixture for cue-execution learning; generated evidence and seeded decisions, no paid model.
 
-Starts the real worker and the built app server over a session with a calibration,
+Starts the real worker and the built app server (dist/ from `npm run build`) on free loopback ports over a session with a calibration,
 two frozen anatomy hypotheses and a committed experiment, then prints the app port.
 The spec drives it with flag files: `publish-N` publishes a later generated native
 capture as the latest USB pull; `decide-N` commits a new experiment and seeds an
@@ -12,6 +12,7 @@ import json
 import os
 from pathlib import Path
 import signal
+import socket
 import subprocess
 import sys
 import threading
@@ -91,9 +92,6 @@ def main():
     def stop(_signal, _frame): raise SystemExit(0)
     signal.signal(signal.SIGTERM, stop)
     root = Path(sys.argv[1]); root.mkdir(); jobs = root / 'jobs'
-    # The worker refuses SO_REUSEADDR, so a fixed port stays in TIME_WAIT between back-to-back
-    # runs; it defaults to an ephemeral loopback port that only the app server uses.
-    app_port, worker_port = int(os.environ.get('CONTROL_E2E_PORT', '5209')), int(os.environ.get('CONTROL_E2E_WORKER_PORT', '0'))
     with JobService(jobs) as service:
         controller = SessionController(jobs / 'sessions', service, 'session')
         calibrate(controller)
@@ -108,10 +106,12 @@ def main():
     (root / 'science-runs/run-control/summary.json').write_text(json.dumps({'sessionId': 'session', 'modelId': 'browser-control-model',
         'source': 'development-fixture', 'files': {}}))
     token = 'browser-control-token-' + 'c' * 32
-    worker = ScientificHTTPServer(str(jobs), token, port=worker_port)
+    worker = ScientificHTTPServer(str(jobs), token, port=0)
     thread = threading.Thread(target=worker.serve_forever, daemon=True); thread.start()
     controller = SessionController(jobs / 'sessions', worker.jobs, 'session')
     design = decide(root, controller, 0, 'design', None)
+    with socket.socket() as probe:
+        probe.bind(('127.0.0.1', 0)); app_port = probe.getsockname()[1]
     env = {**os.environ, 'OPENAI_API_KEY': '', 'OPENAI_ENV_FILE': str(root / 'absent.env'), 'PORT': str(app_port), 'HOST': '127.0.0.1',
            'LOCAL_DATA_DIR': str(root), 'SCIENCE_URL': f'http://127.0.0.1:{worker.server_port}', 'SCIENCE_TOKEN': token}
     app = subprocess.Popen(['node', 'server/local.mjs'], cwd=Path.cwd(), env=env, stdout=subprocess.DEVNULL, stderr=sys.stderr)
