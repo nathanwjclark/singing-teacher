@@ -49,6 +49,8 @@ def evidence(value, limit):
             raise ValueError('Evidence exceeds size limit')
         return value, raw
     path = Path(value)
+    if not path.is_file():
+        raise ValueError('Evidence file not found: '+path.name)
     if path.stat().st_size > limit:
         raise ValueError('Evidence exceeds size limit')
     return load(path), path.read_bytes()
@@ -160,7 +162,13 @@ def recompute(export_path, job_id, frame_path, *, original_replay=None, node_bin
         if current_native != snapshot.data['provenance'] or current_native != design.data['provenance']:
             report.update(status='version_mismatch', reason='Certified native provenance differs from frozen inputs.')
             return report, None
-        if _extractor(node_binary, profile) != design.data['extractor']:
+        try:
+            extractor = _extractor(node_binary, profile)
+        except ValueError as exc:
+            # The validation call carries no evidence, so its rejection (a Node that
+            # cannot run the bridge, or a changed profile) is about this runtime.
+            raise RuntimeError(str(exc)) from exc
+        if extractor != design.data['extractor']:
             report.update(status='version_mismatch', reason='Canonical extractor/contracts differ from frozen design.')
             return report, None
         try:
@@ -183,8 +191,12 @@ def recompute(export_path, job_id, frame_path, *, original_replay=None, node_bin
             report.update(status='verified', reason='Frozen scorer implementation pin matches this runtime and the recomputed score agrees.')
         else:
             report.update(status='legacy_version_unverified', reason='Legacy design has no scorer implementation pin; agreement is with the current implementation only.')
-    except (KeyError, TypeError, ValueError, OSError, RuntimeError, subprocess.TimeoutExpired) as exc:
+    except (KeyError, TypeError, ValueError) as exc:
         report.update(status='invalid_evidence', reason=str(exc))
+    except (RuntimeError, OSError, subprocess.TimeoutExpired) as exc:
+        # Missing Node, an extractor timeout or a native engine fault is a property of
+        # this computer's runtime, not evidence that the retained score is inconsistent.
+        report.update(status='runtime_unavailable', reason='Scoring runtime unavailable: '+(str(exc) or type(exc).__name__))
     return report, fresh
 
 

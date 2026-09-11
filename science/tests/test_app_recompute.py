@@ -11,7 +11,7 @@ from singing_physics.engine import Engine
 from singing_physics.pcm_design import freeze_pcm_hypotheses
 from singing_physics.pcm_inverse import FEATURES
 from singing_physics.pcm_spectral import SPECTRAL_OBJECTIVE
-from singing_physics.prediction import _encode
+from singing_physics.prediction import Artifact, _encode
 from singing_physics.service import JobService
 from singing_physics.session import SessionController
 from test_session import send, collect
@@ -170,9 +170,8 @@ def test_corrupted_ledger_rejected_before_scoring(batch_replay):
         recompute_session(batch_replay,session_id='synthetic-replay-session',max_operations=17)
 
 
-def test_actual_visual_scores_and_changed_policy_are_explicit(tmp_path, monkeypatch):
+def test_actual_visual_scores_and_changed_policy_are_explicit(tmp_path):
     from test_session_visual import setup
-    import singing_physics.visual_likelihood as visual
     with JobService(tmp_path/'worker') as service:
         controller=SessionController(tmp_path/'sessions',service,'visual-replay')
         _,params,annotation=setup(controller)
@@ -182,10 +181,18 @@ def test_actual_visual_scores_and_changed_policy_are_explicit(tmp_path, monkeypa
     report=recompute_session(replay,session_id='visual-replay')
     assert report['counts']['matched']==report['counts']['policyVerified']==1,report
     assert report['budget']['canonicalExtractions']==0
-    monkeypatch.setattr(visual,'_policy',lambda:{'version':'changed'})
-    report=recompute_session(replay,session_id='visual-replay')
-    row=report['operations'][-1]
+    job_id=replay['state']['jobs'][-1]['job_id']
+    def repolicy(job):
+        params=job['request']['parameters'];params['forecast']['policy']={**params['forecast']['policy'],'version':'changed'}
+        forecast=Artifact(_encode(params['forecast']));params['expected_digest']=forecast.sha256
+        job['result']['artifact']['forecast_sha256']=forecast.sha256;job['result']['sha256']=digest(job['result']['artifact'])
+    # A forecast frozen under another policy and bound to its score is unsupported.
+    row=rows(recompute_session(reseal(replay,{job_id:repolicy}),session_id='visual-replay'))[job_id]
     assert (row['outcome'],row['status'],row['numericalAgreement'])==('unsupported','version_mismatch',None)
+    # The same policy change without rebinding is a forged forecast: failed, not unsupported.
+    def forge(job): job['request']['parameters']['forecast']['policy']={**job['request']['parameters']['forecast']['policy'],'version':'changed'}
+    row=rows(recompute_session(reseal(replay,{job_id:forge}),session_id='visual-replay'))[job_id]
+    assert (row['outcome'],row['status'])==('failed','invalid_evidence') and 'bind' in row['reason']
     tampered=deepcopy(replay['state']['jobs'][-1]);tampered['result']['artifact']['scores'][0]['heldout_rms_px']=10
     with pytest.raises(ValueError,match='digest'):visual_score(tampered)
 
@@ -207,6 +214,9 @@ def test_real_source_bank_score_and_missing_frame_receipt(tmp_path):
     assert (report['status'],report['numerical_agreement'],report['canonical_extractions'])==('verified',True,1),report
     missing=deepcopy(job);missing['result']['observation']=None
     assert source_score(missing)['status']=='missing_artifacts'
+    # An absent retained frame is missing media, as for update_pcm, never a failure.
+    absent=deepcopy(job);absent['request']['parameters']['pcm']=None
+    assert source_score(absent)['status']=='missing_media'
     bad=deepcopy(job);bad['request']['parameters']['pcm'][0]+=1
     with pytest.raises(ValueError,match='frame receipt'):source_score(bad)
 
@@ -242,6 +252,34 @@ def test_app_runner_reads_real_http_worker_and_only_persists_redacted_report(bat
             assert after==original
         finally:
             server.shutdown();thread.join(timeout=5)
+
+
+def test_runtime_faults_are_unsupported_not_failed(batch_replay, tmp_path, monkeypatch):
+    ids = updates(batch_replay)
+    def outcomes(report):
+        return {(row['outcome'], row['status']) for row in rows(report).values() if row['jobId'] in ids.values() and row['outcome'] != 'skipped'}
+    # The native engine is process-global: holding it makes every PCM recompute's
+    # Engine() fail inside this process.
+    with Engine():
+        report = recompute_session(batch_replay, session_id='synthetic-replay-session')
+    assert outcomes(report) == {('unsupported', 'runtime_unavailable')} and report['counts']['failed'] == 0
+    assert all('Scoring runtime unavailable' in row['reason'] for row in report['operations'] if row['status'] == 'runtime_unavailable')
+    # No Node on PATH: the canonical extractor cannot run.
+    monkeypatch.setenv('PATH', str(tmp_path/'empty'))
+    report = recompute_session(batch_replay, session_id='synthetic-replay-session')
+    assert outcomes(report) == {('unsupported', 'runtime_unavailable')} and report['counts']['failed'] == 0
+    # A Node that cannot run the bridge (exits nonzero on the evidence-free validation call).
+    (tmp_path/'broken').mkdir(); node = tmp_path/'broken'/'node'
+    node.write_text('#!/bin/sh\nexit 9\n'); node.chmod(0o755)
+    monkeypatch.setenv('PATH', str(tmp_path/'broken'))
+    report = recompute_session(batch_replay, session_id='synthetic-replay-session')
+    assert outcomes(report) == {('unsupported', 'runtime_unavailable')} and report['counts']['failed'] == 0
+    # A Node that never answers hits the bridge's 30-second timeout.
+    (tmp_path/'slow').mkdir(); node = tmp_path/'slow'/'node'
+    node.write_text('#!/bin/sh\nexec /bin/sleep 60\n'); node.chmod(0o755)
+    monkeypatch.setenv('PATH', str(tmp_path/'slow'))
+    report = recompute_session(batch_replay, session_id='synthetic-replay-session', max_operations=1)
+    assert outcomes(report) == {('unsupported', 'runtime_unavailable')} and 'timed out' in next(r for r in report['operations'] if r['status'] == 'runtime_unavailable')['reason']
 
 
 def test_recompute_never_dispatches_a_pending_intent(batch_evidence, tmp_path, monkeypatch):

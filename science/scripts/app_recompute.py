@@ -28,7 +28,10 @@ MAX_OPERATIONS = 16
 # runtime this process cannot reproduce) or skipped (operation or time budget only).
 OUTCOMES = {'verified': 'matched', 'legacy_version_unverified': 'matched', 'numerical_disagreement': 'failed',
             'invalid_evidence': 'failed', 'missing_media': 'unavailable', 'missing_artifacts': 'unavailable',
-            'version_mismatch': 'unsupported'}
+            'version_mismatch': 'unsupported', 'runtime_unavailable': 'unsupported'}
+# Faults of this computer's scoring runtime (missing Node, extractor timeout, native
+# engine failure) say nothing about the retained evidence.
+RUNTIME_FAULTS = (RuntimeError, OSError, subprocess.TimeoutExpired)
 MAX_SECONDS = 240
 # The process ends itself at this deadline (SIGALRM default action), so a verifier
 # orphaned by a server restart cannot outlive the attempt the server still tracks.
@@ -55,13 +58,14 @@ def visual_score(job):
     params = job['request']['parameters']; original = job['result']
     if digest(original['artifact']) != original['sha256']:
         raise ValueError('Visual result digest mismatch')
-    if params['forecast']['policy'] != _policy():
-        return {'status': 'version_mismatch', 'reason': 'Frozen visual scoring policy differs from the available implementation.'}
     forecast = Artifact(_encode(params['forecast']))
     if forecast.sha256 != params['expected_digest'] or original['artifact']['forecast_sha256'] != forecast.sha256:
         raise ValueError('Visual score does not bind the retained forecast')
     if original['artifact']['annotations'] != params['annotations'] or original['artifact']['annotation_sha256'] != digest(params['annotations']):
         raise ValueError('Visual annotation digest mismatch')
+    # Only a forecast bound to its recorded score can be unsupported rather than forged.
+    if params['forecast']['policy'] != _policy():
+        return {'status': 'version_mismatch', 'reason': 'Frozen visual scoring policy differs from the available implementation.'}
     fresh = score_visual_forecast(forecast, expected_digest=params['expected_digest'], annotations=params['annotations']).data
     left, right = without_clock(original['artifact']), without_clock(fresh)
     return {**compared(left == right), 'policy_verification': 'verified', 'scoring_policy': params['forecast']['policy'],
@@ -76,6 +80,8 @@ def source_score(job):
     params = job['request']['parameters']; original = job['result']; frozen = params['frozen']
     if digest(frozen['forecast']) != frozen['sha256'] or original.get('forecast_sha256') != frozen['sha256']:
         raise ValueError('Source result does not bind the retained forecast')
+    if params.get('pcm') is None:
+        return {'status': 'missing_media', 'reason': 'Original controller request no longer contains its source frame.'}
     if not original.get('observation'):
         return {'status': 'missing_artifacts', 'reason': 'Original source score has no received observation receipt.'}
     pcm = np.asarray(params['pcm'], dtype='<f4')
@@ -159,8 +165,10 @@ def recompute_session(replay, *, session_id, max_operations=MAX_OPERATIONS):
                     result = visual_score(job)
                 else:
                     result = source_score(job)
-            except (KeyError, TypeError, ValueError, OSError, RuntimeError, subprocess.TimeoutExpired) as exc:
+            except (KeyError, TypeError, ValueError) as exc:
                 result = {'status': 'invalid_evidence', 'reason': str(exc)}
+            except RUNTIME_FAULTS as exc:
+                result = {'status': 'runtime_unavailable', 'reason': 'Scoring runtime unavailable: '+(str(exc) or type(exc).__name__)}
             row.update(outcome=OUTCOMES[result['status']], status=result['status'], numericalAgreement=result.get('numerical_agreement'),
                 policyVerification=result.get('policy_verification', 'unverified'), details=result)
             if result.get('reason'):
