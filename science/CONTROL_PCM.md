@@ -46,17 +46,17 @@ Repeated physical evidence (a reused attempt ID or any overlapping original hash
 - `score_control {forecast_id, pcm, metadata}` requires a committed forecast for the current baseline, capture after the commitment and unused original hashes. The capture's hashes are consumed as soon as the score is submitted, so a failed or rejected score cannot be retried with the same recording; record a new attempt.
 - `record_control_attempt {forecast_id, status: stopped|failed, reason}` preserves an attempt that was not scored.
 
-Collected forecasts must retain every anatomy x control alternative of the declared binding. Collected scores must retain every committed alternative and bind to the forecast hash. A worker reply that fails these checks is kept as a `rejected` receipt instead of blocking the session. At most one control forecast is committed at a time: committing a new one marks the previous one `superseded` with a receipt, so the cue shown to the learner is the one the next recording is scored against. A baseline change marks committed forecasts `stale`. None of these operations changes the baseline model.
+Collected forecasts must retain every anatomy x control alternative of the declared binding. Collected scores must retain every committed alternative and bind to the forecast hash. A worker reply that fails these checks is kept as a `rejected` receipt instead of blocking the session; the rejected reply itself is retained only in the worker's `jobs.sqlite3` and job artifacts, so its digest cannot be verified from a session export. At most one control forecast is committed at a time: committing a new one marks the previous one `superseded` with a receipt, so the cue shown to the learner is the one the next recording is scored against. A baseline change marks committed forecasts `stale`. None of these operations changes the baseline model.
 
-Control job entries in the ledger keep only SHA-256 digests of their parameters and result (`request.parameters = {sha256}`, `result_sha256`); the sealed forecast and score artifacts live once in `control_forecasts` and `control_receipts`. Every ledger event stores the whole session state, so copies of the PCM frame, frozen bank and history in each job made the replay grow quadratically. Measured with four anatomies and the five-alternative bank (`ledger_size.py`, session commands only):
+Control job entries in the ledger keep only SHA-256 digests of their parameters and result (`request.parameters = {sha256}`, `result_sha256`); the sealed forecast and score artifacts live once in `control_forecasts` and `control_receipts`. Every session read (`state`, `replay`) verifies these digests and fails closed on a mismatch: parameters against the full request the ledger recorded while the job was pending, results against the retained sealed artifact. The score recomputation verifier (`app_recompute.py`) reports control jobs as `unsupported_operation` with these digests and does not recompute them. Every ledger event stores the whole session state, so copies of the PCM frame, frozen bank and history in each job made the replay grow quadratically. Measured with four anatomies and the five-alternative bank through session commands only (`science/scripts/measure_control_ledger.py --anatomies 4 --rounds 6`; sizes vary by a few bytes with timestamps). "Before" is the same scenario with full job payloads, measured at commit `8c85081`:
 
-| Rounds | Replay before | Replay after | State before | State after |
+| Rounds | Replay before | Replay now | State before | State now |
 |---|---|---|---|---|
-| 1 | 0.83 MB | 0.44 MB | 199 KB | 45 KB |
-| 3 | 6.35 MB | 2.13 MB | 632 KB | 130 KB |
-| 6 | 25.65 MB | 6.84 MB | 1391 KB | 262 KB |
+| 1 | 0.83 MB | 0.44 MB | 199 KB | 46 KB |
+| 3 | 6.35 MB | 2.17 MB | 632 KB | 134 KB |
+| 6 | 25.65 MB | 7.00 MB | 1391 KB | 270 KB |
 
-State growth per round fell from about 238 KB to 43 KB (82%). A repeated binding is not declared again, which saves one full-state event per round. In the full app loop (baseline search, Astra decisions, four control forecasts and three scores) the event bodies total 23.9 MB, just under the exporter's 24 MiB replay bound; about three quarters of that state is the baseline search result and the Astra designs, which other lanes store. A ledger that stores changes instead of full states per event is a roadmap item for the session layer, not part of this lane.
+State growth per round fell from about 238 KB to 45 KB (81%). A repeated binding is not declared again, which saves one full-state event per round. In the full app loop (baseline search, Astra decisions, four control forecasts and three scores) the event bodies total 23.9 MB, just under the exporter's 24 MiB replay bound; about three quarters of that state is the baseline search result and the Astra designs, which other lanes store. A ledger that stores changes instead of full states per event is a roadmap item for the session layer, not part of this lane.
 
 A forecast request carries only score receipts of bindings with the same content, because other bindings can never match its key. This keeps the request under the worker's 2 MB input bound; each receipt is a few kilobytes plus about 0.2 KB per bank row. The ledger still rejects reused evidence across all bindings.
 
@@ -81,7 +81,7 @@ Direct use:
 ```python
 from singing_physics.control_pcm import forecast_control_pcm, score_control_pcm
 frozen = forecast_control_pcm(snapshot, expected_digest=snapshot.sha256, cue=cue, context=context,
-                              controls=[{'control_id': 'selected', 'JA': -3., 'f0_hz': 180.}, ...],
+                              controls=[{'control_id': 'reference', 'JA': -3., 'f0_hz': 180.}, ...],
                               gain=4., target_id='attempt-4', history=ledger_receipts)
 receipt = score_control_pcm(frozen=frozen, pcm=frame, metadata=metadata)
 ```
@@ -90,11 +90,11 @@ receipt = score_control_pcm(frozen=frozen, pcm=frame, metadata=metadata)
 
 ## Verification
 
-- `science/tests/test_control_pcm.py`: uniform below three matches and changed predictions at three; pruned support keeps per-anatomy history; changed wording, level, capture context, bank, gain, scales and profile exclude history; repeated evidence and tampered receipts rejected; outcome before the seal rejected; gain absent from support; residual calibration never applied; silent frames unscorable and uncounted; budget and timeout rules; the isolated worker path.
-- `science/tests/test_session_control.py`: ledger-owned history, caller history rejected, history limited to same-content bindings, one committed forecast at a time, binding immutability, stale-on-baseline, pruned successor, stopped/failed/unscorable attempts preserved and uncounted.
+- `science/tests/test_control_pcm.py`: uniform below three matches and changed predictions at three; pruned support keeps per-anatomy history; changed wording, level, capture context, bank, gain, scales and profile exclude history; repeated evidence and tampered receipts rejected; outcome before the seal rejected; gain absent from support; residual calibration never applied; silent frames unscorable and uncounted; attempts no alternative fits kept but uncounted, with both reasons when anatomies are also incomplete; forecasts without the absolute-fit bound refused; indistinguishable alternatives; budget and timeout rules; the isolated worker path.
+- `science/tests/test_session_control.py`: ledger-owned history, caller history rejected, history limited to same-content bindings, one committed forecast at a time, digest-only job entries verified against recorded requests and retained artifacts (tampering fails closed), binding immutability, stale-on-baseline, pruned successor, stopped/failed/unscorable attempts preserved and uncounted, pre-policy forecasts refused before a capture is consumed, and control jobs reported by digest in the recomputation verifier.
 - `science/tests/test_app_control.py`: the app's binding derivation, verbatim reuse of a repeated binding, and refusals for pitch range, budget, rest and non-recording decisions.
-- `science/tests/test_app_control_loop.py`: real app routes, Astra route with a test-only provider and the HTTP worker through four delivered-cue rounds, plus a bound export.
-- `server/controlLearning.test.mjs`, `server/astra.test.mjs`, `server/sessionExport.test.mjs`, `src/experiment/control/controlClient.test.ts`.
+- `science/tests/test_app_control_loop.py`: real app routes, Astra route with a test-only provider and the HTTP worker through four delivered-cue rounds, then an export that keeps the replay and binds every control receipt.
+- `server/controlLearning.test.mjs` (context counts, bounds, indistinguishable groups, routes), `server/astra.test.mjs` (context and context-bounded `cueBindingId`), `server/sessionExport.test.mjs` (ledger binding, rejected forecasts, refused and unrecorded attempts, original audio), `src/experiment/control/controlClient.test.ts`.
 - `npx playwright test tests/control-learning.spec.ts` (default config, which builds the app) runs the built app, real routes and a real worker over a seeded session and saves screenshots under `test-results/`.
 
 Measured on generated frames from the first anatomy at the `open` alternative (`test_control_pcm.py` fixture): forecasts 0–2 hold `1/3` for each alternative; after three matched attempts the first anatomy's weights are closed 0.247, open 0.451, higher 0.302 and its predicted centroid moves from 667.5 Hz to 693.2 Hz. A successor model with only that anatomy reproduces the same weights.

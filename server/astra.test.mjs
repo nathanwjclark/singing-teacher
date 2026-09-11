@@ -103,7 +103,7 @@ test('optional teaching selection is exact, model-bound and backward compatible'
 
 function cueBinding(vowel,wording){return {cue:{cue_id:'astra-delivered-cue',cue_version:'1',wording,wording_sha256:'0'.repeat(64),mode:'elicited'},
  context:{capture_context_id:'native-usb-pcm',source_kind:'development-fixture',pitch_hz:180,vowel,level:'comfortable',posture:'not-instructed'},
- controls:[{control_id:'selected',JA:-3,f0_hz:180},{control_id:'jaw-more-open',JA:-4,f0_hz:180}],gain:4,declared_at:'2026-09-11T00:00:0'+(vowel==='a'?0:1)+'+00:00'};}
+ controls:[{control_id:'reference',JA:-3,f0_hz:180},{control_id:'jaw-more-open',JA:-4,f0_hz:180}],gain:4,declared_at:'2026-09-11T00:00:0'+(vowel==='a'?0:1)+'+00:00'};}
 async function withBindings(t,decision){let seen;const s=await setup(t,{decide:args=>{seen=args;return decision;}});
  s.state.control_bindings={'cue-a':cueBinding('a','Sing an easy ah.'),'cue-e':cueBinding('e','Sing an easy eh.')};s.state.control_forecasts={};s.state.control_receipts=[];
  return {...s,seen:()=>seen};}
