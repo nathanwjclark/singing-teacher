@@ -21,7 +21,7 @@ This is a small falsification/stress suite, not a representative benchmark or a 
 
 ## First independent execution
 
-Protocol commit `761f8ef`; harness `b442c1e`; production spectral module `8c68f60` (carried to `claude/wave3-spectral` by cherry-pick with the same subjects). The unmodified first run used 21 native calls with zero synthesis failures. Canonical extraction ran 86 times, including rejected inputs; spectral extraction ran 30 times. The same forecast PCM was reused by both objectives. Three protocol integrity checks passed. Results and hash receipts are committed in `evaluation/wave3/results/`; the command is in its provenance record.
+Protocol commit `761f8ef`; harness `b442c1e`; production spectral module `8c68f60`. These originals live on the `codex/wave3-eval` and `codex/wave3-spectral` lane branches; `evaluation/wave3/README.md` (Commit provenance) maps each to the commit on this branch with an identical tree. The unmodified first run used 21 native calls with zero synthesis failures. Canonical extraction ran 86 times, including rejected inputs; spectral extraction ran 30 times. The same forecast PCM was reused by both objectives. Three protocol integrity checks passed. Results and hash receipts are committed in `evaluation/wave3/results/`; the command is in its provenance record.
 
 Scientific outcome: **mixed and inconclusive**, not an anatomical recovery claim. No weights, candidate parameters, gains or stress settings were changed after seeing these results.
 
@@ -40,7 +40,7 @@ Two of the four held-out candidate predictions clip under the frozen gain and re
 
 ## Revision 2 execution
 
-`evaluation/wave3/protocol-2.json` responds to review of revision 1's method: a hand-set held-out gain that clipped predictions, no real tie margin, level jumps between neighbouring anatomies, a harness that reimplemented coarse scoring, and one held-out vowel with exact-duplicate ambiguity only. It was committed (`9c951b0`, 03:59:34 UTC; see `evaluation/wave3/README.md` for how that commit is preserved after rebasing) before its only run (prediction bank written 03:59:43 UTC; calibration rankings 04:00:01 UTC, before any held-out truth synthesis). Revision 1 results were not re-scored or tuned. Both objectives were scored by the production `fit_pcm` per-trial scorer on the same 40-call native bank, so their native budgets are equal. Zero synthesis failures, zero reruns. Receipts: `evaluation/wave3/results/second-*.json`.
+`evaluation/wave3/protocol-2.json` responds to review of revision 1's method: a hand-set held-out gain that clipped predictions, no real tie margin, level jumps between neighbouring anatomies, a harness that reimplemented coarse scoring, and one held-out vowel with exact-duplicate ambiguity only. It was committed (`9c951b0`, 03:59:34 UTC; preserved by the tag `wave3-spectral-before-rebase-cb0e6e7`, mapped to this branch in `evaluation/wave3/README.md`) before its only run (prediction bank written 03:59:43 UTC; calibration rankings 04:00:01 UTC, before any held-out truth synthesis). Revision 1 results were not re-scored or tuned. Both objectives were scored by the production `fit_pcm` per-trial scorer on the same 40-call native bank, so their native budgets are equal. Zero synthesis failures, zero reruns. Receipts: `evaluation/wave3/results/second-*.json`.
 
 Evidence source: **synthetic**. Scientific outcome under the frozen decision rule: **inconclusive**.
 
