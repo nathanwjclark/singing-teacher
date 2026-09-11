@@ -122,10 +122,13 @@ def winner(discrepancy, margin):
 def decide(cases):
     """Frozen decision rule over all (generator, held-out vowel) cases."""
     wins = {name: {f: sum(c[name]['winner'] == f for c in cases) for f in FAMILIES} for name in SCORES}
-    failures = {f: sum(c['primary']['failures'][f] for c in cases) for f in FAMILIES}
+    # An unscorable selected candidate is a failure under every score (protocol "metrics").
+    # The committed revision-1 report predates this and counted primary-score failures only.
+    failures = {name: {f: sum(c[name]['failures'][f] for c in cases) for f in FAMILIES} for name in SCORES}
     threshold = 6
-    if all(wins[n]['two_mass'] >= threshold for n in SCORES) and failures['two_mass'] <= failures['geometric']:outcome = 'positive'
-    elif all(wins[n]['geometric'] >= threshold for n in SCORES) and failures['geometric'] <= failures['two_mass']:outcome = 'negative'
+    fewer = lambda f, other: all(failures[n][f] <= failures[n][other] for n in SCORES)
+    if all(wins[n]['two_mass'] >= threshold for n in SCORES) and fewer('two_mass', 'geometric'):outcome = 'positive'
+    elif all(wins[n]['geometric'] >= threshold for n in SCORES) and fewer('geometric', 'two_mass'):outcome = 'negative'
     else:outcome = 'inconclusive'
     return {'outcome': outcome, 'wins': wins, 'failures': failures, 'cases': len(cases), 'threshold': threshold}
 
