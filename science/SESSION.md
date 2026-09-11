@@ -7,7 +7,9 @@ or executables. No Engine is opened in the controller thread. Search, numerical
 design and update run through the existing isolated JobService queue.
 
 Read commands are `{"action":"state"}` and `{"action":"replay"}`. Both return
-`state` and `ledger_sha256`; replay additionally returns immutable ledger events.
+`state` and `ledger_sha256`; replay additionally returns immutable ledger events
+and, once the ledger holds a format 2 event, the state `nodes` those events name
+(see Ledger format below).
 State contains version, snapshot, calibration, pending, designs, attempts,
 sensations and completed jobs. A pending job has `job_id` after dispatch. Poll the
 JobService status; collect only when terminal. There is one outstanding numerical
@@ -65,11 +67,11 @@ reconciles an undispatched intent. Existing queued/running jobs obey JobService'
 restart policy; they are never silently re-executed. Controllers own their
 session's model registry; do not mutate that registry through another API.
 
-Events include full state, command hashes, previous-event hashes, receipt times
-and session identity. Replay verifies every stored event/hash link and does not
-re-run numerical work. Local root/database permissions are 0700/0600, symlink
-root/database and foreign-owned root are rejected, and SQL queries bind session
-IDs. This is local integrity detection, not cryptographic protection against a
+Events include the state (see Ledger format), command hashes, previous-event
+hashes, receipt times and session identity. Replay verifies every stored
+event/hash link and does not re-run numerical work. Local root/database
+permissions are 0700/0600, symlink root/database and foreign-owned root are
+rejected, and SQL queries bind session IDs. This is local integrity detection, not cryptographic protection against a
 user who controls and rewrites the database and every hash. External source-byte
 authenticity and independent capture-time attestation remain outside this layer.
 
@@ -151,3 +153,61 @@ capture time with receipt/re-import time. Held-out evidenceAt must represent the
 not a re-import timestamp. Original hashes are excluded conservatively across
 calibration/heldout artifacts. The low-level session API cannot authenticate device
 clocks or supplied raw files; app importers retain that responsibility.
+
+## Ledger format
+
+Each event row stores canonical JSON (sorted keys, compact, ASCII) and its
+SHA-256. Two event formats exist:
+
+- **v1 (full state)**: `session_id`, `previous_sha256`, `action`, `received_at`,
+  `details`, `state`. Written before format 2 existed. These rows are never
+  rewritten and read back byte for byte (`science/tests/test_session_ledger.py`
+  pins a recorded ledger and its response hashes).
+- **Format 2 (content-addressed state)**: `format: 2`, `session_id`, `version`,
+  `previous_sha256`, `action`, `received_at`, `details`, `state_root`. All new
+  events use it. A ledger may continue from v1 events into format 2, never back.
+
+`state_root` is the SHA-256 of the root node of the state tree. Nodes live in the
+`nodes` table (`session`, `digest`, `body`), stored once per session in the same
+transaction as the event. A node body is canonical JSON of `["v", value]` (a
+leaf), `["d", {key: child}]` or `["l", [child, ...]]`; a child is `["v", value]`
+inline or `["h", digest]`. The writer stores every value whose canonical JSON
+reaches 1024 bytes as its own node, plus the root. Readers accept any valid tree,
+so the threshold can change without a new format. Unchanged values keep their
+digest from version to version, so an event adds only the nodes that changed.
+
+Every read (`state`, `replay`, `GET /sessions/:id/ledger`, and
+`recompute_session_score.verify_replay` for a supplied replay) runs the same
+check: each event's hash, version, previous hash and session; the exact format 2
+key set; each node's hash and shape; every reference resolves; no stored node is
+unreachable from an event root; each root's `version` and `session_id` equal its
+event's. Any failure is `Session ledger integrity failure` (HTTP 409). A replay
+returns `nodes` as `{digest: node}` only when a format 2 event exists, so
+v1-only ledgers return the same bytes as before. A database written before the
+`nodes` table existed still opens read-only.
+
+The app's session export (`server/sessionExport.mjs`, schema still
+`singing-session-export/1`) redacts the replay including its `nodes`, then keeps
+only nodes the redacted events still reach: a node referenced only through an
+omitted media or credential field (a PCM leaf, for example) is dropped and listed
+in `omissions`. Inside a node, an omitted field's `jsonValueSha256` covers the
+child entry, which for a stored child is its `["h", digest]` reference.
+
+Measured on the real app loop (`science/tests/test_app_control_loop.py`: baseline
+search, Astra decisions, four control forecasts, three scores; 33 events) and on
+`science/scripts/measure_control_ledger.py --anatomies 4 --rounds 6` (38 events).
+Timings are from one development Mac: "append" re-appends every recorded state in
+order with `_append`, which verifies the whole ledger first; "read" is one
+verified `read_ledger` of the final ledger.
+
+| Ledger | Stored v1 → format 2 | Replay response v1 → format 2 | Append, mean (max) | Verified read |
+|---|---|---|---|---|
+| App loop | 23.95 MB → 0.92 MB | 24.96 MB → 1.98 MB | 112 (264) ms → 50 (99) ms | 172 ms → 23 ms |
+| Measurement, 6 rounds | 6.73 MB → 0.94 MB | 7.00 MB → 1.23 MB | 25 (72) ms → 13 (30) ms | 46 ms → 18 ms |
+
+In the app loop each further Astra round (decision, forecast, score) adds about
+0.29 MB to the replay; with v1 events each round added 6-7 MB, more every round.
+
+Rollback: code from before format 2 cannot read a format 2 event (it reports the
+session as not found). Returning to it after the first new write needs a backup
+of `sessions.sqlite3` taken before the upgrade.

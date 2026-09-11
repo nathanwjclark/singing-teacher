@@ -59,7 +59,7 @@ idempotency, stale models, cancellation and immutable result retrieval.
 Session routes use the existing `SessionController` and its versioned commands:
 
 - `GET /sessions/:id` returns `execute({action: "state"})`.
-- `GET /sessions/:id/replay` returns its integrity-checked event history.
+- `GET /sessions/:id/replay` returns its integrity-checked event history and, for format 2 events, the state nodes they name (`science/SESSION.md`, Ledger format).
 - `POST /sessions/:id/commands` passes the JSON command to `execute`.
 
 Session IDs contain only letters, digits, underscores and hyphens (1–160 characters).
