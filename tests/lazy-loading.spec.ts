@@ -39,3 +39,18 @@ test('a lazy panel whose chunk fails shows one message in its place and the stud
  await page.screenshot({path:'test-results/lazy-panel-failure.png'});
  expect(errors).toEqual([]);
 });
+
+test('a Pull iPhone fit request starts while the lazy panel chunks are still loading',async({page})=>{
+ const declarations:unknown[]=[];
+ await noAstra(page);await holdLazyChunks(page,4000);
+ await page.route('**/api/science/status',route=>route.fulfill({json:{status:'not-run'}}));
+ await page.route('**/api/science/use-latest-capture',route=>{declarations.push(route.request().postDataJSON());return route.fulfill({json:{prepared:true}});});
+ await page.route('**/api/science/run',route=>route.fulfill({json:{status:'running',runId:'lazy-check'}}));
+ await page.goto('/');
+ // The studio renders only after App's own imports arrive, which are held like every other chunk; the
+ // panels' chunks are requested after that and are still held when the request goes out.
+ await expect(page.getByRole('heading',{name:'Your view'})).toBeVisible({timeout:15_000});
+ await page.evaluate(()=>window.dispatchEvent(new CustomEvent('singing:process-capture',{detail:{purpose:'calibration',pose:'a'}})));
+ await expect.poll(()=>declarations,{timeout:2000}).toEqual([{purpose:'calibration',pose:'a',contains_external_excitation:false}]);
+ expect(await page.getByRole('region',{name:'Scientific session replay',includeHidden:true}).count()).toBe(0);
+});
